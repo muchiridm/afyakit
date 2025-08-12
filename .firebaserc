@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "afyakit-api"
+  },
+  "targets": {
+    "afyakit-api": {
+      "hosting": {
+        "afyakit": [
+          "afyakit"
+        ]
+      }
+    }
+  }
+}
