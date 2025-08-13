@@ -60,4 +60,3 @@ app.*.map.json
 **/windows/flutter/ephemeral/
 
 # Generated Dart files
-lib/generated_plugin_registrant.dart
