@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';

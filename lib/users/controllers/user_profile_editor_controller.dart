@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
 import 'package:afyakit/shared/providers/users/combined_user_stream_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';

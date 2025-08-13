@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.afyakit"
+    namespace = "com.afyakit.app" // tidy namespace (can be anything)
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,20 +20,35 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.afyakit"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Placeholder; per-flavor applicationId below overrides this
+        applicationId = "com.afyakit.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    flavorDimensions += listOf("tenant")
+    productFlavors {
+        create("danabtmc") {
+        dimension = "tenant"
+        applicationId = "com.danabtmc.app"
+        resValue("string", "app_name", "Danab TMC")
+        manifestPlaceholders["host1"] = "danabtmc.com"
+        manifestPlaceholders["host2"] = "www.danabtmc.com"
+    }
+    create("dawapap") {
+        dimension = "tenant"
+        applicationId = "com.dawapap.app"
+        resValue("string", "app_name", "DawaPap")
+        manifestPlaceholders["host1"] = "dawapap.com"
+        manifestPlaceholders["host2"] = "www.dawapap.com"
+    }
+}
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // keep debug signing until you wire a real keystore
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -42,3 +57,6 @@ android {
 flutter {
     source = "../.."
 }
+
+apply(plugin = "com.google.gms.google-services")
+

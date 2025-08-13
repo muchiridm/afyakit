@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
 import 'package:afyakit/users/models/auth_user.dart';
 import 'package:afyakit/users/models/user_role_enum.dart';

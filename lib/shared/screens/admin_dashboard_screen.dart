@@ -4,7 +4,7 @@ import 'package:afyakit/shared/api/api_test_screen.dart';
 import 'package:afyakit/features/item_preferences/item_preferences_screen.dart';
 import 'package:afyakit/features/inventory_locations/screens/inventory_locations_screen.dart';
 import 'package:afyakit/users/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/features/import/import_inventory_screen.dart';

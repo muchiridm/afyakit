@@ -4,7 +4,7 @@ import 'package:afyakit/users/models/auth_user.dart';
 import 'package:afyakit/users/models/combined_user.dart';
 import 'package:afyakit/users/controllers/user_profile_controller.dart';
 import 'package:afyakit/users/models/user_profile.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/users/controllers/user_session_controller.dart';

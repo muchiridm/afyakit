@@ -7,7 +7,7 @@ import 'package:afyakit/features/inventory_locations/inventory_location_controll
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/shared/widgets/delivery_record_tile.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/stock/delivery_records_stream_provider.dart';
 
 class DeliveryRecordsScreen extends ConsumerWidget {

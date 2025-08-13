@@ -5,7 +5,7 @@ import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_state.dart';
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_review_service.dart';

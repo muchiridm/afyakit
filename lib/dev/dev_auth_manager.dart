@@ -1,7 +1,7 @@
 import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/users/utils/claim_validator.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:flutter/foundation.dart';

@@ -1,6 +1,6 @@
 import 'package:afyakit/features/batches/controllers/batch_editor_args.dart';
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

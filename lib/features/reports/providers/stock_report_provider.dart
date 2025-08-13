@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:afyakit/features/inventory/services/inventory_repo_service.dart';
 import 'package:afyakit/features/reports/services/stock_report_service.dart';
 import 'package:afyakit/features/batches/services/batch_repo.dart';
-import 'package:afyakit/shared/providers/tenant_provider.dart';
+import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 
 final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   ref,
