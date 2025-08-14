@@ -30,7 +30,14 @@ android {
 
     flavorDimensions += listOf("tenant")
     productFlavors {
-        create("danabtmc") {
+    create("afyakit") {
+        dimension = "tenant"
+        applicationId = "com.afyakit.app"
+        resValue("string", "app_name", "AfyaKit")
+        manifestPlaceholders["host1"] = "afyakit.app"
+        manifestPlaceholders["host2"] = "www.afyakit.app"
+    }
+    create("danabtmc") {
         dimension = "tenant"
         applicationId = "com.danabtmc.app"
         resValue("string", "app_name", "Danab TMC")

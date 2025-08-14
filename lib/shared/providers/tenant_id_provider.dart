@@ -1,22 +1,27 @@
 // lib/shared/providers/tenant_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Decide the tenant from URL query (?tenant=...) or host name.
-/// Safe default is `danabtmc` (tenant #1).
+/// Decides the tenant from:
+/// 1. URL query (?tenant=...)  — useful for local testing
+/// 2. Hostname/domain          — used in production
+/// 3. Fallback to `danabtmc`
 String resolveTenantId() {
   final uri = Uri.base;
 
-  // Query param override is handy for local testing:
-  final q = uri.queryParameters['tenant'];
-  if (q != null && q.trim().isNotEmpty) return q.trim().toLowerCase();
+  // 1️⃣ Query parameter override
+  final queryTenant = uri.queryParameters['tenant'];
+  if (queryTenant != null && queryTenant.trim().isNotEmpty) {
+    return queryTenant.trim().toLowerCase();
+  }
 
-  // Domain-based routing in production:
+  // 2️⃣ Domain-based routing
   final host = uri.host.toLowerCase();
+  if (host.contains('afyakit')) return 'afyakit';
   if (host.contains('dawapap')) return 'dawapap';
   if (host.contains('danabtmc')) return 'danabtmc';
 
-  // Fallback
-  return 'danabtmc';
+  // 3️⃣ Safe fallback
+  return 'afyakit'; // Default tenant
 }
 
 /// Globally available current tenant id.

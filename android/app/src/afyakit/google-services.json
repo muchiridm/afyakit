@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "484902349205",
+    "project_id": "afyakit-api",
+    "storage_bucket": "afyakit-api.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484902349205:android:5187af94a63ffab37b6e9c",
+        "android_client_info": {
+          "package_name": "com.afyakit.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwLD7S4anMVDJh2TA9MCWAFCaaWa8wACg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484902349205:android:f342fe67cce72ec67b6e9c",
+        "android_client_info": {
+          "package_name": "com.danabtmc.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwLD7S4anMVDJh2TA9MCWAFCaaWa8wACg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484902349205:android:b8bf20fd9c17146a7b6e9c",
+        "android_client_info": {
+          "package_name": "com.dawapap.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwLD7S4anMVDJh2TA9MCWAFCaaWa8wACg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

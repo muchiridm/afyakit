@@ -6,6 +6,9 @@ import 'package:afyakit/shared/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/stock/batch_records_stream_provider.dart';
 import 'package:afyakit/users/widgets/logout_button.dart';
 
+// 👇 add this import (where you expose tenantDisplayNameProvider or tenantConfigProvider)
+import 'package:afyakit/shared/providers/tenant_config_provider.dart';
+
 class HomeHeader extends ConsumerWidget {
   final dynamic session;
 
@@ -14,12 +17,14 @@ class HomeHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
+    final displayName = ref.watch(tenantDisplayNameProvider);
+
     final asyncBatches = ref.watch(batchRecordsStreamProvider(tenantId));
 
     final hasBatchesForSession = asyncBatches.when(
       data: (batches) =>
-          session.isActive &&
-          session.deliveryId != null &&
+          (session?.isActive == true) &&
+          (session?.deliveryId != null) &&
           batches.any((b) => b.deliveryId == session.deliveryId),
       loading: () => false,
       error: (_, __) => false,
@@ -29,10 +34,10 @@ class HomeHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         children: [
-          const ScreenHeader(
-            'Danab TMC',
+          ScreenHeader(
+            displayName,
             showBack: false,
-            trailing: Row(
+            trailing: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [SizedBox(width: 8), LogoutButton()],
             ),

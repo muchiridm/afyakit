@@ -7,8 +7,15 @@
       "hosting": {
         "afyakit": [
           "afyakit"
+        ],
+        "danabtmc": [
+          "danabtmc-app"
+        ],
+        "dawapap": [
+          "dawapap-app"
         ]
       }
     }
-  }
+  },
+  "etags": {}
 }

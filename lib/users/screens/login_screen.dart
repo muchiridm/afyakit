@@ -1,26 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/users/controllers/login_controller.dart';
+import 'package:afyakit/shared/providers/tenant_config_provider.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Controllers/state
     final controller = ref.watch(loginControllerProvider.notifier);
     final state = ref.watch(loginControllerProvider);
 
+    // Per-tenant config
+    final cfg = ref.watch(tenantConfigProvider);
+    final displayName = cfg.displayName;
+    final logoAsset = cfg.logoAsset;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FF),
-      body: Center(child: _buildLoginCard(context, controller, state)),
+      body: Center(
+        child: _buildLoginCard(
+          context: context,
+          controller: controller,
+          state: state,
+          displayName: displayName,
+          logoAsset: logoAsset,
+          primary: primary,
+        ),
+      ),
     );
   }
 
-  Widget _buildLoginCard(
-    BuildContext context,
-    LoginController controller,
-    LoginFormState state,
-  ) {
+  // ────────────────────────────────────────────────────────────────────────────
+  // Private builders
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Widget _buildLoginCard({
+    required BuildContext context,
+    required LoginController controller,
+    required LoginFormState state,
+    required String displayName,
+    required String logoAsset,
+    required Color primary,
+  }) {
     return Card(
       margin: const EdgeInsets.all(32),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -32,30 +56,10 @@ class LoginScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Brand header
-              Column(
-                children: [
-                  // Placeholder for logo
-                  Icon(
-                    Icons.local_hospital,
-                    size: 48,
-                    color: Colors.deepPurple.shade700,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'DanabTMC',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Danab TMC',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                ],
+              _buildBrandHeader(
+                displayName: displayName,
+                logoAsset: logoAsset,
+                primary: primary,
               ),
               const SizedBox(height: 24),
               _buildTitle(),
@@ -65,11 +69,47 @@ class LoginScreen extends ConsumerWidget {
               _buildPasswordField(controller),
               _buildForgotPasswordButton(context, controller),
               const SizedBox(height: 16),
-              _buildLoginButton(context, controller, state),
+              _buildLoginButton(context, controller, state, primary),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBrandHeader({
+    required String displayName,
+    required String logoAsset,
+    required Color primary,
+  }) {
+    return Column(
+      children: [
+        // Prefer tenant logo if provided, fallback to icon
+        if (logoAsset.isNotEmpty)
+          Image.asset(
+            logoAsset,
+            height: 48,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) =>
+                Icon(Icons.local_hospital, size: 48, color: primary),
+          )
+        else
+          Icon(Icons.local_hospital, size: 48, color: primary),
+        const SizedBox(height: 8),
+        Text(
+          displayName,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          displayName, // subtitle/tagline; swap if you want a different strapline
+          style: const TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+      ],
     );
   }
 
@@ -123,6 +163,7 @@ class LoginScreen extends ConsumerWidget {
     BuildContext context,
     LoginController controller,
     LoginFormState state,
+    Color primary,
   ) {
     return SizedBox(
       width: double.infinity,
@@ -144,6 +185,10 @@ class LoginScreen extends ConsumerWidget {
               )
             : const Icon(Icons.lock_open),
         label: const Text('Login'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+        ),
       ),
     );
   }

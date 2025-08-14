@@ -1,12 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 typedef Json = Map<String, dynamic>;
 
 class TenantConfig {
   final String id;
-  final String displayName; // used for app title
-  final String primaryColorHex; // "#RRGGBB"
+  final String displayName; // used for app title, headers, etc.
+  final String primaryColorHex; // "#RRGGBB" or "#AARRGGBB"
   final String logoAsset; // asset path for logos
   final Map<String, dynamic> flags;
 
@@ -30,4 +31,11 @@ class TenantConfig {
 Future<TenantConfig> loadTenantConfig(String tenantId) async {
   final raw = await rootBundle.loadString('assets/tenants/$tenantId.json');
   return TenantConfig.fromJson(json.decode(raw) as Json);
+}
+
+/// Helper: convert "#RRGGBB" / "#AARRGGBB" to [Color]
+Color colorFromHex(String hex) {
+  var h = hex.replaceAll('#', '').toUpperCase();
+  if (h.length == 6) h = 'FF$h';
+  return Color(int.parse(h, radix: 16));
 }
