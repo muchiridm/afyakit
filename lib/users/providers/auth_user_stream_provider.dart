@@ -1,9 +1,9 @@
 //lib/shared/providers/streams/app_users_stream_provider.dart
 
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/users/models/auth_user.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 final authUserStreamProvider = StreamProvider<List<AuthUser>>((ref) {
   final tenantId = ref.watch(tenantIdProvider);

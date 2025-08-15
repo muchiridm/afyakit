@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/providers/item_streams/consumable_items_stream_provider.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/models/items/consumable_item.dart';

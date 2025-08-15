@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 
 class PermissionGuard extends StatelessWidget {
   final CombinedUser user;

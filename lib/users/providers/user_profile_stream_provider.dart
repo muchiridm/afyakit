@@ -2,8 +2,8 @@
 
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/users/models/user_profile.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/models/user_profile_model.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 final userProfileStreamProvider = StreamProvider<List<UserProfile>>((ref) {
   final tenantId = ref.watch(tenantIdProvider);

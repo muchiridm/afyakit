@@ -1,6 +1,6 @@
 // File: lib/users/src/utils/auth_user_status_x.dart
 
-import 'package:afyakit/users/models/auth_user_status_enum.dart';
+import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
 
 extension AuthUserStatusX on AuthUserStatus {
   bool get isActive => this == AuthUserStatus.active;

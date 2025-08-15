@@ -11,9 +11,9 @@ import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.d
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 
 // NEW: policy provider
 import 'package:afyakit/features/records/issues/providers/issue_engine_providers.dart';

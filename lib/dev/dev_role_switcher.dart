@@ -1,8 +1,8 @@
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 import 'package:afyakit/users/controllers/user_profile_controller.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/users/models/user_role_enum.dart';
+import 'package:afyakit/users/extensions/user_role_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

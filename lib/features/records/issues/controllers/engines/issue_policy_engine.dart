@@ -3,8 +3,8 @@ import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.d
 import 'package:afyakit/features/records/issues/models/enums/issue_status_enum.dart';
 import 'package:afyakit/features/records/issues/models/enums/issue_type_enum.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
-import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/users/models/combined_user_x.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/users/extensions/combined_user_x.dart';
 
 class IssuePolicyEngine {
   // ── Permissions (single source of truth) ─────────────────────

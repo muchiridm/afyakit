@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
@@ -18,8 +18,8 @@ import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
-import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/users/models/combined_user_x.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 /// 🎯 ViewController family — scoped per ItemType

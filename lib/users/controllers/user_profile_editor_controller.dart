@@ -4,14 +4,14 @@ import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
 import 'package:afyakit/users/controllers/auth_user_controller.dart';
 import 'package:afyakit/users/controllers/user_session_controller.dart';
-import 'package:afyakit/users/models/auth_user_status_enum.dart';
+import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_stream_provider.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/combined_users_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/users/controllers/user_profile_controller.dart';
 
@@ -31,11 +31,11 @@ final combinedUserByIdProvider = Provider.family<CombinedUser?, String>((
   ref,
   uid,
 ) {
-  final allUsers = ref.watch(combinedUserStreamProvider);
-  return allUsers.maybeWhen(
-    data: (users) => users.firstWhereOrNull((u) => u.uid == uid),
-    orElse: () => null,
-  );
+  Provider.family<CombinedUser?, String>((ref, uid) {
+    final allUsers = ref.watch(combinedUsersProvider);
+    return allUsers.firstWhereOrNull((u) => u.uid == uid);
+  });
+  return null;
 });
 
 class UserProfileEditorController extends StateNotifier<AsyncValue<void>> {

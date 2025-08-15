@@ -10,7 +10,7 @@ import 'package:afyakit/features/records/issues/services/issue_service.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 
 class IssueLifecycleController {
   final Ref ref;

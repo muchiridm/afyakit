@@ -11,7 +11,7 @@ import 'package:afyakit/main.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
 import 'package:afyakit/shared/providers/api_route_provider.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 

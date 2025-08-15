@@ -12,12 +12,12 @@ import 'package:afyakit/features/records/issues/models/enums/issue_status_enum.d
 import 'package:afyakit/features/records/issues/models/enums/issue_status_x.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/shared/providers/stock/issues_stream_provider.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 
 class IssueDetailsScreen extends ConsumerWidget {
   final String issueId;

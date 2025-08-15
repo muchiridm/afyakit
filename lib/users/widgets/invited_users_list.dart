@@ -1,14 +1,16 @@
+import 'package:afyakit/users/providers/auth_user_stream_provider.dart';
+import 'package:afyakit/users/providers/user_profile_stream_provider.dart';
 import 'package:afyakit/users/services/user_deletion_controller.dart';
 import 'package:afyakit/users/utils/label_for_user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/users/models/auth_user_status_enum.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/shared/providers/users/combined_user_stream_provider.dart';
+import 'package:afyakit/users/providers/combined_users_provider.dart';
 import 'package:afyakit/users/controllers/auth_user_controller.dart';
 
 class InvitedUsersList extends ConsumerWidget {
@@ -16,29 +18,69 @@ class InvitedUsersList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final usersAsync = ref.watch(combinedUserStreamProvider);
+    final authAsync = ref.watch(
+      authUserStreamProvider,
+    ); // AsyncValue<List<AuthUser>>
+    final profAsync = ref.watch(
+      userProfileStreamProvider,
+    ); // AsyncValue<List<UserProfile>>
+    final users = ref.watch(combinedUsersProvider); // List<CombinedUser>
 
-    return usersAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('⚠️ Error loading invites: $err')),
-      data: (users) {
-        final invitedUsers = users
-            .where((u) => u.status == AuthUserStatus.invited)
-            .toList();
+    return _buildInvitesBody(context, authAsync, profAsync, users, ref);
+  }
 
-        if (invitedUsers.isEmpty) {
-          return const Center(child: Text('🎉 No pending invites'));
-        }
+  // ────────────────────────────────────────────────────────────────────
+  // UI builders
+  // ────────────────────────────────────────────────────────────────────
 
-        return ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: invitedUsers.length,
-          separatorBuilder: (_, __) => const Divider(),
-          itemBuilder: (_, index) =>
-              _buildInviteTile(context, ref, invitedUsers[index]),
-        );
-      },
+  Widget _buildInvitesBody(
+    BuildContext context,
+    AsyncValue<List<dynamic>> authAsync,
+    AsyncValue<List<dynamic>> profAsync,
+    List<CombinedUser> users,
+    WidgetRef ref,
+  ) {
+    final loadingOrError = _buildLoadingOrError(authAsync, profAsync);
+    if (loadingOrError != null) return loadingOrError;
+
+    final invited = _filterInvited(users);
+    if (invited.isEmpty) {
+      return const Center(child: Text('🎉 No pending invites'));
+    }
+
+    return _buildInvitesList(invited, ref, context);
+  }
+
+  Widget? _buildLoadingOrError(
+    AsyncValue<List<dynamic>> authAsync,
+    AsyncValue<List<dynamic>> profAsync,
+  ) {
+    if (authAsync.isLoading || profAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final err = authAsync.error ?? profAsync.error;
+    if (err != null) {
+      return Center(child: Text('⚠️ Error loading invites: $err'));
+    }
+    return null; // no loading/error → continue
+  }
+
+  List<CombinedUser> _filterInvited(List<CombinedUser> users) {
+    return users.where((u) => u.status == AuthUserStatus.invited).toList()
+      ..sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
+  }
+
+  Widget _buildInvitesList(
+    List<CombinedUser> invited,
+    WidgetRef ref,
+    BuildContext context,
+  ) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: invited.length,
+      separatorBuilder: (_, __) => const Divider(),
+      itemBuilder: (_, i) => _buildInviteTile(context, ref, invited[i]),
     );
   }
 

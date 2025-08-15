@@ -1,4 +1,4 @@
-import 'package:afyakit/users/models/user_role_enum.dart';
+import 'package:afyakit/users/extensions/user_role_enum.dart';
 
 extension UserRoleX on UserRole {
   // ─────────────────────────────────────────────

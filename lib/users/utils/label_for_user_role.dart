@@ -1,4 +1,4 @@
-import 'package:afyakit/users/models/user_role_enum.dart';
+import 'package:afyakit/users/extensions/user_role_enum.dart';
 
 String labelForUserRole(UserRole role) {
   return switch (role) {

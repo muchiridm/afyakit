@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:afyakit/shared/api/api_client.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/users/models/auth_user.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';

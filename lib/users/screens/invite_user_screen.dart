@@ -1,8 +1,8 @@
 import 'package:afyakit/users/controllers/auth_user_controller.dart';
-import 'package:afyakit/users/models/user_role_enum.dart';
+import 'package:afyakit/users/extensions/user_role_enum.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
-import 'package:afyakit/users/models/combined_user_x.dart';
-import 'package:afyakit/users/models/user_role_x.dart';
+import 'package:afyakit/users/extensions/combined_user_x.dart';
+import 'package:afyakit/users/extensions/user_role_x.dart';
 import 'package:afyakit/users/widgets/combined_user_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

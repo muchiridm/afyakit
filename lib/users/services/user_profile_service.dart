@@ -1,6 +1,6 @@
 import 'package:afyakit/shared/api/api_client.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/users/models/user_profile.dart';
+import 'package:afyakit/users/models/user_profile_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 

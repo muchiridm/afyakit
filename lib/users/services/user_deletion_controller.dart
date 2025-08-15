@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/api/api_routes.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_stream_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_users_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 
@@ -74,7 +74,7 @@ class UserDeletionController extends AutoDisposeAsyncNotifier<void> {
 
     // Final outcome
     if (profileDeleted || authDeleted) {
-      ref.invalidate(combinedUserStreamProvider);
+      ref.invalidate(combinedUsersProvider);
 
       if (_isSelf(uid)) {
         await ref.read(loginControllerProvider.notifier).logout();
@@ -108,7 +108,7 @@ class UserDeletionController extends AutoDisposeAsyncNotifier<void> {
       debugPrintStack(stackTrace: st);
     }
 
-    ref.invalidate(combinedUserStreamProvider);
+    ref.invalidate(combinedUsersProvider);
 
     if (_isSelf(uid)) {
       await ref.read(loginControllerProvider.notifier).logout();

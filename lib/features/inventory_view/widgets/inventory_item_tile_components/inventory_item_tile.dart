@@ -4,8 +4,8 @@ import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_comp
 import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_components/batch_row.dart';
 import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
-import 'package:afyakit/users/models/combined_user_x.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

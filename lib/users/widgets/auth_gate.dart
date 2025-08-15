@@ -1,4 +1,4 @@
-import 'package:afyakit/users/models/auth_user_status_enum.dart';
+import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,10 +8,10 @@ import 'package:afyakit/users/screens/splash_screen.dart';
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 
-import 'package:afyakit/users/models/auth_user_status_x.dart';
+import 'package:afyakit/users/extensions/auth_user_status_x.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   final Map<String, String>? inviteParams;

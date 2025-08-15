@@ -10,8 +10,8 @@ import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 

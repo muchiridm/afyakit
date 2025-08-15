@@ -1,6 +1,6 @@
 // shared/providers/tenant_config_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/config/tenant_config.dart';
+import 'package:afyakit/config/tenant_config.dart';
 
 final tenantConfigProvider = Provider<TenantConfig>((ref) {
   throw UnimplementedError('Override me in main()');

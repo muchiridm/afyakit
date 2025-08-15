@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/users/widgets/auth_gate.dart';
-import 'package:afyakit/shared/providers/tenant_config_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
 
 class InviteAcceptScreen extends ConsumerWidget {
   final Map<String, String> inviteParams;

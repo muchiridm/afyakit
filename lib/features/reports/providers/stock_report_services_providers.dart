@@ -7,7 +7,7 @@ import 'package:afyakit/features/reports/services/stock_table_filter.dart';
 import 'package:afyakit/features/records/reorder/services/reorder_service.dart';
 import 'package:afyakit/features/reports/services/stock_report_exporter.dart';
 
-import 'package:afyakit/shared/providers/tenant_id_provider.dart'; // For tenantId
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart'; // For tenantId
 
 // ✅ StockReportLoader depends on Ref
 final stockReportLoaderProvider = Provider<StockReportLoader>((ref) {

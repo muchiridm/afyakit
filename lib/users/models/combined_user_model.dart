@@ -1,9 +1,11 @@
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-import 'package:afyakit/users/models/auth_user_status_enum.dart';
-import 'package:afyakit/users/models/user_role_enum.dart';
+import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
+import 'package:afyakit/users/extensions/user_role_enum.dart';
 import 'package:afyakit/users/utils/parse_user_role.dart';
-import 'package:afyakit/users/models/auth_user.dart';
-import 'package:afyakit/users/models/user_profile.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/models/user_profile_model.dart';
+
+// imports unchanged
 
 class CombinedUser {
   final String uid;
@@ -19,6 +21,9 @@ class CombinedUser {
   final List<String> stores;
   final String? avatarUrl;
 
+  /// 🔑 Global (cross-tenant) capability
+  final bool isSuperAdmin;
+
   CombinedUser({
     required this.uid,
     required this.email,
@@ -31,9 +36,9 @@ class CombinedUser {
     required this.role,
     required this.stores,
     required this.avatarUrl,
+    required this.isSuperAdmin, // 👈 new
   });
 
-  /// 📦 Combines AuthUser + UserProfile
   factory CombinedUser.from(AuthUser auth, UserProfile profile) {
     return CombinedUser(
       uid: auth.uid,
@@ -51,10 +56,10 @@ class CombinedUser {
           .where((s) => s.isNotEmpty)
           .toList(),
       avatarUrl: profile.avatarUrl,
+      isSuperAdmin: auth.claims?['superadmin'] == true, // 👈 new
     );
   }
 
-  /// 🧩 Fallback: auth-only user with no profile
   factory CombinedUser.fromAuthOnly(AuthUser auth) {
     return CombinedUser(
       uid: auth.uid,
@@ -68,10 +73,10 @@ class CombinedUser {
       role: _resolveRole(auth.claims?['role'], UserRole.staff),
       stores: [],
       avatarUrl: null,
+      isSuperAdmin: auth.claims?['superadmin'] == true, // 👈 new
     );
   }
 
-  /// 🆕 Placeholder user
   factory CombinedUser.blank() => CombinedUser(
     uid: '',
     email: '',
@@ -84,11 +89,9 @@ class CombinedUser {
     role: UserRole.staff,
     stores: [],
     avatarUrl: null,
+    isSuperAdmin: false, // 👈 new
   );
 
-  // ────────────────────────────────────────────────
-  // 🔁 Copy helper
-  // ────────────────────────────────────────────────
   CombinedUser copyWith({
     String? uid,
     String? email,
@@ -101,6 +104,7 @@ class CombinedUser {
     UserRole? role,
     List<String>? stores,
     String? avatarUrl,
+    bool? isSuperAdmin, // 👈 new
   }) {
     return CombinedUser(
       uid: uid ?? this.uid,
@@ -114,12 +118,10 @@ class CombinedUser {
       role: role ?? this.role,
       stores: stores ?? this.stores,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin, // 👈 new
     );
   }
 
-  // ────────────────────────────────────────────────
-  // 🔐 Role resolution (claims > profile fallback)
-  // ────────────────────────────────────────────────
   static UserRole _resolveRole(String? claimRole, UserRole fallback) {
     return parseUserRole(claimRole ?? fallback.name);
   }

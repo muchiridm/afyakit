@@ -11,7 +11,7 @@ import 'package:afyakit/main.dart';
 import 'package:afyakit/users/widgets/auth_gate.dart';
 import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/users/services/user_session_service.dart';
-import 'package:afyakit/users/models/auth_user.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:afyakit/users/utils/claim_validator.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/api/api_routes.dart';

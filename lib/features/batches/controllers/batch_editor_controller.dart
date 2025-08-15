@@ -1,7 +1,7 @@
 import 'package:afyakit/features/batches/controllers/batch_editor_args.dart';
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
-import 'package:afyakit/shared/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -16,8 +16,8 @@ import 'package:afyakit/features/records/delivery_sessions/services/delivery_per
 // ⬇️ NEW: we’ll read & write last used store/source on the temp session
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_session_service.dart';
 
-import 'package:afyakit/users/models/combined_user.dart';
-import 'package:afyakit/users/models/combined_user_x.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 

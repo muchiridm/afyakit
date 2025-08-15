@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
-import 'package:afyakit/users/models/combined_user.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/models/combined_user_model.dart';
 
 class CombinedUserGate extends ConsumerWidget {
   final bool Function(CombinedUser user) allow;

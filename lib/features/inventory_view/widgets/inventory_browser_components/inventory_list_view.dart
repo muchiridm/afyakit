@@ -10,7 +10,7 @@ import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/models/items/medication_item.dart';
 import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_components/inventory_item_tile.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_search_utils.dart';
-import 'package:afyakit/shared/providers/users/combined_user_provider.dart';
+import 'package:afyakit/users/providers/combined_user_provider.dart';
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 
