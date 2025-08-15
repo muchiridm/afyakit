@@ -1,4 +1,4 @@
-// shared/providers/tenant_config_provider.dart
+// lib/tenants/providers/tenant_config_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/config/tenant_config.dart';
 

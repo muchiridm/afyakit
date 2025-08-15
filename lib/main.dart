@@ -1,11 +1,13 @@
+import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
 import 'package:afyakit/shared/utils/decide_tenant.dart';
+import 'package:afyakit/tenants/tenant_loader.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-import 'firebase_options.dart'; // used only on web
+import 'firebase_options.dart';
 import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
@@ -27,37 +29,30 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('🚀 App starting...');
 
-  // ✅ Firebase init
+  // Firebase init
   if (kIsWeb) {
-    debugPrint('🌐 Web → Firebase with explicit options');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } else {
-    debugPrint('📱 Mobile/Desktop → Firebase default config');
     await Firebase.initializeApp();
   }
-  debugPrint('✅ Firebase initialized');
+
+  // ✅ new: set settings once, any platform
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
 
   final uri = Uri.base;
   final uid = uri.queryParameters['uid'];
   final isInviteFlow = uri.path == '/invite/accept' && uid != null;
 
-  // Resolve tenant id
-  // Resolve tenant id (query → TENANT define → domain → fallback)
+  // Resolve tenant
   final tenant = decideTenant();
   debugPrint('🏢 Using tenant: $tenant');
 
-  // 🔹 Load the tenant config JSON before bootstrapping widgets
-  TenantConfig cfg;
-  try {
-    cfg = await loadTenantConfig(tenant);
-  } catch (e) {
-    debugPrint(
-      '⚠️ Failed to load config for $tenant → falling back to afyakit. Error: $e',
-    );
-    cfg = await loadTenantConfig('afyakit');
-  }
+  // Single call: loader handles Firestore → asset → default fallback + logs
+  final cfg = await loadTenantConfig(tenant);
 
   // Provide tenant id + loaded config globally
   final container = ProviderContainer(

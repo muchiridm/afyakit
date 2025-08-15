@@ -1,15 +1,18 @@
-// 📂 lib/users/controllers/auth_user_controller.dart
-import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
+// 📂 lib/users/controllers/auth_user_controller.dart (updated)
+import 'package:afyakit/users/providers/user_engine_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/api_client_provider.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:afyakit/users/extensions/user_role_enum.dart';
 import 'package:afyakit/users/utils/parse_user_role.dart';
-import 'package:afyakit/users/services/auth_user_service.dart';
+
+// ✨ NEW: engine + provider + result
+import 'package:afyakit/users/engines/auth_user_engine.dart';
+import 'package:afyakit/shared/types/result.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 final authUserControllerProvider =
     StateNotifierProvider.autoDispose<AuthUserController, AuthUserState>(
@@ -46,9 +49,11 @@ class AuthUserState {
 
 class AuthUserController extends StateNotifier<AuthUserState> {
   final Ref ref;
-
   AuthUserController(this.ref) : super(const AuthUserState());
 
+  // ─────────────────────────────────────────────
+  // 🧩 Form setters
+  // ─────────────────────────────────────────────
   void setEmail(String email) => state = state.copyWith(email: email);
 
   void setRole(String roleStr) {
@@ -62,14 +67,26 @@ class AuthUserController extends StateNotifier<AuthUserState> {
     state = state.copyWith(selectedStoreIds: updated);
   }
 
-  Future<AuthUserService> _getService() async {
+  // ─────────────────────────────────────────────
+  // ⚙️ Engine wiring (lazy, cached)
+  // ─────────────────────────────────────────────
+  AuthUserEngine? _engine;
+  Future<void> _ensureEngine() async {
+    if (_engine != null) return;
+    // If you used the FAMILY version of the provider:
     final tenantId = ref.read(tenantIdProvider);
-    final client = await ref.read(apiClientProvider.future);
-    return AuthUserService(client: client, routes: ApiRoutes(tenantId));
+    _engine = await ref.read(authUserEngineProvider(tenantId).future);
+
+    // If you used a non-family FutureProvider instead, use:
+    // _engine = await ref.read(authUserEngineProvider.future);
   }
 
+  // Keep signature to avoid breaking callers
   Future<void> submit(BuildContext context) => inviteUser(context);
 
+  // ─────────────────────────────────────────────
+  // ✉️ Invite
+  // ─────────────────────────────────────────────
   Future<void> inviteUser(BuildContext context) async {
     final email = EmailHelper.normalize(state.email);
 
@@ -79,10 +96,15 @@ class AuthUserController extends StateNotifier<AuthUserState> {
     }
 
     state = state.copyWith(isLoading: true);
-
     try {
-      final service = await _getService();
-      await service.inviteUser(email: email); // 👈 remove uid
+      await _ensureEngine();
+      final res = await _engine!.invite(email);
+
+      if (res is Err<void>) {
+        SnackService.showError('❌ Failed to invite: ${res.error.message}');
+        return;
+      }
+
       SnackService.showSuccess('✅ Invite sent to $email');
       state = const AuthUserState(); // Reset form
     } catch (e) {
@@ -92,29 +114,46 @@ class AuthUserController extends StateNotifier<AuthUserState> {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // 🔁 Resend invite
+  // ─────────────────────────────────────────────
   Future<void> resendInvite({required String email}) async {
     try {
-      final service = await _getService();
-      await service.inviteUser(
-        email: email,
-        forceResend: true,
-      ); // 👈 added forceResend
+      await _ensureEngine();
+      final res = await _engine!.invite(email, forceResend: true);
+
+      if (res is Err<void>) {
+        SnackService.showError(
+          '❌ Failed to resend invite: ${res.error.message}',
+        );
+        return;
+      }
+
       SnackService.showSuccess('✅ Invite resent to $email');
     } catch (e) {
       SnackService.showError('❌ Failed to resend invite: $e');
     }
   }
 
+  // ─────────────────────────────────────────────
+  // 🛠️ Update fields
+  // ─────────────────────────────────────────────
   Future<void> updateAuthUserFields(
     String uid,
     Map<String, dynamic> updates,
   ) async {
     debugPrint('📡 [Controller] Updating AuthUser fields: $uid');
     debugPrint('📬 Fields: $updates');
-
     try {
-      final service = await _getService();
-      await service.updateAuthUserFields(uid, updates);
+      await _ensureEngine();
+      final res = await _engine!.updateFields(uid, updates);
+
+      if (res is Err<void>) {
+        debugPrint('❌ [Controller] Update failed: ${res.error.message}');
+        SnackService.showError('❌ Failed to update user');
+        return;
+      }
+
       debugPrint('✅ [Controller] Update complete');
       SnackService.showSuccess('✅ AuthUser updated');
     } catch (e, st) {
@@ -124,12 +163,18 @@ class AuthUserController extends StateNotifier<AuthUserState> {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // 👥 Read APIs
+  // ─────────────────────────────────────────────
   Future<List<AuthUser>> getAllUsers() async {
     try {
-      final service = await _getService();
-      final users = await service.getAllUsers();
-      SnackService.showInfo('📋 Loaded ${users.length} users');
-      return users;
+      await _ensureEngine();
+      final res = await _engine!.all();
+
+      return switch (res) {
+        Ok<List<AuthUser>>(:final value) => value,
+        Err<List<AuthUser>>() => <AuthUser>[],
+      };
     } catch (e) {
       SnackService.showError('❌ Failed to load users: $e');
       return [];
@@ -138,8 +183,13 @@ class AuthUserController extends StateNotifier<AuthUserState> {
 
   Future<AuthUser?> getUserById(String uid) async {
     try {
-      final service = await _getService();
-      return await service.getUserById(uid);
+      await _ensureEngine();
+      final res = await _engine!.byId(uid);
+
+      return switch (res) {
+        Ok<AuthUser?>(:final value) => value,
+        Err<AuthUser?>() => null,
+      };
     } catch (e) {
       SnackService.showError('❌ Failed to load user: $e');
       return null;

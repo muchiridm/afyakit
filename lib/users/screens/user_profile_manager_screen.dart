@@ -9,7 +9,7 @@ import 'package:afyakit/users/providers/combined_users_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/users/controllers/user_profile_editor_controller.dart';
+import 'package:afyakit/users/controllers/profile_controller.dart';
 import 'package:afyakit/users/models/combined_user_model.dart';
 import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/users/screens/invite_user_screen.dart';
@@ -115,9 +115,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
     CombinedUser user,
     List<InventoryLocation> allStores,
   ) {
-    final editor = ref.read(
-      userProfileEditorControllerProvider(user.uid).notifier,
-    );
+    final editor = ref.read(profileControllerProvider(user.uid).notifier);
 
     final deletionController = ref.read(
       userDeletionControllerProvider.notifier,

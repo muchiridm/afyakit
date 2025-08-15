@@ -14,6 +14,10 @@ export 'package:cloud_firestore/cloud_firestore.dart'
         Timestamp,
         FieldValue,
         WriteBatch,
-        SetOptions;
+        SetOptions,
+        GetOptions,
+        Source,
+        FirebaseException,
+        Settings;
 
 final db = FirebaseFirestore.instance;

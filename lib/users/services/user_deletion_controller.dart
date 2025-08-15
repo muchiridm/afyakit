@@ -12,7 +12,7 @@ import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/users/services/auth_user_service.dart';
 import 'package:afyakit/users/services/user_profile_service.dart';
 import 'package:afyakit/users/controllers/login_controller.dart';
-import 'package:afyakit/users/controllers/user_session_controller.dart';
+import 'package:afyakit/users/controllers/session_controller.dart';
 
 final userDeletionControllerProvider =
     AutoDisposeAsyncNotifierProvider<UserDeletionController, void>(
@@ -35,7 +35,7 @@ class UserDeletionController extends AutoDisposeAsyncNotifier<void> {
   }
 
   bool _isSelf(String uid) {
-    final currentUser = ref.read(userSessionControllerProvider(tenantId)).value;
+    final currentUser = ref.read(sessionControllerProvider(tenantId)).value;
     return uid == currentUser?.uid;
   }
 

@@ -1,7 +1,7 @@
 import 'package:afyakit/dev/dev_role_switcher.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/users/controllers/user_profile_editor_controller.dart';
+import 'package:afyakit/users/controllers/profile_controller.dart';
 import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/users/models/combined_user_model.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
@@ -24,10 +24,8 @@ class UserProfileEditorScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inviteUid = inviteParams?['uid'];
-    final controller = ref.watch(
-      userProfileEditorControllerProvider(inviteUid).notifier,
-    );
-    final state = ref.watch(userProfileEditorControllerProvider(inviteUid));
+    final controller = ref.watch(profileControllerProvider(inviteUid).notifier);
+    final state = ref.watch(profileControllerProvider(inviteUid));
     final user = controller.user;
 
     if (user == null) {
@@ -88,7 +86,7 @@ class UserProfileEditorScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEditableFields(UserProfileEditorController controller) {
+  Widget _buildEditableFields(ProfileController controller) {
     return Form(
       key: _formKey,
       child: Column(
@@ -170,7 +168,7 @@ class UserProfileEditorScreen extends ConsumerWidget {
 
   Widget _buildSaveButton(
     BuildContext context,
-    UserProfileEditorController controller,
+    ProfileController controller,
     AsyncValue<void> state,
   ) {
     return SizedBox(

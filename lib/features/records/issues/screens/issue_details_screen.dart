@@ -1,6 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:afyakit/users/controllers/user_profile_editor_controller.dart';
+import 'package:afyakit/users/controllers/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

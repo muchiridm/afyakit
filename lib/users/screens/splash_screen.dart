@@ -13,7 +13,8 @@ class SplashScreen extends ConsumerWidget {
     // per-tenant
     final cfg = ref.watch(tenantConfigProvider);
     final displayName = cfg.displayName;
-    final logoAsset = cfg.logoAsset;
+    final logoPath = cfg.logoPath; // ← nullable
+    final primary = theme.colorScheme.primary;
 
     return Scaffold(
       backgroundColor: isDark ? theme.colorScheme.surface : Colors.white,
@@ -24,7 +25,8 @@ class SplashScreen extends ConsumerWidget {
             _buildBrand(
               theme: theme,
               displayName: displayName,
-              logoAsset: logoAsset,
+              logoPath: logoPath,
+              primary: primary,
             ),
             const SizedBox(height: 8),
             _buildSpinner(),
@@ -41,34 +43,50 @@ class SplashScreen extends ConsumerWidget {
   Widget _buildBrand({
     required ThemeData theme,
     required String displayName,
-    required String logoAsset,
+    required String? logoPath, // ← allow null
+    required Color primary,
   }) {
     final titleStyle = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.bold,
-      color: theme.colorScheme.primary,
+      color: primary,
     );
+
+    final hasLogo = logoPath != null && logoPath.trim().isNotEmpty;
+    final radius = BorderRadius.circular(8);
+
+    Widget logoWidget() {
+      if (!hasLogo) {
+        return Icon(Icons.local_hospital, size: 48, color: primary);
+      }
+
+      final path = logoPath.trim();
+      final isNetwork =
+          path.startsWith('http://') || path.startsWith('https://');
+
+      final img = isNetwork
+          ? Image.network(
+              path,
+              height: 56,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.local_hospital, size: 48, color: primary),
+            )
+          : Image.asset(
+              path,
+              height: 56,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.local_hospital, size: 48, color: primary),
+            );
+
+      return ClipRRect(borderRadius: radius, child: img);
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
         children: [
-          if (logoAsset.isNotEmpty)
-            Image.asset(
-              logoAsset,
-              height: 56,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.local_hospital,
-                size: 48,
-                color: theme.colorScheme.primary,
-              ),
-            )
-          else
-            Icon(
-              Icons.local_hospital,
-              size: 48,
-              color: theme.colorScheme.primary,
-            ),
+          logoWidget(),
           const SizedBox(height: 8),
           Text(displayName, style: titleStyle),
         ],
@@ -85,9 +103,11 @@ class SplashScreen extends ConsumerWidget {
   }
 
   Widget _buildLoadingText(ThemeData theme) {
+    // hintColor can be low-contrast in dark mode; tweak if needed
+    final color = theme.hintColor;
     return Text(
       'Loading...',
-      style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+      style: theme.textTheme.bodyMedium?.copyWith(color: color),
     );
   }
 }

@@ -1,11 +1,11 @@
 // lib/users/providers/combined_user_provider.dart
 
+import 'package:afyakit/users/providers/user_engine_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/controllers/user_profile_controller.dart';
-import 'package:afyakit/users/controllers/user_session_controller.dart';
+import 'package:afyakit/users/controllers/session_controller.dart';
 
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
@@ -14,12 +14,14 @@ import 'package:afyakit/users/models/combined_user_model.dart';
 import 'package:afyakit/users/models/user_profile_model.dart';
 import 'package:afyakit/users/utils/parse_user_role.dart';
 
+import 'package:afyakit/shared/types/result.dart';
+
 final combinedUserProvider = FutureProvider<CombinedUser?>((ref) async {
   final tenantId = ref.watch(tenantIdProvider);
 
   // Read current auth user from session controller
   final authUser = ref
-      .watch(userSessionControllerProvider(tenantId))
+      .watch(sessionControllerProvider(tenantId))
       .maybeWhen(data: (u) => u, orElse: () => null);
 
   if (authUser == null) {
@@ -28,23 +30,27 @@ final combinedUserProvider = FutureProvider<CombinedUser?>((ref) async {
   }
   _log('✅ AuthUser: ${authUser.email} / ${authUser.uid}');
 
-  // Get a profile controller for this tenant
-  final profileController = await ref.watch(
-    userProfileControllerProvider(tenantId).future,
-  );
+  // ✅ Load ProfileEngine for this tenant
+  final engine = await ref.watch(profileEngineProvider(tenantId).future);
 
   // Try to load profile (don’t fail the whole build if it errors)
   UserProfile? profile;
   try {
     _log('📡 Loading UserProfile for ${authUser.uid}');
-    profile = await profileController.getProfile(authUser.uid);
-    if (profile == null) {
-      _log('⚠️ No UserProfile for ${authUser.uid} — using fallback');
-    } else {
-      _log('✅ Profile: ${profile.displayName} (${profile.role.name})');
+    final res = await engine.getProfile(authUser.uid);
+    switch (res) {
+      case Ok<UserProfile?>(:final value):
+        profile = value;
+        if (profile == null) {
+          _log('⚠️ No UserProfile for ${authUser.uid} — using fallback');
+        } else {
+          _log('✅ Profile: ${profile.displayName} (${profile.role.name})');
+        }
+      case Err<UserProfile?>(:final error):
+        _log('❌ Profile load failed: ${error.message}');
     }
   } catch (e, st) {
-    _log('❌ Profile load failed: $e\n$st');
+    _log('❌ Profile load threw: $e\n$st');
   }
 
   // Build the merged view regardless of profile outcome

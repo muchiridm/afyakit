@@ -1,22 +1,24 @@
-import 'package:afyakit/shared/providers/token_provider.dart';
-import 'package:afyakit/users/services/firebase_auth_service.dart';
-import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/users/services/user_session_service.dart';
+// lib/users/controllers/login_controller.dart (updated)
+
+import 'package:afyakit/users/providers/user_engine_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/users/controllers/user_session_controller.dart';
+import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
+import 'package:afyakit/users/services/firebase_auth_service.dart';
+import 'package:afyakit/users/controllers/session_controller.dart';
 import 'package:afyakit/users/widgets/auth_gate.dart';
 import 'package:afyakit/main.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/shared/providers/api_client_provider.dart';
-import 'package:afyakit/shared/providers/api_route_provider.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
+// ✨ NEW: engine + result imports
+import 'package:afyakit/users/engines/login_engine.dart';
+import 'package:afyakit/shared/types/result.dart';
+
 // ─────────────────────────────────────────────────────────────
-// 🧠 State
+// 🧠 State (unchanged)
 // ─────────────────────────────────────────────────────────────
 
 class LoginFormState {
@@ -40,26 +42,24 @@ class LoginFormState {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 🧩 Provider
+// 🧩 Provider (small tweak: we don’t need ApiRoutes anymore)
 // ─────────────────────────────────────────────────────────────
 
 final loginControllerProvider =
     StateNotifierProvider<LoginController, LoginFormState>((ref) {
       final tenantId = ref.read(tenantIdProvider);
-      final apiRoutes = ref.read(apiRouteProvider);
-      return LoginController(ref, tenantId: tenantId, apiRoutes: apiRoutes);
+      return LoginController(ref, tenantId: tenantId);
     });
 
 // ─────────────────────────────────────────────────────────────
-// 🔐 Controller
+// 🔐 Controller (now delegates to LoginEngine)
 // ─────────────────────────────────────────────────────────────
 
 class LoginController extends StateNotifier<LoginFormState> {
   final Ref ref;
   final String tenantId;
-  final ApiRoutes apiRoutes;
 
-  LoginController(this.ref, {required this.tenantId, required this.apiRoutes})
+  LoginController(this.ref, {required this.tenantId})
     : super(LoginFormState(emailController: TextEditingController()));
 
   TextEditingController get emailController => state.emailController;
@@ -68,12 +68,18 @@ class LoginController extends StateNotifier<LoginFormState> {
     state = state.copyWith(password: value);
   }
 
+  // Lazily resolve async dependencies once and cache them
+  LoginEngine? _engine;
+  Future<void> _ensureDeps() async {
+    _engine ??= await ref.read(loginEngineProvider.future);
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // 🔑 Login
+  // 🔑 Login (now uses engine.login)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> login() async {
-    final identity = ref.read(firebaseAuthServiceProvider);
+    ref.read(firebaseAuthServiceProvider);
     final email = EmailHelper.normalize(state.emailController.text);
     final password = state.password.trim();
 
@@ -85,31 +91,26 @@ class LoginController extends StateNotifier<LoginFormState> {
     state = state.copyWith(loading: true);
 
     try {
-      // 🧾 Check if email is registered (backend)
-      final service = await _getUserSessionService();
-      final isAllowed = await service.isEmailRegistered(email);
+      await _ensureDeps();
+      final res = await _engine!.login(email, password);
 
-      if (!isAllowed) {
+      if (res is Err<LoginOutcome>) {
+        SnackService.showError('Login failed. Please try again.');
+        return;
+      }
+
+      final outcome = (res as Ok<LoginOutcome>).value;
+
+      if (!outcome.registered) {
         SnackService.showError('This account is not registered.');
         return;
       }
 
-      // 🔐 Sign in via Firebase
-      await identity.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      // Engine already signed in & refreshed token.
+      // Hydrate session so claims/AuthUser are loaded
+      await ref.read(sessionControllerProvider(tenantId).notifier).reload();
 
-      // 🕰️ Ensure Firebase fully hydrates currentUser
-      await identity.waitForUserSignIn();
-
-      // 🔄 Refresh ID token for backend usage
-      await identity.getIdToken(forceRefresh: true);
-
-      // 🧠 Reload session (hydrates AuthUser, claims, etc)
-      await ref.read(userSessionControllerProvider(tenantId).notifier).reload();
-
-      // 🏠 Navigate to home screen
+      // Navigate to home
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (_) => false,
@@ -125,7 +126,7 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 🔓 Logout
+  // 🔓 Logout (unchanged logic)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
@@ -134,8 +135,8 @@ class LoginController extends StateNotifier<LoginFormState> {
     try {
       await identity.signOut();
 
-      ref.invalidate(userSessionControllerProvider);
-      ref.invalidate(userSessionControllerProvider(tenantId));
+      ref.invalidate(sessionControllerProvider);
+      ref.invalidate(sessionControllerProvider(tenantId));
 
       state = LoginFormState(emailController: TextEditingController());
 
@@ -152,7 +153,7 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 🔄 Session Hydration
+  // 🔄 Session Hydration (unchanged)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> initialize(Future<void> Function() onSessionReady) async {
@@ -174,7 +175,7 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 📧 Password Reset
+  // 📧 Password Reset (now uses engine.sendPasswordReset)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> sendPasswordReset() async {
@@ -184,46 +185,28 @@ class LoginController extends StateNotifier<LoginFormState> {
     debugPrint('📨 Raw input: $rawInput');
     debugPrint('📨 Normalized email: $email');
 
-    if (!EmailHelper.isValid(email)) {
+    // Let engine validate; we keep a quick UX guard for obvious empties.
+    if (email.isEmpty) {
       SnackService.showError(
         'Please enter a valid email to reset your password.',
       );
-      debugPrint('❌ Invalid email format: $email');
       return;
     }
 
     try {
-      final sessionService = await _getUserSessionService();
-      debugPrint('✅ Got UserSessionService');
+      await _ensureDeps();
+      final res = await _engine!.sendPasswordReset(email);
 
-      final isAllowed = await sessionService.isEmailRegistered(email);
-      debugPrint('🔍 Email registration check: $email → isAllowed: $isAllowed');
-
-      if (!isAllowed) {
+      if (res is Err<void>) {
         SnackService.showError('This email is not registered in the system.');
         return;
       }
 
-      debugPrint('📡 Sending password reset email for: $email');
-      await sessionService.sendPasswordResetEmail(email);
       SnackService.showSuccess('Password reset link sent to $email');
     } catch (e, stack) {
       debugPrint('❌ Password reset error: $e');
       debugPrint('🧱 Stack trace:\n$stack');
       SnackService.showError('Something went wrong. Please try again.');
     }
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // 🔧 Helper to get UserSessionService
-  // ─────────────────────────────────────────────────────────────
-  Future<UserSessionService> _getUserSessionService() async {
-    final tokenProviderInstance = ref.read(tokenProvider);
-    final client = await ref.read(apiClientProvider.future);
-    return UserSessionService(
-      client: client,
-      routes: apiRoutes,
-      tokenProvider: tokenProviderInstance,
-    );
   }
 }

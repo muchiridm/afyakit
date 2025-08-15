@@ -2,7 +2,7 @@ import 'package:afyakit/users/extensions/auth_user_status_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/users/controllers/user_session_controller.dart';
+import 'package:afyakit/users/controllers/session_controller.dart';
 import 'package:afyakit/users/screens/login_screen.dart';
 import 'package:afyakit/users/screens/splash_screen.dart';
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
@@ -28,14 +28,14 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     super.initState();
     Future.microtask(() {
       final tenantId = ref.read(tenantIdProvider);
-      ref.read(userSessionControllerProvider(tenantId).notifier).ensureReady();
+      ref.read(sessionControllerProvider(tenantId).notifier).ensureReady();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final tenantId = ref.watch(tenantIdProvider);
-    final authState = ref.watch(userSessionControllerProvider(tenantId));
+    final authState = ref.watch(sessionControllerProvider(tenantId));
     final combinedState = ref.watch(combinedUserProvider);
 
     final authUser = authState.value;

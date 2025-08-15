@@ -15,7 +15,7 @@ class LoginScreen extends ConsumerWidget {
     // Per-tenant config
     final cfg = ref.watch(tenantConfigProvider);
     final displayName = cfg.displayName;
-    final logoAsset = cfg.logoAsset;
+    final logoPath = cfg.logoPath; // String? now
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -26,7 +26,7 @@ class LoginScreen extends ConsumerWidget {
           controller: controller,
           state: state,
           displayName: displayName,
-          logoAsset: logoAsset,
+          logoPath: logoPath, // ← rename + allow null
           primary: primary,
         ),
       ),
@@ -42,7 +42,7 @@ class LoginScreen extends ConsumerWidget {
     required LoginController controller,
     required LoginFormState state,
     required String displayName,
-    required String logoAsset,
+    required String? logoPath, // ← allow null
     required Color primary,
   }) {
     return Card(
@@ -58,7 +58,7 @@ class LoginScreen extends ConsumerWidget {
             children: [
               _buildBrandHeader(
                 displayName: displayName,
-                logoAsset: logoAsset,
+                logoPath: logoPath, // ← pass through
                 primary: primary,
               ),
               const SizedBox(height: 24),
@@ -79,22 +79,48 @@ class LoginScreen extends ConsumerWidget {
 
   Widget _buildBrandHeader({
     required String displayName,
-    required String logoAsset,
+    required String? logoPath,
     required Color primary,
   }) {
+    final radius = BorderRadius.circular(8.0);
+
+    final hasLogo = logoPath != null && logoPath.trim().isNotEmpty;
+
+    Widget logo() {
+      if (!hasLogo) {
+        return _initialsBlock(
+          displayName: displayName,
+          primary: primary,
+          radius: radius,
+        );
+      }
+
+      final path = logoPath.trim();
+      final isNetwork =
+          path.startsWith('http://') || path.startsWith('https://');
+
+      final image = isNetwork
+          ? Image.network(
+              path,
+              height: 48,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.local_hospital, size: 48, color: primary),
+            )
+          : Image.asset(
+              path,
+              height: 48,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.local_hospital, size: 48, color: primary),
+            );
+
+      return ClipRRect(borderRadius: radius, child: image);
+    }
+
     return Column(
       children: [
-        // Prefer tenant logo if provided, fallback to icon
-        if (logoAsset.isNotEmpty)
-          Image.asset(
-            logoAsset,
-            height: 48,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) =>
-                Icon(Icons.local_hospital, size: 48, color: primary),
-          )
-        else
-          Icon(Icons.local_hospital, size: 48, color: primary),
+        logo(),
         const SizedBox(height: 8),
         Text(
           displayName,
@@ -105,12 +131,48 @@ class LoginScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          displayName, // subtitle/tagline; swap if you want a different strapline
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
+        const Text(
+          'Welcome back',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
       ],
     );
+  }
+
+  Widget _initialsBlock({
+    required String displayName,
+    required Color primary,
+    required BorderRadius radius,
+  }) {
+    final initials = _initials(displayName);
+    return Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: primary.withOpacity(0.12),
+        borderRadius: radius,
+      ),
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: primary,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+        ),
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
   Widget _buildTitle() {

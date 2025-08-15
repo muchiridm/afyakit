@@ -1,41 +1,53 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+// lib/config/tenant_config.dart
+import 'dart:ui';
 
 typedef Json = Map<String, dynamic>;
 
 class TenantConfig {
-  final String id;
-  final String displayName; // used for app title, headers, etc.
-  final String primaryColorHex; // "#RRGGBB" or "#AARRGGBB"
-  final String logoAsset; // asset path for logos
+  final String id; // doc id (e.g., "afyakit")
+  final String displayName; // "AfyaKit"
+  final String primaryColorHex; // "#5E60CE"
+  final String? logoPath; // optional (asset or URL)
   final Map<String, dynamic> flags;
 
   const TenantConfig({
     required this.id,
     required this.displayName,
     required this.primaryColorHex,
-    required this.logoAsset,
-    required this.flags,
+    this.logoPath,
+    this.flags = const {},
   });
 
+  // Asset JSON (your current format)
   factory TenantConfig.fromJson(Json j) => TenantConfig(
-    id: j['id'],
-    displayName: j['displayName'],
-    primaryColorHex: j['primaryColor'],
-    logoAsset: j['logoPath'],
-    flags: (j['flags'] ?? {}) as Json,
+    id: j['id'] as String,
+    displayName: j['displayName'] as String,
+    primaryColorHex: (j['primaryColorHex'] ?? j['primaryColor']) as String,
+    logoPath: j['logoPath'] as String?,
+    flags: Map<String, dynamic>.from(j['flags'] ?? const {}),
+  );
+
+  // Firestore doc (matches your screenshot)
+  factory TenantConfig.fromFirestore(String id, Json d) => TenantConfig(
+    id: id,
+    displayName: (d['displayName'] as String?) ?? id,
+    primaryColorHex:
+        (d['primaryColorHex'] as String?) ??
+        (d['primaryColor'] as String?) ??
+        '#2196F3',
+    logoPath: d['logoPath'] as String?, // optional
+    flags: Map<String, dynamic>.from(d['flags'] ?? const {}),
   );
 }
 
-Future<TenantConfig> loadTenantConfig(String tenantId) async {
-  final raw = await rootBundle.loadString('assets/tenants/$tenantId.json');
-  return TenantConfig.fromJson(json.decode(raw) as Json);
-}
+// Helper: "#RRGGBB"/"#AARRGGBB" → Color
 
-/// Helper: convert "#RRGGBB" / "#AARRGGBB" to [Color]
-Color colorFromHex(String hex) {
-  var h = hex.replaceAll('#', '').toUpperCase();
+Color colorFromHex(String hex, {String fallback = '#2196F3'}) {
+  String h = hex.trim().toUpperCase().replaceAll('#', '').replaceAll('0X', '');
   if (h.length == 6) h = 'FF$h';
+  if (h.length != 8) {
+    h = fallback.replaceAll('#', '').toUpperCase();
+    if (h.length == 6) h = 'FF$h';
+  }
   return Color(int.parse(h, radix: 16));
 }

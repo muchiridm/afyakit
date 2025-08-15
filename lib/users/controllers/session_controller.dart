@@ -18,20 +18,20 @@ import 'package:afyakit/shared/api/api_routes.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
 
-final userSessionControllerProvider =
+final sessionControllerProvider =
     StateNotifierProviderFamily<
-      UserSessionController,
+      SessionController,
       AsyncValue<AuthUser?>,
       String
     >((ref, tenantId) {
-      return UserSessionController(
+      return SessionController(
         ref: ref,
         tenantId: tenantId,
         auth: ref.read(firebaseAuthServiceProvider),
       );
     });
 
-class UserSessionController extends StateNotifier<AsyncValue<AuthUser?>> {
+class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   final Ref ref;
   final String tenantId;
   final FirebaseAuthService auth;
@@ -40,7 +40,7 @@ class UserSessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   Completer<void>? _initCompleter;
   bool _sessionInitialized = false;
 
-  UserSessionController({
+  SessionController({
     required this.ref,
     required this.tenantId,
     required this.auth,
