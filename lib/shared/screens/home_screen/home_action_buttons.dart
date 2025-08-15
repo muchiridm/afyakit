@@ -1,4 +1,6 @@
 import 'package:afyakit/features/records/shared/records_dashboard_screen.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,16 +9,14 @@ import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/reports/screens/reports_dashboard_screen.dart';
 import 'package:afyakit/shared/screens/admin_dashboard_screen.dart';
 
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 
 class HomeActionButtons extends ConsumerWidget {
   const HomeActionButtons({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(combinedUserProvider).valueOrNull;
+    final user = ref.watch(currentUserProvider).valueOrNull;
     if (user == null) return const SizedBox.shrink();
 
     return LayoutBuilder(
@@ -149,7 +149,7 @@ class PermissionedAction {
   final IconData icon;
   final String label;
   final Widget destination;
-  final bool Function(CombinedUser user)? allowed;
+  final bool Function(AuthUser user)? allowed;
 
   const PermissionedAction({
     required this.icon,

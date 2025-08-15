@@ -11,7 +11,7 @@ import 'package:afyakit/features/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 
@@ -51,7 +51,7 @@ class IssueFormController extends SafeStateNotifier<IssueRecordState> {
 
   Future<void> submit(BuildContext context) async {
     final cartState = ref.read(multiCartProvider);
-    final user = ref.read(combinedUserProvider).asData?.value;
+    final user = ref.read(currentUserProvider).asData?.value;
 
     if (user == null) {
       SnackService.showError('User not loaded');

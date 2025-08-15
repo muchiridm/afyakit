@@ -1,3 +1,4 @@
+// lib/users/extensions/user_role_enum.dart
 enum UserRole {
   admin,
   manager,

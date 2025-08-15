@@ -1,11 +1,14 @@
+// lib/users/services/dev_auth_manager.dart
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/users/utils/claim_validator.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/shared/api/api_routes.dart';
 
 import 'dev_auth_result.dart';
 
@@ -46,8 +49,6 @@ class DevAuthManager {
     String? overrideEmail,
     bool forceRetry = false,
   }) async {
-    ref.read(tenantIdProvider); // ⏫ Prime it anyway
-
     final firebase = ref.read(firebaseAuthServiceProvider);
     final email = EmailHelper.normalize(
       overrideEmail ??
@@ -85,35 +86,38 @@ class DevAuthManager {
     debugPrint('🧪 Attempting dev login with: $email');
 
     try {
+      // 1) Firebase sign-in
       final cred = await firebase.signInWithEmailAndPassword(
         email: email,
         password: _devPassword,
       );
-
       debugPrint('✅ Firebase signed in as ${cred.user?.email}');
 
-      // 🔁 Backend claim sync
+      // 2) Ensure API token & hit the correct backend route to sync session/claims
       try {
         final tokenProviderInstance = ref.read(tokenProvider);
         await tokenProviderInstance.getToken();
+
+        final tenantId = ref.read(tenantIdProvider);
+        final routes = ApiRoutes(tenantId);
         final client = await ref.read(apiClientProvider.future);
 
-        final response = await client.dio.post(
-          '/users/check-user-status',
+        final response = await client.dio.postUri(
+          routes
+              .checkUserStatus(), // 👈 correct: auth/session/check-user-status
           data: {'email': email},
         );
-
         debugPrint('🔁 check-user-status → ${response.data}');
       } catch (syncErr) {
-        debugPrint('⚠️ Claim sync failed: $syncErr');
+        debugPrint('⚠️ Claim/session sync failed: $syncErr');
       }
 
-      // 🔐 Retry fetching claims (up to 3 times)
+      // 3) Try to see a tenant-bearing claim (minimal validity). Don’t block UI if missing.
       bool claimsReady = false;
       Map<String, dynamic> claims = {};
 
       for (var attempt = 1; attempt <= 3; attempt++) {
-        await cred.user?.getIdToken(true); // 🔄 Force refresh
+        await cred.user?.getIdToken(true); // force refresh
         final result = await cred.user?.getIdTokenResult();
         claims = result?.claims ?? {};
 
@@ -123,12 +127,12 @@ class DevAuthManager {
           claimsReady = true;
           break;
         }
-
         await Future.delayed(const Duration(seconds: 1));
       }
 
       if (!claimsReady) {
-        debugPrint('❌ Claims still missing after retries.');
+        // Not fatal. The app now hydrates UI role/stores from auth_users anyway.
+        debugPrint('❌ Claims still missing after retries (continuing).');
         return DevAuthResult(
           success: true,
           claimsSynced: false,

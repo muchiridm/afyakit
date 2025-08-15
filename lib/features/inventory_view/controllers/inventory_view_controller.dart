@@ -1,3 +1,5 @@
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,8 +20,6 @@ import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 /// 🎯 ViewController family — scoped per ItemType
@@ -138,7 +138,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
   void startAddBatch(
     BuildContext context,
     BaseInventoryItem item,
-    CombinedUser user,
+    AuthUser user,
   ) {
     if (user.tenantId.isEmpty) {
       SnackService.showError('❌ Missing tenant ID for this user');
@@ -179,7 +179,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
     BuildContext context,
     BatchRecord batch,
     dynamic item,
-    CombinedUser user,
+    AuthUser user,
   ) {
     if (user.tenantId.isEmpty) {
       SnackService.showError('❌ Missing tenant ID');
@@ -207,7 +207,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
     );
   }
 
-  bool canEditBatch(BatchRecord batch, CombinedUser user) =>
+  bool canEditBatch(BatchRecord batch, AuthUser user) =>
       user.canManageBatch(batch);
 
   @override

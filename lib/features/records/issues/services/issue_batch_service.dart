@@ -10,7 +10,7 @@ import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
 
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_session_service.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
@@ -37,7 +37,7 @@ class IssueBatchService {
   }) async {
     // ⛔ Guard: block stock mutations while the current user has an open delivery session
     if (enforceDeliveryLock) {
-      final user = ref.read(combinedUserProvider).asData?.value;
+      final user = ref.read(currentUserProvider).asData?.value;
       final email = (user?.email ?? user?.email ?? '').trim().toLowerCase();
 
       if (email.isNotEmpty) {

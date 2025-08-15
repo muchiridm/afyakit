@@ -1,6 +1,6 @@
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,7 +10,7 @@ class UserBadge extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
-    final userAsync = ref.watch(combinedUserProvider);
+    final userAsync = ref.watch(currentUserProvider);
 
     return userAsync.when(
       loading: () => const SizedBox(

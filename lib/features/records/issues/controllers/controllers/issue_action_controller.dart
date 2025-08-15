@@ -2,6 +2,7 @@
 
 import 'package:afyakit/features/records/issues/controllers/controllers/issue_lifecycle_controller.dart';
 import 'package:afyakit/features/records/issues/controllers/engines/issue_policy_engine.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,15 +13,14 @@ import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 
 // NEW: policy provider
 import 'package:afyakit/features/records/issues/providers/issue_engine_providers.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantIdProvider);
-  final user = ref.watch(combinedUserProvider).asData?.value;
+  final user = ref.watch(currentUserProvider).asData?.value;
   if (user == null) return null;
 
   final lifecycle = IssueLifecycleController(
@@ -94,7 +94,7 @@ class IssueActionController {
   }
 
   List<IssueActionButton> getAvailableActions({
-    required CombinedUser user,
+    required AuthUser user,
     required IssueRecord record,
     required List<InventoryLocation> allStores, // kept for signature parity
   }) {

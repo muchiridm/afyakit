@@ -1,6 +1,6 @@
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:afyakit/users/controllers/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,11 +13,10 @@ import 'package:afyakit/features/records/issues/models/enums/issue_status_x.dart
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/shared/providers/stock/issues_stream_provider.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
 
 class IssueDetailsScreen extends ConsumerWidget {
   final String issueId;
@@ -27,7 +26,7 @@ class IssueDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
     final asyncIssues = ref.watch(hydratedIssuesStreamProvider(tenantId));
-    final asyncUser = ref.watch(combinedUserProvider);
+    final asyncUser = ref.watch(currentUserProvider);
 
     // 👇 watch both stores and dispensaries
     final asyncStores = ref.watch(
@@ -46,9 +45,7 @@ class IssueDetailsScreen extends ConsumerWidget {
         final issue = issues.firstWhereOrNull((i) => i.id == issueId);
         if (issue == null) return _buildNotFound('Issue');
 
-        final requestedByUser = ref.watch(
-          combinedUserByIdProvider(issue.requestedByUid),
-        );
+        final requestedByUser = ref.watch(currentUserIdProvider);
 
         return asyncUser.when(
           loading: _buildLoading,
@@ -78,7 +75,7 @@ class IssueDetailsScreen extends ConsumerWidget {
               context,
               issue,
               user,
-              requestedByUser?.displayName,
+              requestedByUser,
               controller,
               asyncStores, // keep passing stores AsyncValue for actions
               fromStoreName: fromStoreName,
@@ -104,7 +101,7 @@ class IssueDetailsScreen extends ConsumerWidget {
   Widget _buildScreen(
     BuildContext context,
     IssueRecord issue,
-    CombinedUser user,
+    AuthUser user,
     String? requestedByName,
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores, {
@@ -216,7 +213,7 @@ class IssueDetailsScreen extends ConsumerWidget {
   List<Widget> _buildActionButtons(
     BuildContext context,
     IssueRecord issue,
-    CombinedUser user,
+    AuthUser user,
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores,
   ) {

@@ -3,23 +3,22 @@ import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.d
 import 'package:afyakit/features/records/issues/models/enums/issue_status_enum.dart';
 import 'package:afyakit/features/records/issues/models/enums/issue_type_enum.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 
 class IssuePolicyEngine {
   // ── Permissions (single source of truth) ─────────────────────
 
-  bool isRequesterOrAdmin(CombinedUser u, IssueRecord r) =>
+  bool isRequesterOrAdmin(AuthUser u, IssueRecord r) =>
       u.uid == r.requestedByUid || u.isAdmin;
 
-  bool canManageFrom(CombinedUser u, IssueRecord r) =>
+  bool canManageFrom(AuthUser u, IssueRecord r) =>
       u.canManageStoreById(r.fromStore);
 
-  bool canManageTo(CombinedUser u, IssueRecord r) =>
+  bool canManageTo(AuthUser u, IssueRecord r) =>
       u.canManageStoreById(r.toStore);
 
-  bool canDispose(CombinedUser u, IssueRecord r) =>
-      u.canDisposeFrom(r.fromStore);
+  bool canDispose(AuthUser u, IssueRecord r) => u.canDisposeFrom(r.fromStore);
 
   bool isDisposal(IssueRecord r) =>
       r.type == IssueType.dispose ||
@@ -29,7 +28,7 @@ class IssuePolicyEngine {
 
   // ── Which actions are available? (pure) ──────────────────────
   List<IssueAction> actionsFor({
-    required CombinedUser user,
+    required AuthUser user,
     required IssueRecord record,
   }) {
     final status = record.statusEnum;

@@ -10,7 +10,7 @@ import 'package:afyakit/features/inventory_locations/inventory_location_controll
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 
@@ -50,7 +50,7 @@ class BatchEditorScreen extends ConsumerWidget {
     final sourcesAsync = ref.watch(
       inventoryLocationProvider(InventoryLocationType.source),
     );
-    final sessionAsync = ref.watch(combinedUserProvider);
+    final sessionAsync = ref.watch(currentUserProvider);
 
     return sessionAsync.when(
       loading: _loader,

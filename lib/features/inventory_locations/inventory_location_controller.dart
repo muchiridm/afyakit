@@ -1,6 +1,6 @@
-import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
@@ -120,7 +120,7 @@ final allDispensariesProvider = Provider<List<InventoryLocation>>((ref) {
 final filteredStoreProvider = FutureProvider<List<InventoryLocation>>((
   ref,
 ) async {
-  final userAsync = ref.watch(combinedUserProvider);
+  final userAsync = ref.watch(currentUserProvider);
   final storeState = ref.watch(
     inventoryLocationProvider(InventoryLocationType.store),
   );

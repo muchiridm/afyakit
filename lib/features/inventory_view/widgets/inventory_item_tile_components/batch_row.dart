@@ -4,10 +4,10 @@ import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_controller.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/records/issues/controllers/controllers/multi_cart_controller.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +34,7 @@ class BatchRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessionAsync = ref.watch(combinedUserProvider);
+    final sessionAsync = ref.watch(currentUserProvider);
     final cartState = ref.watch(multiCartProvider);
     final cartNotifier = ref.read(multiCartProvider.notifier);
     final controller = ref.read(
@@ -149,7 +149,7 @@ class BatchRow extends ConsumerWidget {
 
   List<Widget> _buildEditButton(
     BuildContext context,
-    CombinedUser user,
+    AuthUser user,
     InventoryViewController controller,
   ) {
     return [

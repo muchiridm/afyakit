@@ -1,9 +1,9 @@
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
 
 class PermissionGuard extends StatelessWidget {
-  final CombinedUser user;
-  final bool Function(CombinedUser) allowed;
+  final AuthUser user;
+  final bool Function(AuthUser) allowed;
   final Widget child;
   final Widget fallback;
 

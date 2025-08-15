@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:afyakit/shared/providers/stock/batch_records_stream_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -154,8 +154,9 @@ class DeliverySessionController extends StateNotifier<DeliverySessionState> {
     // 2) If no local, try Firestore temp sessions for this signed-in user
     try {
       // Wait for user session to be available
-      final user = await ref.read(combinedUserProvider.future);
-      final email = user?.email.trim().toLowerCase() ?? '';
+      final user = await ref.read(currentUserFutureProvider.future);
+      final email = (user?.email ?? '').trim().toLowerCase();
+
       if (email.isEmpty) {
         debugPrint('📭 No cached session and no user email yet.');
         return;

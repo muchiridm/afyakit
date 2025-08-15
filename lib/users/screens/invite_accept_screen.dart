@@ -1,9 +1,11 @@
+import 'package:afyakit/users/extensions/auth_user_status_x.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
 import 'package:afyakit/users/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/users/widgets/auth_gate.dart';
 import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
@@ -16,12 +18,15 @@ class InviteAcceptScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inviteUid = inviteParams['uid'];
-    final asyncUser = ref.watch(combinedUserProvider);
 
-    // Per-tenant data + theme color
+    // theme + tenant
     final cfg = ref.watch(tenantConfigProvider);
     final displayName = cfg.displayName;
     final primary = Theme.of(context).colorScheme.primary;
+
+    final asyncUser = ref.watch(
+      currentUserProvider,
+    ); // now AsyncValue<AuthUser?>
 
     return asyncUser.when(
       loading: () => _buildLoading(),
@@ -37,10 +42,11 @@ class InviteAcceptScreen extends ConsumerWidget {
           return _buildWrongAccount(context);
         }
 
-        final isInvited = user.status.name == 'invited';
-        final profileIncomplete = user.displayName.trim().isEmpty;
+        // Use your status extension if you have it; otherwise compare string
+        final isInvited =
+            user.statusEnum.isInvited; // or: user.status == 'invited'
+        final profileIncomplete = (user.displayName).trim().isEmpty;
 
-        // Needs onboarding/profile completion
         if (isInvited || profileIncomplete) {
           return _buildCompleteProfile(
             context: context,

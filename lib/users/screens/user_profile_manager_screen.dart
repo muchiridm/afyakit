@@ -1,29 +1,39 @@
+import 'package:afyakit/users/extensions/auth_user_status_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/controllers/auth_user_controller.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
 import 'package:afyakit/users/providers/auth_user_stream_provider.dart';
-import 'package:afyakit/users/providers/user_profile_stream_provider.dart';
-import 'package:collection/collection.dart';
+import 'package:afyakit/users/utils/parse_user_role.dart';
+
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
-import 'package:afyakit/users/providers/combined_users_provider.dart';
+
+import 'package:afyakit/users/screens/invite_user_screen.dart';
+import 'package:afyakit/users/widgets/user_profile_card.dart';
+
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/users/controllers/profile_controller.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
-import 'package:afyakit/users/screens/invite_user_screen.dart';
-import 'package:afyakit/users/services/user_deletion_controller.dart';
-import 'package:afyakit/users/widgets/user_profile_card.dart';
+
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final allAuthUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
+  ref,
+) async {
+  final ctrl = ref.read(authUserControllerProvider.notifier);
+  return await ctrl.getAllUsers();
+});
 
 class UserProfileManagerScreen extends ConsumerWidget {
   const UserProfileManagerScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentUserAsync = ref.watch(combinedUserProvider);
+    final currentUserAsync = ref.watch(currentUserProvider);
 
     return currentUserAsync.when(
       loading: () =>
@@ -85,41 +95,32 @@ class UserProfileManagerScreen extends ConsumerWidget {
   }
 
   Widget _buildUserList(WidgetRef ref, List<InventoryLocation> allStores) {
-    final authAsync = ref.watch(authUserStreamProvider);
-    final profAsync = ref.watch(userProfileStreamProvider);
-    final users = ref.watch(combinedUsersProvider);
+    final usersAsync = ref.watch(authUserStreamProvider); // 👈 stream, not API
 
-    if (authAsync.isLoading || profAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final err = authAsync.error ?? profAsync.error;
-    if (err != null) {
-      return Center(child: Text('❌ Error loading users: $err'));
-    }
-
-    if (users.isEmpty) {
-      return const Center(child: Text('No users found.'));
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: users.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _buildUserCard(ref, users[i], allStores),
+    return usersAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('❌ Error loading users: $e')),
+      data: (users) {
+        if (users.isEmpty) {
+          return const Center(child: Text('No users found.'));
+        }
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: users.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, i) => _buildUserCard(ref, users[i], allStores),
+        );
+      },
     );
   }
 
   Widget _buildUserCard(
     WidgetRef ref,
-    CombinedUser user,
+    AuthUser user,
     List<InventoryLocation> allStores,
   ) {
-    final editor = ref.read(profileControllerProvider(user.uid).notifier);
-
-    final deletionController = ref.read(
-      userDeletionControllerProvider.notifier,
-    );
+    final controller = ref.read(authUserControllerProvider.notifier);
 
     final readableStores = user.stores.map((id) {
       final store = allStores.firstWhere(
@@ -135,11 +136,11 @@ class UserProfileManagerScreen extends ConsumerWidget {
     }).toList();
 
     return UserProfileCard(
-      displayName: user.displayName,
+      displayName: _displayLabelFor(user),
       email: user.email,
       phoneNumber: user.phoneNumber,
-      role: user.role.name,
-      status: user.status.name,
+      role: user.effectiveRole.name, // via AuthUserX
+      status: user.statusEnum.label, // via AuthUserStatusX
       storeLabels: readableStores,
       onAvatarTapped: () async {
         final newUrl = await DialogService.prompt(
@@ -147,12 +148,15 @@ class UserProfileManagerScreen extends ConsumerWidget {
           initialValue: user.avatarUrl,
         );
         if (newUrl != null && newUrl.trim().isNotEmpty) {
-          await editor.updateAvatar(user.uid, newUrl.trim());
+          await controller.updateFields(user.uid, {'avatarUrl': newUrl.trim()});
         }
       },
-      onRoleChanged: (newRole) {
-        if (newRole != null) {
-          editor.updateRole(user.uid, newRole);
+      onRoleChanged: (newRole) async {
+        if (newRole == null) return;
+
+        switch (newRole) {
+          case String s:
+            await controller.updateUserRole(user.uid, role: parseUserRole(s));
         }
       },
       onEditStoresTapped: () async {
@@ -161,19 +165,37 @@ class UserProfileManagerScreen extends ConsumerWidget {
           user.stores,
         );
         if (selected != null) {
-          editor.updateStores(user.uid, selected);
+          await controller.setStores(user.uid, selected);
         }
       },
-      onRemoveStore: (storeName) {
+      onRemoveStore: (storeName) async {
         final match = allStores.firstWhereOrNull((s) => s.name == storeName);
         if (match != null) {
-          editor.removeStore(user.uid, user.stores, match.id);
+          final updated = [...user.stores]..remove(match.id);
+          await controller.setStores(user.uid, updated);
         }
       },
       onDeleteUser: () {
         debugPrint('🔥 onDeleteUser triggered for: ${user.uid}');
-        deletionController.deleteUser(user.uid, email: user.email);
+        controller.deleteUser(user.uid);
       },
     );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────
+
+  String _displayLabelFor(AuthUser u) {
+    final claimName = (u.claims?['displayName'] as String?)?.trim();
+    if (claimName != null && claimName.isNotEmpty) return claimName;
+
+    // If your AuthUser model now has displayName, prefer it:
+    final modelName = (u as dynamic).displayName;
+    if (modelName is String && modelName.trim().isNotEmpty) return modelName;
+
+    if (u.email.trim().isNotEmpty) return u.email.trim();
+    if (u.phoneNumber?.trim().isNotEmpty == true) return u.phoneNumber!.trim();
+    return u.uid;
   }
 }

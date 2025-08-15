@@ -10,8 +10,8 @@ import 'package:afyakit/features/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/models/items/medication_item.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:flutter/material.dart';
@@ -41,7 +41,7 @@ class _InventoryEditorScreenState extends ConsumerState<InventoryEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sessionAsync = ref.watch(combinedUserProvider);
+    final sessionAsync = ref.watch(currentUserProvider);
 
     return sessionAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -57,7 +57,7 @@ class _InventoryEditorScreenState extends ConsumerState<InventoryEditorScreen> {
     );
   }
 
-  Widget _buildHeader(CombinedUser? user) {
+  Widget _buildHeader(AuthUser? user) {
     final canDelete = widget.item != null;
 
     return ScreenHeader(

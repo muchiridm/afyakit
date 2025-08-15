@@ -2,6 +2,7 @@
 
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_locked_exception.dart';
 import 'package:afyakit/features/records/issues/controllers/engines/issue_lifecycle_engine.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,12 +11,11 @@ import 'package:afyakit/features/records/issues/services/issue_service.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
 
 class IssueLifecycleController {
   final Ref ref;
   final String tenantId;
-  final CombinedUser currentUser;
+  final AuthUser currentUser;
   final IssueService service;
   final IssueBatchService batchService;
 

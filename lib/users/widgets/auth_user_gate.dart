@@ -1,14 +1,17 @@
+// lib/users/widgets/auth_user_gate.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
-import 'package:afyakit/users/models/combined_user_model.dart';
 
-class CombinedUserGate extends ConsumerWidget {
-  final bool Function(CombinedUser user) allow;
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/controllers/session_controller.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+
+class AuthUserGate extends ConsumerWidget {
+  final bool Function(AuthUser user) allow;
   final Widget Function(BuildContext context) builder;
   final Widget? fallback;
 
-  const CombinedUserGate({
+  const AuthUserGate({
     super.key,
     required this.allow,
     required this.builder,
@@ -17,9 +20,10 @@ class CombinedUserGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final combinedUser = ref.watch(combinedUserProvider);
+    final tenantId = ref.watch(tenantIdProvider);
+    final authUserAsync = ref.watch(sessionControllerProvider(tenantId));
 
-    return combinedUser.when(
+    return authUserAsync.when(
       data: (user) {
         if (user != null && allow(user)) {
           return builder(context);

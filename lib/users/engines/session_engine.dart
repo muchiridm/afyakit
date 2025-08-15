@@ -18,11 +18,15 @@ class SessionEngine {
       final u = await auth.getCurrentUser();
       if (u == null) return const Ok(null); // not signed in
 
-      await _syncClaimsIfNeeded();
       final email = u.email?.trim().toLowerCase();
       if (email == null || email.isEmpty) {
         return Err(AppError('auth/no-email', 'Firebase user has no email'));
       }
+
+      // 🔑 Always let the helper decide whether to sync/hydrate
+      await _syncClaimsIfNeeded(email: email, uid: u.uid);
+
+      // Canonical fetch (also keeps backend/session in sync)
       final authUser = await session.checkUserStatus(email: email);
       return Ok(authUser);
     } catch (e) {
@@ -36,8 +40,13 @@ class SessionEngine {
     try {
       final u = await auth.getCurrentUser();
       if (u == null) return const Ok(null);
+
       await auth.refreshToken();
       final email = u.email?.trim().toLowerCase() ?? '';
+
+      // Same logic on reload: hydrate if claims are incomplete
+      await _syncClaimsIfNeeded(email: email, uid: u.uid);
+
       final authUser = await session.checkUserStatus(email: email);
       return Ok(authUser);
     } catch (e) {
@@ -47,14 +56,28 @@ class SessionEngine {
     }
   }
 
-  Future<void> _syncClaimsIfNeeded() async {
+  /// If claims are missing tenant → trigger server sync.
+  /// If claims are valid but missing profile bits (role/stores) → hydrate from model by
+  /// calling `checkUserStatus(email)`, which returns the authoritative AuthUser.
+  Future<void> _syncClaimsIfNeeded({required String email, String? uid}) async {
     await auth.refreshToken();
     final claims = await auth.getClaims();
-    if (ClaimValidator.isValid(claims)) return;
-    // trigger backend sync by pinging status endpoint
-    final u = await auth.getCurrentUser();
-    if (u?.email != null) {
-      await session.checkUserStatus(email: u!.email!);
+
+    // 1) No tenant claim → force backend to stamp claims/session.
+    if (!ClaimValidator.isValid(claims)) {
+      if (email.isNotEmpty) {
+        await session.checkUserStatus(email: email);
+      }
+      return;
     }
+
+    // 2) Tenant present but profile bits may be stale/missing in claims.
+    //    Hydrate the in-memory user from the canonical model.
+    if (ClaimValidator.shouldHydrateFromModel(claims)) {
+      if (email.isNotEmpty) {
+        await session.checkUserStatus(email: email);
+      }
+    }
+    // Otherwise: claims good enough; nothing to do.
   }
 }

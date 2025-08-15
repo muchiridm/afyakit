@@ -4,8 +4,8 @@ import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_comp
 import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_components/batch_row.dart';
 import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -130,7 +130,7 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
     if (stores == null) return [const Text('Loading store data...')];
 
     final rows = <Widget>[];
-    final user = ref.watch(combinedUserProvider).valueOrNull;
+    final user = ref.watch(currentUserProvider).valueOrNull;
 
     final isStockIn = widget.mode.isStockIn;
     final isStockOut = widget.mode.isStockOut;

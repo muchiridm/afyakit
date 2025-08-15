@@ -9,7 +9,7 @@ import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 
 import 'package:afyakit/users/extensions/auth_user_status_x.dart';
 
@@ -36,7 +36,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   Widget build(BuildContext context) {
     final tenantId = ref.watch(tenantIdProvider);
     final authState = ref.watch(sessionControllerProvider(tenantId));
-    final combinedState = ref.watch(combinedUserProvider);
+    final combinedState = ref.watch(currentUserProvider);
 
     final authUser = authState.value;
     final combinedUser = combinedState.value;

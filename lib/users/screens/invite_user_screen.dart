@@ -1,9 +1,9 @@
 import 'package:afyakit/users/controllers/auth_user_controller.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
 import 'package:afyakit/users/extensions/user_role_enum.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
 import 'package:afyakit/users/extensions/user_role_x.dart';
-import 'package:afyakit/users/widgets/combined_user_gate.dart';
+import 'package:afyakit/users/widgets/auth_user_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,7 +25,7 @@ class InviteUserScreen extends ConsumerWidget {
     final formState = ref.watch(authUserControllerProvider);
     final controller = ref.read(authUserControllerProvider.notifier);
 
-    return CombinedUserGate(
+    return AuthUserGate(
       allow: (user) => user.canManageUsers,
       builder: (_) => BaseScreen(
         maxContentWidth: 600,
@@ -80,16 +80,22 @@ class _InviteUserForm extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<UserRole>(
-                initialValue: formState.role,
+                value: formState
+                    .role, // use `value`, not `initialValue`, so it updates with state
                 decoration: const InputDecoration(labelText: 'Role'),
-                items: UserRole.values.map((role) {
-                  return DropdownMenuItem(value: role, child: Text(role.label));
-                }).toList(),
+                items: UserRole.values
+                    .map(
+                      (role) => DropdownMenuItem<UserRole>(
+                        value: role,
+                        child: Text(role.label), // from UserRoleX
+                      ),
+                    )
+                    .toList(),
                 onChanged: (role) {
                   if (role != null) {
-                    controller.setRole(
-                      role.name,
-                    ); // 👈 still store as string if needed
+                    controller.setFormRole(
+                      role,
+                    ); // ✅ pass the enum, not a String
                   }
                 },
               ),

@@ -1,7 +1,9 @@
 import 'package:afyakit/features/batches/controllers/batch_editor_args.dart';
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/providers/combined_user_provider.dart';
+import 'package:afyakit/users/extensions/auth_user_x.dart';
+import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -13,11 +15,8 @@ import 'package:afyakit/features/inventory_locations/inventory_location_type_enu
 import 'package:afyakit/features/batches/controllers/batch_controller.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_persistence_service.dart';
-// ⬇️ NEW: we’ll read & write last used store/source on the temp session
-import 'package:afyakit/features/records/delivery_sessions/services/delivery_session_service.dart';
 
-import 'package:afyakit/users/models/combined_user_model.dart';
-import 'package:afyakit/users/extensions/combined_user_x.dart';
+import 'package:afyakit/features/records/delivery_sessions/services/delivery_session_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 
@@ -80,7 +79,7 @@ class BatchEditorController extends StateNotifier<BatchEditorState> {
   // ─────────────────────────────────────────────
   Future<void> _prefillFromActiveDelivery() async {
     try {
-      final user = ref.read(combinedUserProvider).asData?.value;
+      final user = ref.read(currentUserProvider).asData?.value;
       final email = (user?.email ?? user?.email ?? '').trim().toLowerCase();
       if (email.isEmpty) return;
 
@@ -154,7 +153,7 @@ class BatchEditorController extends StateNotifier<BatchEditorState> {
 
   List<InventoryLocation> getStoreOptions(
     List<InventoryLocation> allStores,
-    CombinedUser user,
+    AuthUser user,
   ) {
     final current = state.storeId?.trim();
 
@@ -208,7 +207,7 @@ class BatchEditorController extends StateNotifier<BatchEditorState> {
   // 🧑🏾‍💻 Permissions
   // ─────────────────────────────────────────────
 
-  bool canEdit(CombinedUser user) {
+  bool canEdit(AuthUser user) {
     final storeId = state.storeId?.trim();
     return storeId != null && user.canManageStoreById(storeId);
   }
@@ -253,7 +252,7 @@ class BatchEditorController extends StateNotifier<BatchEditorState> {
     final deliveryController = ref.read(
       deliverySessionControllerProvider.notifier,
     );
-    final user = ref.read(combinedUserProvider).asData?.value;
+    final user = ref.read(currentUserProvider).asData?.value;
     final enteredByEmail = (user?.email ?? user?.email ?? 'unknown@user.com')
         .trim();
     final enteredByName = user?.displayName.trim() ?? 'Unknown';

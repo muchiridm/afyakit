@@ -6,12 +6,10 @@ import 'package:afyakit/shared/providers/api_route_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/users/services/auth_user_service.dart';
 import 'package:afyakit/users/services/firebase_auth_service.dart';
-import 'package:afyakit/users/services/user_profile_service.dart';
 import 'package:afyakit/users/services/user_session_service.dart';
 import 'package:afyakit/users/engines/session_engine.dart';
 import 'package:afyakit/users/engines/login_engine.dart';
 import 'package:afyakit/users/engines/auth_user_engine.dart';
-import 'package:afyakit/users/engines/profile_engine.dart';
 
 /// ─────────────────────────────────────────────────────────
 /// SessionEngine (tenant-scoped, async)
@@ -62,26 +60,4 @@ final authUserEngineProvider = FutureProvider.family<AuthUserEngine, String>((
   final client = await ref.read(apiClientProvider.future);
   final service = AuthUserService(client: client, routes: ApiRoutes(tenantId));
   return AuthUserEngine(service);
-});
-
-/// If you prefer reading tenantId from provider instead of passing it in:
-/// final authUserEngineProvider = FutureProvider<AuthUserEngine>((ref) async {
-///   final tenantId = ref.read(tenantIdProvider);
-///   final client   = await ref.read(apiClientProvider.future);
-///   return AuthUserEngine(AuthUserService(client: client, routes: ApiRoutes(tenantId)));
-/// });
-
-/// ─────────────────────────────────────────────────────────
-/// ProfileEngine (tenant-scoped, async)
-/// ─────────────────────────────────────────────────────────
-final profileEngineProvider = FutureProvider.family<ProfileEngine, String>((
-  ref,
-  tenantId,
-) async {
-  final client = await ref.read(apiClientProvider.future);
-
-  return ProfileEngine(
-    profiles: UserProfileService(client: client, routes: ApiRoutes(tenantId)),
-    authUsers: AuthUserService(client: client, routes: ApiRoutes(tenantId)),
-  );
 });
