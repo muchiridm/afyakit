@@ -1,7 +1,7 @@
 // lib/hq/providers/hq_providers.dart
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/tenants/tenant_model.dart';
-import 'package:afyakit/tenants/tenant_service.dart';
+import 'package:afyakit/hq/tenants/tenant_model.dart';
+import 'package:afyakit/hq/tenants/tenant_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final tenantServiceProvider = Provider((ref) {

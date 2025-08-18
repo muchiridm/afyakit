@@ -11,7 +11,7 @@ import 'package:afyakit/features/inventory/services/inventory_service.dart';
 import 'package:afyakit/features/batches/services/batch_service.dart';
 import 'package:afyakit/shared/providers/api_route_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/main.dart';

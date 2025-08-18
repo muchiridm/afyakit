@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:afyakit/users/extensions/user_role_enum.dart';

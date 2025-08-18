@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/users/controllers/login_controller.dart';
-import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_config_provider.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});

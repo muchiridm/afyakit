@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:afyakit/features/inventory/controllers/inventory_editable_base.dart';
 import 'package:afyakit/features/inventory/providers/item_streams/medication_items_stream_provider.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/controllers/inventory_controller.dart';

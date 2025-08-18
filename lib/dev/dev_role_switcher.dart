@@ -23,7 +23,7 @@ class DevRoleSwitcher extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentRole = _currentRoleFromAuth(user);
     return DropdownButtonFormField<UserRole>(
-      value: currentRole,
+      initialValue: currentRole,
       decoration: const InputDecoration(
         labelText: 'Switch Role (dev only)',
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

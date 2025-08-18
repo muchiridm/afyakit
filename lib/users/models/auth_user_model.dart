@@ -76,42 +76,40 @@ class AuthUser {
         ? Map<String, dynamic>.from(json['claims'])
         : null;
 
-    String _s(dynamic v) => (v ?? '').toString().trim();
+    String s(dynamic v) => (v ?? '').toString().trim();
 
     // email / phone
-    final email = _s(json['email']);
-    final phone = _s(json['phoneNumber']).isNotEmpty
-        ? _s(json['phoneNumber'])
-        : (_s(claims?['phone']).isNotEmpty
-              ? _s(claims?['phone'])
-              : _s(claims?['phone_number']));
+    final email = s(json['email']);
+    final phone = s(json['phoneNumber']).isNotEmpty
+        ? s(json['phoneNumber'])
+        : (s(claims?['phone']).isNotEmpty
+              ? s(claims?['phone'])
+              : s(claims?['phone_number']));
 
     // tenantId (top-level → claims)
-    final tenantId = _s(json['tenantId']).isNotEmpty
-        ? _s(json['tenantId'])
-        : (_s(claims?['tenant']).isNotEmpty
-              ? _s(claims?['tenant'])
-              : (_s(claims?['tenantId']).isNotEmpty
-                    ? _s(claims?['tenantId'])
-                    : _s(claims?['tenant_id'])));
+    final tenantId = s(json['tenantId']).isNotEmpty
+        ? s(json['tenantId'])
+        : (s(claims?['tenant']).isNotEmpty
+              ? s(claims?['tenant'])
+              : (s(claims?['tenantId']).isNotEmpty
+                    ? s(claims?['tenantId'])
+                    : s(claims?['tenant_id'])));
 
     // status
-    final status = _s(json['status']).isNotEmpty
-        ? _s(json['status'])
-        : 'invited';
+    final status = s(json['status']).isNotEmpty ? s(json['status']) : 'invited';
 
     // role (top-level → claims → staff)
-    final rawRole = _s(json['role']);
-    final claimRole = _s(claims?['role']);
+    final rawRole = s(json['role']);
+    final claimRole = s(claims?['role']);
     final roleStr = rawRole.isNotEmpty ? rawRole : claimRole;
     final role = parseUserRole(roleStr.isNotEmpty ? roleStr : 'staff');
 
     // displayName (top-level → claims.displayName/name)
-    final displayName = _s(json['displayName']).isNotEmpty
-        ? _s(json['displayName'])
-        : (_s(claims?['displayName']).isNotEmpty
-              ? _s(claims?['displayName'])
-              : _s(claims?['name']));
+    final displayName = s(json['displayName']).isNotEmpty
+        ? s(json['displayName'])
+        : (s(claims?['displayName']).isNotEmpty
+              ? s(claims?['displayName'])
+              : s(claims?['name']));
 
     // stores (top-level → claims.stores)
     List<String> storesModel = _normalizeStores(json['stores']);
@@ -132,8 +130,8 @@ class AuthUser {
       displayName: displayName,
       role: role,
       stores: storesModel,
-      avatarUrl: (_s(json['avatarUrl']).isNotEmpty)
-          ? _s(json['avatarUrl'])
+      avatarUrl: (s(json['avatarUrl']).isNotEmpty)
+          ? s(json['avatarUrl'])
           : null,
     );
 

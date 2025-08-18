@@ -8,7 +8,7 @@ import 'package:afyakit/users/screens/splash_screen.dart';
 import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/providers/current_user_provider.dart';
 
 import 'package:afyakit/users/extensions/auth_user_status_x.dart';

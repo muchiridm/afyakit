@@ -1,4 +1,3 @@
-// lib/users/engines/auth_user_engine.dart
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
@@ -14,12 +13,24 @@ class AuthUserEngine {
   Future<Result<void>> invite({
     String? email,
     String? phoneNumber,
+    String? role, // ← NEW: 'admin' | 'manager' | null
     bool forceResend = false,
   }) async {
     try {
+      if ((email == null || email.isEmpty) &&
+          (phoneNumber == null || phoneNumber.isEmpty)) {
+        return Err(AppError('auth/bad-invite', 'Email or phone is required'));
+      }
+
+      // Normalize/guard role (default to admin if provided but invalid)
+      final normalizedRole = (role == null || role.isEmpty)
+          ? null
+          : (role == 'manager' ? 'manager' : 'admin');
+
       await service.inviteUser(
         email: email,
         phoneNumber: phoneNumber,
+        role: normalizedRole, // ← pass through to service
         forceResend: forceResend,
       );
       return const Ok(null);
@@ -53,8 +64,6 @@ class AuthUserEngine {
 
   // ─────────────────────────────────────────────────────────────
   // ✏️ Write
-  //  - updateFields: single entry-point (service handles unified + legacy split)
-  //  - sugar methods call explicit service helpers for clarity
   // ─────────────────────────────────────────────────────────────
   Future<Result<void>> updateFields(
     String uid,
@@ -95,7 +104,6 @@ class AuthUserEngine {
 
   Future<Result<void>> setRole(String uid, String role) async {
     try {
-      // Explicitly call the service helper (which routes to unified + legacy)
       await service.setRole(uid, role);
       return const Ok(null);
     } catch (e) {

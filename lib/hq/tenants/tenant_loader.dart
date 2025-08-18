@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:afyakit/config/tenant_config.dart';
-import 'package:afyakit/tenants/tenant_service.dart';
+import 'package:afyakit/hq/tenants/tenant_service.dart';
 
 typedef LogFn = void Function(String);
 

@@ -9,7 +9,7 @@ import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/users/controllers/session_controller.dart';
 import 'package:afyakit/users/widgets/auth_gate.dart';
 import 'package:afyakit/main.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 

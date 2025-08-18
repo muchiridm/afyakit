@@ -2,36 +2,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/controllers/session_controller.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/providers/current_user_provider.dart'; // <= uses currentAuthUserProvider
 
 class AuthUserGate extends ConsumerWidget {
   final bool Function(AuthUser user) allow;
-  final Widget Function(BuildContext context) builder;
+  final WidgetBuilder builder;
   final Widget? fallback;
+  final Widget? loading;
 
   const AuthUserGate({
     super.key,
     required this.allow,
     required this.builder,
     this.fallback,
+    this.loading,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider);
-    final authUserAsync = ref.watch(sessionControllerProvider(tenantId));
+    // ✅ This one merges Firestore user + *fresh* ID-token claims
+    final auth = ref.watch(currentAuthUserProvider);
 
-    return authUserAsync.when(
+    return auth.when(
+      loading: () =>
+          loading ?? const Center(child: CircularProgressIndicator()),
+      error: (e, _) =>
+          fallback ?? Center(child: Text('Error loading user: $e')),
       data: (user) {
-        if (user != null && allow(user)) {
-          return builder(context);
-        }
+        if (user != null && allow(user)) return builder(context);
         return fallback ?? const Center(child: Text('🚫 Access Denied'));
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error loading user: $e')),
     );
   }
 }

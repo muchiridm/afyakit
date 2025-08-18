@@ -12,7 +12,7 @@ import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.d
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/providers/current_user_provider.dart';
 
 // NEW: policy provider

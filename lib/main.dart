@@ -1,7 +1,7 @@
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_config_provider.dart';
 import 'package:afyakit/shared/utils/decide_tenant.dart';
-import 'package:afyakit/tenants/tenant_loader.dart';
+import 'package:afyakit/hq/tenants/tenant_loader.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +10,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/config/tenant_config.dart';
 

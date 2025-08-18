@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:afyakit/users/providers/user_engine_providers.dart'; // authUserEngineProvider
 import 'package:afyakit/shared/types/result.dart';

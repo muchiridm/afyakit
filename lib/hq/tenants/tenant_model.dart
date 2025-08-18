@@ -1,15 +1,19 @@
 // lib/tenants/tenant_model.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 class Tenant {
-  final String id; // Firestore doc id (often the slug)
-  final String slug; // prefer field; fallback to id
-  final String displayName; // prefer field; fallback to id
-  final String primaryColor; // hex, defaults to #1565C0
+  final String id;
+  final String slug;
+  final String displayName;
+  final String primaryColor;
   final String? logoPath;
   final Map<String, dynamic> flags;
   final String status; // 'active' | 'suspended'
   final DateTime? createdAt;
+
+  // 👇 NEW: canonical ownership (single source of truth)
+  final String? ownerUid;
+  final String? ownerEmail; // convenience (optional)
 
   const Tenant({
     required this.id,
@@ -20,12 +24,13 @@ class Tenant {
     this.flags = const {},
     this.status = 'active',
     this.createdAt,
+    this.ownerUid,
+    this.ownerEmail,
   });
 
   factory Tenant.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? const <String, dynamic>{};
     final id = doc.id;
-
     return Tenant(
       id: id,
       slug: (d['slug'] ?? id).toString(),
@@ -35,10 +40,11 @@ class Tenant {
       flags: Map<String, dynamic>.from(d['flags'] as Map? ?? const {}),
       status: (d['status'] ?? 'active').toString(),
       createdAt: _parseCreatedAt(d['createdAt']),
+      ownerUid: (d['ownerUid'] as String?)?.trim(),
+      ownerEmail: (d['ownerEmail'] as String?)?.trim(),
     );
   }
 
-  /// Build from a plain map (no snapshot)
   factory Tenant.fromMap(String id, Map<String, dynamic> d) {
     return Tenant(
       id: id,
@@ -49,10 +55,11 @@ class Tenant {
       flags: Map<String, dynamic>.from(d['flags'] as Map? ?? const {}),
       status: (d['status'] ?? 'active').toString(),
       createdAt: _parseCreatedAt(d['createdAt']),
+      ownerUid: (d['ownerUid'] as String?)?.trim(),
+      ownerEmail: (d['ownerEmail'] as String?)?.trim(),
     );
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
   static String? _normalizeLogoPath(dynamic v) {
     final s = (v as String?)?.trim();
     return (s == null || s.isEmpty) ? null : s;
@@ -62,10 +69,7 @@ class Tenant {
     if (v is Timestamp) return v.toDate();
     if (v is DateTime) return v;
     if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
-    if (v is int) {
-      // assume ms epoch (Firestore serverTimestamp writes won't hit this)
-      return DateTime.fromMillisecondsSinceEpoch(v);
-    }
+    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
     return null;
   }
 }

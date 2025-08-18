@@ -7,11 +7,11 @@ Run these from the project root.
 
 ## 🏃 Run the App
 
-| Tenant       | Run Command         | Run on Web              |
-| ------------ | ------------------- | ----------------------- |
-| **AfyaKit**  | `make run afyakit`  | `make run-web afyakit`  |
-| **DanabTMC** | `make run danabtmc` | `make run-web danabtmc` |
-| **DawaPap**  | `make run dawapap`  | `make run-web dawapap`  |
+| Tenant       | Run Command       | Run on Web / CHROME   |
+| ------------ | ----------------- | --------------------- |
+| **AfyaKit**  | make run afyakit  | make run-web afyakit  |
+| **DanabTMC** | make run danabtmc | make run-web danabtmc |
+| **DawaPap**  | make run dawapap  | make run-web dawapap  |
 
 > List devices:
 >
@@ -23,11 +23,11 @@ Run these from the project root.
 
 ## 📦 Build (Web)
 
-| Tenant       | Build Command             |
-| ------------ | ------------------------- |
-| **AfyaKit**  | `make build-web afyakit`  |
-| **DanabTMC** | `make build-web danabtmc` |
-| **DawaPap**  | `make build-web dawapap`  |
+| Tenant       | Build Command       |
+| ------------ | ------------------- |
+| **AfyaKit**  | `make web afyakit`  |
+| **DanabTMC** | `make web danabtmc` |
+| **DawaPap**  | `make web dawapap`  |
 
 ---
 

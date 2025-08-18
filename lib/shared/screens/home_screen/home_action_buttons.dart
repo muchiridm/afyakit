@@ -1,4 +1,5 @@
 import 'package:afyakit/features/records/shared/records_dashboard_screen.dart';
+import 'package:afyakit/hq/hq_dashboard_screen.dart';
 import 'package:afyakit/users/extensions/auth_user_x.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
@@ -16,14 +17,17 @@ class HomeActionButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider).valueOrNull;
+    final user = ref.watch(currentUserValueProvider);
     if (user == null) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 600;
 
+        // Order of groups/rows. Each inner list is rendered together.
+        // "hq" shows only for super admins via `allowed`.
         final buttonPairs = [
+          ['hq'], // 👈 HQ row (hidden if not super admin)
           ['admin', 'reports'],
           ['stockIn', 'stockOut'],
           ['records'],
@@ -89,6 +93,14 @@ class HomeActionButtons extends ConsumerWidget {
 
   Map<String, PermissionedAction> _buildActionsMap() {
     return {
+      'hq': PermissionedAction(
+        icon: Icons.corporate_fare,
+        label: 'HQ',
+        destination: const HqDashboardScreen(),
+        allowed: (u) => u.isSuperAdmin, // 🔒 Only super admins
+        // If you use a different check, e.g.:
+        // allowed: (u) => u.hasRole(UserRole.superAdmin),
+      ),
       'stockIn': PermissionedAction(
         icon: Icons.inventory,
         label: 'Stock In',

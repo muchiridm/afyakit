@@ -3,7 +3,7 @@ import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/users/models/auth_user_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 final authUserStreamProvider = StreamProvider.autoDispose<List<AuthUser>>((
   ref,
