@@ -1,16 +1,14 @@
 // lib/users/extensions/auth_user_x.dart
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_x.dart';
+import 'package:afyakit/users/user_manager/extensions/user_status_x.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_enum.dart';
-import 'package:afyakit/users/user_manager/extensions/user_role_enum.dart';
 import 'package:afyakit/users/user_manager/extensions/user_role_x.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
   // status
-  AuthUserStatus get statusEnum => AuthUserStatus.fromString(status);
+  UserStatus get statusEnum => UserStatus.fromString(status);
   bool get isActive => statusEnum.isActive;
   bool get isInvited => statusEnum.isInvited;
   bool get isPending => !isActive;

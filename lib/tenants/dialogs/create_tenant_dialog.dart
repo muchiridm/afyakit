@@ -1,6 +1,6 @@
 // lib/hq/tenants/dialogs/create_tenant_dialog.dart
+import 'package:afyakit/tenants/models/tenant_dtos.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/tenants/models/tenant_payloads.dart';
 
 class CreateTenantDialog extends StatefulWidget {
   const CreateTenantDialog({super.key});

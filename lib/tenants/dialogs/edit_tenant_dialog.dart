@@ -1,6 +1,6 @@
 // lib/hq/tenants/dialogs/edit_tenant_dialog.dart
+import 'package:afyakit/tenants/models/tenant_dtos.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/tenants/models/tenant_payloads.dart';
 
 class EditTenantDialog extends StatefulWidget {
   const EditTenantDialog({

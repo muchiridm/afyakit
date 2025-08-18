@@ -1,19 +1,59 @@
-// lib/hq/tenants/services/tenant_service.dart
+import 'dart:async';
+import 'dart:convert';
 
-import 'package:afyakit/config/tenant_config.dart'; // TenantConfig + color utils
-import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/tenants/tenant_model.dart';
+import 'package:afyakit/shared/api/api_client.dart';
+import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
+import 'package:afyakit/tenants/models/tenant_dtos.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
-/// Service for managing tenants and tenant-scoped admins (auth_users).
-/// - Ownership lives on the tenant doc: `ownerUid` (single source of truth).
-/// - Admins live under: `tenants/{slug}/auth_users/{uid}` with {role, active}.
+/// ─────────────────────────────────────────────────────────────
+/// Service
+/// ─────────────────────────────────────────────────────────────
 class TenantService {
-  TenantService(this.db);
-  final FirebaseFirestore db;
+  TenantService({required this.client, required this.routes});
 
-  // ─────────────────────────────────────────────
+  final ApiClient client;
+  final ApiRoutes routes;
+
+  Dio get _dio => client.dio;
+  static const _json = Headers.jsonContentType;
+  static const _tag = '[TenantService]';
+
+  // ── helpers ─────────────────────────────────────────────────
+  Map<String, dynamic> _asMap(Object? raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return Map<String, dynamic>.from(jsonDecode(jsonEncode(raw)));
+  }
+
+  List<Map<String, dynamic>> _asList(Object? raw) {
+    if (raw is List) {
+      return raw
+          .where((e) => e is Map)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+    final m = _asMap(raw);
+    final results = m['results'];
+    if (results is List) {
+      return results
+          .where((e) => e is Map)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+    return const [];
+  }
+
+  Never _bad(Response r, String op) {
+    final reason = r.data is Map ? (r.data as Map)['error'] : null;
+    throw Exception('❌ $op failed (${r.statusCode}): ${reason ?? 'Unknown'}');
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Utils
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
 
   /// Lowercase, strip non [a-z0-9 -], collapse spaces to '-', collapse dashes.
   String slugify(String input) {
@@ -27,114 +67,76 @@ class TenantService {
     return s.isNotEmpty ? s : 'tenant';
   }
 
-  DocumentReference<Map<String, dynamic>> _tenantRef(String slug) =>
-      db.collection('tenants').doc(slug);
+  // ─────────────────────────────────────────────────────────────
+  // Tenants – list / get / create / update / status / flags / owner
+  // ─────────────────────────────────────────────────────────────
 
-  DocumentReference<Map<String, dynamic>> _memberRef(String slug, String uid) =>
-      _tenantRef(slug).collection('auth_users').doc(uid);
-
-  // ─────────────────────────────────────────────
-  // Reads (lists + config)
-  // ─────────────────────────────────────────────
-
-  Stream<List<Tenant>> streamTenants() {
-    return db
-        .collection('tenants')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(Tenant.fromDoc).toList());
+  Future<List<TenantSummary>> listTenants() async {
+    final r = await _dio.getUri(routes.listTenants());
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List tenants');
+    final list = _asList(r.data).map(TenantSummary.fromJson).toList();
+    if (kDebugMode) debugPrint('✅ $_tag Loaded ${list.length} tenants');
+    return list;
   }
 
-  /// Load the **config** for a single tenant (server preferred, cache fallback).
-  Future<TenantConfig> fetchConfig(String slug) async {
-    final doc = await _tenantRef(
-      slug,
-    ).get(const GetOptions(source: Source.serverAndCache));
-    if (!doc.exists || doc.data() == null) {
-      throw StateError('Tenant config not found: $slug');
-    }
-    return TenantConfig.fromFirestore(doc.id, doc.data()!);
+  /// Polling replacement for Firestore snapshots.
+  Stream<List<TenantSummary>> streamTenants({
+    Duration every = const Duration(seconds: 8),
+  }) async* {
+    // Emit immediately, then poll.
+    yield await listTenants();
+    yield* Stream.periodic(every).asyncMap((_) => listTenants());
   }
 
-  /// Live updates to tenant config (theme/feature flags can react at runtime).
-  Stream<TenantConfig> watchConfig(String slug) {
-    return _tenantRef(slug)
-        .snapshots()
-        .where((s) => s.exists && s.data() != null)
-        .map((s) => TenantConfig.fromFirestore(s.id, s.data()!));
+  Future<TenantSummary> getTenant(String slug) async {
+    final r = await _dio.getUri(routes.getTenant(slug));
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Get tenant');
+    return TenantSummary.fromJson(_asMap(r.data));
   }
 
-  // ─────────────────────────────────────────────
-  // Writes (create / status / updates)
-  // ─────────────────────────────────────────────
-
-  /// Create a tenant (doc id == slug), optionally setting an owner and seeding admins.
-  ///
-  /// - `ownerUid`: canonical owner; also ensured as a member (role 'admin').
-  /// - `seedAdminUids`: any extra admins to create under auth_users.
+  /// Returns the slug created by the server.
   Future<String> createTenant({
     required String displayName,
     String? slug,
     String primaryColor = '#1565C0',
     String? logoPath,
     Map<String, dynamic> flags = const {},
-    String? ownerUid, // NEW
-    String? ownerEmail, // optional (display/convenience)
-    List<String> seedAdminUids = const [], // NEW
+    String? ownerUid,
+    String? ownerEmail,
+    List<String> seedAdminUids = const [],
   }) async {
-    final desired = (slug?.trim().isNotEmpty == true)
-        ? slug!.trim().toLowerCase()
-        : slugify(displayName);
+    final payload = <String, dynamic>{
+      'displayName': displayName,
+      if (slug != null && slug.trim().isNotEmpty) 'slug': slugify(slug),
+      'primaryColor': primaryColor,
+      if (logoPath != null && logoPath.isNotEmpty) 'logoPath': logoPath,
+      'flags': flags,
+      if (ownerUid != null && ownerUid.isNotEmpty) 'ownerUid': ownerUid,
+      if (ownerEmail != null && ownerEmail.isNotEmpty) 'ownerEmail': ownerEmail,
+      if (seedAdminUids.isNotEmpty) 'seedAdminUids': seedAdminUids,
+    };
 
-    final tenantRef = _tenantRef(desired);
+    final r = await _dio.postUri(
+      routes.createTenant(),
+      data: payload,
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Create tenant');
 
-    // de-dup + sanitize admin list
-    final dedupSeed = <String>{for (final s in seedAdminUids) s.trim()}
-      ..removeWhere((s) => s.isEmpty || s == ownerUid);
-
-    await db.runTransaction<void>((tx) async {
-      final exists = await tx.get(tenantRef);
-      if (exists.exists) throw StateError('slug-taken');
-
-      tx.set(tenantRef, {
-        'slug': desired,
-        'displayName': displayName,
-        'primaryColor': primaryColor,
-        if (logoPath != null) 'logoPath': logoPath,
-        'flags': flags,
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-        if (ownerUid != null && ownerUid.isNotEmpty) 'ownerUid': ownerUid,
-        if (ownerEmail != null && ownerEmail.isNotEmpty)
-          'ownerEmail': ownerEmail,
-      });
-
-      // Owner as member (role 'admin'); ownership still comes from tenant.ownerUid.
-      if (ownerUid != null && ownerUid.isNotEmpty) {
-        tx.set(_memberRef(desired, ownerUid), {
-          'uid': ownerUid,
-          'role': 'admin',
-          'active': true,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-
-      // Seed extra admins
-      for (final uid in dedupSeed) {
-        tx.set(_memberRef(desired, uid), {
-          'uid': uid,
-          'role': 'admin',
-          'active': true,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-    });
-
-    return desired;
+    final m = _asMap(r.data);
+    final createdSlug = (m['slug'] ?? payload['slug'] ?? '').toString();
+    if (kDebugMode) debugPrint('✅ $_tag Tenant created: $createdSlug');
+    return createdSlug;
   }
 
   Future<void> setStatusBySlug(String slug, String status) async {
-    await _tenantRef(slug).set({'status': status}, SetOptions(merge: true));
+    final r = await _dio.postUri(
+      routes.setTenantStatus(slug),
+      data: {'status': status},
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Set tenant status');
+    if (kDebugMode) debugPrint('✅ $_tag Tenant $slug → status=$status');
   }
 
   Future<void> updateTenant({
@@ -142,102 +144,132 @@ class TenantService {
     String? displayName,
     String? primaryColor,
     String? logoPath,
-    Map<String, dynamic>? flags, // full replace for now
+    Map<String, dynamic>? flags, // full replace (server-side merge is fine too)
   }) async {
-    final payload = <String, dynamic>{};
-    if (displayName != null) payload['displayName'] = displayName;
-    if (primaryColor != null) payload['primaryColor'] = primaryColor;
-    if (logoPath != null) payload['logoPath'] = logoPath;
-    if (flags != null) payload['flags'] = flags;
-
+    final payload = <String, dynamic>{
+      if (displayName != null) 'displayName': displayName,
+      if (primaryColor != null) 'primaryColor': primaryColor,
+      if (logoPath != null) 'logoPath': logoPath,
+      if (flags != null) 'flags': flags,
+    };
     if (payload.isEmpty) return;
-    await _tenantRef(slug).set(payload, SetOptions(merge: true));
+
+    final r = await _dio.patchUri(
+      routes.updateTenant(slug),
+      data: payload,
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Update tenant');
+    if (kDebugMode) debugPrint('✅ $_tag Tenant $slug updated: $payload');
   }
 
-  /// Patch a single flag without replacing the whole map.
   Future<void> setFlag(String slug, String key, Object? value) async {
-    await _tenantRef(slug).set({'flags.$key': value}, SetOptions(merge: true));
+    final r = await _dio.patchUri(
+      routes.setTenantFlag(slug, key),
+      data: {'value': value},
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Set tenant flag');
+    if (kDebugMode) debugPrint('✅ $_tag Tenant $slug flag[$key]=$value');
   }
 
-  // ─────────────────────────────────────────────
-  // Ownership (canonical on tenant doc)
-  // ─────────────────────────────────────────────
-
-  /// Change the canonical owner. Optionally ensures the new owner is an active admin member.
   Future<void> transferOwnership({
     required String slug,
     required String newOwnerUid,
-    bool ensureMember = true,
   }) async {
-    final tenantRef = _tenantRef(slug);
-    final newOwnerMemberRef = _memberRef(slug, newOwnerUid);
-
-    await db.runTransaction<void>((tx) async {
-      final tSnap = await tx.get(tenantRef);
-      if (!tSnap.exists) throw StateError('tenant-not-found');
-
-      if (ensureMember) {
-        final mSnap = await tx.get(newOwnerMemberRef);
-        final isActive = mSnap.exists && (mSnap.data()?['active'] == true);
-        if (!isActive) {
-          tx.set(newOwnerMemberRef, {
-            'uid': newOwnerUid,
-            'role': 'admin',
-            'active': true,
-            'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-      }
-
-      tx.update(tenantRef, {'ownerUid': newOwnerUid});
-    });
+    final r = await _dio.postUri(
+      routes.transferTenantOwner(slug),
+      data: {'newOwnerUid': newOwnerUid},
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Transfer ownership');
+    if (kDebugMode) debugPrint('✅ $_tag Tenant $slug owner → $newOwnerUid');
   }
 
-  // ─────────────────────────────────────────────
-  // Tenant admins (tenant-scoped auth_users)
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Tenant Admins – list / add / remove
+  // ─────────────────────────────────────────────────────────────
 
-  /// Stream active admins/managers under a tenant.
-  Stream<List<Map<String, dynamic>>> streamAdmins(String slug) {
-    return _tenantRef(slug)
-        .collection('auth_users')
-        .where('active', isEqualTo: true)
-        .where('role', whereIn: ['admin', 'manager'])
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => d.data()).toList());
+  Future<List<TenantAdminUser>> listAdmins(String slug) async {
+    final r = await _dio.getUri(routes.listTenantAdmins(slug));
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List admins');
+    final list = _asList(r.data).map(TenantAdminUser.fromJson).toList();
+    if (kDebugMode) debugPrint('✅ $_tag Loaded ${list.length} admins ($slug)');
+    return list;
   }
 
-  /// Add/upgrade an admin or manager in the tenant's auth_users.
+  /// Polling replacement for Firestore admins stream.
+  Stream<List<TenantAdminUser>> streamAdmins(
+    String slug, {
+    Duration every = const Duration(seconds: 8),
+  }) async* {
+    yield await listAdmins(slug);
+    yield* Stream.periodic(every).asyncMap((_) => listAdmins(slug));
+  }
+
+  /// Add/upgrade an admin by uid or email.
   Future<void> addAdmin({
     required String slug,
-    required String uid,
-    String role = 'admin', // 'admin' | 'manager'
+    String? uid,
     String? email,
-    String? displayName,
+    String role = 'admin', // 'admin' | 'manager'
   }) async {
-    final ref = _memberRef(slug, uid);
-    await ref.set({
-      'uid': uid,
+    if ((uid == null || uid.isEmpty) && (email == null || email.isEmpty)) {
+      throw ArgumentError('Provide uid or email to add admin');
+    }
+    final payload = <String, dynamic>{
+      if (uid != null && uid.isNotEmpty) 'uid': uid,
+      if (email != null && email.isNotEmpty)
+        'email': EmailHelper.normalize(email),
       'role': role,
-      'active': true,
-      if (email != null && email.isNotEmpty) 'email': email,
-      if (displayName != null && displayName.isNotEmpty)
-        'displayName': displayName,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+    final r = await _dio.postUri(
+      routes.addTenantAdmin(slug),
+      data: payload,
+      options: Options(contentType: _json),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Add admin');
+    if (kDebugMode) debugPrint('✅ $_tag Admin added ($slug): $payload');
   }
 
-  /// Soft-remove an admin (active=false) or hard-delete the membership.
+  /// Soft-remove or hard-delete an admin membership.
   Future<void> removeAdmin({
     required String slug,
     required String uid,
     bool softDelete = true,
   }) async {
-    final ref = _memberRef(slug, uid);
-    if (softDelete) {
-      await ref.set({'active': false}, SetOptions(merge: true));
-    } else {
-      await ref.delete();
+    final uri = softDelete
+        ? routes
+              .removeTenantAdmin(slug, uid)
+              .replace(queryParameters: {'soft': '1'})
+        : routes.removeTenantAdmin(slug, uid);
+
+    final r = await _dio.deleteUri(uri);
+    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    if (!ok) _bad(r, 'Remove admin');
+    if (kDebugMode) {
+      debugPrint('🗑️ $_tag Admin removed ($slug): $uid soft=$softDelete');
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Membership (back-compat helpers; wrappers around tenant endpoints)
+  // ─────────────────────────────────────────────────────────────
+
+  Future<InviteResult> inviteToTenant({
+    required String email,
+    String role = 'staff', // 'owner'|'admin'|'manager'|'staff'|'client'
+  }) async {
+    final payload = {'email': EmailHelper.normalize(email), 'role': role};
+    final r = await _dio.postUri(routes.inviteToTenant(), data: payload);
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Invite to tenant');
+    return InviteResult.fromJson(_asMap(r.data));
+  }
+
+  Future<void> revokeFromTenant({required String uid}) async {
+    final r = await _dio.deleteUri(routes.revokeFromTenant(uid));
+    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    if (!ok) _bad(r, 'Revoke from tenant');
+    if (kDebugMode) debugPrint('🗑️ $_tag Membership revoked: $uid');
   }
 }

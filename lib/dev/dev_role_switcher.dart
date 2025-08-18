@@ -1,11 +1,11 @@
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/types/result.dart';
-import 'package:afyakit/users/user_manager/extensions/user_role_enum.dart';
 import 'package:afyakit/users/user_manager/extensions/user_role_x.dart';
 import 'package:afyakit/users/user_manager/providers/auth_users_provider.dart'; // list invalidation
 import 'package:afyakit/users/user_manager/providers/user_engine_providers.dart';
 import 'package:afyakit/users/user_operations/controllers/session_controller.dart'; // reload if self
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+import 'package:afyakit/users/utils/parse_user_role.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

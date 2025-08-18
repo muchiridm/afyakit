@@ -1,9 +1,9 @@
 // lib/users/widgets/invited_users_list.dart
-import 'package:afyakit/users/user_manager/controllers/auth_user_controller.dart';
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
+import 'package:afyakit/users/user_manager/extensions/user_status_x.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_enum.dart';
 import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/users/user_operations/utils/label_for_user_role.dart';
+import 'package:afyakit/users/utils/label_for_user_role.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
@@ -16,12 +16,10 @@ import 'package:timeago/timeago.dart' as timeago;
 final invitedUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
   ref,
 ) async {
-  final ctrl = ref.read(authUserControllerProvider.notifier);
+  final ctrl = ref.read(userManagerControllerProvider.notifier);
   final all = await ctrl.getAllUsers();
-  final invited =
-      all.where((u) => u.statusEnum == AuthUserStatus.invited).toList()..sort(
-        (a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()),
-      );
+  final invited = all.where((u) => u.statusEnum == UserStatus.invited).toList()
+    ..sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
   return invited;
 });
 
@@ -64,7 +62,7 @@ class _InviteTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(authUserControllerProvider.notifier);
+    final controller = ref.read(userManagerControllerProvider.notifier);
     final roleLabel = labelForUserRole(user.effectiveRole);
     final invitedAgo = _invitedAgo(user);
 
@@ -98,7 +96,7 @@ class _InviteTile extends ConsumerWidget {
 
   Future<void> _cancelInvite(
     BuildContext context,
-    AuthUserController controller,
+    UserManagerController controller,
   ) async {
     final confirmed = await DialogService.confirm(
       title: 'Cancel Invite',

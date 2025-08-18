@@ -1,4 +1,3 @@
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +10,7 @@ import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_x.dart';
+import 'package:afyakit/users/user_manager/extensions/user_status_x.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   final Map<String, String>? inviteParams;
@@ -62,7 +61,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       return const SplashScreen();
     }
 
-    final statusEnum = AuthUserStatus.fromString(authUser.status);
+    final statusEnum = UserStatus.fromString(authUser.status);
 
     if (statusEnum.isInvited) {
       debugPrint(

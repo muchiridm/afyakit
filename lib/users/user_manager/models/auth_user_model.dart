@@ -1,9 +1,10 @@
 // lib/users/models/auth_user_model.dart
+import 'package:afyakit/users/user_manager/extensions/user_role_x.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-import 'package:afyakit/users/user_manager/extensions/user_role_enum.dart';
-import 'package:afyakit/users/user_operations/utils/parse_user_role.dart';
+
+import 'package:afyakit/users/utils/parse_user_role.dart';
 
 class AuthUser {
   // ── auth / session fields

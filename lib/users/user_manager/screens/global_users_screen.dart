@@ -1,106 +1,106 @@
-import 'package:afyakit/users/user_manager/controllers/global_user_controller.dart';
-import 'package:afyakit/users/user_manager/models/global_user_model.dart';
-import 'package:afyakit/users/user_manager/services/global_user_service.dart';
-import 'package:afyakit/shared/utils/firestore_instance.dart';
+// lib/hq/global_users/global_users_screen.dart
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/users/user_manager/models/global_user_model.dart';
 
-class GlobalUsersScreen extends StatefulWidget {
+class GlobalUsersScreen extends ConsumerStatefulWidget {
   const GlobalUsersScreen({super.key});
 
   @override
-  State<GlobalUsersScreen> createState() => _GlobalUsersScreenState();
+  ConsumerState<GlobalUsersScreen> createState() => _GlobalUsersScreenState();
 }
 
-class _GlobalUsersScreenState extends State<GlobalUsersScreen> {
-  late final GlobalUserController ctrl;
-
+class _GlobalUsersScreenState extends ConsumerState<GlobalUsersScreen> {
   static const tenants = <String>['', 'afyakit', 'danabtmc', 'dawapap'];
   final _searchCtl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    ctrl = GlobalUserController(GlobalUserService(FirebaseFirestore.instance));
+    // seed input with current state
+    final s = ref.read(userManagerControllerProvider).search;
+    _searchCtl.text = s;
+    // start polling the global directory
+    ref.read(userManagerControllerProvider.notifier).startGlobalUsersStream();
   }
 
   @override
   void dispose() {
+    ref.read(userManagerControllerProvider.notifier).stopGlobalUsersStream();
     _searchCtl.dispose();
-    ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: ctrl,
-      builder: (context, _) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Global Users'),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: ctrl.tenantFilter,
-                    items: tenants
-                        .map(
-                          (t) => DropdownMenuItem(
-                            value: t,
-                            child: Text(t.isEmpty ? 'All tenants' : t),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => ctrl.tenantFilter = v ?? '',
-                  ),
-                ),
+    final ctrl = ref.read(userManagerControllerProvider.notifier);
+    final state = ref.watch(userManagerControllerProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Global Users'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: state.tenantFilter,
+                items: tenants
+                    .map(
+                      (t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t.isEmpty ? 'All tenants' : t),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => ctrl.tenantFilter = v ?? '',
               ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(56),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: TextField(
-                  controller: _searchCtl,
-                  onChanged: (v) => ctrl.search = v,
-                  decoration: InputDecoration(
-                    hintText: 'Search by email…',
-                    prefixIcon: const Icon(Icons.search),
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 0,
-                      horizontal: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+            ),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _searchCtl,
+              onChanged: (v) => ctrl.globalSearch = v,
+              decoration: InputDecoration(
+                hintText: 'Search by email…',
+                prefixIcon: const Icon(Icons.search),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
           ),
-          body: StreamBuilder<List<GlobalUser>>(
-            stream: ctrl.stream,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}'));
-              }
-              final users = snap.data ?? const <GlobalUser>[];
-              if (users.isEmpty) {
-                return const Center(child: Text('No users found'));
-              }
-              return ListView.separated(
-                itemCount: users.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) => _UserRowTile(user: users[i], ctrl: ctrl),
-              );
-            },
-          ),
-        );
-      },
+        ),
+      ),
+      body: StreamBuilder<List<GlobalUser>>(
+        stream: ctrl.globalUsersStream,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
+          }
+          final users = snap.data ?? const <GlobalUser>[];
+          if (users.isEmpty) {
+            return const Center(child: Text('No users found'));
+          }
+          return ListView.separated(
+            itemCount: users.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) => _UserRowTile(user: users[i], ctrl: ctrl),
+          );
+        },
+      ),
     );
   }
 }
@@ -111,7 +111,7 @@ class _UserRowTile extends StatelessWidget {
   const _UserRowTile({required this.user, required this.ctrl});
 
   final GlobalUser user;
-  final GlobalUserController ctrl;
+  final UserManagerController ctrl;
 
   @override
   Widget build(BuildContext context) {

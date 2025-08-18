@@ -3,7 +3,7 @@ import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/users/user_operations/services/user_operations_service.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
-import 'package:afyakit/users/user_operations/utils/claim_validator.dart';
+import 'package:afyakit/users/utils/claim_validator.dart';
 
 class SessionEngine {
   final UserOperationsService ops;

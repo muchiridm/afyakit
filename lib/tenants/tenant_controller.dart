@@ -1,24 +1,24 @@
 // lib/hq/tenants/tenant_controller.dart
 import 'package:afyakit/shared/types/result.dart';
-import 'package:afyakit/users/user_manager/providers/user_engine_providers.dart';
+import 'package:afyakit/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/users/user_manager/providers/user_engine_providers.dart'; // for invites on a target tenant
 import 'package:afyakit/tenants/services/tenant_service.dart';
 
 final tenantControllerProvider = Provider<TenantController>((ref) {
-  final svc = ref.watch(tenantServiceProvider);
-  return TenantController(ref, svc);
+  return TenantController(ref); // ⬅️ no direct service passed
 });
 
 class TenantController {
-  TenantController(this.ref, this._svc);
+  TenantController(this.ref);
   final Ref ref;
-  final TenantService _svc;
 
-  /// Create a tenant and (optionally) set an owner + seed admins.
-  /// If only `ownerEmail` is provided (no ownerUid), we send an invite to that email.
+  Future<TenantService> _svc() => ref.read(tenantServiceProvider.future);
+
+  // ─────────────────────────────────────────────────────────────
+  // Create tenant
+  // ─────────────────────────────────────────────────────────────
   Future<void> createTenant({
     required BuildContext context,
     required String displayName,
@@ -35,7 +35,8 @@ class TenantController {
       return;
     }
     try {
-      final id = await _svc.createTenant(
+      final svc = await _svc();
+      final id = await svc.createTenant(
         displayName: displayName.trim(),
         slug: slug?.trim().isEmpty == true ? null : slug?.trim(),
         primaryColor: primaryColor.trim().isEmpty
@@ -54,7 +55,7 @@ class TenantController {
             .toList(),
       );
 
-      // If we only got ownerEmail (no uid yet), invite them now so they can activate.
+      // If only ownerEmail was provided, send an invite on the NEW tenant.
       if ((ownerUid == null || ownerUid.trim().isEmpty) &&
           (ownerEmail != null && ownerEmail.trim().isNotEmpty)) {
         final engine = await ref.read(userManagerEngineProvider(id).future);
@@ -80,7 +81,9 @@ class TenantController {
     }
   }
 
-  /// Toggle tenant status between 'active' and 'suspended'.
+  // ─────────────────────────────────────────────────────────────
+  // Status toggle
+  // ─────────────────────────────────────────────────────────────
   Future<void> toggleStatusBySlug(
     BuildContext context,
     String slug,
@@ -88,7 +91,8 @@ class TenantController {
   ) async {
     final next = currentStatus == 'active' ? 'suspended' : 'active';
     try {
-      await _svc.setStatusBySlug(slug, next);
+      final svc = await _svc();
+      await svc.setStatusBySlug(slug, next);
       _toast(context, 'Tenant $slug → $next');
     } catch (e) {
       _toast(context, 'Failed to update status: $e');
@@ -96,7 +100,9 @@ class TenantController {
     }
   }
 
-  /// Edit basic tenant fields.
+  // ─────────────────────────────────────────────────────────────
+  // Edit tenant
+  // ─────────────────────────────────────────────────────────────
   Future<void> editTenant({
     required BuildContext context,
     required String slug,
@@ -110,7 +116,8 @@ class TenantController {
       if (pc != null && pc.trim().isNotEmpty) {
         pc = _normalizeHex(pc);
       }
-      await _svc.updateTenant(
+      final svc = await _svc();
+      await svc.updateTenant(
         slug: slug,
         displayName: (displayName?.trim().isEmpty ?? true)
             ? null
@@ -126,117 +133,49 @@ class TenantController {
     }
   }
 
-  /// Transfer ownership to a new user (ensures membership as admin).
+  // ─────────────────────────────────────────────────────────────
+  // Owner / Admin hooks used by the UI
+  // ─────────────────────────────────────────────────────────────
   Future<void> transferOwner(
     BuildContext context, {
     required String slug,
     required String newOwnerUid,
   }) async {
+    if (newOwnerUid.trim().isEmpty) {
+      _toast(context, 'Owner UID is required');
+      return;
+    }
     try {
-      final target = newOwnerUid.trim();
-      if (target.isEmpty) {
-        _toast(context, 'New owner UID is required');
-        return;
-      }
-      await _svc.transferOwnership(
-        slug: slug,
-        newOwnerUid: target,
-        ensureMember: true,
-      );
-      _toast(context, 'Ownership transferred');
+      final svc = await _svc();
+      await svc.transferOwnership(slug: slug, newOwnerUid: newOwnerUid.trim());
+      _toast(context, 'Ownership transferred to $newOwnerUid');
     } catch (e) {
-      _toast(context, 'Failed to transfer: $e');
+      _toast(context, 'Failed to transfer ownership: $e');
       rethrow;
     }
   }
 
-  /// Add or upgrade a tenant-scoped admin/manager (UID path).
-  Future<void> addAdmin(
-    BuildContext context, {
-    required String slug,
-    required String uid,
-    String role = 'admin', // 'admin' | 'manager'
-    String? email,
-    String? displayName,
-  }) async {
-    try {
-      final target = uid.trim();
-      if (target.isEmpty) {
-        _toast(context, 'UID is required');
-        return;
-      }
-      await _svc.addAdmin(
-        slug: slug,
-        uid: target,
-        role: role,
-        email: (email?.trim().isEmpty ?? true) ? null : email!.trim(),
-        displayName: (displayName?.trim().isEmpty ?? true)
-            ? null
-            : displayName!.trim(),
-      );
-      _toast(context, 'Admin added');
-    } catch (e) {
-      _toast(context, 'Failed to add admin: $e');
-      rethrow;
-    }
-  }
-
-  /// Remove (soft by default) a tenant-scoped admin/manager.
-  Future<void> removeAdmin(
-    BuildContext context, {
-    required String slug,
-    required String uid,
-    bool softDelete = true,
-  }) async {
-    try {
-      final target = uid.trim();
-      if (target.isEmpty) {
-        _toast(context, 'UID is required');
-        return;
-      }
-      await _svc.removeAdmin(slug: slug, uid: target, softDelete: softDelete);
-      _toast(context, 'Admin removed');
-    } catch (e) {
-      _toast(context, 'Failed to remove admin: $e');
-      rethrow;
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // NEW: Invite flows (FE → backend via ApiClient)
-  // ─────────────────────────────────────────────────────────────
-
-  /// Invite a tenant admin by **email** with an assigned role.
-  /// After activation, they’ll sign in with that role in the tenant.
   Future<void> inviteAdminByEmail(
     BuildContext context, {
     required String slug,
     required String email,
-    String role = 'admin', // 'admin' | 'manager'
+    String role = 'admin',
     bool forceResend = false,
   }) async {
-    final cleaned = email.trim();
-    if (cleaned.isEmpty) {
+    final norm = email.trim();
+    if (norm.isEmpty) {
       _toast(context, 'Email is required');
       return;
     }
-
-    // basic guard
-    final normalizedRole = (role == 'manager') ? 'manager' : 'admin';
-
     try {
       final engine = await ref.read(userManagerEngineProvider(slug).future);
-
-      // Engine supports role on invite (controller is ready).
       final res = await engine.invite(
-        email: cleaned,
-        role: normalizedRole, // ← assign role here
+        email: norm,
+        role: role,
         forceResend: forceResend,
       );
-
       res.when(
-        ok: (_) =>
-            _toast(context, 'Invite sent to $cleaned as $normalizedRole'),
+        ok: (_) => _toast(context, 'Invite sent to $norm ($role)'),
         err: (e) => _toast(context, 'Invite failed: ${e.message}'),
       );
     } catch (e) {
@@ -245,8 +184,39 @@ class TenantController {
     }
   }
 
-  // ── internals ─────────────────────────────────────────────
+  Future<void> addAdminByUid(
+    BuildContext context, {
+    required String slug,
+    required String uid,
+    String role = 'admin',
+  }) async {
+    try {
+      final svc = await _svc();
+      await svc.addAdmin(slug: slug, uid: uid.trim(), role: role);
+      _toast(context, 'Admin added: $uid ($role)');
+    } catch (e) {
+      _toast(context, 'Failed to add admin: $e');
+      rethrow;
+    }
+  }
 
+  Future<void> removeAdmin(
+    BuildContext context, {
+    required String slug,
+    required String uid,
+    bool softDelete = true,
+  }) async {
+    try {
+      final svc = await _svc();
+      await svc.removeAdmin(slug: slug, uid: uid, softDelete: softDelete);
+      _toast(context, 'Admin removed');
+    } catch (e) {
+      _toast(context, 'Failed to remove admin: $e');
+      rethrow;
+    }
+  }
+
+  // ── internals ─────────────────────────────────────────────
   String _normalizeHex(String input) {
     final s = input.trim().toUpperCase();
     return s.startsWith('#') ? s : '#$s';

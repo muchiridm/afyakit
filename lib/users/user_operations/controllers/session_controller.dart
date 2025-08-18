@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/dev/dev_auth_manager.dart';
 import 'package:afyakit/main.dart';
-import 'package:afyakit/users/user_operations/widgets/auth_gate.dart';
+import 'package:afyakit/users/widgets/auth_gate.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';

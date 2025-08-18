@@ -11,7 +11,7 @@ import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/user_operations/widgets/auth_gate.dart';
+import 'package:afyakit/users/widgets/auth_gate.dart';
 
 class LoginFormState {
   final TextEditingController emailController;

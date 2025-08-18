@@ -3,18 +3,18 @@ import 'package:afyakit/tenants/dialogs/add_admin_dialog.dart';
 import 'package:afyakit/tenants/dialogs/confirm_dialog.dart';
 import 'package:afyakit/tenants/dialogs/edit_tenant_dialog.dart';
 import 'package:afyakit/tenants/dialogs/transfer_owner_dialog.dart';
-import 'package:afyakit/tenants/models/tenant_payloads.dart';
+import 'package:afyakit/tenants/models/tenant_dtos.dart'; // ⬅️ use DTOs
 import 'package:afyakit/tenants/providers/tenant_users_providers.dart';
 import 'package:afyakit/tenants/tenant_controller.dart';
-import 'package:afyakit/tenants/tenant_model.dart';
 import 'package:afyakit/tenants/widgets/section_block.dart';
 import 'package:afyakit/tenants/widgets/status_chip.dart';
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TenantTile extends ConsumerWidget {
   const TenantTile({super.key, required this.tenant});
-  final Tenant tenant;
+  final TenantSummary tenant; // ⬅️ was Tenant
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -30,18 +30,16 @@ class TenantTile extends ConsumerWidget {
         subtitle: _buildSubtitle(tenant),
         trailing: _buildTrailingActions(context, tenant, controller),
         children: [
-          _buildOwnerSection(context, tenant, controller),
+          _buildOwnerSection(context, ref, tenant, controller),
           const SizedBox(height: 12),
-          _buildAdminsSection(context, ref, tenant, controller),
+          _buildAdminsSection(context, ref, tenant),
         ],
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
   // Header & subtitle
-  // ─────────────────────────────────────────────────────────────
-  Widget _buildHeaderRow(BuildContext context, Tenant t) {
+  Widget _buildHeaderRow(BuildContext context, TenantSummary t) {
     final initial = (t.displayName.isNotEmpty ? t.displayName[0] : t.slug[0])
         .toUpperCase();
     return Row(
@@ -60,19 +58,17 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  Widget _buildSubtitle(Tenant t) {
+  Widget _buildSubtitle(TenantSummary t) {
     return Padding(
       padding: const EdgeInsets.only(left: 52, top: 4),
       child: Text('${t.slug} • primary ${t.primaryColor}'),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
   // Row actions (edit / toggle)
-  // ─────────────────────────────────────────────────────────────
   Widget _buildTrailingActions(
     BuildContext context,
-    Tenant t,
+    TenantSummary t,
     TenantController controller,
   ) {
     return Row(
@@ -113,12 +109,11 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
   // Owner section
-  // ─────────────────────────────────────────────────────────────
   Widget _buildOwnerSection(
     BuildContext context,
-    Tenant t,
+    WidgetRef ref,
+    TenantSummary t,
     TenantController controller,
   ) {
     return SectionBlock(
@@ -146,11 +141,20 @@ class TenantTile extends ConsumerWidget {
                 builder: (_) => const TransferOwnerDialog(),
               );
               if (uid != null && uid.trim().isNotEmpty) {
-                await controller.transferOwner(
-                  context,
-                  slug: t.slug,
-                  newOwnerUid: uid.trim(),
+                // Backend endpoint not wired yet; keep a clear placeholder.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Transfer owner not available yet — backend pending.',
+                    ),
+                  ),
                 );
+                // When ready, call:
+                // await controller.transferOwner(
+                //   context,
+                //   slug: t.slug,
+                //   newOwnerUid: uid.trim(),
+                // );
               }
             },
           ),
@@ -159,14 +163,11 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Admins section
-  // ─────────────────────────────────────────────────────────────
+  // Admins section (uses backend stream provider)
   Widget _buildAdminsSection(
     BuildContext context,
     WidgetRef ref,
-    Tenant t,
-    TenantController controller,
+    TenantSummary t,
   ) {
     final adminsAsync = ref.watch(tenantAdminsStreamProvider(t.slug));
 
@@ -233,10 +234,14 @@ class TenantTile extends ConsumerWidget {
                       ),
                     );
                     if (ok == true) {
-                      await controller.removeAdmin(
-                        context,
-                        slug: t.slug,
-                        uid: u.uid,
+                      // Remove tenant-scoped membership via UserManagerController
+                      final userCtrl = ref.read(
+                        userManagerControllerProvider.notifier,
+                      );
+                      await userCtrl.deleteUser(u.uid);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Admin removed')),
                       );
                     }
                   },

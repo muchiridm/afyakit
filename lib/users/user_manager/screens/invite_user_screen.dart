@@ -1,15 +1,14 @@
-import 'package:afyakit/users/user_manager/controllers/auth_user_controller.dart';
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
 import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/users/user_manager/extensions/user_role_enum.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/users/user_manager/extensions/user_role_x.dart';
-import 'package:afyakit/users/user_operations/widgets/auth_user_gate.dart';
+import 'package:afyakit/users/widgets/auth_user_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/users/user_operations/widgets/invited_users_list.dart';
+import 'package:afyakit/users/widgets/invited_users_list.dart';
 
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
@@ -22,8 +21,8 @@ class InviteUserScreen extends ConsumerWidget {
     final storesAsync = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
     );
-    final formState = ref.watch(authUserControllerProvider);
-    final controller = ref.read(authUserControllerProvider.notifier);
+    final formState = ref.watch(userManagerControllerProvider);
+    final controller = ref.read(userManagerControllerProvider.notifier);
 
     return AuthUserGate(
       allow: (user) => user.canManageUsers,
@@ -53,7 +52,7 @@ class InviteUserScreen extends ConsumerWidget {
 
 class _InviteUserForm extends StatelessWidget {
   final AuthUserState formState;
-  final AuthUserController controller;
+  final UserManagerController controller;
   final List<InventoryLocation> stores;
 
   const _InviteUserForm({

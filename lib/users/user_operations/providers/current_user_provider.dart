@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb; // 👈 NEW
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/user_operations/controllers/session_controller.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
-import 'package:afyakit/users/user_manager/controllers/auth_user_controller.dart'; // 👈 keep
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart'; // 👈 keep
 
 /// UI-friendly: returns AsyncValue<AuthUser?> from the SESSION controller
 final currentUserProvider = Provider<AsyncValue<AuthUser?>>((ref) {
@@ -58,7 +58,7 @@ final currentAuthUserProvider = FutureProvider.autoDispose<AuthUser?>((
   }
 
   // 3) Fetch authoritative user doc (for profile/role/tenant fields)
-  final ctrl = ref.read(authUserControllerProvider.notifier);
+  final ctrl = ref.read(userManagerControllerProvider.notifier);
   final fetched = await ctrl.getUserById(uid);
 
   // 4) Merge claims: token wins over any mirrored doc claims

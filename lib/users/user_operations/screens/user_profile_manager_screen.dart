@@ -1,17 +1,17 @@
-import 'package:afyakit/users/user_manager/extensions/auth_user_status_x.dart';
+import 'package:afyakit/users/user_manager/extensions/user_status_x.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
-import 'package:afyakit/users/user_manager/controllers/auth_user_controller.dart';
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
 import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
 import 'package:afyakit/users/user_manager/providers/auth_user_stream_provider.dart';
-import 'package:afyakit/users/user_operations/utils/parse_user_role.dart';
+import 'package:afyakit/users/utils/parse_user_role.dart';
 
 import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 
-import 'package:afyakit/users/user_operations/screens/invite_user_screen.dart';
-import 'package:afyakit/users/user_operations/widgets/user_profile_card.dart';
+import 'package:afyakit/users/user_manager/screens/invite_user_screen.dart';
+import 'package:afyakit/users/widgets/user_profile_card.dart';
 
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
@@ -24,7 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final allAuthUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
   ref,
 ) async {
-  final ctrl = ref.read(authUserControllerProvider.notifier);
+  final ctrl = ref.read(userManagerControllerProvider.notifier);
   return await ctrl.getAllUsers();
 });
 
@@ -120,7 +120,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
     AuthUser user,
     List<InventoryLocation> allStores,
   ) {
-    final controller = ref.read(authUserControllerProvider.notifier);
+    final controller = ref.read(userManagerControllerProvider.notifier);
 
     final readableStores = user.stores.map((id) {
       final store = allStores.firstWhere(

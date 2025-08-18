@@ -4,7 +4,7 @@ import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/features/records/delivery_sessions/widgets/delivery_banner.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/stock/batch_records_stream_provider.dart';
-import 'package:afyakit/users/user_operations/widgets/logout_button.dart';
+import 'package:afyakit/users/widgets/logout_button.dart';
 
 // 👇 add this import (where you expose tenantDisplayNameProvider or tenantConfigProvider)
 import 'package:afyakit/tenants/providers/tenant_config_provider.dart';

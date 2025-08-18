@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/users/user_operations/utils/claim_validator.dart';
+import 'package:afyakit/users/utils/claim_validator.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';

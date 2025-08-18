@@ -1,12 +1,12 @@
+// lib/hq/tenants/dialogs/add_admin_dialog.dart
+import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/tenants/tenant_controller.dart';
 
 class AddAdminDialog extends ConsumerStatefulWidget {
   const AddAdminDialog({super.key, required this.tenantSlug});
 
-  final String tenantSlug;
+  final String tenantSlug; // kept for future use (no-op for now)
 
   @override
   ConsumerState<AddAdminDialog> createState() => _AddAdminDialogState();
@@ -17,7 +17,7 @@ class _AddAdminDialogState extends ConsumerState<AddAdminDialog> {
   bool _forceResend = false;
   bool _busy = false;
 
-  // NEW: pick role on invite (defaults to admin)
+  // pick role on invite (defaults to admin)
   String _role = 'admin'; // 'admin' | 'manager'
 
   @override
@@ -35,14 +35,18 @@ class _AddAdminDialogState extends ConsumerState<AddAdminDialog> {
 
     setState(() => _busy = true);
     try {
-      final controller = ref.read(tenantControllerProvider);
-      await controller.inviteAdminByEmail(
-        context,
-        slug: widget.tenantSlug,
-        email: email,
-        role: _role, // ← assign role in the invite
-        forceResend: _forceResend,
-      );
+      final ctrl = ref.read(userManagerControllerProvider.notifier);
+
+      // prime controller state
+      ctrl.setEmail(email);
+      ctrl.setFormRoleFromString(_role);
+
+      if (_forceResend) {
+        await ctrl.resendInvite(email: email);
+      } else {
+        await ctrl.inviteUser(context);
+      }
+
       if (!mounted) return;
       Navigator.pop(context, true); // success
     } finally {
@@ -69,9 +73,9 @@ class _AddAdminDialogState extends ConsumerState<AddAdminDialog> {
             ),
             const SizedBox(height: 12),
 
-            // NEW: Role selector
+            // Role selector
             DropdownButtonFormField<String>(
-              initialValue: _role,
+              value: _role,
               onChanged: _busy
                   ? null
                   : (v) => setState(() => _role = v ?? 'admin'),
