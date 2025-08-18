@@ -1,9 +1,9 @@
 import 'package:afyakit/features/batches/controllers/batch_editor_args.dart';
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/extensions/auth_user_x.dart';
-import 'package:afyakit/users/models/auth_user_model.dart';
-import 'package:afyakit/users/providers/current_user_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
+import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';

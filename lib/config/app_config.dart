@@ -4,4 +4,4 @@
 const String baseApiUrl = 'https://api.afyakit.app';
 
 /// Default tenant used before login or in dev mode
-const String defaultTenantId = 'danabtmc';
+const String defaultTenantId = 'afyakit';

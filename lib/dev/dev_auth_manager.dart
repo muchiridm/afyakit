@@ -2,23 +2,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/users/services/firebase_auth_service.dart';
-import 'package:afyakit/users/utils/claim_validator.dart';
+import 'package:afyakit/users/user_operations/utils/claim_validator.dart';
 import 'package:afyakit/shared/providers/api_client_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/users/user_operations/services/user_operations_service.dart';
 
 import 'dev_auth_result.dart';
 
 class DevAuthManager {
-  static const _devEmails = {
-    'muchiridm@gmail.com',
-    'dev@afyakit.app',
-    'testdev@afyakit.app',
-  };
-
+  static const _devEmails = {'muchiridm@gmail.com'};
   static const _devPassword = 'letmein';
   static String? _lastAttemptedEmail;
 
@@ -33,7 +28,7 @@ class DevAuthManager {
     final queryEmail = EmailHelper.normalize(
       Uri.base.queryParameters['email'] ?? '',
     );
-    final currentUser = ref.read(firebaseAuthServiceProvider).currentUser;
+    final currentUser = ref.read(firebaseOnlyUserOpsProvider).currentUser;
     final currentEmail = EmailHelper.normalize(currentUser?.email ?? '');
 
     final match = isDevEmail(queryEmail) || isDevEmail(currentEmail);
@@ -49,11 +44,12 @@ class DevAuthManager {
     String? overrideEmail,
     bool forceRetry = false,
   }) async {
-    final firebase = ref.read(firebaseAuthServiceProvider);
+    final ops = ref.read(firebaseOnlyUserOpsProvider);
+
     final email = EmailHelper.normalize(
       overrideEmail ??
           Uri.base.queryParameters['email'] ??
-          firebase.currentUser?.email ??
+          ops.currentUser?.email ??
           (kDebugMode && isLocalhost ? 'muchiridm@gmail.com' : ''),
     );
 
@@ -87,24 +83,23 @@ class DevAuthManager {
 
     try {
       // 1) Firebase sign-in
-      final cred = await firebase.signInWithEmailAndPassword(
+      await ops.signInWithEmailAndPassword(
         email: email,
         password: _devPassword,
       );
-      debugPrint('✅ Firebase signed in as ${cred.user?.email}');
+      debugPrint('✅ Firebase signed in as ${ops.currentUser?.email}');
 
-      // 2) Ensure API token & hit the correct backend route to sync session/claims
+      // 2) Ensure API token & hit backend to sync claims/session
       try {
         final tokenProviderInstance = ref.read(tokenProvider);
-        await tokenProviderInstance.getToken();
+        await tokenProviderInstance.getToken(); // ensures Firebase token exists
 
         final tenantId = ref.read(tenantIdProvider);
         final routes = ApiRoutes(tenantId);
         final client = await ref.read(apiClientProvider.future);
 
         final response = await client.dio.postUri(
-          routes
-              .checkUserStatus(), // 👈 correct: auth/session/check-user-status
+          routes.checkUserStatus(), // canonical claims/session sync
           data: {'email': email},
         );
         debugPrint('🔁 check-user-status → ${response.data}');
@@ -112,14 +107,17 @@ class DevAuthManager {
         debugPrint('⚠️ Claim/session sync failed: $syncErr');
       }
 
-      // 3) Try to see a tenant-bearing claim (minimal validity). Don’t block UI if missing.
+      // 3) Retry a couple times for claims to appear
       bool claimsReady = false;
       Map<String, dynamic> claims = {};
 
       for (var attempt = 1; attempt <= 3; attempt++) {
-        await cred.user?.getIdToken(true); // force refresh
-        final result = await cred.user?.getIdTokenResult();
-        claims = result?.claims ?? {};
+        await ops.refreshToken(); // force refresh
+        try {
+          claims = await ops.getClaims();
+        } catch (_) {
+          claims = const {};
+        }
 
         debugPrint('🔐 Attempt $attempt → Claims: $claims');
 
@@ -131,7 +129,7 @@ class DevAuthManager {
       }
 
       if (!claimsReady) {
-        // Not fatal. The app now hydrates UI role/stores from auth_users anyway.
+        // Not fatal; UI hydrates from auth_users anyway.
         debugPrint('❌ Claims still missing after retries (continuing).');
         return DevAuthResult(
           success: true,

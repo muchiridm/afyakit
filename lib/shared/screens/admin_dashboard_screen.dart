@@ -2,13 +2,13 @@ import 'package:afyakit/features/backup/backup_screen.dart';
 import 'package:afyakit/shared/api/api_test_screen.dart';
 import 'package:afyakit/features/item_preferences/item_preferences_screen.dart';
 import 'package:afyakit/features/inventory_locations/screens/inventory_locations_screen.dart';
-import 'package:afyakit/users/extensions/auth_user_x.dart';
-import 'package:afyakit/users/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
+import 'package:afyakit/users/user_operations/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/features/import/import_inventory_screen.dart';
-import 'package:afyakit/users/widgets/auth_user_gate.dart';
+import 'package:afyakit/users/user_operations/widgets/auth_user_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

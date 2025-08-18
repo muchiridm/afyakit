@@ -3,7 +3,7 @@ import 'package:afyakit/features/records/issues/controllers/engines/cart_engine.
 import 'package:afyakit/features/records/issues/controllers/engines/issue_policy_engine.dart';
 import 'package:afyakit/features/records/issues/controllers/engines/issue_form_engine.dart';
 import 'package:afyakit/features/records/issues/services/issue_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issuePolicyEngineProvider = Provider<IssuePolicyEngine>(

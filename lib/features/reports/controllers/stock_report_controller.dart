@@ -1,6 +1,6 @@
 // 📦 Dependencies
 
-import 'package:afyakit/users/providers/current_user_provider.dart';
+import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

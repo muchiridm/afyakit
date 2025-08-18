@@ -1,21 +1,21 @@
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_config_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
 import 'package:afyakit/shared/utils/decide_tenant.dart';
-import 'package:afyakit/hq/tenants/tenant_loader.dart';
+import 'package:afyakit/tenants/services/tenant_loader.dart';
+import 'package:afyakit/users/user_operations/providers/user_operations_engine_providers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
-import 'package:afyakit/users/services/firebase_auth_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/config/tenant_config.dart';
 
-import 'package:afyakit/users/widgets/auth_gate.dart';
-import 'package:afyakit/users/screens/invite_accept_screen.dart';
+import 'package:afyakit/users/user_operations/widgets/auth_gate.dart';
+import 'package:afyakit/users/user_operations/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -62,9 +62,17 @@ Future<void> main() async {
     ],
   );
 
-  // Wait for Firebase Auth to restore session
-  final auth = container.read(firebaseAuthServiceProvider);
-  await auth.waitForUser();
+  // Build the engine and do one clean pre-hydration (fast enough in practice).
+  final sessionEngine = await container.read(
+    sessionEngineProvider(tenant).future,
+  );
+  try {
+    // ensureReady(): waitForUser + claims check + backend checkUserStatus()
+    await sessionEngine.ensureReady();
+  } catch (e) {
+    // Don’t block startup on failures; AuthGate will still handle state.
+    debugPrint('⚠️ Session pre-hydration failed: $e');
+  }
 
   runApp(
     UncontrolledProviderScope(

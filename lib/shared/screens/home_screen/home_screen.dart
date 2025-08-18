@@ -4,7 +4,7 @@ import 'package:afyakit/shared/screens/home_screen/latest_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/users/providers/current_user_provider.dart';
+import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 class HomeScreen extends ConsumerWidget {

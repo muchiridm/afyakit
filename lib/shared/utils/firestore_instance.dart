@@ -18,6 +18,7 @@ export 'package:cloud_firestore/cloud_firestore.dart'
         GetOptions,
         Source,
         FirebaseException,
-        Settings;
+        Settings,
+        Query;
 
 final db = FirebaseFirestore.instance;

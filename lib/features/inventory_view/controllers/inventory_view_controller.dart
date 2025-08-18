@@ -1,10 +1,10 @@
-import 'package:afyakit/users/extensions/auth_user_x.dart';
-import 'package:afyakit/users/models/auth_user_model.dart';
+import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
+import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
