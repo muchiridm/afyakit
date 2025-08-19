@@ -1,5 +1,5 @@
 import 'package:afyakit/features/records/shared/records_dashboard_screen.dart';
-import 'package:afyakit/tenants/screens/hq_dashboard_screen.dart';
+import 'package:afyakit/shared/screens/hq_dashboard_screen.dart';
 import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
 import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
 import 'package:flutter/material.dart';

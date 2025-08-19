@@ -10,7 +10,7 @@ import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 
-import 'package:afyakit/users/user_manager/screens/invite_user_screen.dart';
+import 'package:afyakit/users/screens/invite_user_screen.dart';
 import 'package:afyakit/users/widgets/user_profile_card.dart';
 
 import 'package:afyakit/shared/screens/base_screen.dart';

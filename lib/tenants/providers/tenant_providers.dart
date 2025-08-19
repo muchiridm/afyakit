@@ -1,21 +1,24 @@
-// lib/hq/providers/hq_providers.dart
+// lib/tenants/providers/tenant_providers.dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:afyakit/shared/utils/firestore_instance.dart'; // your FireFlex instance/bootstrap
+import 'package:afyakit/shared/api/api_client.dart';
+import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/tenants/models/tenant_dtos.dart';
 import 'package:afyakit/tenants/services/tenant_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart'; // assumes you expose a TokenProvider via Riverpod
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-
-/// Builds a backend-driven TenantService (no Firestore).
-/// Uses the current tenantId for base URL scoping and attaches an auth token.
+/// ─────────────────────────────────────────────────────────────
+/// API client → TenantService (mutations only: create/update/delete/etc.)
+/// ─────────────────────────────────────────────────────────────
 final tenantServiceProvider = FutureProvider.autoDispose<TenantService>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantIdProvider);
-  final tokenProv = ref.read(tokenProvider); // <- your TokenProvider
+  final tokenProv = ref.read(tokenProvider);
 
   final client = await ApiClient.create(
     tenantId: tenantId,
@@ -26,21 +29,62 @@ final tenantServiceProvider = FutureProvider.autoDispose<TenantService>((
   return TenantService(client: client, routes: routes);
 });
 
-/// Stream of tenants via polling, replacing Firestore snapshots().
+/// ─────────────────────────────────────────────────────────────
+/// Firestore collection (typed) for /tenants
+/// ─────────────────────────────────────────────────────────────
+final _tenantsRefProvider =
+    Provider.autoDispose<CollectionReference<TenantSummary>>((ref) {
+      // If your FireFlex wrapper exposes an instance (e.g. `firestore`), use it.
+      final db = FirebaseFirestore.instance; // or `firestore` from your wrapper
+      return db
+          .collection('tenants')
+          .withConverter<TenantSummary>(
+            fromFirestore: (snap, _) => _tenantFromDoc(snap),
+            // We don’t write via Firestore in this layer; API handles mutations.
+            toFirestore: (value, _) => <String, dynamic>{},
+          );
+    });
+
+TenantSummary _tenantFromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+  final data = d.data() ?? <String, dynamic>{};
+  final m = Map<String, dynamic>.from(data);
+
+  // Ensure slug/id is present for DTO
+  m.putIfAbsent('slug', () => d.id);
+
+  // Normalize timestamps for DTO (string ISO is fine)
+  final created = m['createdAt'];
+  if (created is Timestamp) {
+    m['createdAt'] = created.toDate().toIso8601String();
+  }
+
+  // Friendly defaults
+  m.putIfAbsent('displayName', () => m['name'] ?? d.id);
+  m.putIfAbsent('status', () => 'active');
+  m.putIfAbsent('primaryColor', () => '#1565C0');
+
+  return TenantSummary.fromJson(m);
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// Live stream of tenants (Firestore → FireFlex-style reads)
+/// ─────────────────────────────────────────────────────────────
 final tenantsStreamProvider = StreamProvider.autoDispose<List<TenantSummary>>((
   ref,
-) async* {
-  final svc = await ref.watch(tenantServiceProvider.future);
-  // Default poll interval is defined in the service; override here if you want:
-  yield* svc.streamTenants(); // svc.streamTenants(every: Duration(seconds: 8))
+) {
+  final col = ref.watch(_tenantsRefProvider);
+  final query = col.orderBy('createdAt', descending: true);
+
+  return query.snapshots().map(
+    (snap) => snap.docs.map((d) => d.data()).toList(),
+  );
 });
 
-/// Same stream, but sorted by displayName (then slug) newest-first-ish UI.
-/// (We no longer have createdAt on the DTO, so sort lexicographically.)
+/// Alphabetically sorted by displayName (fallback to slug)
 final tenantsStreamProviderSorted =
-    StreamProvider.autoDispose<List<TenantSummary>>((ref) async* {
-      final baseStream = ref.watch(tenantsStreamProvider.stream);
-      yield* baseStream.map((list) {
+    StreamProvider.autoDispose<List<TenantSummary>>((ref) {
+      final base = ref.watch(tenantsStreamProvider.stream);
+      return base.map((list) {
         final sorted = [...list]
           ..sort((a, b) {
             final ad = (a.displayName.isEmpty ? a.slug : a.displayName)
@@ -53,9 +97,25 @@ final tenantsStreamProviderSorted =
       });
     });
 
-/// Optional: fetch a single tenant on demand.
-final tenantBySlugProvider = FutureProvider.autoDispose
+/// ─────────────────────────────────────────────────────────────
+/// Single tenant (live updates) by slug/doc id
+/// ─────────────────────────────────────────────────────────────
+final tenantStreamBySlugProvider = StreamProvider.autoDispose
+    .family<TenantSummary, String>((ref, slug) {
+      final col = ref.watch(_tenantsRefProvider);
+      return col.doc(slug).snapshots().map((doc) {
+        if (!doc.exists) {
+          throw StateError('tenant-not-found');
+        }
+        return doc.data()!;
+      });
+    });
+
+/// One-off fetch if you really need a Future (non-live)
+final tenantBySlugOnceProvider = FutureProvider.autoDispose
     .family<TenantSummary, String>((ref, slug) async {
-      final svc = await ref.watch(tenantServiceProvider.future);
-      return svc.getTenant(slug);
+      final col = ref.watch(_tenantsRefProvider);
+      final doc = await col.doc(slug).get();
+      if (!doc.exists) throw StateError('tenant-not-found');
+      return doc.data()!;
     });

@@ -3,8 +3,9 @@ import 'package:afyakit/tenants/dialogs/add_admin_dialog.dart';
 import 'package:afyakit/tenants/dialogs/confirm_dialog.dart';
 import 'package:afyakit/tenants/dialogs/edit_tenant_dialog.dart';
 import 'package:afyakit/tenants/dialogs/transfer_owner_dialog.dart';
-import 'package:afyakit/tenants/models/tenant_dtos.dart'; // ⬅️ use DTOs
-import 'package:afyakit/tenants/providers/tenant_users_providers.dart';
+import 'package:afyakit/tenants/models/tenant_dtos.dart';
+import 'package:afyakit/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/tenants/providers/tenant_user_providers.dart';
 import 'package:afyakit/tenants/tenant_controller.dart';
 import 'package:afyakit/tenants/widgets/section_block.dart';
 import 'package:afyakit/tenants/widgets/status_chip.dart';
@@ -14,31 +15,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TenantTile extends ConsumerWidget {
   const TenantTile({super.key, required this.tenant});
-  final TenantSummary tenant; // ⬅️ was Tenant
+  final TenantSummary tenant; // initial snapshot (for graceful loading)
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final live = ref.watch(tenantStreamBySlugProvider(tenant.slug));
     final controller = ref.watch(tenantControllerProvider);
 
+    return live.when(
+      data: (t) => _buildCard(context, ref, t, controller),
+      loading: () => _buildCard(context, ref, tenant, controller),
+      error: (_, __) => _buildCard(context, ref, tenant, controller),
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    WidgetRef ref,
+    TenantSummary t,
+    TenantController controller,
+  ) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 12),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        title: _buildHeaderRow(context, tenant),
-        subtitle: _buildSubtitle(tenant),
-        trailing: _buildTrailingActions(context, tenant, controller),
+        title: _buildHeaderRow(context, t),
+        subtitle: _buildSubtitle(t),
+        trailing: _buildTrailingActions(context, t, controller),
         children: [
-          _buildOwnerSection(context, ref, tenant, controller),
+          _buildOwnerSection(context, ref, t),
           const SizedBox(height: 12),
-          _buildAdminsSection(context, ref, tenant),
+          _buildAdminsSection(context, ref, t), // Firestore stream
         ],
       ),
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
   // Header & subtitle
+  // ─────────────────────────────────────────────────────────────
   Widget _buildHeaderRow(BuildContext context, TenantSummary t) {
     final initial = (t.displayName.isNotEmpty ? t.displayName[0] : t.slug[0])
         .toUpperCase();
@@ -58,14 +75,14 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  Widget _buildSubtitle(TenantSummary t) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 52, top: 4),
-      child: Text('${t.slug} • primary ${t.primaryColor}'),
-    );
-  }
+  Widget _buildSubtitle(TenantSummary t) => Padding(
+    padding: const EdgeInsets.only(left: 52, top: 4),
+    child: Text('${t.slug} • primary ${t.primaryColor}'),
+  );
 
+  // ─────────────────────────────────────────────────────────────
   // Row actions (edit / toggle)
+  // ─────────────────────────────────────────────────────────────
   Widget _buildTrailingActions(
     BuildContext context,
     TenantSummary t,
@@ -109,12 +126,13 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  // Owner section
+  // ─────────────────────────────────────────────────────────────
+  // Owner section (read-only for now)
+  // ─────────────────────────────────────────────────────────────
   Widget _buildOwnerSection(
     BuildContext context,
     WidgetRef ref,
     TenantSummary t,
-    TenantController controller,
   ) {
     return SectionBlock(
       title: 'Owner',
@@ -141,7 +159,6 @@ class TenantTile extends ConsumerWidget {
                 builder: (_) => const TransferOwnerDialog(),
               );
               if (uid != null && uid.trim().isNotEmpty) {
-                // Backend endpoint not wired yet; keep a clear placeholder.
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
@@ -149,12 +166,6 @@ class TenantTile extends ConsumerWidget {
                     ),
                   ),
                 );
-                // When ready, call:
-                // await controller.transferOwner(
-                //   context,
-                //   slug: t.slug,
-                //   newOwnerUid: uid.trim(),
-                // );
               }
             },
           ),
@@ -163,7 +174,9 @@ class TenantTile extends ConsumerWidget {
     );
   }
 
-  // Admins section (uses backend stream provider)
+  // ─────────────────────────────────────────────────────────────
+  // Admins section (Firestore memberships → join to user doc)
+  // ─────────────────────────────────────────────────────────────
   Widget _buildAdminsSection(
     BuildContext context,
     WidgetRef ref,
@@ -210,10 +223,9 @@ class TenantTile extends ConsumerWidget {
             itemCount: admins.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (_, i) {
-              final u = admins[i];
-              final label = u.email.isNotEmpty
-                  ? u.email
-                  : (u.displayName.isNotEmpty ? u.displayName : u.uid);
+              final tm = admins[i];
+              final u = tm.user;
+              final label = (u.email ?? u.emailLower);
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.admin_panel_settings),
@@ -222,7 +234,7 @@ class TenantTile extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(u.role.name),
+                subtitle: Text(tm.role),
                 trailing: TextButton(
                   onPressed: () async {
                     final ok = await showDialog<bool>(
@@ -234,12 +246,12 @@ class TenantTile extends ConsumerWidget {
                       ),
                     );
                     if (ok == true) {
-                      // Remove tenant-scoped membership via UserManagerController
                       final userCtrl = ref.read(
                         userManagerControllerProvider.notifier,
                       );
-                      await userCtrl.deleteUser(u.uid);
-
+                      await userCtrl.deleteUser(
+                        u.id,
+                      ); // tenant membership removal (server)
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Admin removed')),
                       );

@@ -75,7 +75,7 @@ class _AddAdminDialogState extends ConsumerState<AddAdminDialog> {
 
             // Role selector
             DropdownButtonFormField<String>(
-              value: _role,
+              initialValue: _role,
               onChanged: _busy
                   ? null
                   : (v) => setState(() => _role = v ?? 'admin'),

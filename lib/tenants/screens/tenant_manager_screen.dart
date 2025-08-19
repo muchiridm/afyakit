@@ -1,12 +1,11 @@
 // lib/hq/tenants/screens/tenant_manager_screen.dart
-import 'package:afyakit/tenants/models/tenant_dtos.dart';
+import 'package:afyakit/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/tenants/tenant_controller.dart';
+import 'package:afyakit/tenants/widgets/tenant_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/tenants/tenant_controller.dart';
-
-import 'package:afyakit/tenants/widgets/tenant_tile.dart';
+import 'package:afyakit/tenants/models/tenant_dtos.dart';
 import 'package:afyakit/tenants/dialogs/create_tenant_dialog.dart';
 
 class TenantManagerScreen extends ConsumerWidget {
@@ -28,6 +27,7 @@ class TenantManagerScreen extends ConsumerWidget {
             builder: (_) => const CreateTenantDialog(),
           );
           if (payload != null) {
+            // ⬇️ Only pass CRUD fields. Owner/admin invites are handled by User Manager.
             await controller.createTenant(
               context: context,
               displayName: payload.displayName,
@@ -35,10 +35,9 @@ class TenantManagerScreen extends ConsumerWidget {
               primaryColor: payload.primaryColor,
               logoPath: payload.logoPath,
               flags: payload.flags,
-              ownerUid: payload.ownerUid,
-              ownerEmail: payload.ownerEmail,
-              seedAdminUids: payload.seedAdminUids,
             );
+            // If you want to auto-invite an owner here, do it via userManagerEngineProvider
+            // using the chosen slug (payload.slug) after creation.
           }
         },
       ),
@@ -60,7 +59,8 @@ class TenantManagerScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             itemCount: sorted.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) => TenantTile(tenant: sorted[i]),
+            itemBuilder: (_, i) =>
+                TenantTile(tenant: sorted[i]), // TenantSummary
           );
         },
       ),

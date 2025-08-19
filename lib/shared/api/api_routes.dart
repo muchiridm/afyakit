@@ -17,55 +17,78 @@ class ApiRoutes {
     return query != null ? uri.replace(queryParameters: query) : uri;
   }
 
-  // ─────────────────────────────────────────────
-  // HQ (global) – superadmins & global users
-  // (Server should authorize via superadmin claim; tenantId in base may be ignored.)
-  // ─────────────────────────────────────────────
-  Uri hqListSuperAdmins() => _uri('hq/superadmins'); // GET
-  Uri hqSetSuperAdmin(String uid) =>
-      _uri('hq/superadmins/$uid'); // POST {value: bool}
-
-  Uri hqUsers({String? tenantId, String? search, int limit = 50}) => _uri(
-    'hq/users', // GET
-    query: {
-      if (tenantId != null && tenantId.isNotEmpty) 'tenantId': tenantId,
-      if (search != null && search.isNotEmpty) 'search': search,
-      'limit': '$limit',
-    },
-  );
-
-  Uri hqUserMemberships(String uid) => _uri('hq/users/$uid/memberships'); // GET
+  // Strip trailing "/:tenantId" to hit core-level endpoints.
+  Uri _uriCore(String path, {Map<String, String>? query}) {
+    final baseWithTenant = apiBaseUrl(
+      tenantId,
+    ); // e.g. https://api.host/api/acme
+    final suffix = '/$tenantId';
+    final coreBase = baseWithTenant.endsWith(suffix)
+        ? baseWithTenant.substring(0, baseWithTenant.length - suffix.length)
+        : baseWithTenant;
+    final uri = Uri.parse('$coreBase/$path');
+    return query != null ? uri.replace(queryParameters: query) : uri;
+  }
 
   // ─────────────────────────────────────────────
-  // 🏢 Tenancy (Tenant Scoped) – membership invite/revoke
-  // (Kept for backwards compatibility with older callers.)
-  // ─────────────────────────────────────────────
-  Uri inviteToTenant() =>
-      _uri('users/invite'); // POST {email, role?, forceResend?}
-  Uri revokeFromTenant(String uid) => _uri('users/$uid'); // DELETE
-
-  // ─────────────────────────────────────────────
-  // 🏢 Tenants (management APIs) – owner/admins/status/config
+  // 🏢 Tenants (management APIs) – CRUD only
   // ─────────────────────────────────────────────
   Uri listTenants() => _uri('tenants'); // GET
-  Uri getTenant(String slug) => _uri('tenants/$slug'); // GET
   Uri createTenant() => _uri('tenants'); // POST
-  Uri updateTenant(String slug) => _uri('tenants/$slug'); // PATCH
+  Uri getTenant(String slug) =>
+      _uri('tenants/${Uri.encodeComponent(slug)}'); // GET
+  Uri updateTenant(String slug) =>
+      _uri('tenants/${Uri.encodeComponent(slug)}'); // PATCH
+  Uri deleteTenant(String slug) =>
+      _uri('tenants/${Uri.encodeComponent(slug)}'); // DELETE
+
+  // Compatibility endpoints still used by the UI:
   Uri setTenantStatus(String slug) =>
-      _uri('tenants/$slug/status'); // POST {status}
-  Uri transferTenantOwner(String slug) =>
-      _uri('tenants/$slug/owner'); // POST {newOwnerUid}
+      _uri('tenants/${Uri.encodeComponent(slug)}/status'); // POST {status}
+  Uri setTenantFlag(String slug, String key) => _uri(
+    'tenants/${Uri.encodeComponent(slug)}/flags/${Uri.encodeComponent(key)}',
+  ); // PATCH {value}
 
-  // admins under a tenant
-  Uri listTenantAdmins(String slug) => _uri('tenants/$slug/admins'); // GET
-  Uri addTenantAdmin(String slug) =>
-      _uri('tenants/$slug/admins'); // POST {uid|email, role}
-  Uri removeTenantAdmin(String slug, String uid) =>
-      _uri('tenants/$slug/admins/$uid'); // DELETE (optional ?soft=1)
+  // ─────────────────────────────────────────────
+  // 👥 User Manager (tenant-scoped under /api/:tenantId)
+  // ─────────────────────────────────────────────
+  Uri inviteUser() => _uri('auth_users/invite'); // POST
+  Uri getAllUsers() => _uri('auth_users'); // GET
+  Uri getUserById(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}'); // GET
+  Uri updateAuthUserRole(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}/role'); // PATCH
+  Uri updateAuthUserStores(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}/stores'); // PATCH
+  Uri updateUser(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}'); // PATCH
+  Uri updateAuthUserProfile(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}/profile'); // PATCH
+  Uri deleteUser(String uid) =>
+      _uri('auth_users/${Uri.encodeComponent(uid)}'); // DELETE
 
-  // optional: flags/config knobs under a tenant
-  Uri setTenantFlag(String slug, String key) =>
-      _uri('tenants/$slug/flags/$key'); // PATCH {value}
+  // ─────────────────────────────────────────────
+  // 🌍 Global users directory (core-level, not tenant-scoped)
+  // ─────────────────────────────────────────────
+  Uri fetchGlobalUsers({String? tenantId, String? search, int limit = 50}) =>
+      _uriCore(
+        'users',
+        query: {
+          if (tenantId != null && tenantId.isNotEmpty) 'tenantId': tenantId,
+          if (search != null && search.isNotEmpty) 'search': search,
+          'limit': '$limit',
+        },
+      );
+
+  Uri fetchUserMemberships(String uid) =>
+      _uriCore('users/${Uri.encodeComponent(uid)}/memberships'); // GET
+
+  // ─────────────────────────────────────────────
+  // ⭐ Superadmins (core-level)
+  // ─────────────────────────────────────────────
+  Uri listSuperAdmins() => _uriCore('superadmins'); // GET
+  Uri setSuperAdmin(String uid) =>
+      _uriCore('superadmins/${Uri.encodeComponent(uid)}'); // POST {value: bool}
 
   // ─────────────────────────────────────────────
   // 🔐 Auth (Session + Dev)
@@ -77,42 +100,22 @@ class ApiRoutes {
   Uri sendPasswordResetEmail() => _uri('auth/session/send-password-reset');
 
   // ─────────────────────────────────────────────
-  // 👥 Auth Users (tenant-scoped directory)
-  // ─────────────────────────────────────────────
-  Uri getAllUsers() => _uri('auth_users'); // GET
-  Uri getUserById(String uid) => _uri('auth_users/$uid'); // GET
-  Uri inviteUser() => _uri(
-    'auth_users/invite',
-  ); // POST {email|phoneNumber, role?, forceResend?}
-  Uri deleteUser(String uid) =>
-      _uri('auth_users/$uid'); // DELETE (removes tenant membership)
-  Uri updateUser(String uid) => _uri('auth_users/$uid'); // PATCH {status?}
-
-  // subresources
-  Uri updateAuthUserRole(String uid) =>
-      _uri('auth_users/$uid/role'); // PATCH {role}
-  Uri updateAuthUserStores(String uid) =>
-      _uri('auth_users/$uid/stores'); // PATCH {stores: []}
-  Uri updateAuthUserProfile(String uid) => _uri(
-    'auth_users/$uid/profile',
-  ); // PATCH {displayName?, phoneNumber?, avatarUrl?}
-
-  // ─────────────────────────────────────────────
   // 📦 Inventory
   // ─────────────────────────────────────────────
   Uri inventory(String itemType) =>
       _uri('inventory', query: {'type': itemType});
   Uri createItem() => _uri('inventory');
   Uri itemById(String id, [String? itemType]) => _uri(
-    'inventory/$id',
+    'inventory/${Uri.encodeComponent(id)}',
     query: itemType != null ? {'type': itemType} : null,
   );
 
   // ─────────────────────────────────────────────
   // ⚙️ Preferences
   // ─────────────────────────────────────────────
-  Uri preferenceField(String type, String field) =>
-      _uri('preferences/$type/$field');
+  Uri preferenceField(String type, String field) => _uri(
+    'preferences/${Uri.encodeComponent(type)}/${Uri.encodeComponent(field)}',
+  );
 
   // ─────────────────────────────────────────────
   // 📍 Typed Inventory Location Routes
@@ -120,9 +123,9 @@ class ApiRoutes {
   Uri getTypedLocationsUri(InventoryLocationType type) =>
       _uri('inventory-locations', query: {'type': type.asString});
   Uri addTypedLocationWithIdUri(InventoryLocationType type, String id) =>
-      _uri('inventory-locations/${type.asString}/$id');
+      _uri('inventory-locations/${type.asString}/${Uri.encodeComponent(id)}');
   Uri deleteTypedLocationUri(InventoryLocationType type, String id) =>
-      _uri('inventory-locations/${type.asString}/$id');
+      _uri('inventory-locations/${type.asString}/${Uri.encodeComponent(id)}');
   Uri addLocationUri() => _uri('inventory-locations');
 
   // ─────────────────────────────────────────────
@@ -130,8 +133,10 @@ class ApiRoutes {
   // ─────────────────────────────────────────────
   Uri createBatchUri(String storeId) =>
       _uri('stores/${Uri.encodeComponent(storeId)}/batches');
-  Uri updateBatchUri(String storeId, String batchId) =>
-      _uri('stores/${Uri.encodeComponent(storeId)}/batches/$batchId');
-  Uri deleteBatchUri(String storeId, String batchId) =>
-      _uri('stores/${Uri.encodeComponent(storeId)}/batches/$batchId');
+  Uri updateBatchUri(String storeId, String batchId) => _uri(
+    'stores/${Uri.encodeComponent(storeId)}/batches/${Uri.encodeComponent(batchId)}',
+  );
+  Uri deleteBatchUri(String storeId, String batchId) => _uri(
+    'stores/${Uri.encodeComponent(storeId)}/batches/${Uri.encodeComponent(batchId)}',
+  );
 }

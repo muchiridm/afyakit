@@ -1,13 +1,14 @@
 // lib/hq/tenants/tenant_controller.dart
 import 'package:afyakit/shared/types/result.dart';
-import 'package:afyakit/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/users/user_manager/providers/user_engine_providers.dart'; // for invites on a target tenant
+
 import 'package:afyakit/tenants/services/tenant_service.dart';
+import 'package:afyakit/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/users/user_manager/providers/user_engine_providers.dart';
 
 final tenantControllerProvider = Provider<TenantController>((ref) {
-  return TenantController(ref); // ⬅️ no direct service passed
+  return TenantController(ref);
 });
 
 class TenantController {
@@ -17,7 +18,7 @@ class TenantController {
   Future<TenantService> _svc() => ref.read(tenantServiceProvider.future);
 
   // ─────────────────────────────────────────────────────────────
-  // Create tenant
+  // Create tenant (CRUD only)
   // ─────────────────────────────────────────────────────────────
   Future<void> createTenant({
     required BuildContext context,
@@ -26,9 +27,9 @@ class TenantController {
     String primaryColor = '#1565C0',
     String? logoPath,
     Map<String, dynamic> flags = const {},
-    String? ownerUid,
-    String? ownerEmail,
-    List<String> seedAdminUids = const <String>[],
+    // NOTE: ownership/admin invites are handled by User Manager,
+    // not here. If you need to invite an owner after creation,
+    // do it from the UI using userManagerEngineProvider(newSlug).
   }) async {
     if (displayName.trim().isEmpty) {
       _toast(context, 'Display name is required');
@@ -39,42 +40,14 @@ class TenantController {
       final id = await svc.createTenant(
         displayName: displayName.trim(),
         slug: slug?.trim().isEmpty == true ? null : slug?.trim(),
-        primaryColor: primaryColor.trim().isEmpty
-            ? '#1565C0'
-            : primaryColor.trim(),
+        primaryColor: primaryColor.trim().isNotEmpty
+            ? primaryColor.trim()
+            : '#1565C0',
         logoPath: (logoPath?.trim().isEmpty ?? true) ? null : logoPath!.trim(),
         flags: flags,
-        ownerUid: (ownerUid?.trim().isEmpty ?? true) ? null : ownerUid!.trim(),
-        ownerEmail: (ownerEmail?.trim().isEmpty ?? true)
-            ? null
-            : ownerEmail!.trim(),
-        seedAdminUids: seedAdminUids
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toSet()
-            .toList(),
       );
-
-      // If only ownerEmail was provided, send an invite on the NEW tenant.
-      if ((ownerUid == null || ownerUid.trim().isEmpty) &&
-          (ownerEmail != null && ownerEmail.trim().isNotEmpty)) {
-        final engine = await ref.read(userManagerEngineProvider(id).future);
-        final res = await engine.invite(email: ownerEmail.trim());
-        res.when(
-          ok: (_) => _toast(context, 'Owner invite sent to $ownerEmail'),
-          err: (e) => _toast(context, 'Owner invite failed: ${e.message}'),
-        );
-      }
 
       _toast(context, 'Tenant created ✓ (id: $id)');
-    } on StateError catch (e) {
-      _toast(
-        context,
-        e.message == 'slug-taken'
-            ? 'Slug is already taken'
-            : 'Failed: ${e.message}',
-      );
-      rethrow;
     } catch (e) {
       _toast(context, 'Error: $e');
       rethrow;
@@ -82,7 +55,7 @@ class TenantController {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Status toggle
+  // Toggle status (active <-> suspended)
   // ─────────────────────────────────────────────────────────────
   Future<void> toggleStatusBySlug(
     BuildContext context,
@@ -101,7 +74,7 @@ class TenantController {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Edit tenant
+  // Edit tenant (CRUD)
   // ─────────────────────────────────────────────────────────────
   Future<void> editTenant({
     required BuildContext context,
@@ -134,26 +107,46 @@ class TenantController {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Owner / Admin hooks used by the UI
+  // Flags (compat helper)
   // ─────────────────────────────────────────────────────────────
-  Future<void> transferOwner(
-    BuildContext context, {
+  Future<void> setFlag({
+    required BuildContext context,
     required String slug,
-    required String newOwnerUid,
+    required String key,
+    required Object? value,
   }) async {
-    if (newOwnerUid.trim().isEmpty) {
-      _toast(context, 'Owner UID is required');
-      return;
-    }
     try {
       final svc = await _svc();
-      await svc.transferOwnership(slug: slug, newOwnerUid: newOwnerUid.trim());
-      _toast(context, 'Ownership transferred to $newOwnerUid');
+      await svc.setFlag(slug, key, value);
+      _toast(context, 'Flag "$key" updated');
     } catch (e) {
-      _toast(context, 'Failed to transfer ownership: $e');
+      _toast(context, 'Failed to set flag: $e');
       rethrow;
     }
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // Delete tenant (CRUD)
+  // ─────────────────────────────────────────────────────────────
+  Future<void> deleteTenant({
+    required BuildContext context,
+    required String slug,
+    bool hard = false,
+  }) async {
+    try {
+      final svc = await _svc();
+      await svc.deleteTenant(slug, hard: hard);
+      _toast(context, 'Tenant deleted: $slug');
+    } catch (e) {
+      _toast(context, 'Failed to delete: $e');
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Admin/User operations → delegate to User Manager engine
+  // (Keep these small wrappers only if your UI still calls them)
+  // ─────────────────────────────────────────────────────────────
 
   Future<void> inviteAdminByEmail(
     BuildContext context, {
@@ -180,38 +173,6 @@ class TenantController {
       );
     } catch (e) {
       _toast(context, 'Invite failed: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> addAdminByUid(
-    BuildContext context, {
-    required String slug,
-    required String uid,
-    String role = 'admin',
-  }) async {
-    try {
-      final svc = await _svc();
-      await svc.addAdmin(slug: slug, uid: uid.trim(), role: role);
-      _toast(context, 'Admin added: $uid ($role)');
-    } catch (e) {
-      _toast(context, 'Failed to add admin: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> removeAdmin(
-    BuildContext context, {
-    required String slug,
-    required String uid,
-    bool softDelete = true,
-  }) async {
-    try {
-      final svc = await _svc();
-      await svc.removeAdmin(slug: slug, uid: uid, softDelete: softDelete);
-      _toast(context, 'Admin removed');
-    } catch (e) {
-      _toast(context, 'Failed to remove admin: $e');
       rethrow;
     }
   }

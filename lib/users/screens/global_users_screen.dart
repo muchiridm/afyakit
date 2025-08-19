@@ -1,5 +1,5 @@
 // lib/hq/global_users/global_users_screen.dart
-import 'package:afyakit/users/user_manager/controllers/user_manager_controller.dart';
+import 'package:afyakit/users/user_manager/providers/global_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/users/user_manager/models/global_user_model.dart';
@@ -12,60 +12,35 @@ class GlobalUsersScreen extends ConsumerStatefulWidget {
 }
 
 class _GlobalUsersScreenState extends ConsumerState<GlobalUsersScreen> {
-  static const tenants = <String>['', 'afyakit', 'danabtmc', 'dawapap'];
   final _searchCtl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // seed input with current state
-    final s = ref.read(userManagerControllerProvider).search;
-    _searchCtl.text = s;
-    // start polling the global directory
-    ref.read(userManagerControllerProvider.notifier).startGlobalUsersStream();
+    _searchCtl.text = ref.read(globalUsersSearchProvider);
   }
 
   @override
   void dispose() {
-    ref.read(userManagerControllerProvider.notifier).stopGlobalUsersStream();
     _searchCtl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = ref.read(userManagerControllerProvider.notifier);
-    final state = ref.watch(userManagerControllerProvider);
+    final usersAsync = ref.watch(globalUsersStreamProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Global Users'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: state.tenantFilter,
-                items: tenants
-                    .map(
-                      (t) => DropdownMenuItem(
-                        value: t,
-                        child: Text(t.isEmpty ? 'All tenants' : t),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => ctrl.tenantFilter = v ?? '',
-              ),
-            ),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: TextField(
               controller: _searchCtl,
-              onChanged: (v) => ctrl.globalSearch = v,
+              onChanged: (v) =>
+                  ref.read(globalUsersSearchProvider.notifier).state = v,
               decoration: InputDecoration(
                 hintText: 'Search by email…',
                 prefixIcon: const Icon(Icons.search),
@@ -81,23 +56,17 @@ class _GlobalUsersScreenState extends ConsumerState<GlobalUsersScreen> {
           ),
         ),
       ),
-      body: StreamBuilder<List<GlobalUser>>(
-        stream: ctrl.globalUsersStream,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
-          final users = snap.data ?? const <GlobalUser>[];
+      body: usersAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (users) {
           if (users.isEmpty) {
             return const Center(child: Text('No users found'));
           }
           return ListView.separated(
             itemCount: users.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) => _UserRowTile(user: users[i], ctrl: ctrl),
+            itemBuilder: (_, i) => _UserRowTile(user: users[i]),
           );
         },
       ),
@@ -105,18 +74,17 @@ class _GlobalUsersScreenState extends ConsumerState<GlobalUsersScreen> {
   }
 }
 
-/// Flat, high-signal row. No expansion.
-/// Pulls memberships once per row and renders tenant chips with role + active state.
-class _UserRowTile extends StatelessWidget {
-  const _UserRowTile({required this.user, required this.ctrl});
-
+class _UserRowTile extends ConsumerWidget {
+  const _UserRowTile({required this.user});
   final GlobalUser user;
-  final UserManagerController ctrl;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final email = user.email ?? user.emailLower;
     final name = (user.displayName ?? '').trim();
+
+    // Live memberships stream (Firestore) for this user
+    final memsAsync = ref.watch(userMembershipsStreamProvider(user.id));
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -166,14 +134,11 @@ class _UserRowTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // tenant chips (role + active) — fetched once
-            FutureBuilder<Map<String, Map<String, Object?>>>(
-              future: ctrl.memberships(user.id),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const LinearProgressIndicator(minHeight: 2);
-                }
-                final mems = snap.data ?? const {};
+            // tenant chips (live from Firestore)
+            memsAsync.when(
+              loading: () => const LinearProgressIndicator(minHeight: 2),
+              error: (e, _) => Text('memberships: $e'),
+              data: (mems) {
                 if (mems.isEmpty && user.tenantIds.isEmpty) {
                   return Chip(
                     label: const Text('no tenants'),
@@ -183,7 +148,6 @@ class _UserRowTile extends StatelessWidget {
                   );
                 }
 
-                // order: cached tenantIds if available; else keys from mems
                 final keys = user.tenantIds.isNotEmpty
                     ? user.tenantIds
                     : (mems.keys.toList()..sort());

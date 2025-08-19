@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/users/user_operations/controllers/session_controller.dart';
-import 'package:afyakit/users/user_operations/screens/login_screen.dart';
-import 'package:afyakit/users/user_operations/screens/splash_screen.dart';
-import 'package:afyakit/users/user_operations/screens/user_profile_editor_screen.dart';
+import 'package:afyakit/users/screens/login_screen.dart';
+import 'package:afyakit/shared/screens/splash_screen.dart';
+import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';

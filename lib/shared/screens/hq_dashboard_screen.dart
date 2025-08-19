@@ -1,7 +1,7 @@
 // lib/hq/hq_dashboard_screen.dart
 
-import 'package:afyakit/users/user_manager/screens/global_users_screen.dart';
-import 'package:afyakit/users/user_manager/screens/super_admins_screen.dart';
+import 'package:afyakit/users/screens/global_users_screen.dart';
+import 'package:afyakit/users/screens/super_admin_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,7 +45,7 @@ class HqDashboardScreen extends ConsumerWidget {
           context,
           icon: Icons.verified_user,
           label: 'Super Admins',
-          destination: const SuperAdminsScreen(),
+          destination: const SuperAdminScreen(),
         ),
         _hqActionButton(
           context,

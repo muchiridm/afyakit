@@ -230,7 +230,7 @@ class UserManagerService {
   // HQ: Superadmins
   // ─────────────────────────────────────────────────────────────
   Future<List<SuperAdmin>> listSuperAdmins() async {
-    final r = await _dio.getUri(routes.hqListSuperAdmins());
+    final r = await _dio.getUri(routes.listSuperAdmins());
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List superadmins');
 
     final data = _asMap(r.data);
@@ -242,7 +242,7 @@ class UserManagerService {
   /// Replace HqApiClient.setSuperAdmin
   Future<void> setSuperAdmin({required String uid, required bool value}) async {
     final r = await _dio.postUri(
-      routes.hqSetSuperAdmin(uid),
+      routes.setSuperAdmin(uid),
       data: {'value': value},
       options: Options(contentType: _json),
     );
@@ -253,15 +253,15 @@ class UserManagerService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // HQ: Global user directory (non-realtime by default)
+  // Global user directory (non-realtime by default)
   // ─────────────────────────────────────────────────────────────
-  Future<List<GlobalUser>> hqUsers({
+  Future<List<GlobalUser>> fetchGlobalUsers({
     String? tenantId,
     String search = '',
     int limit = 50,
   }) async {
     final r = await _dio.getUri(
-      routes.hqUsers(tenantId: tenantId, search: search, limit: limit),
+      routes.fetchGlobalUsers(tenantId: tenantId, search: search, limit: limit),
     );
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List global users');
 
@@ -275,11 +275,10 @@ class UserManagerService {
     }).toList();
   }
 
-  /// Replace GlobalUserService.fetchMemberships
-  Future<Map<String, Map<String, Object?>>> hqFetchMemberships(
+  Future<Map<String, Map<String, Object?>>> fetchUserMemberships(
     String uid,
   ) async {
-    final r = await _dio.getUri(routes.hqUserMemberships(uid));
+    final r = await _dio.getUri(routes.fetchUserMemberships(uid));
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Fetch memberships');
 
     final map = <String, Map<String, Object?>>{};

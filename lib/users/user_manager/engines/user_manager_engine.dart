@@ -79,7 +79,7 @@ class UserManagerEngine {
   ) async {
     try {
       // normalize keys and read values
-      String? _s(String key) {
+      String? s0(String key) {
         final v = updates[key];
         if (v == null) return null;
         final s = v.toString().trim();
@@ -88,22 +88,22 @@ class UserManagerEngine {
 
       // profile chunk
       final profileReq = UpdateProfileRequest(
-        displayName: _s('displayName'),
-        phoneNumber: _s('phoneNumber'),
-        avatarUrl: _s('avatarUrl'),
+        displayName: s0('displayName'),
+        phoneNumber: s0('phoneNumber'),
+        avatarUrl: s0('avatarUrl'),
       );
       if (profileReq.toJson().isNotEmpty) {
         await service.updateProfile(uid, profileReq);
       }
 
       // role
-      final roleStr = _s('role');
+      final roleStr = s0('role');
       if (roleStr != null) {
         await service.assignRole(uid, _parseRole(roleStr));
       }
 
       // status
-      final statusStr = _s('status');
+      final statusStr = s0('status');
       if (statusStr != null) {
         await service.setStatus(uid, _parseStatus(statusStr));
       }
@@ -263,7 +263,7 @@ class UserManagerEngine {
     int limit = 50,
   }) async {
     try {
-      final list = await service.hqUsers(
+      final list = await service.fetchGlobalUsers(
         tenantId: tenantId,
         search: search,
         limit: limit,
@@ -276,11 +276,11 @@ class UserManagerEngine {
     }
   }
 
-  Future<Result<Map<String, Map<String, Object?>>>> hqMemberships(
+  Future<Result<Map<String, Map<String, Object?>>>> fetchUserMemberships(
     String uid,
   ) async {
     try {
-      final map = await service.hqFetchMemberships(uid);
+      final map = await service.fetchUserMemberships(uid);
       return Ok(map);
     } catch (e) {
       return Err(

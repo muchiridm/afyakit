@@ -15,7 +15,7 @@ import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/config/tenant_config.dart';
 
 import 'package:afyakit/users/widgets/auth_gate.dart';
-import 'package:afyakit/users/user_manager/screens/invite_accept_screen.dart';
+import 'package:afyakit/users/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

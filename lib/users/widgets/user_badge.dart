@@ -1,4 +1,4 @@
-import 'package:afyakit/users/user_operations/screens/user_profile_editor_screen.dart';
+import 'package:afyakit/users/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
 import 'package:flutter/material.dart';
