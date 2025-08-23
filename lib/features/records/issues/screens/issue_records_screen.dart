@@ -6,8 +6,8 @@ import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/stock/issues_stream_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/records/issues/providers/issues_stream_provider.dart';
 import 'package:afyakit/shared/widgets/issue_record_tile.dart';
 
 class IssueRecordsScreen extends ConsumerWidget {

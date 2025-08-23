@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function claimTenant() {
+      return isSignedIn()
+        ? (request.auth.token.tenantId != null
+            ? request.auth.token.tenantId
+            : request.auth.token.tenant)
+        : null;
+    }
+    function inTenant(tid) { return isSignedIn() && claimTenant() == tid; }
+    function isSuperAdmin() { return isSignedIn() && (request.auth.token.superadmin == true); }
+
+    // ── Tenants shell doc
+    match /tenants/{tenantId} {
+      allow get: if inTenant(tenantId) || isSuperAdmin();
+      allow list, create, update, delete: if isSuperAdmin();
+    }
+
+    // ── Whole tenant subtree (path-based allow, fine to keep)
+    match /tenants/{tenantId}/{document=**} {
+      allow read, write: if inTenant(tenantId) || isSuperAdmin();
+    }
+
+    // ── Collection-GROUP rules (explicit; require doc.tenantId match)
+    match /{path=**}/batches/{batchId} {
+      allow read, write: if isSuperAdmin() ||
+                         (isSignedIn() && resource.data.tenantId == claimTenant());
+    }
+    match /{path=**}/memberships/{membershipId} {
+      allow read, write: if isSuperAdmin() ||
+                         (isSignedIn() && resource.data.tenantId == claimTenant());
+    }
+
+    // ── Catch-all for other tenant-scoped docs
+    match /{path=**} {
+      function isGlobalBlocked() {
+        return resource.__name__.segments[0] == "users" ||
+               (resource.__name__.segments[0] == "tenants" &&
+                resource.__name__.segments.size() == 2);
+      }
+
+      allow read: if !isGlobalBlocked() && isSignedIn() &&
+                   resource.data.tenantId == claimTenant();
+      allow create: if !isGlobalBlocked() && isSignedIn() &&
+                    request.resource.data.tenantId == claimTenant();
+      allow update: if !isGlobalBlocked() && isSignedIn() &&
+                    resource.data.tenantId == claimTenant() &&
+                    request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if !isGlobalBlocked() && isSignedIn() &&
+                    resource.data.tenantId == claimTenant();
+    }
+
+    // ── Global users (superadmin only)
+    match /users/{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

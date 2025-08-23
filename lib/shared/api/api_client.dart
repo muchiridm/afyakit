@@ -1,5 +1,4 @@
-//library: shared/api/api_client.dart
-
+// shared/api/api_client.dart
 import 'package:afyakit/shared/api/api_client_base.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:dio/dio.dart';
@@ -8,6 +7,9 @@ import 'package:flutter/foundation.dart';
 class ApiClient {
   final Dio dio;
   ApiClient(this.dio);
+
+  // ✅ Expose baseUrl so callers can log/use it
+  String get baseUrl => dio.options.baseUrl;
 
   /// Factory method to create a new API client
   static Future<ApiClient> create({

@@ -1,3 +1,4 @@
+import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
@@ -13,10 +14,7 @@ import 'package:afyakit/features/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/models/items/medication_item.dart';
 
-import 'package:afyakit/features/inventory/providers/item_streams/consumable_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/equipment_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/medication_items_stream_provider.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 

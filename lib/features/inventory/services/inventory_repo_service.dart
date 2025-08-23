@@ -3,6 +3,11 @@ import 'package:afyakit/features/inventory/models/items/medication_item.dart';
 import 'package:afyakit/features/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final inventoryRepoProvider = Provider<InventoryRepoService>((ref) {
+  return InventoryRepoService();
+});
 
 class InventoryRepoService {
   Future<List<MedicationItem>> getMedications(String tenantId) async {

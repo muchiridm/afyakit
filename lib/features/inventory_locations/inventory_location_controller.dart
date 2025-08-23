@@ -1,10 +1,10 @@
 import 'package:afyakit/shared/providers/token_provider.dart';
-import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
+import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
+import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
-import 'package:afyakit/shared/providers/api_route_provider.dart';
+import 'package:afyakit/shared/api/providers/api_route_provider.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_service.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_validator.dart';

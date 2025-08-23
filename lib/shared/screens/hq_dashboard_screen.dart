@@ -1,14 +1,14 @@
 // lib/hq/hq_dashboard_screen.dart
 
-import 'package:afyakit/users/screens/global_users_screen.dart';
-import 'package:afyakit/users/screens/super_admin_screen.dart';
+import 'package:afyakit/features/auth_users/screens/global_users_screen.dart';
+import 'package:afyakit/features/auth_users/screens/super_admin_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
-import 'package:afyakit/users/widgets/auth_user_gate.dart';
-import 'package:afyakit/tenants/screens/tenant_manager_screen.dart';
+import 'package:afyakit/features/auth_users/widgets/auth_user_gate.dart';
+import 'package:afyakit/features/tenants/screens/tenant_manager_screen.dart';
 
 class HqDashboardScreen extends ConsumerWidget {
   const HqDashboardScreen({super.key});

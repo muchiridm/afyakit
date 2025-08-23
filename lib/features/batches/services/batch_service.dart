@@ -1,3 +1,4 @@
+// lib/shared/providers/batch_service_provider.dart
 import 'dart:convert';
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/shared/api/api_routes.dart';
@@ -8,16 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-// lib/shared/providers/batch_service_provider.dart (or nearby)
 final batchServiceProvider = Provider<BatchService>((ref) {
   final tokenProviderInstance = ref.read(tokenProvider);
   return BatchService(tokenProviderInstance);
 });
 
-/// Service for managing batch-level stock records across stores
 class BatchService {
   final TokenProvider tokenProvider;
-
   BatchService(this.tokenProvider);
 
   Future<BatchRecord?> getBatchById(
@@ -34,9 +32,7 @@ class BatchService {
           .collection('batches')
           .doc(batchId)
           .get();
-
       if (!doc.exists) return null;
-
       return BatchRecord.fromSnapshot(doc);
     } catch (e, stack) {
       debugPrint('❌ Failed to fetch batch $batchId from store $storeId: $e');
@@ -55,27 +51,28 @@ class BatchService {
     BatchRecord batch,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).createBatchUri(storeId);
+    final uri = ApiRoutes(tenantId).createBatch(storeId);
+
+    final body = batch.toJson()
+      ..putIfAbsent('tenantId', () => tenantId); // ensure persisted
+
+    debugPrint('🚀 Calling: $uri');
+    debugPrint('📦 JSON: ${jsonEncode(body)}');
 
     final res = await http.post(
       uri,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
+        'x-tenant-id': tenantId,
       },
-      body: jsonEncode(batch.toJson()),
+      body: jsonEncode(body),
     );
-
     if (res.statusCode != 201) {
       throw Exception('❌ Failed to create batch: ${res.body}');
     }
-
-    final data = jsonDecode(res.body);
-
-    debugPrint('🚀 Calling: ${uri.toString()}');
-    debugPrint('📦 JSON: ${jsonEncode(batch.toJson())}');
-
-    return BatchRecord.fromJson(data['id'], data);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return BatchRecord.fromJson(data['id'] as String, data);
   }
 
   Future<void> updateBatch(
@@ -84,17 +81,19 @@ class BatchService {
     BatchRecord batch,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).updateBatchUri(storeId, batch.id);
+    final uri = ApiRoutes(tenantId).updateBatch(storeId, batch.id);
+
+    final body = batch.toJson()..putIfAbsent('tenantId', () => tenantId);
 
     final res = await http.put(
       uri,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
+        'x-tenant-id': tenantId,
       },
-      body: jsonEncode(batch.toJson()),
+      body: jsonEncode(body),
     );
-
     if (res.statusCode != 200) {
       throw Exception('❌ Failed to update batch: ${res.body}');
     }
@@ -106,17 +105,16 @@ class BatchService {
     String batchId,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).deleteBatchUri(storeId, batchId);
+    final uri = ApiRoutes(tenantId).deleteBatch(storeId, batchId);
 
     final res = await http.delete(
       uri,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
-        'x-tenant-id': tenantId, // 👈 Add this line
+        'x-tenant-id': tenantId,
       },
     );
-
     if (res.statusCode != 200) {
       throw Exception('❌ Failed to delete batch: ${res.body}');
     }
@@ -131,32 +129,25 @@ class BatchService {
     required String itemId,
     required ItemType itemType,
   }) async {
-    if (tenantId.isEmpty || itemId.isEmpty) {
-      debugPrint('⚠️ Skipped: tenantId or itemId is empty');
-      return false;
-    }
-
+    if (tenantId.isEmpty || itemId.isEmpty) return false;
     try {
-      final query = await db
+      final q = await db
           .collectionGroup('batches')
+          .where('tenantId', isEqualTo: tenantId) // ← REQUIRED
           .where('itemId', isEqualTo: itemId)
           .where('itemType', isEqualTo: itemType.name)
           .limit(5)
           .get();
 
-      for (final doc in query.docs) {
-        final segments = doc.reference.path.split('/');
-        final tenantIndex = segments.indexOf('tenants');
-        if (tenantIndex != -1 && segments[tenantIndex + 1] == tenantId) {
-          debugPrint('📦 Linked batch found: ${doc.reference.path}');
-          return true;
-        }
-      }
-
-      debugPrint('✅ No linked batches for item $itemId under tenant $tenantId');
-      return false;
-    } catch (e) {
-      debugPrint('❌ Error during batch linkage check: $e');
+      final any = q.docs.isNotEmpty;
+      debugPrint(
+        any
+            ? '📦 Linked batch exists for item=$itemId under $tenantId'
+            : '✅ No linked batches for item=$itemId under $tenantId',
+      );
+      return any;
+    } catch (e, st) {
+      debugPrint('❌ hasLinkedBatches error: $e\n$st');
       return false;
     }
   }

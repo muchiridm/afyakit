@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:afyakit/users/widgets/user_badge.dart';
+import 'package:afyakit/features/auth_users/widgets/user_badge.dart';
 
 class ScreenHeader extends StatelessWidget {
   final String title;

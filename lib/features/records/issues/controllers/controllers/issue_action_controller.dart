@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/records/issues/controllers/controllers/issue_lifecycle_controller.dart';
 import 'package:afyakit/features/records/issues/controllers/engines/issue_policy_engine.dart';
-import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,8 +12,8 @@ import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.d
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
 
 // NEW: policy provider
 import 'package:afyakit/features/records/issues/providers/issue_engine_providers.dart';

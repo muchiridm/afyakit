@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/records/delivery_sessions/services/delivery_locked_exception.dart';
 import 'package:afyakit/features/records/issues/controllers/engines/issue_lifecycle_engine.dart';
-import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
+import 'package:afyakit/shared/api/providers/api_route_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:afyakit/shared/api/api_routes.dart';
@@ -11,6 +13,13 @@ import 'package:afyakit/shared/utils/payload_sanitizer.dart';
 import '../models/items/medication_item.dart';
 import '../models/items/consumable_item.dart';
 import '../models/items/equipment_item.dart';
+
+final inventoryServiceProvider = Provider<InventoryService>((ref) {
+  final token = ref.read(tokenProvider);
+  final routes = ref.read(apiRouteProvider);
+
+  return InventoryService(routes, token);
+});
 
 class InventoryService {
   final ApiRoutes routes;
@@ -91,7 +100,7 @@ class InventoryService {
       throw Exception('ID is required for update');
     }
 
-    final url = routes.itemById(id, itemType);
+    final url = routes.itemById(id);
     final payload = {...PayloadSanitizer.sanitize(data), 'itemType': itemType};
 
     debugPrint('📡 PUT $url');
@@ -110,7 +119,7 @@ class InventoryService {
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id, 'medication');
+    final url = routes.itemById(id);
     return _patchJson(url, fields); // ✅ return the backend response
   }
 
@@ -121,7 +130,7 @@ class InventoryService {
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id, 'consumable');
+    final url = routes.itemById(id);
     return _patchJson(url, fields); // ✅ return the backend response
   }
 
@@ -129,7 +138,7 @@ class InventoryService {
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id, 'equipment');
+    final url = routes.itemById(id);
     return _patchJson(url, fields); // ✅ return the backend response
   }
 
@@ -141,7 +150,7 @@ class InventoryService {
   Future<void> deleteEquipment(String id) => _deleteItem(id, 'equipment');
 
   Future<void> _deleteItem(String id, String itemType) async {
-    final url = routes.itemById(id, itemType);
+    final url = routes.itemById(id);
     final res = await _delete(url);
     if (res.statusCode != 200) {
       throw Exception("Failed to delete $itemType [$id]: ${res.body}");

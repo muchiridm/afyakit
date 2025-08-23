@@ -17,7 +17,7 @@ class InventoryLocationService {
     required InventoryLocationType type,
   }) async {
     final token = await tokenProvider.getToken();
-    final uri = api.getTypedLocationsUri(type); // /stores, /dispensaries, etc.
+    final uri = api.getTypedLocations(type); // /stores, /dispensaries, etc.
 
     final res = await http.get(
       uri,
@@ -42,7 +42,7 @@ class InventoryLocationService {
     required InventoryLocationType type,
   }) async {
     final token = await tokenProvider.getToken();
-    final uri = api.addLocationUri(); // new helper
+    final uri = api.addLocation(); // new helper
 
     final payload = {'name': name.trim(), 'type': type.asString};
 
@@ -66,7 +66,7 @@ class InventoryLocationService {
     required String id,
   }) async {
     final token = await tokenProvider.getToken();
-    final uri = api.deleteTypedLocationUri(type, id);
+    final uri = api.deleteTypedLocation(type, id);
 
     final res = await http.delete(
       uri,

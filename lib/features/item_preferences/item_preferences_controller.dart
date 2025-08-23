@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/item_preferences/utils/item_preference_field.dart';
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/item_preferences/item_preferences_service.dart';
-import 'package:afyakit/shared/providers/api_route_provider.dart';
+import 'package:afyakit/shared/api/providers/api_route_provider.dart';
 
 /// 🧩 Composite key: defines a unique preference group (e.g., medication/group)
 class PreferenceKey {

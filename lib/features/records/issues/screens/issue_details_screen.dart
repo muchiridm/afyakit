@@ -1,4 +1,4 @@
-import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +11,9 @@ import 'package:afyakit/features/records/issues/controllers/controllers/issue_ac
 import 'package:afyakit/features/records/issues/models/enums/issue_status_enum.dart';
 import 'package:afyakit/features/records/issues/models/enums/issue_status_x.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
-import 'package:afyakit/shared/providers/stock/issues_stream_provider.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/users/user_operations/providers/current_user_provider.dart';
+import 'package:afyakit/features/records/issues/providers/issues_stream_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';

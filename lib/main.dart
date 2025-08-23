@@ -1,8 +1,8 @@
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/tenants/providers/tenant_config_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_config_provider.dart';
 import 'package:afyakit/shared/utils/decide_tenant.dart';
-import 'package:afyakit/tenants/services/tenant_loader.dart';
-import 'package:afyakit/users/user_operations/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/features/tenants/services/tenant_loader.dart';
+import 'package:afyakit/features/auth_users/user_operations/providers/user_operations_engine_providers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,12 +10,12 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/config/tenant_config.dart';
 
-import 'package:afyakit/users/widgets/auth_gate.dart';
-import 'package:afyakit/users/screens/invite_accept_screen.dart';
+import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
+import 'package:afyakit/features/auth_users/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

@@ -1,42 +1,82 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Tenants & Auto-Tenant (last word of the command)
-# Usage pattern: `make <action> <tenant>` e.g. `make run afyakit`
+# Dynamic Tenants
+#   - Tenants are read from a local ".tenants" file (one per line).
+#   - If the file doesn't exist, we fall back to a small default list.
+#   - You can manage the list via: add-tenant / remove-tenant / print-tenants
 # ─────────────────────────────────────────────────────────────────────────────
-TENANTS := afyakit danabtmc dawapap
-TENANT  ?= $(lastword $(MAKECMDGOALS))
 
-# Swallow the trailing tenant target so make doesn't error
+TENANTS_FILE := .tenants
+
+# Fallback list if no .tenants file exists yet
+DEFAULT_TENANTS := afyakit danabtmc dawapap
+
+# Load tenants from file (trim empty lines). Otherwise use defaults.
+ifneq ("$(wildcard $(TENANTS_FILE))","")
+  TENANTS := $(shell awk 'NF' $(TENANTS_FILE))
+else
+  TENANTS := $(DEFAULT_TENANTS)
+endif
+
+# Allow passing TENANT explicitly or infer it from "make <target> <tenant>"
+TENANT_REQ_TARGETS := run run-web web deploy release-web apk aab
+ifneq (,$(filter $(firstword $(MAKECMDGOALS)),$(TENANT_REQ_TARGETS)))
+  TENANT ?= $(word 2,$(MAKECMDGOALS))
+endif
+
+# If not provided in the two-word form, fall back to the last goal
+TENANT ?= $(lastword $(MAKECMDGOALS))
+
+# Swallow the trailing "<tenant>" token so make doesn't try to build a target
+# named after the tenant. For known tenants:
+.PHONY: $(TENANTS)
 $(TENANTS): ; @:
 
+# For ad-hoc tenants when ALLOW_ANY_TENANT=1, swallow that token too
+ifeq ($(ALLOW_ANY_TENANT),1)
+  ifneq ($(TENANT),)
+    .PHONY: $(TENANT)
+    $(TENANT): ; @:
+  endif
+endif
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Device selection (auto-pick first Android device; fallback to chrome)
-# Override per call: DEVICE=sdk_gphone64_x86_64
+# Device selection (auto-pick first Android; fallback to chrome)
+# Override: DEVICE=sdk_gphone64_x86_64
 # ─────────────────────────────────────────────────────────────────────────────
 DEVICE ?= $(shell flutter devices 2>/dev/null | awk '/android|emulator|gphone|Pixel/ {print $$1; exit}')
 ifeq ($(strip $(DEVICE)),)
   DEVICE := chrome
 endif
 
-# Extra args passthrough if you need them: EXTRA="-t lib/main_alt.dart"
+# Extra args passthrough to flutter commands
 EXTRA ?=
 
-# Build output base for web
+# Web build output base
 WEB_OUT := build
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Internal helpers
+# Internal: assertion helpers
 # ─────────────────────────────────────────────────────────────────────────────
 define assert_tenant
-	@if ! printf "%s\n" $(TENANTS) | grep -qx "$(TENANT)"; then \
-		echo "❌ Unknown or missing tenant '$(TENANT)'. Use one of: $(TENANTS)"; \
+	@if [ -z "$(TENANT)" ]; then \
+		echo "❌ Missing tenant. Usage: make $(firstword $(MAKECMDGOALS)) <tenant>"; \
+		exit 2; \
+	fi; \
+	if [ "$(ALLOW_ANY_TENANT)" = "1" ]; then \
+		exit 0; \
+	fi; \
+	if ! printf "%s\n" $(TENANTS) | grep -qx "$(TENANT)"; then \
+		echo "❌ Unknown tenant '$(TENANT)'. Add it with 'make add-tenant NAME=$(TENANT)'"; \
+		echo "   Known: $(TENANTS)"; \
+		echo "   Or bypass the check: ALLOW_ANY_TENANT=1 make $(firstword $(MAKECMDGOALS)) $(TENANT)"; \
 		exit 2; \
 	fi
 endef
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Help
+# Help & devices
 # ─────────────────────────────────────────────────────────────────────────────
-.PHONY: help devices
+.PHONY: help devices print-tenants add-tenant remove-tenant
 help:
 	@echo "Usage:"
 	@echo "  make run <tenant>           # Run (auto Android device or chrome fallback)"
@@ -50,28 +90,54 @@ help:
 	@echo "  make all-apk                # Build APK for ALL tenants"
 	@echo "  make all-aab                # Build AAB for ALL tenants"
 	@echo ""
+	@echo "Tenant list management:"
+	@echo "  make print-tenants"
+	@echo "  make add-tenant NAME=<tenant>"
+	@echo "  make remove-tenant NAME=<tenant>"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make run afyakit"
-	@echo "  make run-web danabtmc"
+	@echo "  make run-web test           # after add-tenant NAME=test or with ALLOW_ANY_TENANT=1"
 	@echo "  make web dawapap"
 	@echo "  make release-web afyakit"
 	@echo "  make apk danabtmc"
 	@echo "  make aab afyakit"
 	@echo ""
-	@echo "Vars: DEVICE=<id> (from 'make devices'), EXTRA='extra flutter args'"
+	@echo "Vars: DEVICE=<id> (see 'make devices'), EXTRA='extra flutter args', ALLOW_ANY_TENANT=1"
 devices:
 	flutter devices
+
+print-tenants:
+	@echo "📜 Tenants:"; \
+	if [ -n "$(TENANTS)" ]; then printf "  - %s\n" $(TENANTS); else echo "  (none)"; fi
+
+add-tenant:
+	@if [ -z "$(NAME)" ]; then echo "Usage: make add-tenant NAME=<tenant>"; exit 2; fi
+	@touch $(TENANTS_FILE)
+	@if grep -qx "$(NAME)" $(TENANTS_FILE); then \
+		echo "ℹ️  Tenant '$(NAME)' already present"; \
+	else \
+		echo "$(NAME)" >> $(TENANTS_FILE); \
+		echo "✅ Added tenant '$(NAME)' to $(TENANTS_FILE)"; \
+	fi
+
+remove-tenant:
+	@if [ -z "$(NAME)" ]; then echo "Usage: make remove-tenant NAME=<tenant>"; exit 2; fi
+	@if [ ! -f "$(TENANTS_FILE)" ]; then echo "ℹ️  No $(TENANTS_FILE) file yet"; exit 0; fi
+	@grep -vx "$(NAME)" $(TENANTS_FILE) > $(TENANTS_FILE).tmp || true
+	@mv $(TENANTS_FILE).tmp $(TENANTS_FILE)
+	@echo "🗑️  Removed tenant '$(NAME)' (if it existed)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Run (Android if present, else chrome)
 # ─────────────────────────────────────────────────────────────────────────────
 .PHONY: run run-web
-run: $(TENANT)
+run:
 	@$(call assert_tenant)
 	@echo "▶️  Running $(TENANT) on '$(DEVICE)'..."
 	flutter run -d $(DEVICE) --flavor $(TENANT) --dart-define=TENANT=$(TENANT) $(EXTRA)
 
-run-web: $(TENANT)
+run-web:
 	@$(call assert_tenant)
 	@echo "🌐 Running (web) $(TENANT) on chrome..."
 	flutter run -d chrome --dart-define=TENANT=$(TENANT) $(EXTRA)
@@ -80,22 +146,21 @@ run-web: $(TENANT)
 # Web build / deploy
 # ─────────────────────────────────────────────────────────────────────────────
 .PHONY: web deploy release-web all-web
-web: $(TENANT)
+web:
 	@$(call assert_tenant)
 	@echo "🌐 Building web for $(TENANT)…"
 	flutter build web --release --dart-define=TENANT=$(TENANT) --output $(WEB_OUT)/$(TENANT)_web $(EXTRA)
 
-deploy: $(TENANT)
+deploy:
 	@$(call assert_tenant)
 	@test -d "$(WEB_OUT)/$(TENANT)_web" || (echo "❌ Missing $(WEB_OUT)/$(TENANT)_web — run 'make web $(TENANT)' first." && exit 2)
 	@echo "🚀 Deploying hosting:$(TENANT)…"
 	firebase deploy --only hosting:$(TENANT)
 
-release-web: $(TENANT)
-	@$(MAKE) web $(TENENT) >/dev/null 2>&1 || true
+release-web:
 	@$(call assert_tenant)
-	@$(MAKE) web $(TENANT)
-	@$(MAKE) deploy $(TENANT)
+	@$(MAKE) web TENANT=$(TENANT)
+	@$(MAKE) deploy TENANT=$(TENANT)
 
 all-web:
 	@for t in $(TENANTS); do \
@@ -107,12 +172,12 @@ all-web:
 # Android builds
 # ─────────────────────────────────────────────────────────────────────────────
 .PHONY: apk aab all-apk all-aab
-apk: $(TENANT)
+apk:
 	@$(call assert_tenant)
 	@echo "🤖 Building APK for $(TENANT)…"
 	flutter build apk --release --flavor $(TENANT) --dart-define=TENANT=$(TENANT) $(EXTRA)
 
-aab: $(TENANT)
+aab:
 	@$(call assert_tenant)
 	@echo "📦 Building AAB for $(TENANT)…"
 	flutter build appbundle --release --flavor $(TENANT) --dart-define=TENANT=$(TENANT) $(EXTRA)

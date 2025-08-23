@@ -1,14 +1,12 @@
 // delivery_review_service.dart
 
+import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_state.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_name.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/features/records/delivery_sessions/models/view_models/delivery_review_summary.dart';
-import 'package:afyakit/shared/providers/stock/batch_records_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/medication_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/consumable_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/equipment_items_stream_provider.dart';
+import 'package:afyakit/features/batches/providers/batch_records_stream_provider.dart';
 
 Future<DeliveryReviewSummary?> getDeliveryReviewSummary({
   required WidgetRef ref,

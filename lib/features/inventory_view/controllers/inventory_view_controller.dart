@@ -1,26 +1,28 @@
-import 'package:afyakit/users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/users/user_manager/models/auth_user_model.dart';
+// lib/features/inventory_view/controllers/inventory_view_controller.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
-import 'package:afyakit/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
+
+import 'package:afyakit/features/batches/models/batch_record.dart';
+import 'package:afyakit/features/batches/providers/batch_records_stream_provider.dart';
 
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
-import 'package:afyakit/features/batches/models/batch_record.dart';
+import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
+import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
 
-import 'package:afyakit/features/inventory/providers/item_streams/medication_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/consumable_items_stream_provider.dart';
-import 'package:afyakit/features/inventory/providers/item_streams/equipment_items_stream_provider.dart';
-import 'package:afyakit/shared/providers/stock/batch_records_stream_provider.dart';
-
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
-import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
-import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
-import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
+import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
+
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/shared/providers/firestore_tenant_guard.dart';
+import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
 
 /// 🎯 ViewController family — scoped per ItemType
 /// IMPORTANT: not autoDispose so view prefs persist across navigation.
@@ -50,13 +52,38 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
     _initialize();
   }
 
+  // ─────────────────────────────────────────────
+  // Init: wait for tenant guard, then wire streams
+  // ─────────────────────────────────────────────
   void _initialize() {
-    // ITEMS stream (by type)
+    // Ensure token claims are synced to the selected tenant before any CG reads.
+    ref
+        .read(firestoreTenantGuardProvider.future)
+        .then((_) {
+          if (!mounted) return;
+          _startItemsStream();
+          _startBatchesStream();
+          if (kDebugMode) {
+            debugPrint('🛡️ [invVC] tenant guard OK → $tenantId, type=$type');
+          }
+        })
+        .catchError((e, st) {
+          _itemsLoading = _batchesLoading = false;
+          if (!mounted) return;
+          state = state.copyWith(isLoading: false, error: e.toString());
+          if (kDebugMode) {
+            debugPrint('🔥 [invVC] guard error: $e');
+            debugPrint('🧱 [invVC] stack:\n$st');
+          }
+        });
+  }
+
+  void _startItemsStream() {
     final itemsProvider = switch (type) {
       ItemType.medication => medicationItemsStreamProvider(tenantId),
       ItemType.consumable => consumableItemsStreamProvider(tenantId),
       ItemType.equipment => equipmentItemsStreamProvider(tenantId),
-      ItemType.unknown => throw Exception('Unknown item type'),
+      ItemType.unknown => throw StateError('Unknown item type'),
     };
 
     _itemsSub = ref.listen<AsyncValue<List<BaseInventoryItem>>>(itemsProvider, (
@@ -67,19 +94,29 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
         loading: () {
           _itemsLoading = true;
           _applyLoading();
+          if (kDebugMode) debugPrint('⏳ [invVC] items loading…');
         },
-        error: (e, _) {
+        error: (e, st) {
           _itemsLoading = false;
+          if (!mounted) return;
           state = state.copyWith(isLoading: false, error: e.toString());
+          if (kDebugMode) {
+            debugPrint('🔥 [invVC] items error: $e');
+            debugPrint('🧱 [invVC] stack:\n$st');
+          }
         },
         data: (items) {
           _itemsLoading = false;
+          if (kDebugMode) {
+            debugPrint('📦 [invVC] items loaded: ${items.length} (type=$type)');
+          }
           _rebuild(items: items);
         },
       );
     }, fireImmediately: true);
+  }
 
-    // BATCHES stream
+  void _startBatchesStream() {
     _batchesSub = ref.listen<AsyncValue<List<BatchRecord>>>(
       batchRecordsStreamProvider(tenantId),
       (prev, next) {
@@ -87,13 +124,22 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
           loading: () {
             _batchesLoading = true;
             _applyLoading();
+            if (kDebugMode) debugPrint('⏳ [invVC] batches loading…');
           },
-          error: (e, _) {
+          error: (e, st) {
             _batchesLoading = false;
+            if (!mounted) return;
             state = state.copyWith(isLoading: false, error: e.toString());
+            if (kDebugMode) {
+              debugPrint('🔥 [invVC] batches error: $e');
+              debugPrint('🧱 [invVC] stack:\n$st');
+            }
           },
           data: (batches) {
             _batchesLoading = false;
+            if (kDebugMode) {
+              debugPrint('📦 [invVC] batches loaded: ${batches.length}');
+            }
             _rebuild(batches: batches);
           },
         );
@@ -104,6 +150,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
 
   void _applyLoading() {
     final isLoading = _itemsLoading || _batchesLoading;
+    if (!mounted) return;
     if (state.isLoading != isLoading) {
       state = state.copyWith(isLoading: isLoading, error: null);
     }
@@ -115,7 +162,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
 
     final matcher = SkuBatchMatcher.from(items: newItems, batches: newBatches);
 
-    // 🔒 Preserve query/sort; patch just the data slices
+    if (!mounted) return;
     state = state.copyWith(
       items: newItems,
       batches: newBatches,
@@ -128,12 +175,17 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
   // ─────────────────────────────────────────────
   // View prefs
   // ─────────────────────────────────────────────
-  void setQuery(String val) => state = state.copyWith(query: val);
+  void setQuery(String val) {
+    final q = val.trim();
+    if (q == state.query) return;
+    state = state.copyWith(query: q);
+  }
+
   void toggleSort() =>
       state = state.copyWith(sortAscending: !state.sortAscending);
 
   // ─────────────────────────────────────────────
-  // Navigation helpers (unchanged)
+  // Navigation helpers
   // ─────────────────────────────────────────────
   void startAddBatch(
     BuildContext context,
@@ -159,7 +211,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
       sessionController.startNew(
         enteredByName: enteredByName,
         enteredByEmail: enteredByEmail,
-        sources: [], // No assumption about source
+        sources: const [],
       );
     }
 
@@ -178,7 +230,7 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
   void editBatch(
     BuildContext context,
     BatchRecord batch,
-    dynamic item,
+    BaseInventoryItem item,
     AuthUser user,
   ) {
     if (user.tenantId.isEmpty) {

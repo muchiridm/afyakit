@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Import the service that exposes firebaseOnly provider
-import 'package:afyakit/users/user_operations/services/user_operations_service.dart';
+import 'package:afyakit/features/auth_users/user_operations/services/user_operations_service.dart';
 
 /// Infra-level token access (no engines).
 /// Uses a Firebase-only UserOperationsService to avoid dependency cycles.
