@@ -1,24 +1,11 @@
-import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/features/auth_users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/features/auth_users/user_manager/controllers/user_manager_controller.dart';
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_auth_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Canonical "me" in this tenant: resolves Firebase user → AuthUser doc
-final myAuthUserProvider = FutureProvider.autoDispose<AuthUser?>((ref) async {
-  // Rebuild if tenant changes
-  final _ = ref.watch(tenantIdProvider);
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/auth_users/screens/user_profile_editor_screen.dart';
 
-  // Wait for Firebase session so we know which UID to load
-  final fbUser = await ref.watch(currentUserFutureProvider.future);
-  if (fbUser == null) return null;
-
-  // Use your controller’s byId() path (single source of truth)
-  final ctrl = ref.read(userManagerControllerProvider.notifier);
-  return await ctrl.getUserById(fbUser.uid);
-});
+import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 class UserBadge extends ConsumerWidget {
   const UserBadge({super.key});
@@ -26,7 +13,9 @@ class UserBadge extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
-    final meAsync = ref.watch(myAuthUserProvider);
+    final meAsync = ref.watch(
+      currentAuthUserProvider,
+    ); // <— canonical current user
 
     return meAsync.when(
       loading: () => const SizedBox(
@@ -42,7 +31,8 @@ class UserBadge extends ConsumerWidget {
         if (user == null) return const SizedBox.shrink();
         return _buildBadge(
           context,
-          user,
+          displayName: user.displayLabel(), // <— unified resolver
+          roleLabel: _roleLabel(user.role.toString()),
           onTap: () {
             Navigator.push(
               context,
@@ -59,14 +49,12 @@ class UserBadge extends ConsumerWidget {
   // ────────────────── helpers ──────────────────
 
   Widget _buildBadge(
-    BuildContext context,
-    AuthUser user, {
+    BuildContext context, {
+    required String displayName,
+    required String roleLabel,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    final displayName = _displayName(user);
-    final roleLabel = _roleLabel(user);
-
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -113,23 +101,13 @@ class UserBadge extends ConsumerWidget {
     );
   }
 
-  String _displayName(AuthUser u) {
-    final name = (u.displayName).trim();
-    if (name.isNotEmpty) return name;
-    if (u.email.trim().isNotEmpty) return u.email.trim();
-    final phone = (u.phoneNumber ?? '').trim();
-    if (phone.isNotEmpty) return phone;
-    return u.uid;
-  }
-
   /// Turns enums like `UserRole.admin` or raw strings like `admin` into `Admin`.
-  String _roleLabel(AuthUser u) {
-    final raw = u.role.toString().trim();
+  String _roleLabel(String rawRole) {
+    final raw = rawRole.trim();
     if (raw.isEmpty) return '—';
     final cleaned = raw.contains('.') ? raw.split('.').last : raw;
-    return _capitalize(cleaned);
+    return cleaned.isEmpty
+        ? '—'
+        : '${cleaned[0].toUpperCase()}${cleaned.substring(1)}';
   }
-
-  String _capitalize(String s) =>
-      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }

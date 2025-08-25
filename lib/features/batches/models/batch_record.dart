@@ -4,18 +4,23 @@ import 'package:afyakit/shared/utils/parsers/parse_date.dart';
 import 'package:afyakit/shared/utils/parsers/parse_item_type.dart';
 import 'package:flutter/foundation.dart';
 
+@immutable
 class BatchRecord {
   final String id;
   final String? fullPath;
 
+  // Tenant / store (present on doc and derivable from path)
+  final String tenantId;
+  final String storeId;
+
   final String itemId;
   final ItemType itemType;
-  final String storeId;
 
   final DateTime? expiryDate;
   final DateTime? receivedDate;
   final int quantity;
 
+  // 🔗 Delivery linkage
   final String? deliveryId;
 
   final String? enteredByUid;
@@ -30,9 +35,10 @@ class BatchRecord {
   const BatchRecord({
     required this.id,
     this.fullPath,
+    required this.tenantId,
+    required this.storeId,
     required this.itemId,
     required this.itemType,
-    required this.storeId,
     this.expiryDate,
     this.receivedDate,
     required this.quantity,
@@ -47,56 +53,76 @@ class BatchRecord {
 
   // ─────────────────────────────────────────────
   // 🔥 From Firestore
-  factory BatchRecord.fromSnapshot(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final itemId = data['itemId'];
-
-    if (itemId == null || itemId is! String || itemId.isEmpty) {
-      throw StateError(
-        '❌ Missing or invalid `itemId` in batch: ${doc.reference.path}',
-      );
-    }
-
-    final extractedStoreId = _extractStoreId(doc.reference.path);
-    final embeddedStoreId = data['storeId'];
-    if (embeddedStoreId != null && embeddedStoreId != extractedStoreId) {
-      debugPrint(
-        '⚠️ Mismatch: embedded storeId ($embeddedStoreId) ≠ path storeId ($extractedStoreId)',
-      );
-    }
-
-    return BatchRecord(
+  factory BatchRecord.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final path = doc.reference.path;
+    return _fromData(
       id: doc.id,
-      fullPath: doc.reference.path,
-      itemId: itemId,
-      itemType: parseItemType(data['itemType']),
-      storeId: extractedStoreId,
-      expiryDate: parseDate(data['expiryDate']),
-      receivedDate: parseDate(data['receivedDate']),
-      quantity: data['quantity'] ?? 0,
-      deliveryId: data['deliveryId'],
-      enteredByUid: data['enteredByUid'],
-      enteredByName: data['enteredByName'],
-      enteredByEmail: data['enteredByEmail'],
-      source: data['source'],
-      isEdited: data['isEdited'] ?? false,
-      editReason: data['editReason'],
+      data: data,
+      // only from snapshot we know the path, so we can warn on mismatches
+      path: path,
     );
   }
 
-  static String _extractStoreId(String path) {
-    final match = RegExp(r'stores/([^/]+)/batches').firstMatch(path);
-    return match?.group(1) ?? '';
+  // 🔁 From API JSON
+  factory BatchRecord.fromJson(String id, Map<String, dynamic> json) {
+    return _fromData(id: id, data: json);
+  }
+
+  // 📄 From embedded maps
+  factory BatchRecord.fromMap(Map<String, dynamic> map) {
+    return _fromData(id: (map['id'] as String?) ?? '', data: map);
   }
 
   // ─────────────────────────────────────────────
+  // 📤 Serialization
+  Map<String, dynamic> toMap({bool forFirestore = true}) {
+    final map = <String, dynamic>{
+      'tenantId': tenantId,
+      'storeId': storeId,
+      'itemId': itemId,
+      'itemType': itemType.name,
+      'expiryDate': serializeDate(expiryDate, forFirestore: forFirestore),
+      'receivedDate': serializeDate(receivedDate, forFirestore: forFirestore),
+      'quantity': quantity,
+      'deliveryId': deliveryId, // canonical
+      'enteredByUid': enteredByUid,
+      'enteredByName': enteredByName,
+      'enteredByEmail': enteredByEmail,
+      'source': source,
+      'isEdited': isEdited,
+      'editReason': editReason,
+    };
+
+    // ✅ Back-compat: dual-write for readers expecting snake_case
+    map['delivery_id'] = deliveryId;
+
+    return map;
+  }
+
+  Map<String, dynamic> toJson() {
+    // for API payloads; same content as toMap(false) + the snake key
+    final map = toMap(forFirestore: false);
+    map['delivery_id'] = deliveryId; // ensure API gets both variants
+    // sanity: never leak Timestamp to the API
+    for (final e in map.entries) {
+      if (e.value is Timestamp) {
+        debugPrint('🚨 toJson leaked Timestamp: ${e.key} → ${e.value}');
+      }
+    }
+    return map;
+  }
+
+  Map<String, dynamic> toRawMap() => {'id': id, ...toMap(forFirestore: false)};
+
   // 🧬 CopyWith
   BatchRecord copyWith({
     String? id,
     String? fullPath,
+    String? tenantId,
+    String? storeId,
     String? itemId,
     ItemType? itemType,
-    String? storeId,
     DateTime? expiryDate,
     DateTime? receivedDate,
     int? quantity,
@@ -111,9 +137,10 @@ class BatchRecord {
     return BatchRecord(
       id: id ?? this.id,
       fullPath: fullPath ?? this.fullPath,
+      tenantId: tenantId ?? this.tenantId,
+      storeId: storeId ?? this.storeId,
       itemId: itemId ?? this.itemId,
       itemType: itemType ?? this.itemType,
-      storeId: storeId ?? this.storeId,
       expiryDate: expiryDate ?? this.expiryDate,
       receivedDate: receivedDate ?? this.receivedDate,
       quantity: quantity ?? this.quantity,
@@ -127,86 +154,20 @@ class BatchRecord {
     );
   }
 
-  // 🔁 From API JSON
-  factory BatchRecord.fromJson(String id, Map<String, dynamic> json) {
-    return BatchRecord(
-      id: id,
-      itemId: json['itemId'] ?? '',
-      itemType: parseItemType(json['itemType']),
-      storeId: json['storeId'] ?? '',
-      expiryDate: parseDate(json['expiryDate']),
-      receivedDate: parseDate(json['receivedDate']),
-      quantity: json['quantity'] ?? 0,
-      deliveryId: json['deliveryId'],
-      enteredByUid: json['enteredByUid'],
-      enteredByName: json['enteredByName'],
-      enteredByEmail: json['enteredByEmail'],
-      source: json['source'],
-      isEdited: json['isEdited'] ?? false,
-      editReason: json['editReason'],
-    );
-  }
-
-  // 📄 From embedded maps (e.g. delivery snapshot)
-  factory BatchRecord.fromMap(Map<String, dynamic> map) {
-    return BatchRecord(
-      id: map['id'] ?? '',
-      itemId: map['itemId'] ?? '',
-      itemType: parseItemType(map['itemType']),
-      storeId: map['storeId'] ?? '',
-      expiryDate: parseDate(map['expiryDate']),
-      receivedDate: parseDate(map['receivedDate']),
-      quantity: map['quantity'] ?? 0,
-      deliveryId: map['deliveryId'],
-      enteredByUid: map['enteredByUid'],
-      enteredByName: map['enteredByName'],
-      enteredByEmail: map['enteredByEmail'],
-      source: map['source'],
-      isEdited: map['isEdited'] ?? false,
-      editReason: map['editReason'],
-    );
-  }
-
-  // 📤 Firestore / API serialization
-  Map<String, dynamic> toMap({bool forFirestore = true}) => {
-    'itemId': itemId,
-    'itemType': itemType.name,
-    'storeId': storeId,
-    'expiryDate': serializeDate(expiryDate, forFirestore: forFirestore),
-    'receivedDate': serializeDate(receivedDate, forFirestore: forFirestore),
-    'quantity': quantity,
-    'deliveryId': deliveryId,
-    'enteredByUid': enteredByUid,
-    'enteredByName': enteredByName,
-    'enteredByEmail': enteredByEmail,
-    'source': source,
-    'isEdited': isEdited,
-    'editReason': editReason,
-  };
-
-  Map<String, dynamic> toJson() {
-    final map = toMap(forFirestore: false);
-    for (final entry in map.entries) {
-      if (entry.value is Timestamp) {
-        debugPrint('🚨 toJson leaked Timestamp: ${entry.key} → ${entry.value}');
-      }
-    }
-    return map;
-  }
-
-  Map<String, dynamic> toRawMap() => {'id': id, ...toMap(forFirestore: false)};
-
   // 🧱 Blank stub for editors
   factory BatchRecord.blank({
     required String itemId,
     required ItemType itemType,
+    required String tenantId,
+    required String storeId,
   }) {
     return BatchRecord(
       id: '',
       fullPath: null,
+      tenantId: tenantId,
+      storeId: storeId,
       itemId: itemId,
       itemType: itemType,
-      storeId: '',
       expiryDate: null,
       receivedDate: null,
       quantity: 0,
@@ -217,6 +178,112 @@ class BatchRecord {
       source: null,
       isEdited: false,
       editReason: null,
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Internals: DRY parsing helpers & core builder
+  static final RegExp _tenantRe = RegExp(r'tenants/([^/]+)/stores/');
+  static final RegExp _storeRe = RegExp(r'stores/([^/]+)/batches');
+
+  static String _extractTenantId(String path) =>
+      _tenantRe.firstMatch(path)?.group(1) ?? '';
+
+  static String _extractStoreId(String path) =>
+      _storeRe.firstMatch(path)?.group(1) ?? '';
+
+  static String? _trimmed(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  static String? _pickS(Map<String, dynamic> m, List<String> keys) {
+    for (final k in keys) {
+      final v = _trimmed(m[k]);
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  static int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(_trimmed(v) ?? '') ?? 0;
+  }
+
+  static DateTime? _toDate(dynamic v) {
+    // delegate to your parser; it already handles String/Timestamp/null
+    return parseDate(v);
+  }
+
+  // lib/features/batches/models/batch_record.dart
+  // only the _fromData changes shown
+
+  static BatchRecord _fromData({
+    required String id,
+    required Map<String, dynamic> data,
+    String? path,
+  }) {
+    // accept both camel/snake and backend's "store"
+    final embeddedTenantId = _pickS(data, const ['tenantId', 'tenant_id']);
+    final embeddedStoreId = _pickS(data, const [
+      'storeId',
+      'store_id',
+      'store',
+    ]); // 👈 add "store"
+
+    String tenantId = embeddedTenantId ?? '';
+    String storeId = embeddedStoreId ?? '';
+
+    if ((tenantId.isEmpty || storeId.isEmpty) && path != null) {
+      final pathTenantId = _extractTenantId(path);
+      final pathStoreId = _extractStoreId(path);
+      tenantId = tenantId.isEmpty ? pathTenantId : tenantId;
+      storeId = storeId.isEmpty ? pathStoreId : storeId;
+
+      if (embeddedTenantId != null && embeddedTenantId != pathTenantId) {
+        debugPrint(
+          '⚠️ tenantId mismatch: embedded=$embeddedTenantId path=$pathTenantId ($path)',
+        );
+      }
+      if (embeddedStoreId != null && embeddedStoreId != pathStoreId) {
+        debugPrint(
+          '⚠️ storeId mismatch: embedded=$embeddedStoreId path=$pathStoreId ($path)',
+        );
+      }
+    }
+
+    final itemId = _pickS(data, const ['itemId', 'item_id']) ?? '';
+    if (itemId.isEmpty) {
+      throw StateError(
+        '❌ Missing or invalid `itemId` in batch: ${path ?? '(no path)'}',
+      );
+    }
+
+    final itemTypeRaw = data['itemType'] ?? data['item_type'];
+
+    return BatchRecord(
+      id: id,
+      fullPath: path,
+      tenantId: tenantId,
+      storeId: storeId,
+      itemId: itemId,
+      itemType: parseItemType(itemTypeRaw),
+      expiryDate: _toDate(data['expiryDate'] ?? data['expiry_date']),
+      receivedDate: _toDate(data['receivedDate'] ?? data['received_date']),
+      quantity: _toInt(data['quantity']),
+      deliveryId: _pickS(data, const ['deliveryId', 'delivery_id']),
+      enteredByUid: _pickS(data, const ['enteredByUid', 'entered_by_uid']),
+      enteredByName: _pickS(data, const ['enteredByName', 'entered_by_name']),
+      enteredByEmail: _pickS(data, const [
+        'enteredByEmail',
+        'entered_by_email',
+      ]),
+      source: _trimmed(data['source']),
+      isEdited:
+          (data['isEdited'] as bool?) ?? (data['is_edited'] as bool?) ?? false,
+      editReason: _pickS(data, const ['editReason', 'edit_reason']),
     );
   }
 }

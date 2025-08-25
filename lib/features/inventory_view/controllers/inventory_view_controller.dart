@@ -1,4 +1,5 @@
 // lib/features/inventory_view/controllers/inventory_view_controller.dart
+import 'package:afyakit/features/batches/controllers/batch_args.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +21,7 @@ import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/features/inventory_view/controllers/inventory_view_state.dart';
 
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/firestore_tenant_guard.dart';
+import 'package:afyakit/features/tenants/providers/firestore_tenant_guard.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
@@ -187,33 +188,38 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
   // ─────────────────────────────────────────────
   // Navigation helpers
   // ─────────────────────────────────────────────
-  void startAddBatch(
+  Future<void> startAddBatch(
     BuildContext context,
     BaseInventoryItem item,
     AuthUser user,
-  ) {
+  ) async {
     if (user.tenantId.isEmpty) {
       SnackService.showError('❌ Missing tenant ID for this user');
       return;
     }
 
-    final session = ref.read(deliverySessionControllerProvider);
-    final sessionController = ref.read(
-      deliverySessionControllerProvider.notifier,
-    );
+    // Controller is the UI façade over the engine.
+    final ds = ref.read(deliverySessionControllerProvider);
 
-    final enteredByName = user.displayName.trim().isNotEmpty
+    // Read once (no rebuilds here).
+    final session = ds.readState();
+
+    final enteredByName = (user.displayName.trim().isNotEmpty)
         ? user.displayName.trim()
-        : user.email;
-    final enteredByEmail = user.email;
+        : user.email.trim();
+    final enteredByEmail = user.email.trim();
 
+    // Ensure there’s an active session (engine will resume or start new).
     if (!session.isActive) {
-      sessionController.startNew(
+      await ds.ensureActive(
         enteredByName: enteredByName,
         enteredByEmail: enteredByEmail,
-        sources: const [],
+        source: '', // no source yet; engine ignores empty
+        storeId: null, // provide one if you already know it
       );
     }
+
+    if (!context.mounted) return;
 
     Navigator.of(context).push(
       MaterialPageRoute(

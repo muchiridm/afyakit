@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/auth_users/user_manager/controllers/user_manager_controller.dart';
-import 'package:afyakit/features/auth_users/user_manager/providers/super_admin_providers.dart';
+import 'package:afyakit/features/auth_users/providers/super_admin_providers.dart';
 
 class SuperAdminScreen extends ConsumerWidget {
   const SuperAdminScreen({super.key});

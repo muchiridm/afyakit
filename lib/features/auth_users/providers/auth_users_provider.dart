@@ -1,5 +1,5 @@
 // lib/users/providers/auth_users_provider.dart
-import 'package:afyakit/features/auth_users/user_manager/providers/user_engine_providers.dart';
+import 'package:afyakit/features/auth_users/providers/user_engine_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

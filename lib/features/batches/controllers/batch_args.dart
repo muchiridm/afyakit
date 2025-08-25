@@ -1,14 +1,15 @@
-import 'package:afyakit/features/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
 
-class BatchEditorArgs {
+enum BatchEditorMode { add, edit }
+
+class BatchArgs {
   final String tenantId;
   final BaseInventoryItem item;
   final BatchRecord? batch;
   final BatchEditorMode mode;
 
-  BatchEditorArgs({
+  BatchArgs({
     required this.tenantId,
     required this.item,
     required this.mode,
@@ -20,7 +21,7 @@ class BatchEditorArgs {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is BatchEditorArgs &&
+      other is BatchArgs &&
           tenantId == other.tenantId &&
           item.id == other.item.id &&
           batch?.id == other.batch?.id &&

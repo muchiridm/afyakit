@@ -1,4 +1,5 @@
 // lib/.../auth_gate.dart  (same file you showed)
+import 'package:afyakit/features/auth_users/providers/current_auth_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +11,6 @@ import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/features/auth_users/user_operations/controllers/session_controller.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/user_status_x.dart';
 
 class AuthGate extends ConsumerStatefulWidget {

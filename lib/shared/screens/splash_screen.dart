@@ -1,6 +1,6 @@
+import 'package:afyakit/features/tenants/services/tenant_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/features/tenants/providers/tenant_config_provider.dart';
 
 class SplashScreen extends ConsumerWidget {
   const SplashScreen({super.key});

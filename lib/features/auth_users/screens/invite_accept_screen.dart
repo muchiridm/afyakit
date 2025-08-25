@@ -1,14 +1,14 @@
 import 'package:afyakit/features/auth_users/user_manager/extensions/user_status_x.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
 import 'package:afyakit/features/auth_users/screens/login_screen.dart';
+import 'package:afyakit/features/tenants/services/tenant_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/auth_users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
-import 'package:afyakit/features/tenants/providers/tenant_config_provider.dart';
 
 class InviteAcceptScreen extends ConsumerWidget {
   final Map<String, String> inviteParams;

@@ -1,4 +1,6 @@
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
+import 'package:afyakit/features/auth_users/providers/user_display_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +15,7 @@ import 'package:afyakit/features/records/issues/models/enums/issue_status_x.dart
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/providers/issues_stream_provider.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
@@ -28,7 +30,6 @@ class IssueDetailsScreen extends ConsumerWidget {
     final asyncIssues = ref.watch(hydratedIssuesStreamProvider(tenantId));
     final asyncUser = ref.watch(currentUserProvider);
 
-    // 👇 watch both stores and dispensaries
     final asyncStores = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
     );
@@ -45,7 +46,10 @@ class IssueDetailsScreen extends ConsumerWidget {
         final issue = issues.firstWhereOrNull((i) => i.id == issueId);
         if (issue == null) return _buildNotFound('Issue');
 
-        final requestedByUser = ref.watch(currentUserIdProvider);
+        // 🔹 Resolve "Requested By" with the shared provider (uid → name/email)
+        final requestedBy = ref
+            .watch(userDisplayProvider(issue.requestedByUid))
+            .maybeWhen(data: (v) => v, orElse: () => issue.requestedByUid);
 
         return asyncUser.when(
           loading: _buildLoading,
@@ -55,11 +59,11 @@ class IssueDetailsScreen extends ConsumerWidget {
               return _buildNotFound('User or Controller');
             }
 
-            // 👇 resolve names using shared util with both lists
             final stores =
                 asyncStores.asData?.value ?? const <InventoryLocation>[];
             final dispensaries =
                 asyncDispensaries.asData?.value ?? const <InventoryLocation>[];
+
             final fromStoreName = resolveLocationName(
               issue.fromStore,
               stores,
@@ -75,9 +79,9 @@ class IssueDetailsScreen extends ConsumerWidget {
               context,
               issue,
               user,
-              requestedByUser,
+              requestedBy, // ← pass resolved display string
               controller,
-              asyncStores, // keep passing stores AsyncValue for actions
+              asyncStores, // keep passing AsyncValue for actions
               fromStoreName: fromStoreName,
               toStoreName: toStoreName,
             );
@@ -102,7 +106,7 @@ class IssueDetailsScreen extends ConsumerWidget {
     BuildContext context,
     IssueRecord issue,
     AuthUser user,
-    String? requestedByName,
+    String requestedByDisplay, // ← simplified
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores, {
     required String fromStoreName,
@@ -112,15 +116,11 @@ class IssueDetailsScreen extends ConsumerWidget {
       maxContentWidth: 1000,
       header: AppBar(title: const Text('Issue Request Details')),
       contentSections: [
-        _buildSummary(
-          issue,
-          fromStoreName,
-          toStoreName,
-        ), // 👈 already takes names
+        _buildSummary(issue, fromStoreName, toStoreName),
         const Divider(height: 32),
         ..._buildEntries(issue),
         const Divider(height: 32),
-        _buildMeta(issue, requestedByName),
+        _buildMeta(issue, requestedByDisplay),
       ],
       actionButtons: _buildActionButtons(
         context,
@@ -150,54 +150,52 @@ class IssueDetailsScreen extends ConsumerWidget {
   }
 
   List<Widget> _buildEntries(IssueRecord issue) {
-    return issue.entries
-        .map(
-          (entry) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return issue.entries.map((entry) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '📦 ${entry.itemName}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 20,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      '📦 ${entry.itemName}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 20,
-                      runSpacing: 4,
-                      children: [
-                        _info('Type', entry.itemType.label),
-                        _info('Group', entry.itemGroup),
-                        _info('Strength', entry.strength),
-                        _info('Formulation', entry.formulation),
-                        _info('Size', entry.size),
-                        _info('Pack Size', entry.packSize),
-                        _info('Batch ID', entry.batchId),
-                        _info('Quantity', '${entry.quantity}'),
-                      ],
-                    ),
+                    _info('Type', entry.itemType.label),
+                    _info('Group', entry.itemGroup),
+                    _info('Strength', entry.strength),
+                    _info('Formulation', entry.formulation),
+                    _info('Size', entry.size),
+                    _info('Pack Size', entry.packSize),
+                    _info('Batch ID', entry.batchId),
+                    _info('Quantity', '${entry.quantity}'),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
-        )
-        .toList();
+        ),
+      );
+    }).toList();
   }
 
-  Widget _buildMeta(IssueRecord issue, String? requestedByName) {
+  Widget _buildMeta(IssueRecord issue, String requestedByDisplay) {
     return Wrap(
       spacing: 32,
       runSpacing: 12,
       children: [
-        _info('Requested By', requestedByName ?? issue.requestedByUid),
+        _info('Requested By', requestedByDisplay),
         _info('Requested At', formatDate(issue.dateRequested)),
         if (issue.dateApproved != null)
           _info('Approved At', formatDate(issue.dateApproved!)),

@@ -1,8 +1,19 @@
 // shared/api/api_client.dart
-import 'package:afyakit/shared/api/api_client_base.dart';
+import 'package:afyakit/features/api/api_config.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final apiClientProvider = FutureProvider<ApiClient>((ref) async {
+  final tenantId = ref.watch(tenantIdProvider);
+  final tokenRepo = ref.watch(tokenProvider);
+
+  return ApiClient.create(tenantId: tenantId, tokenProvider: tokenRepo);
+});
+
+String apiBaseUrl(String tenantId) => '$baseApiUrl/api/$tenantId';
 
 class ApiClient {
   final Dio dio;

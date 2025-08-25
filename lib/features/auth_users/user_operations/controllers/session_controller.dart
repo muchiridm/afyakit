@@ -1,11 +1,11 @@
 // lib/users/controllers/auth_session_controller.dart
 import 'dart:async';
-import 'package:afyakit/features/auth_users/user_operations/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/features/auth_users/providers/user_operations_engine_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/dev/dev_auth_manager.dart';
+import 'package:afyakit/features/dev/dev_auth_manager.dart';
 import 'package:afyakit/main.dart';
 import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
 

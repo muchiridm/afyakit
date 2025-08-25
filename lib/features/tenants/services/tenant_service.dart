@@ -2,8 +2,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_client.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/features/tenants/models/tenant_dtos.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';

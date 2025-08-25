@@ -1,29 +1,23 @@
-import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/features/tenants/providers/tenant_config_provider.dart';
-import 'package:afyakit/shared/utils/decide_tenant.dart';
-import 'package:afyakit/features/tenants/services/tenant_loader.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/user_operations_engine_providers.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 
-import 'package:afyakit/config/tenant_config.dart';
+import 'package:afyakit/features/tenants/utils/tenant_picker.dart'; // decideTenant()
+import 'package:afyakit/features/tenants/services/tenant_loader.dart'; // loadTenantConfig
+import 'package:afyakit/features/tenants/services/tenant_config.dart'; // TenantConfig + color
 
+import 'package:afyakit/features/auth_users/providers/user_operations_engine_providers.dart';
 import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
 import 'package:afyakit/features/auth_users/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-// Android/iOS flavor default (passed at build time). Web ignores this.
-const kDefaultTenant = String.fromEnvironment(
-  'TENANT',
-  defaultValue: 'afyakit',
-);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +25,7 @@ Future<void> main() async {
 
   // Firebase init
   if (kIsWeb) {
+    debugPrint('🌐 Web → Firebase with explicit options');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
@@ -38,23 +33,35 @@ Future<void> main() async {
     await Firebase.initializeApp();
   }
 
-  // ✅ new: set settings once, any platform
+  // Firestore (safe on all platforms)
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
+  debugPrint('✅ Firebase initialized');
 
+  // URL/deeplink bits
   final uri = Uri.base;
+  final segs = uri.pathSegments;
   final uid = uri.queryParameters['uid'];
-  final isInviteFlow = uri.path == '/invite/accept' && uid != null;
+  final isInviteFlow =
+      segs.length >= 2 &&
+      segs[0] == 'invite' &&
+      segs[1] == 'accept' &&
+      uid != null;
 
-  // Resolve tenant
-  final tenant = decideTenant();
+  // Tenant
+  final tenant = decideTenant(); // ?tenant=, host, path, else fallback
   debugPrint('🏢 Using tenant: $tenant');
 
-  // Single call: loader handles Firestore → asset → default fallback + logs
-  final cfg = await loadTenantConfig(tenant);
+  // Load tenant config (backend if available → asset → default)
+  final cfg = await loadTenantConfig(
+    tenant,
+    tokenProvider: null, // no token at boot; loader goes public
+    preferBackend: true, // try API unauth first (no warnings)
+    assetFallback: 'afyakit', // safety net
+  );
 
-  // Provide tenant id + loaded config globally
+  // Provide tenant id + config into the root container
   final container = ProviderContainer(
     overrides: [
       tenantIdProvider.overrideWithValue(tenant),
@@ -62,15 +69,11 @@ Future<void> main() async {
     ],
   );
 
-  // Build the engine and do one clean pre-hydration (fast enough in practice).
-  final sessionEngine = await container.read(
-    sessionEngineProvider(tenant).future,
-  );
+  // Pre-hydrate auth session (non-blocking)
   try {
-    // ensureReady(): waitForUser + claims check + backend checkUserStatus()
-    await sessionEngine.ensureReady();
+    final engine = await container.read(sessionEngineProvider(tenant).future);
+    await engine.ensureReady();
   } catch (e) {
-    // Don’t block startup on failures; AuthGate will still handle state.
     debugPrint('⚠️ Session pre-hydration failed: $e');
   }
 
@@ -93,12 +96,10 @@ class AfyaKitApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cfg = ref.watch(
-      tenantConfigProvider,
-    ); // ✅ already loaded at bootstrap
+    final cfg = ref.watch(tenantConfigProvider);
 
     return MaterialApp(
-      title: cfg.displayName, // ✅ per-tenant title
+      title: cfg.displayName,
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: SnackService.scaffoldMessengerKey,

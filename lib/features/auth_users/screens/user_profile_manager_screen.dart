@@ -2,10 +2,10 @@ import 'package:afyakit/features/auth_users/user_manager/extensions/user_status_
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/features/auth_users/user_manager/controllers/user_manager_controller.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/features/auth_users/user_manager/providers/auth_user_stream_provider.dart';
+import 'package:afyakit/features/auth_users/providers/auth_user_stream_provider.dart';
 import 'package:afyakit/features/auth_users/utils/parse_user_role.dart';
 
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';

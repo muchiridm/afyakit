@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
@@ -42,7 +42,7 @@ class InventoryLocationService {
     required InventoryLocationType type,
   }) async {
     final token = await tokenProvider.getToken();
-    final uri = api.addLocation(); // new helper
+    final uri = api.addTypedLocation(type); // new helper
 
     final payload = {'name': name.trim(), 'type': type.asString};
 

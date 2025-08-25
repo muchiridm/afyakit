@@ -1,22 +1,21 @@
-import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
-import 'package:afyakit/features/inventory_locations/inventory_location.dart';
-import 'package:afyakit/shared/screens/detail_record_screen.dart';
-import 'package:afyakit/shared/utils/format/format_date.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:afyakit/shared/utils/string_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/batches/models/batch_record.dart';
-import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/models/items/medication_item.dart';
-
+import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
+import 'package:afyakit/features/inventory_locations/inventory_location.dart';
+import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
+import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/shared/utils/format/format_date.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
+import 'package:afyakit/shared/utils/string_utils.dart';
 
 class DeliveryDetailScreen extends ConsumerWidget {
   final DeliveryRecord summary;
@@ -31,30 +30,32 @@ class DeliveryDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
+
     final medsAsync = ref.watch(medicationItemsStreamProvider(tenantId));
     final consAsync = ref.watch(consumableItemsStreamProvider(tenantId));
     final equipAsync = ref.watch(equipmentItemsStreamProvider(tenantId));
 
+    Widget loading() =>
+        const Scaffold(body: Center(child: CircularProgressIndicator()));
+    Widget error(Object e, StackTrace _) =>
+        Scaffold(body: Center(child: Text('Error loading data: $e')));
+
     return medsAsync.when(
-      loading: _loading,
-      error: _error,
+      loading: loading,
+      error: error,
       data: (meds) => consAsync.when(
-        loading: _loading,
-        error: _error,
+        loading: loading,
+        error: error,
         data: (cons) => equipAsync.when(
-          loading: _loading,
-          error: _error,
+          loading: loading,
+          error: error,
           data: (equip) => _buildBody(context, [...meds, ...cons, ...equip]),
         ),
       ),
     );
   }
 
-  Widget _loading() =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
-
-  Widget _error(Object error, StackTrace _) =>
-      Scaffold(body: Center(child: Text('Error loading data: $error')));
+  // ─────────────────────────────────────────────────────────────
 
   Widget _buildBody(BuildContext context, List<BaseInventoryItem> allItems) {
     final batches = summary.batchSnapshots.map(BatchRecord.fromMap).toList();
@@ -73,33 +74,57 @@ class DeliveryDetailScreen extends ConsumerWidget {
         ),
       ),
       contentSections: [
-        _buildMetaCard(summary),
-        ...sorted.map((b) => _buildBatchCard(b, matcher)),
+        _metaCard(summary),
+        ...sorted.map((b) => _batchCard(b, matcher)),
       ],
     );
   }
 
-  Widget _buildMetaCard(DeliveryRecord summary) {
+  // ───────────────────────── meta ─────────────────────────
+
+  Widget _metaCard(DeliveryRecord s) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _metaRow('Date', formatDate(summary.date)),
-            const SizedBox(height: 8),
-            _metaRow(
-              'Entered By',
-              '${summary.enteredByName} (${summary.enteredByEmail})',
-            ),
-            const SizedBox(height: 8),
-            _metaRow('Sources', summary.sources.join(', ')),
-          ],
-        ),
+        child: _metaList([
+          ('Date', formatDate(s.date)),
+          ('Entered By', _enteredByLine(s)),
+          ('Sources', s.sources.join(', ')),
+        ]),
       ),
     );
   }
+
+  /// Always prefer "Name (email)" when both exist and differ.
+  /// Fallbacks:
+  /// - name only if email missing
+  /// - email only if name missing or equals email (avoid "email (email)")
+  /// - "-" if both blank
+  String _enteredByLine(DeliveryRecord s) {
+    final name = s.enteredByName.trim();
+    final email = s.enteredByEmail.trim();
+
+    if (name.isEmpty && email.isEmpty) return '-';
+    if (name.isEmpty) return email;
+    if (email.isEmpty) return name;
+    if (name.toLowerCase() == email.toLowerCase()) return email;
+    return '$name ($email)';
+  }
+
+  Widget _metaList(List<(String, String)> rows) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children:
+        rows
+            .map(
+              (r) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _metaRow(r.$1, r.$2),
+              ),
+            )
+            .toList()
+          ..removeLast(), // trim last gap
+  );
 
   Widget _metaRow(String label, String value) => RichText(
     text: TextSpan(
@@ -114,26 +139,28 @@ class DeliveryDetailScreen extends ConsumerWidget {
     ),
   );
 
-  Widget _buildBatchCard(BatchRecord batch, SkuBatchMatcher matcher) {
-    final label = _buildItemLabel(batch, matcher);
-    final expiry = batch.expiryDate != null
+  // ──────────────────────── batch cards ────────────────────────
+
+  Widget _batchCard(BatchRecord batch, SkuBatchMatcher matcher) {
+    final label = _itemLabel(batch, matcher);
+
+    final expiryText = batch.expiryDate != null
         ? ' • Exp: ${formatDate(batch.expiryDate!)}'
         : '';
-    final statusText = batch.isEdited ? 'Edited' : 'New';
-    final statusIcon = batch.isEdited ? Icons.edit : Icons.fiber_new;
-    final statusColor = batch.isEdited ? Colors.orange : Colors.teal;
-    final isSoonExpiring =
+    final soonExpiring =
         batch.expiryDate != null &&
         batch.expiryDate!.isBefore(
           DateTime.now().add(const Duration(days: 30)),
         );
-    final storeName = resolveLocationName(batch.storeId, stores, []);
 
+    final storeName = resolveLocationName(batch.storeId, stores, []);
     final detailLine =
-        'Qty: ${batch.quantity} • Store: $storeName • ${_formatEnum(batch.itemType.name)}$expiry';
-    final editLine = batch.isEdited && (batch.editReason?.isNotEmpty ?? false)
-        ? 'Reason: ${batch.editReason}'
-        : null;
+        'Qty: ${batch.quantity} • Store: $storeName • ${_formatEnum(batch.itemType.name)}$expiryText';
+
+    final isEdited = batch.isEdited;
+    final statusText = isEdited ? 'Edited' : 'New';
+    final statusIcon = isEdited ? Icons.edit : Icons.fiber_new;
+    final statusColor = isEdited ? Colors.orange : Colors.teal;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -143,34 +170,27 @@ class DeliveryDetailScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+              child: _column([
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  detailLine,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: soonExpiring ? Colors.redAccent : null,
                   ),
-                  const SizedBox(height: 6),
+                ),
+                if (isEdited && (batch.editReason?.isNotEmpty ?? false))
                   Text(
-                    detailLine,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isSoonExpiring ? Colors.redAccent : null,
+                    'Reason: ${batch.editReason}',
+                    style: const TextStyle(
+                      fontStyle: FontStyle.italic,
+                      fontSize: 12,
                     ),
                   ),
-                  if (editLine != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        editLine,
-                        style: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              ], gap: 6),
             ),
             const SizedBox(width: 8),
             Chip(
@@ -189,7 +209,19 @@ class DeliveryDetailScreen extends ConsumerWidget {
     );
   }
 
-  String _buildItemLabel(BatchRecord batch, SkuBatchMatcher matcher) {
+  // ───────────────────────── helpers ─────────────────────────
+
+  Widget _column(List<Widget> children, {double gap = 8}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (int i = 0; i < children.length; i++) ...[
+        if (i > 0) SizedBox(height: gap),
+        children[i],
+      ],
+    ],
+  );
+
+  String _itemLabel(BatchRecord batch, SkuBatchMatcher matcher) {
     final item = matcher.getItem(batch.itemId);
     if (item == null) return 'Unknown Item';
 
@@ -226,10 +258,8 @@ class DeliveryDetailScreen extends ConsumerWidget {
     };
   }
 
-  String _sortKey(BatchRecord batch, SkuBatchMatcher matcher) {
-    final item = matcher.getItem(batch.itemId);
-    return item?.name.trim().toLowerCase() ?? 'unknown';
-  }
+  String _sortKey(BatchRecord batch, SkuBatchMatcher matcher) =>
+      matcher.getItem(batch.itemId)?.name.trim().toLowerCase() ?? 'unknown';
 
   String _formatEnum(String value) => value.isEmpty
       ? ''

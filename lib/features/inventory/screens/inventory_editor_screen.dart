@@ -11,7 +11,7 @@ import 'package:afyakit/features/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/models/items/medication_item.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:flutter/material.dart';

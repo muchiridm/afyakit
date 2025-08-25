@@ -1,9 +1,11 @@
 import 'package:afyakit/features/records/issues/models/issue_entry.dart';
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class IssueSummaryPreview extends StatelessWidget {
+class IssueSummaryPreview extends ConsumerWidget {
   final List<IssueEntry> entries;
   final List<BatchRecord> batches;
 
@@ -14,16 +16,27 @@ class IssueSummaryPreview extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tenantId = ref.watch(tenantIdProvider);
+
     return Column(
       children: entries.map((entry) {
         final batch = batches.firstWhere(
           (b) => b.id == entry.batchId,
-          orElse: () =>
-              BatchRecord.blank(itemId: entry.itemId, itemType: entry.itemType),
+          orElse: () => BatchRecord.blank(
+            itemId: entry.itemId,
+            itemType: entry.itemType,
+            tenantId: tenantId,
+            // If IssueEntry has a storeId field, use it here instead:
+            storeId: '(unknown)',
+          ),
         );
 
-        final store = batch.storeId;
+        final storeLabel =
+            (batch.storeId.isEmpty || batch.storeId == '(unknown)')
+            ? 'Unknown Store'
+            : batch.storeId;
+
         final expiry = batch.expiryDate != null
             ? formatDate(batch.expiryDate!)
             : 'No Expiry';
@@ -45,9 +58,10 @@ class IssueSummaryPreview extends StatelessWidget {
                 '${entry.itemName} (${entry.itemTypeLabel})',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
+              if (subtitle.isNotEmpty) const SizedBox(height: 4),
               if (subtitle.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 8),
+                  padding: const EdgeInsets.only(left: 8),
                   child: Text(
                     subtitle,
                     style: const TextStyle(fontSize: 13.5, color: Colors.grey),
@@ -56,7 +70,7 @@ class IssueSummaryPreview extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 4, left: 8),
                 child: Text(
-                  '- $store • $expiry • Qty: ${entry.quantity}',
+                  '- $storeLabel • $expiry • Qty: ${entry.quantity}',
                   style: const TextStyle(fontSize: 13.5),
                 ),
               ),

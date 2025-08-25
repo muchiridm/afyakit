@@ -1,5 +1,5 @@
 // lib/hq/global_users/global_users_screen.dart
-import 'package:afyakit/features/auth_users/user_manager/providers/global_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/global_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/auth_users/models/global_user_model.dart';

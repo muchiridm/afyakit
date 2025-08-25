@@ -4,7 +4,7 @@ import 'package:afyakit/shared/screens/home_screen/latest_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -13,7 +13,9 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
-    final session = ref.watch(deliverySessionControllerProvider);
+
+    // (Optional) If you want to ensure the controller is created on home load:
+    ref.watch(deliverySessionControllerProvider);
 
     return userAsync.when(
       loading: () =>
@@ -27,12 +29,10 @@ class HomeScreen extends ConsumerWidget {
           );
         }
 
-        ref.read(deliverySessionControllerProvider.notifier);
-
         return BaseScreen(
           scrollable: true,
           maxContentWidth: 800,
-          header: HomeHeader(session: session),
+          header: const HomeHeader(), // ⬅️ no session arg
           body: Column(
             mainAxisSize: MainAxisSize.min,
             children: const [

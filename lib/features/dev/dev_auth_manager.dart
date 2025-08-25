@@ -1,13 +1,13 @@
-// lib/users/services/dev_auth_manager.dart
+// lib/features/dev/dev_auth_manager.dart
+import 'package:afyakit/features/auth_users/utils/claim_validator.dart';
+import 'package:afyakit/features/api/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/auth_users/utils/claim_validator.dart';
-import 'package:afyakit/shared/api/providers/api_client_provider.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/features/auth_users/user_operations/services/user_operations_service.dart';
 
 import 'dev_auth_result.dart';

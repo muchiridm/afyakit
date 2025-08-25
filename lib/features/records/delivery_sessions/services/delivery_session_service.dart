@@ -1,161 +1,349 @@
-// lib/features/records/delivery_sessions/services/delivery_session_service.dart
-
-import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
-import 'package:afyakit/features/records/delivery_sessions/models/temp_session.dart';
-import 'package:afyakit/shared/utils/firestore_instance.dart';
+// lib/features/records/delivery_sessions/data/delivery_session_service.dart
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:afyakit/shared/utils/firestore_instance.dart';
+import 'package:afyakit/features/records/delivery_sessions/models/delivery_record.dart';
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_state.dart';
+import 'package:afyakit/features/records/delivery_sessions/models/view_models/delivery_review_summary.dart';
+import 'package:afyakit/features/batches/providers/batch_records_stream_provider.dart';
+import 'package:afyakit/features/inventory/providers/item_stream_providers.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_item_name.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum SaveResult { saved, alreadySaved }
 
-class DeliverySessionService {
-  final FirebaseFirestore _firestore = db;
+// snake-case collections, camelCase fields
+class _K {
+  static const collTemp = 'delivery_records_temp';
+  static const collRecords = 'delivery_records';
+  static const collCounters = 'delivery_id_counters';
 
-  // ─────────────────────────────────────────────
-  // 🔎 Resume an open (unfinalized) temp session
-  // ─────────────────────────────────────────────
-  Future<TempSession?> findOpenSession({
+  static const deliveryId = 'deliveryId';
+  static const enteredByEmail = 'enteredByEmail';
+  static const enteredByName = 'enteredByName';
+  static const sources = 'sources';
+  static const isFinalized = 'isFinalized';
+  static const batchesCount = 'batchesCount';
+  static const startedAt = 'startedAt';
+  static const finalizedAt = 'finalizedAt';
+  static const updatedAt = 'updatedAt';
+  static const closedAt = 'closedAt';
+  static const expiresAt = 'expiresAt';
+  static const lastSource = 'lastSource';
+  static const lastStoreId = 'lastStoreId';
+
+  static const prefsKey = 'delivery_session_state';
+}
+
+@immutable
+class TempSession {
+  final String deliveryId;
+  final String? enteredByName;
+  final String enteredByEmail;
+  final List<String> sources;
+  final String? lastStoreId;
+  final String? lastSource;
+  const TempSession({
+    required this.deliveryId,
+    required this.enteredByName,
+    required this.enteredByEmail,
+    required this.sources,
+    this.lastStoreId,
+    this.lastSource,
+  });
+}
+
+class DeliverySessionService {
+  final FirebaseFirestore _db = db;
+
+  // ---------- IDs ----------
+  Future<String> newDeliveryId(String tenantId) async {
+    final now = DateTime.now();
+    final dateKey = '${now.year}${_2(now.month)}${_2(now.day)}';
+    final ref = _db
+        .collection('tenants')
+        .doc(tenantId)
+        .collection(_K.collCounters)
+        .doc(dateKey);
+
+    final next = await _db.runTransaction((txn) async {
+      final snap = await txn.get(ref);
+      final current = snap.exists ? (snap.data()?['count'] ?? 0) : 0;
+      final n = current + 1;
+      txn.set(ref, {'count': n}, SetOptions(merge: true));
+      return n;
+    });
+
+    return 'DN_${dateKey}_${next.toString().padLeft(3, '0')}';
+  }
+
+  // ---------- Temp sessions ----------
+  Future<TempSession?> findOpen({
     required String tenantId,
     required String enteredByEmail,
   }) async {
     final email = enteredByEmail.trim().toLowerCase();
+    final base = _db.collection('tenants/$tenantId/${_K.collTemp}');
 
-    final snap = await _firestore
-        .collection('tenants/$tenantId/delivery_sessions_temp')
-        .where('entered_by_email', isEqualTo: email)
-        .where('is_finalized', isEqualTo: false)
+    // Get all open sessions for this user
+    final snap = await base
+        .where(_K.enteredByEmail, isEqualTo: email)
+        .where(_K.isFinalized, isEqualTo: false)
         .get();
 
     if (snap.docs.isEmpty) return null;
 
-    // Prefer newest by started_at; fallback to delivery_id
+    int ts(dynamic v) => v is Timestamp ? v.millisecondsSinceEpoch : 0;
+
+    // Prefer most recently updated, then most recently started
     final docs = snap.docs.toList()
       ..sort((a, b) {
-        final ta = a.data()['started_at'];
-        final tb = b.data()['started_at'];
-        if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
-        final ida = a.data()['delivery_id'] as String? ?? '';
-        final idb = b.data()['delivery_id'] as String? ?? '';
-        return idb.compareTo(ida);
+        final da = a.data(), dbb = b.data();
+        final ua = ts(da[_K.updatedAt]);
+        final ub = ts(dbb[_K.updatedAt]);
+        if (ub != ua) return ub.compareTo(ua);
+        final sa = ts(da[_K.startedAt]);
+        final sb = ts(dbb[_K.startedAt]);
+        return sb.compareTo(sa);
       });
 
-    final d = docs.first.data();
-    return TempSession(
-      deliveryId: d['delivery_id'] as String,
-      enteredByName: d['entered_by_name'] as String?,
-      enteredByEmail: d['entered_by_email'] as String,
-      sources: (d['sources'] as List<dynamic>? ?? const []).cast<String>(),
-      lastStoreId: d['last_store_id'] as String?,
-      lastSource: d['last_source'] as String?,
-    );
+    for (final doc in docs) {
+      final d = doc.data();
+      final id = (d[_K.deliveryId] as String?)?.trim() ?? '';
+      if (id.isEmpty) continue;
+
+      final lastStoreId = (d[_K.lastStoreId] as String?)?.trim();
+      final lastSource = (d[_K.lastSource] as String?)?.trim();
+
+      // 1) Prefer store-scoped query (single where → no composite index)
+      if (lastStoreId != null && lastStoreId.isNotEmpty) {
+        final s = await _db
+            .collection('tenants/$tenantId/stores/$lastStoreId/batches')
+            .where('deliveryId', isEqualTo: id)
+            .limit(1)
+            .get();
+        if (s.docs.isNotEmpty) {
+          return TempSession(
+            deliveryId: id,
+            enteredByName: d[_K.enteredByName] as String?,
+            enteredByEmail: (d[_K.enteredByEmail] as String?) ?? email,
+            sources: ((d[_K.sources] as List?) ?? const [])
+                .whereType<String>()
+                .toList(),
+            lastStoreId: lastStoreId,
+            lastSource: lastSource,
+          );
+        }
+      }
+
+      // 2) Fallback: collectionGroup with SINGLE where, tenant check in-memory
+      final cg = await _db
+          .collectionGroup('batches')
+          .where('deliveryId', isEqualTo: id) // single-field filter
+          .limit(5)
+          .get();
+
+      final anyInTenant = cg.docs.any(
+        (dd) => dd.reference.path.contains('tenants/$tenantId/stores/'),
+      );
+
+      if (anyInTenant) {
+        return TempSession(
+          deliveryId: id,
+          enteredByName: d[_K.enteredByName] as String?,
+          enteredByEmail: (d[_K.enteredByEmail] as String?) ?? email,
+          sources: ((d[_K.sources] as List?) ?? const [])
+              .whereType<String>()
+              .toList(),
+          lastStoreId: lastStoreId,
+          lastSource: lastSource,
+        );
+      }
+    }
+
+    // No qualifying open sessions
+    return null;
   }
 
-  // ─────────────────────────────────────────────
-  // 🧾 Create/update temp session (don’t bump started_at)
-  // ─────────────────────────────────────────────
-  Future<void> upsertTempSession({
+  Future<void> upsertTemp({
     required String tenantId,
     required String deliveryId,
     required String enteredByEmail,
     required String enteredByName,
-    List<String> sources = const [],
+    required List<String> sources,
+    String? lastStoreId, // ⬅️ new
+    String? lastSource, // ⬅️ new
   }) async {
-    final email = enteredByEmail.trim().toLowerCase();
-    final ref = _firestore
-        .collection('tenants/$tenantId/delivery_sessions_temp')
+    final ref = _db
+        .collection('tenants/$tenantId/${_K.collTemp}')
         .doc(deliveryId);
 
-    await _firestore.runTransaction((txn) async {
+    await _db.runTransaction((txn) async {
       final snap = await txn.get(ref);
-
       if (!snap.exists) {
         txn.set(ref, {
-          'delivery_id': deliveryId,
-          'entered_by_email': email,
-          'entered_by_name': enteredByName,
-          'sources': sources,
-          'is_finalized': false,
-          'batches_count': 0,
-          'started_at': FieldValue.serverTimestamp(),
-          'expires_at': null,
+          _K.deliveryId: deliveryId,
+          _K.enteredByEmail: enteredByEmail.trim().toLowerCase(),
+          _K.enteredByName: enteredByName,
+          _K.sources: sources,
+          _K.isFinalized: false,
+          _K.batchesCount: 0,
+          _K.startedAt: FieldValue.serverTimestamp(),
+          _K.updatedAt: FieldValue.serverTimestamp(),
+          _K.closedAt: null,
+          _K.expiresAt: null,
+          if (lastStoreId != null) _K.lastStoreId: lastStoreId,
+          if (lastSource != null) _K.lastSource: lastSource,
         });
       } else {
-        final prevSources =
-            (snap.data()?['sources'] as List<dynamic>? ?? const [])
-                .cast<String>();
-        final merged = {...prevSources, ...sources}.toList();
+        final prev = (snap.data()?[_K.sources] as List<dynamic>? ?? const [])
+            .cast<String>();
+        final merged = {...prev, ...sources}.toList();
 
-        txn.update(ref, {
-          'entered_by_email': email,
-          'entered_by_name': enteredByName,
-          'sources': merged,
-          'is_finalized': false,
-        });
+        final data = <String, dynamic>{
+          _K.enteredByEmail: enteredByEmail.trim().toLowerCase(),
+          _K.enteredByName: enteredByName,
+          _K.sources: merged,
+          _K.isFinalized: false,
+          _K.updatedAt: FieldValue.serverTimestamp(),
+          _K.closedAt: null,
+        };
+        if (lastStoreId != null) data[_K.lastStoreId] = lastStoreId;
+        if (lastSource != null) data[_K.lastSource] = lastSource;
+
+        txn.set(ref, data, SetOptions(merge: true));
       }
     });
   }
 
-  // ─────────────────────────────────────────────
-  // ✅ Mark temp session finalized
-  // ─────────────────────────────────────────────
-  Future<void> finalizeTempSession({
-    required String tenantId,
-    required String deliveryId,
-    required int batchesCount,
-  }) async {
-    final ref = _firestore
-        .collection('tenants/$tenantId/delivery_sessions_temp')
-        .doc(deliveryId);
-
-    await ref.set({
-      'is_finalized': true,
-      'batches_count': batchesCount,
-      'finalized_at': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  // ─────────────────────────────────────────────
-  // 💾 Final save (idempotent)
-  // ─────────────────────────────────────────────
-  Future<SaveResult> saveDeliverySession({
-    required String tenantId,
-    required DeliveryRecord record,
-  }) async {
-    final docRef = _firestore.doc(
-      'tenants/$tenantId/delivery_records/${record.deliveryId}',
-    );
-
-    final existing = await docRef.get();
-    if (existing.exists) {
-      debugPrint(
-        'ℹ️ [Delivery] ${record.deliveryId} already exists → idempotent OK',
-      );
-      return SaveResult.alreadySaved;
-    }
-
-    await docRef.set(record.toMap(), SetOptions(merge: false));
-    debugPrint('✅ [Delivery] Saved ${record.deliveryId}');
-    return SaveResult.saved;
-  }
-
-  // ─────────────────────────────────────────────
-  // ✍️ Persist “last used” prefs for UX prefill
-  // ─────────────────────────────────────────────
   Future<void> updateLastPrefs({
     required String tenantId,
     required String deliveryId,
     String? lastStoreId,
     String? lastSource,
   }) async {
-    final ref = _firestore
-        .collection('tenants/$tenantId/delivery_sessions_temp')
-        .doc(deliveryId);
-
     final data = <String, dynamic>{};
-    if (lastStoreId != null) data['last_store_id'] = lastStoreId;
-    if (lastSource != null) data['last_source'] = lastSource;
+    if (lastStoreId != null) data[_K.lastStoreId] = lastStoreId;
+    if (lastSource != null) data[_K.lastSource] = lastSource;
+    if (data.isEmpty) return;
+    data[_K.updatedAt] = FieldValue.serverTimestamp();
 
-    if (data.isNotEmpty) {
-      await ref.set(data, SetOptions(merge: true));
+    await _db
+        .collection('tenants/$tenantId/${_K.collTemp}')
+        .doc(deliveryId)
+        .set(data, SetOptions(merge: true));
+  }
+
+  Future<void> finalizeTemp({
+    required String tenantId,
+    required String deliveryId,
+    required int batchesCount,
+  }) async {
+    await _db
+        .collection('tenants/$tenantId/${_K.collTemp}')
+        .doc(deliveryId)
+        .set({
+          _K.isFinalized: true,
+          _K.batchesCount: batchesCount,
+          _K.finalizedAt: FieldValue.serverTimestamp(),
+          _K.updatedAt: FieldValue.serverTimestamp(),
+          _K.closedAt: FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+  }
+
+  // ---------- Final save ----------
+  Future<SaveResult> saveRecord({
+    required String tenantId,
+    required DeliveryRecord record,
+  }) async {
+    final ref = _db.doc(
+      'tenants/$tenantId/${_K.collRecords}/${record.deliveryId}',
+    );
+    final existing = await ref.get();
+    if (existing.exists) return SaveResult.alreadySaved;
+    await ref.set(record.toMap(), SetOptions(merge: false));
+    return SaveResult.saved;
+  }
+
+  // ---------- Local prefs ----------
+  Future<void> persistLocal(DeliverySessionState state) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_K.prefsKey, jsonEncode(state.toJson()));
+    } catch (e, st) {
+      debugPrint('❌ persistLocal failed: $e\n$st');
     }
   }
+
+  Future<DeliverySessionState?> restoreLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_K.prefsKey);
+      if (raw == null) return null;
+      return DeliverySessionState.fromJson(jsonDecode(raw));
+    } catch (e, st) {
+      debugPrint('❌ restoreLocal failed: $e\n$st');
+      return null;
+    }
+  }
+
+  Future<void> clearLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_K.prefsKey);
+    } catch (e, st) {
+      debugPrint('❌ clearLocal failed: $e\n$st');
+    }
+  }
+
+  // ---------- Review summary ----------
+  Future<DeliveryReviewSummary?> buildReviewSummary({
+    required WidgetRef ref,
+    required String tenantId,
+    required DeliverySessionState state,
+  }) async {
+    if (!state.isActive || state.deliveryId == null) return null;
+
+    final batches = await ref.read(batchRecordsStreamProvider(tenantId).future);
+    final linked = batches
+        .where((b) => (b.deliveryId ?? '').trim() == state.deliveryId)
+        .toList();
+    if (linked.isEmpty) return null;
+
+    final meds = await ref.read(medicationItemsStreamProvider(tenantId).future);
+    final cons = await ref.read(consumableItemsStreamProvider(tenantId).future);
+    final equip = await ref.read(equipmentItemsStreamProvider(tenantId).future);
+
+    final srcs = linked
+        .map((b) => b.source?.trim())
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final record = DeliveryRecord.fromBatches(
+      linked,
+      state.deliveryId!,
+      enteredByName: state.enteredByName ?? 'unknown',
+      enteredByEmail: state.enteredByEmail ?? 'unknown',
+      sources: srcs,
+    );
+
+    final items = linked
+        .map(
+          (b) => DeliveryReviewItem(
+            name: resolveItemName(b, meds, cons, equip),
+            quantity: b.quantity,
+            store: b.storeId,
+            type: b.itemType.name,
+          ),
+        )
+        .toList();
+
+    return DeliveryReviewSummary(summary: record, items: items);
+  }
+
+  String _2(int n) => n.toString().padLeft(2, '0');
 }

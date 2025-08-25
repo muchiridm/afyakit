@@ -1,7 +1,7 @@
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/features/auth_users/user_operations/controllers/session_controller.dart';
 import 'package:afyakit/features/auth_users/user_operations/engines/login_engine.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/features/auth_users/providers/user_operations_engine_providers.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

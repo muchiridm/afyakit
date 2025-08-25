@@ -5,7 +5,7 @@ import 'package:afyakit/features/inventory_view/widgets/inventory_item_tile_comp
 import 'package:afyakit/features/inventory/screens/inventory_editor_screen.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

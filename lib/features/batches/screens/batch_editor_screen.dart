@@ -1,20 +1,19 @@
-import 'package:afyakit/features/batches/controllers/batch_editor_args.dart';
-import 'package:afyakit/features/batches/controllers/batch_editor_state.dart';
+// lib/features/batches/screens/batch_editor_screen.dart
+import 'package:afyakit/features/batches/controllers/batch_args.dart';
+import 'package:afyakit/features/batches/controllers/batch_controller.dart';
+import 'package:afyakit/features/batches/controllers/batch_state.dart';
+import 'package:afyakit/features/batches/models/batch_record.dart';
 import 'package:afyakit/features/batches/models/dropdown_option.dart';
+import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
+import 'package:afyakit/features/inventory_locations/inventory_location.dart';
+import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
+import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
+import 'package:afyakit/shared/screens/base_screen.dart';
+import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
-import 'package:afyakit/features/batches/controllers/batch_editor_controller.dart';
-import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
-import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
-import 'package:afyakit/features/batches/models/batch_record.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/screen_header.dart';
-
-enum BatchEditorMode { add, edit }
 
 class BatchEditorScreen extends ConsumerWidget {
   final String tenantId;
@@ -32,7 +31,7 @@ class BatchEditorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final args = BatchEditorArgs(
+    final args = BatchArgs(
       tenantId: tenantId,
       item: item,
       batch: batch,
@@ -69,7 +68,10 @@ class BatchEditorScreen extends ConsumerWidget {
                 ? IconButton(
                     icon: const Icon(Icons.delete, color: Colors.redAccent),
                     tooltip: 'Delete Batch',
-                    onPressed: () => controller.delete(context),
+                    onPressed: () async {
+                      final ok = await controller.delete();
+                      if (ok && context.mounted) Navigator.of(context).pop();
+                    },
                   )
                 : null,
           ),
@@ -77,21 +79,19 @@ class BatchEditorScreen extends ConsumerWidget {
             loading: _loader,
             error: _error,
             data: (stores) {
-              final allowedStores = controller.getStoreOptions(stores, user);
-              final storeOptions = allowedStores
-                  .map(
-                    (s) => DropdownOption<String>(value: s.id, label: s.name),
-                  )
-                  .toList();
+              final storeOptions = _toStoreOptions(
+                stores: stores,
+                currentStoreId: state.storeId,
+              );
 
               return sourcesAsync.when(
                 loading: _loader,
                 error: _error,
                 data: (sources) {
-                  final sourceOptions = controller
-                      .getSourceOptions(sources)
-                      .map((s) => DropdownOption<String>(value: s, label: s))
-                      .toList();
+                  final sourceOptions = _toSourceOptions(
+                    sources: sources,
+                    currentSource: state.source,
+                  );
 
                   return _buildForm(
                     context,
@@ -110,17 +110,18 @@ class BatchEditorScreen extends ConsumerWidget {
     );
   }
 
+  // ── UI builders ───────────────────────────────────────────────
+
   Widget _buildForm(
     BuildContext context,
     BatchEditorController controller,
-    BatchEditorState state,
+    BatchState state,
     bool isEditing,
     List<DropdownOption<String>> storeOptions,
     List<DropdownOption<String>> sourceOptions,
   ) {
     return Column(
       children: [
-        // 🔁 Scrollable form content
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -149,7 +150,7 @@ class BatchEditorScreen extends ConsumerWidget {
                   label: 'Receiving Store *',
                   value: state.storeId,
                   options: storeOptions,
-                  onChanged: controller.updateStore,
+                  onChanged: isEditing ? null : controller.updateStore,
                   readOnly: isEditing,
                 ),
                 if (isEditing)
@@ -185,13 +186,15 @@ class BatchEditorScreen extends ConsumerWidget {
             ),
           ),
         ),
-        // ✅ Sticky submit button
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => controller.save(context),
+              onPressed: () async {
+                final ok = await controller.save();
+                if (ok && context.mounted) Navigator.of(context).pop();
+              },
               child: Text(isEditing ? 'Save Changes' : 'Add Batch'),
             ),
           ),
@@ -222,7 +225,8 @@ class BatchEditorScreen extends ConsumerWidget {
             border: Border.all(color: Colors.blueGrey.shade100),
           ),
           child: Text(
-            '${item.name} (${item.storeId} • ${item.itemType.name.toUpperCase()})',
+            // Keep the screen dumb: show only name + type
+            '${item.name} • ${item.type.name.toUpperCase()}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
         ),
@@ -330,7 +334,42 @@ class BatchEditorScreen extends ConsumerWidget {
   }
 
   Widget _loader() => const Center(child: CircularProgressIndicator());
-
   Widget _error(Object e, StackTrace _) =>
       Center(child: Text('Error loading data: $e'));
+
+  // ── helpers to keep UI dumb but resilient ─────────────────────
+
+  List<DropdownOption<String>> _toStoreOptions({
+    required List<InventoryLocation> stores,
+    required String? currentStoreId,
+  }) {
+    final opts = [
+      for (final s in stores)
+        DropdownOption<String>(value: s.id, label: s.name),
+    ];
+
+    // If editing and the current store isn’t in the loaded list, include it so the UI displays correctly.
+    if (currentStoreId != null &&
+        currentStoreId.isNotEmpty &&
+        !opts.any((o) => o.value == currentStoreId)) {
+      opts.add(
+        DropdownOption<String>(value: currentStoreId, label: 'Unknown Store'),
+      );
+    }
+    return opts;
+  }
+
+  List<DropdownOption<String>> _toSourceOptions({
+    required List<InventoryLocation> sources,
+    required String? currentSource,
+  }) {
+    final names = {...sources.map((s) => s.name)};
+    if (currentSource != null && currentSource.isNotEmpty) {
+      names.add(currentSource);
+    }
+    final sortedNames = names.toList()..sort();
+    return sortedNames
+        .map((n) => DropdownOption<String>(value: n, label: n))
+        .toList();
+  }
 }

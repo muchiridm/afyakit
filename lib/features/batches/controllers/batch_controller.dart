@@ -1,87 +1,208 @@
+// lib/features/batches/controllers/batch_controller.dart
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
+
+import 'package:afyakit/features/batches/controllers/batch_args.dart';
+import 'package:afyakit/features/batches/controllers/batch_engine.dart';
+import 'package:afyakit/features/batches/controllers/batch_state.dart';
 import 'package:afyakit/features/batches/models/batch_record.dart';
-import '../services/batch_service.dart';
-import '../services/batch_record_validator.dart';
+import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_engine.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
 
-// ─────────────────────────────────────────────
-// 🧠 Tenant-scoped StateNotifier for batches
-// ─────────────────────────────────────────────
-final batchControllerProvider = StateNotifierProvider.autoDispose
-    .family<BatchController, List<BatchRecord>, String>((ref, tenantId) {
-      final service = ref.read(batchServiceProvider); // Injected 🔥
-      return BatchController(ref, tenantId, service);
-    });
+final batchEditorProvider = StateNotifierProvider.autoDispose
+    .family<BatchEditorController, BatchState, BatchArgs>(
+      (ref, args) => BatchEditorController(
+        ref,
+        tenantId: args.tenantId,
+        item: args.item,
+        batch: args.batch,
+        mode: args.mode,
+      ),
+    );
 
-class BatchController extends StateNotifier<List<BatchRecord>> {
+class BatchEditorController extends StateNotifier<BatchState> {
   final Ref ref;
   final String tenantId;
-  final BatchService _service;
+  final BaseInventoryItem item;
+  final BatchRecord? batch;
+  final BatchEditorMode mode;
 
-  BatchController(this.ref, this.tenantId, this._service) : super([]) {
-    final link = ref.keepAlive();
-    final timer = Timer(const Duration(seconds: 30), link.close);
-    ref.onDispose(timer.cancel);
+  Timer? _ensureDebounce;
+
+  BatchEditorController(
+    this.ref, {
+    required this.tenantId,
+    required this.item,
+    required this.batch,
+    required this.mode,
+  }) : super(
+         BatchState(
+           receivedDate: _initReceivedDate(batch, mode),
+           expiryDate: batch?.expiryDate,
+           storeId: batch?.storeId.trim(),
+           source: batch?.source?.trim(),
+           quantity: batch?.quantity.toString() ?? '',
+         ),
+       ) {
+    if (mode == BatchEditorMode.edit && batch == null) {
+      throw Exception('❌ Batch cannot be null in edit mode');
+    }
+    if (mode == BatchEditorMode.add) {
+      // Prefill from delivery engine state (engine auto-restores on init)
+      Future.microtask(_prefillFromDeliveryEngine);
+    }
+    ref.onDispose(() => _ensureDebounce?.cancel());
   }
 
-  // ─────────────────────────────────────────────
-  // ➕ CREATE
-  // ─────────────────────────────────────────────
-  Future<void> createBatch(BatchRecord batch) async {
-    final enriched = batch.copyWith(
-      receivedDate: normalizeDate(batch.receivedDate),
-      expiryDate: normalizeDate(batch.expiryDate),
-    );
+  bool get isEditing => mode == BatchEditorMode.edit;
 
-    final errors = batchRecordValidator(enriched.toRawMap());
-    if (errors.isNotEmpty) {
-      throw Exception('Invalid batch data:\n• ${errors.join('\n• ')}');
+  // ── Prefill from the Delivery Session Engine ─────────────────
+  Future<void> _prefillFromDeliveryEngine() async {
+    final ds = ref.read(deliverySessionEngineProvider);
+    if (!ds.isActive) return;
+
+    final nextStore = (state.storeId?.trim().isNotEmpty ?? false)
+        ? state.storeId
+        : ds.lastStoreId;
+    final nextSource = (state.source?.trim().isNotEmpty ?? false)
+        ? state.source
+        : ds.lastSource;
+
+    if (nextStore != state.storeId || nextSource != state.source) {
+      state = state.copyWith(storeId: nextStore, source: nextSource);
     }
 
-    final newBatch = await _service.createBatch(
-      tenantId,
-      enriched.storeId,
-      enriched,
-    );
-
-    state = [...state, newBatch];
+    // If both are present after prefill, try to ensure a session
+    _ensureActiveIfReady();
   }
 
-  // ─────────────────────────────────────────────
-  // ✏️ UPDATE
-  // ─────────────────────────────────────────────
-  Future<void> updateBatch(BatchRecord input) async {
-    final enriched = input.copyWith(
-      receivedDate: normalizeDate(input.receivedDate),
-      expiryDate: normalizeDate(input.expiryDate),
-    );
+  // ── Debounced ensureActive via Delivery Session Engine ───────
+  void _ensureActiveIfReady() {
+    final s = (state.storeId ?? '').trim();
+    final src = (state.source ?? '').trim();
+    if (s.isEmpty || src.isEmpty) return;
 
-    final errors = batchRecordValidator(enriched.toRawMap());
-    if (errors.isNotEmpty) {
-      throw Exception('Invalid batch update:\n• ${errors.join('\n• ')}');
-    }
+    _ensureDebounce?.cancel();
+    _ensureDebounce = Timer(const Duration(milliseconds: 200), () async {
+      final user = await ref.read(currentUserFutureProvider.future);
+      final email = (user?.email ?? '').trim().toLowerCase();
+      final name = (user?.displayName ?? 'Unknown').trim();
+      if (email.isEmpty) return;
 
-    await _service.updateBatch(tenantId, enriched.storeId, enriched);
-    state = state.map((b) => b.id == enriched.id ? enriched : b).toList();
+      await ref
+          .read(deliverySessionEngineProvider.notifier)
+          .ensureActive(
+            enteredByName: name,
+            enteredByEmail: email,
+            source: src,
+            storeId: s,
+          );
+    });
   }
 
-  Future<void> updateBatchQuantity({
-    required String batchId,
-    required int quantity,
+  // ⬇️ NEW: immediate ensure (non-debounced) used in save()
+  Future<void> _ensureActiveNowIfPossible({
+    required String email,
+    required String name,
   }) async {
-    final batch = state.firstWhere(
-      (b) => b.id == batchId,
-      orElse: () => throw Exception('Batch not found: $batchId'),
-    );
-    await updateBatch(batch.copyWith(quantity: quantity));
+    final s = (state.storeId ?? '').trim();
+    final src = (state.source ?? '').trim();
+    if (s.isEmpty || src.isEmpty || email.isEmpty) return;
+    await ref
+        .read(deliverySessionEngineProvider.notifier)
+        .ensureActive(
+          enteredByName: name,
+          enteredByEmail: email,
+          source: src,
+          storeId: s,
+        );
   }
 
-  // ─────────────────────────────────────────────
-  // ❌ DELETE
-  // ─────────────────────────────────────────────
-  Future<void> deleteBatch(BatchRecord batch) async {
-    await _service.deleteBatch(tenantId, batch.storeId, batch.id);
-    state = state.where((b) => b.id != batch.id).toList();
+  // ── Mutations (auto-ensure when both fields present) ─────────
+  void updateReceivedDate(DateTime? v) =>
+      state = state.copyWith(receivedDate: v);
+
+  void updateExpiryDate(DateTime? v) => state = state.copyWith(expiryDate: v);
+
+  void updateQuantity(String v) => state = state.copyWith(quantity: v.trim());
+
+  void updateStore(String? v) {
+    state = state.copyWith(storeId: (v ?? '').trim());
+    _ensureActiveIfReady();
   }
+
+  void updateSource(String? v) {
+    state = state.copyWith(source: (v ?? '').trim());
+    _ensureActiveIfReady();
+  }
+
+  void updateEditReason(String v) =>
+      state = state.copyWith(editReason: v.trim());
+
+  // ── Save via BatchEngine (engine ensures session again) ──────
+  Future<bool> save() async {
+    final user = await ref.read(currentUserFutureProvider.future);
+    final email = (user?.email ?? '').trim().toLowerCase();
+    final name = (user?.displayName ?? 'Unknown').trim();
+    final uid = (user?.uid ?? 'unknown').trim();
+
+    if (email.isEmpty) {
+      SnackService.showError('You must be signed in to record deliveries.');
+      return false;
+    }
+
+    final id = item.id;
+    if (id == null || id.isEmpty) {
+      SnackService.showError('❌ Item is missing a valid ID');
+      return false;
+    }
+
+    try {
+      // Ensure immediately (don’t rely on the debounce timer)
+      await _ensureActiveNowIfPossible(email: email, name: name);
+
+      final engine = ref.read(batchEngineProvider(tenantId).notifier);
+      await engine.save(
+        itemId: id,
+        itemType: item.type,
+        form: state,
+        existing: batch,
+        enteredByUid: uid,
+        enteredByName: name,
+        enteredByEmail: email,
+      );
+
+      // ⬇️ NEW: remember last used to the temp session
+      await ref
+          .read(deliverySessionEngineProvider.notifier)
+          .rememberLastUsed(
+            lastStoreId: state.storeId?.trim(),
+            lastSource: state.source?.trim(),
+          );
+
+      SnackService.showSuccess(isEditing ? 'Batch updated!' : 'Batch added!');
+      return true;
+    } catch (e, _) {
+      SnackService.showError('Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> delete() async {
+    if (!isEditing || batch == null) return false;
+    try {
+      final engine = ref.read(batchEngineProvider(tenantId).notifier);
+      await engine.deleteBatch(batch!);
+      SnackService.showSuccess('Batch deleted!');
+      return true;
+    } catch (e, _) {
+      SnackService.showError('Error: $e');
+      return false;
+    }
+  }
+
+  static DateTime _initReceivedDate(BatchRecord? b, BatchEditorMode m) =>
+      b?.receivedDate ?? DateTime.now();
 }

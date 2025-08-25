@@ -1,109 +1,71 @@
-// lib/hq/tenants/services/tenant_loader.dart
 import 'dart:convert';
-import 'package:afyakit/features/tenants/services/tenant_service.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/foundation.dart' show debugPrint;
 
-import 'package:afyakit/config/tenant_config.dart';
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/tenants/services/tenant_config.dart';
+import 'package:afyakit/features/tenants/services/tenant_service.dart';
+import 'package:afyakit/features/api/api_client.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 
 typedef LogFn = void Function(String);
 
-/// Unified loader: Backend (HTTP) → asset fallback → default asset.
-/// Emits detailed logs for each step.
-///
-/// Pass a TokenProvider if the /tenants/:slug endpoint requires auth.
-/// If you already have an ApiClient/ApiRoutes, you can supply them to reuse.
 Future<TenantConfig> loadTenantConfig(
   String tenantId, {
-  ApiClient? client,
-  ApiRoutes? routes,
   TokenProvider? tokenProvider,
-  bool withAuth = true,
-  String defaultTenant = 'afyakit',
+  bool preferBackend = true,
+  String assetFallback = 'afyakit',
   LogFn? log,
 }) async {
   log ??= debugPrint;
   final sw = Stopwatch()..start();
-  log('🔎 [TenantLoader] start: tenant="$tenantId"');
+  log('🔎 TenantLoader: "$tenantId"');
 
-  // 1) Backend attempt (preferred)
-  try {
-    final apiClient =
-        client ??
-        await ApiClient.create(
-          tenantId: tenantId,
-          tokenProvider: tokenProvider,
-          withAuth: withAuth,
-        );
-    final apiRoutes = routes ?? ApiRoutes(tenantId);
-    final svc = TenantService(client: apiClient, routes: apiRoutes);
+  // 1) Backend (public if no token; authenticated if token provider exists)
+  if (preferBackend) {
+    try {
+      final api = await ApiClient.create(
+        tenantId: tenantId,
+        tokenProvider: tokenProvider,
+        withAuth: tokenProvider != null,
+      );
+      final routes = ApiRoutes(tenantId);
+      final svc = TenantService(client: api, routes: routes);
 
-    log('🌐 [TenantLoader] hitting GET /tenants/$tenantId …');
-    final t = await svc.getTenant(tenantId); // TenantSummary
-
-    // Build a TenantConfig from the API shape (defensive defaults).
-    final cfg = TenantConfig.fromJson(<String, dynamic>{
-      'slug': t.slug,
-      'displayName': t.displayName,
-      'primaryColor': t.primaryColor,
-      if (t.logoPath != null) 'logoPath': t.logoPath,
-      // Flags are optional; server may add them later.
-      // Keep an empty map to satisfy older constructors.
-      'flags': <String, dynamic>{},
-      // You can pass owner/email/status if your TenantConfig supports them.
-      'ownerUid': t.ownerUid,
-      'ownerEmail': t.ownerEmail,
-      'status': t.status,
-    });
-
-    sw.stop();
-    log(
-      '✅ [TenantLoader] API hit in ${sw.elapsedMilliseconds}ms '
-      '(displayName="${cfg.displayName}", color="${cfg.primaryColorHex}")',
-    );
-    return cfg;
-  } catch (e) {
-    log('⚠️ [TenantLoader] API load failed: $e');
+      final t = await svc.getTenant(tenantId);
+      final cfg = TenantConfig.fromFirestore(tenantId, {
+        'displayName': t.displayName,
+        'primaryColor': t.primaryColor,
+        'logoPath': t.logoPath,
+        'flags': <String, dynamic>{},
+      });
+      sw.stop();
+      log(
+        '✅ TenantLoader(API) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
+      );
+      return cfg;
+    } catch (e) {
+      log('⚠️ TenantLoader(API) failed: $e');
+    }
   }
 
-  // 2) Asset attempt for requested tenant
+  // 2) Asset: assets/tenants/<id>.json
   try {
-    log('📦 [TenantLoader] falling back: assets/tenants/$tenantId.json …');
     final raw = await rootBundle.loadString('assets/tenants/$tenantId.json');
     final cfg = TenantConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
     sw.stop();
     log(
-      '✅ [TenantLoader] asset hit in ${sw.elapsedMilliseconds}ms '
-      '(displayName="${cfg.displayName}", color="${cfg.primaryColorHex}")',
+      '✅ TenantLoader(asset) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
     );
     return cfg;
-  } catch (e) {
-    log('⚠️ [TenantLoader] asset "$tenantId.json" not found/invalid: $e');
-  }
+  } catch (_) {}
 
-  // 3) Final default asset fallback
-  try {
-    log(
-      '🛟 [TenantLoader] default asset: assets/tenants/$defaultTenant.json …',
-    );
-    final raw = await rootBundle.loadString(
-      'assets/tenants/$defaultTenant.json',
-    );
-    final cfg = TenantConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
-    sw.stop();
-    log(
-      '✅ [TenantLoader] default asset "$defaultTenant" loaded in '
-      '${sw.elapsedMilliseconds}ms',
-    );
-    return cfg;
-  } catch (e) {
-    sw.stop();
-    final msg =
-        '❌ [TenantLoader] final fallback failed (tenant="$tenantId", default="$defaultTenant"). Error: $e';
-    log(msg);
-    throw StateError(msg);
-  }
+  // 3) Default asset
+  final raw = await rootBundle.loadString('assets/tenants/$assetFallback.json');
+  final cfg = TenantConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
+  sw.stop();
+  log(
+    '🛟 TenantLoader(default) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
+  );
+  return cfg;
 }

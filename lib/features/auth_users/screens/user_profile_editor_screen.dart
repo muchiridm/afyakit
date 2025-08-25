@@ -1,8 +1,9 @@
 // lib/users/screens/user_profile_editor_screen.dart
+import 'package:afyakit/features/auth_users/providers/user_display_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/dev/dev_role_switcher.dart';
+import 'package:afyakit/features/dev/dev_role_switcher.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
 
@@ -10,7 +11,7 @@ import 'package:afyakit/features/auth_users/user_manager/controllers/user_manage
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/user_status_x.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/features/auth_users/user_operations/services/user_operations_service.dart';
 import 'package:afyakit/features/auth_users/user_operations/services/user_operations_service.dart'
     show userOperationsServiceProvider;
@@ -18,13 +19,6 @@ import 'package:afyakit/features/auth_users/user_operations/services/user_operat
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-
-// Fetch a single AuthUser via controller (doc id = uid)
-final authUserByIdProvider = FutureProvider.family
-    .autoDispose<AuthUser?, String>((ref, uid) async {
-      final ctrl = ref.read(userManagerControllerProvider.notifier);
-      return ctrl.getUserById(uid);
-    });
 
 class UserProfileEditorScreen extends ConsumerStatefulWidget {
   final String tenantId;

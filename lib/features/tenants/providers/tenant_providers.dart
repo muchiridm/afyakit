@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:afyakit/shared/utils/firestore_instance.dart'; // your FireFlex instance/bootstrap
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_client.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 

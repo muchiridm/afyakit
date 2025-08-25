@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/tenants/services/tenant_service.dart';
 import 'package:afyakit/features/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/tenants/providers/tenant_user_providers.dart';
-import 'package:afyakit/features/auth_users/user_manager/providers/user_engine_providers.dart';
+import 'package:afyakit/features/auth_users/providers/user_engine_providers.dart';
 
 // Dumb-UI friendly controller
 final tenantControllerProvider = Provider<TenantController>((ref) {

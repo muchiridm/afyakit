@@ -1,17 +1,13 @@
-// lib/shared/api/api_routes.dart
-//
-// Single source of truth for frontend → backend paths.
-// Reads can go directly to Firestore on the FE if desired,
-// but all mutations should use these backend endpoints.
-//
-// Conventions:
-// - Tenant-scoped endpoints live under /api/:tenantId/…
-// - HQ (global) endpoints live under /api/* (no tenant segment).
-// - Use _uri(...) for tenant scope, _uriCore(...) for HQ/core scope.
-
+import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/features/api/api_client.dart';
 import 'package:flutter/foundation.dart';
-import 'package:afyakit/shared/api/api_client_base.dart';
 import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final apiRouteProvider = Provider<ApiRoutes>((ref) {
+  final tenantId = ref.watch(tenantIdProvider);
+  return ApiRoutes(tenantId);
+});
 
 class ApiRoutes {
   final String tenantId;
@@ -190,12 +186,14 @@ class ApiRoutes {
   // 📍 Inventory Locations (tenant-scoped)
   // ─────────────────────────────────────────────
 
-  /// GET typed locations: /inventory-locations?type=store|dispensary|source
+  // ApiRoutes additions
+  /// GET typed locations: /inventory-locations/:type
   Uri getTypedLocations(InventoryLocationType type) =>
-      _uri('inventory-locations', query: {'type': type.asString});
+      _uri('inventory-locations/${type.asString}');
 
-  /// POST add location (body: { name, type })
-  Uri addLocation() => _uri('inventory-locations');
+  /// POST add location: /inventory-locations/:type  (body: { name })
+  Uri addTypedLocation(InventoryLocationType type) =>
+      _uri('inventory-locations/${type.asString}');
 
   /// DELETE a typed location: /inventory-locations/:type/:id
   Uri deleteTypedLocation(InventoryLocationType type, String id) =>

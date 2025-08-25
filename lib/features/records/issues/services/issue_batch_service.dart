@@ -1,29 +1,30 @@
-// lib/features/issues/services/issue_batch_service.dart
-
-import 'package:afyakit/features/records/delivery_sessions/services/delivery_locked_exception.dart';
-import 'package:afyakit/features/records/issues/controllers/controllers/issue_form_controller.dart';
+import 'package:afyakit/features/records/issues/services/stock_repo.dart';
+import 'package:afyakit/features/records/issues/services/transfer_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/shared/utils/firestore_instance.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
+
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_engine.dart';
+import 'package:afyakit/features/records/delivery_sessions/utils/delivery_locked_exception.dart';
+import 'package:afyakit/features/records/issues/controllers/controllers/issue_form_controller.dart';
 import 'package:afyakit/features/records/issues/models/enums/issue_type_enum.dart';
 import 'package:afyakit/features/records/issues/models/issue_record.dart';
-import 'package:afyakit/features/batches/models/batch_record.dart';
-
-import 'package:afyakit/features/records/delivery_sessions/services/delivery_session_service.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
-
-import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 class IssueBatchService {
   final String tenantId;
   final Ref ref;
 
+  // small collaborators
+  late final StockRepo _repo = StockRepo(tenantId);
+  late final TransferService _transfer = TransferService(_repo);
+
   IssueBatchService({required this.tenantId, required this.ref});
 
-  /// Adjusts batch quantities (issue/transfer/dispense/dispose/transit).
-  /// Throws [DeliveryLockedException] if an active delivery session exists for the current user,
-  /// unless [enforceDeliveryLock] is false.
+  // ─────────────────────────────────────────────────────────────
+  // Public API
+  // ─────────────────────────────────────────────────────────────
   Future<void> adjustBatchQuantity({
     required IssueType type,
     required String fromStore,
@@ -33,171 +34,125 @@ class IssueBatchService {
     required int quantity,
     required BuildContext context,
     Map<String, dynamic> metadata = const {},
-    bool enforceDeliveryLock = true, // ⬅️ NEW
+    bool enforceDeliveryLock = true,
   }) async {
-    // ⛔ Guard: block stock mutations while the current user has an open delivery session
-    if (enforceDeliveryLock) {
-      final user = ref.read(currentUserProvider).asData?.value;
-      final email = (user?.email ?? user?.email ?? '').trim().toLowerCase();
-
-      if (email.isNotEmpty) {
-        final active = await DeliverySessionService().findOpenSession(
-          tenantId: tenantId,
-          enteredByEmail: email,
-        );
-
-        if (active != null) {
-          throw DeliveryLockedException(
-            'Stock changes are blocked while delivery ${active.deliveryId} is open for $email.',
-          );
-        }
-      }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Existing mutation logic
-    // ─────────────────────────────────────────────────────────────
-
-    final batchRef = db
-        .collection('tenants')
-        .doc(tenantId)
-        .collection('stores')
-        .doc(fromStore)
-        .collection('batches')
-        .doc(batchId);
-
-    final batchSnap = await batchRef.get();
-    if (!batchSnap.exists) throw Exception('❌ Batch not found: $batchId');
-
-    final batch = BatchRecord.fromSnapshot(batchSnap);
-
-    if (batch.quantity < quantity) {
-      throw Exception('❌ Insufficient stock in $batchId');
-    }
-
-    final newQty = batch.quantity - quantity;
-    if (newQty > 0) {
-      await batchRef.update({'quantity': newQty});
-    } else {
-      await batchRef.delete();
-    }
-
-    final baseData = {
-      'batchId': batchId,
-      'itemId': itemId,
-      'quantity': quantity,
-      'timestamp': FieldValue.serverTimestamp(),
-      ...metadata,
-    };
+    await _guardDeliveryLock(enforceDeliveryLock);
+    if (quantity <= 0) throw StateError('❌ Quantity must be positive.');
 
     switch (type) {
       case IssueType.transfer:
-        final transitRef = db
-            .collection('tenants')
-            .doc(tenantId)
-            .collection('batch_transit')
-            .doc();
-
-        await transitRef.set({
-          ...baseData,
-          'transitId': transitRef.id,
-          'issueId': metadata['issueId'],
-          'fromStore': fromStore,
-          'toStore': toStore,
-          'received': false,
-          'itemType': batch.itemType.name,
-          'expiry': batch.expiryDate?.toIso8601String(),
-        });
+        final dest = (toStore ?? '').trim();
+        if (dest.isEmpty) {
+          throw StateError('❌ Destination store is required for transfers.');
+        }
+        await _transfer.transfer(
+          fromStore: fromStore,
+          toStore: dest,
+          sourceBatchId: batchId,
+          itemId: itemId,
+          quantity: quantity,
+          metadata: metadata,
+        );
         break;
 
       case IssueType.dispense:
-        await db
-            .collection('tenants')
-            .doc(tenantId)
-            .collection('batch_dispensations')
-            .add({
-              ...baseData,
-              'storeId': fromStore,
-              'reason': metadata['reason'] ?? 'Dispensed',
-            });
+        await _dispenseNow(
+          storeId: fromStore,
+          itemId: itemId,
+          batchId: batchId,
+          quantity: quantity,
+          reason: (metadata['reason'] ?? 'Dispensed').toString(),
+          extra: metadata,
+        );
         break;
 
       case IssueType.dispose:
-        await db
-            .collection('tenants')
-            .doc(tenantId)
-            .collection('batch_disposals')
-            .add({
-              ...baseData,
-              'storeId': fromStore,
-              'reason': metadata['reason'] ?? 'Disposed',
-            });
+        await _disposeNow(
+          storeId: fromStore,
+          itemId: itemId,
+          batchId: batchId,
+          quantity: quantity,
+          reason: (metadata['reason'] ?? 'Disposed').toString(),
+          extra: metadata,
+        );
         break;
     }
   }
 
+  /// Legacy transit receive (kept as-is, uses repo helpers).
   Future<void> receiveTransit(String docId, Map<String, dynamic> data) async {
-    final toStore = data['toStore'];
-    final itemId = data['itemId'];
-    final quantity = data['quantity'];
-    final sourceBatchId = data['batchId'];
-    final itemTypeRaw = data['itemType'];
-    final expiryString = data['expiry'];
+    await db.runTransaction((tx) async {
+      final transitRef = _repo.transitDoc(docId);
+      final transitSnap = await tx.get(transitRef);
+      if (!transitSnap.exists) {
+        throw StateError('❌ Transit doc not found: $docId');
+      }
 
-    final transitRef = db
-        .collection('tenants')
-        .doc(tenantId)
-        .collection('batch_transit')
-        .doc(docId);
+      final t = transitSnap.data()!;
+      if ((t['received'] as bool?) == true) {
+        debugPrint('↪️ Transit $docId already received. Skipping.');
+        return;
+      }
 
-    final storeRef = db
-        .collection('tenants')
-        .doc(tenantId)
-        .collection('stores')
-        .doc(toStore);
+      final toStore = StockRepo.asString(t['toStore'] ?? data['toStore']);
+      final itemId = StockRepo.asString(t['itemId'] ?? data['itemId']);
+      final qty = StockRepo.asInt(t['quantity'] ?? data['quantity']);
+      final srcBatch = StockRepo.asString(t['batchId'] ?? data['batchId']);
+      final itemType = StockRepo.asString(t['itemType'] ?? data['itemType']);
+      final expiry = StockRepo.asString(t['expiry'] ?? data['expiry']);
 
-    final storeDoc = await storeRef.get();
+      if (toStore.isEmpty || itemId.isEmpty || qty <= 0) {
+        throw StateError('❌ Invalid transit payload for $docId');
+      }
 
-    if (!storeDoc.exists) {
-      debugPrint('🏗️ Store [$toStore] not found. Creating...');
-      await storeRef.set({
+      final storeRef = _repo.storeDoc(toStore);
+      final storeSnap = await tx.get(storeRef);
+      if (!storeSnap.exists) {
+        tx.set(storeRef, {
+          'storeId': toStore,
+          'name': toStore.replaceAll('_', ' ').toUpperCase(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      final newBatchRef = _repo.batchesCol(toStore).doc();
+      tx.set(newBatchRef, {
+        'tenantId': tenantId,
         'storeId': toStore,
-        'name': toStore.replaceAll('_', ' ').toUpperCase(),
+        'itemId': itemId,
+        'itemType': itemType,
+        'quantity': qty,
+        'receivedDate': FieldValue.serverTimestamp(),
+        'expiryDate': expiry.isNotEmpty
+            ? Timestamp.fromDate(DateTime.parse(expiry))
+            : null,
+        'sourceBatchId': srcBatch,
+        'source': 'transfer',
+        'deliveryId': null,
+        'isEdited': false,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ Store [$toStore] created.');
-    }
 
-    final newBatchRef = storeRef.collection('batches').doc();
+      tx.update(transitRef, {
+        'received': true,
+        'newBatchId': newBatchRef.id,
+        'receivedAt': FieldValue.serverTimestamp(),
+      });
 
-    await newBatchRef.set({
-      'batchId': newBatchRef.id,
-      'sourceBatchId': sourceBatchId,
-      'itemId': itemId,
-      'itemType': itemTypeRaw,
-      'storeId': toStore,
-      'quantity': quantity,
-      'expiryDate': expiryString != null
-          ? Timestamp.fromDate(DateTime.parse(expiryString))
-          : null,
-      'receivedDate': FieldValue.serverTimestamp(),
+      debugPrint(
+        '📦 [receiveTransit] new batch ${newBatchRef.id} in [$toStore].',
+      );
     });
-
-    await transitRef.update({'received': true, 'newBatchId': newBatchRef.id});
-
-    debugPrint('📦 New batch ${newBatchRef.id} created in store [$toStore].');
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
   getUnreceivedTransitDocs(String issueId) async {
-    final snap = await db
-        .collection('tenants')
-        .doc(tenantId)
-        .collection('batch_transit')
+    final snap = await _repo
+        .transitCol()
         .where('issueId', isEqualTo: issueId)
         .where('received', isEqualTo: false)
         .get();
-
     return snap.docs;
   }
 
@@ -207,18 +162,88 @@ class IssueBatchService {
     String message,
   ) async {
     try {
-      await db
-          .collection('tenants')
-          .doc(tenantId)
-          .collection('issue_records')
-          .doc(updated.id)
-          .update(updated.toMap());
-
+      debugPrint(
+        '📝 [applyStatusUpdate] issueId=${updated.id} status=${updated.status}',
+      );
+      await _repo.issuesCol().doc(updated.id).update(updated.toMap());
       SnackService.showSuccess(message);
       await ref.read(issueFormControllerProvider.notifier).loadIssuedRecords();
       if (context.mounted) Navigator.of(context).pop();
-    } catch (e) {
+    } on FirebaseException catch (e, st) {
+      debugPrint(
+        '💥 [applyStatusUpdate] FirebaseException code=${e.code} msg=${e.message}\n$st',
+      );
+      SnackService.showError('❌ ${e.message ?? 'Update failed'}');
+      throw Exception('applyStatusUpdate failed (${e.code}): ${e.message}');
+    } catch (e, st) {
+      debugPrint('💥 [applyStatusUpdate] Unexpected: $e\n$st');
       SnackService.showError('❌ $e');
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Smaller mutations
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _dispenseNow({
+    required String storeId,
+    required String itemId,
+    required String batchId,
+    required int quantity,
+    required String reason,
+    required Map<String, dynamic> extra,
+  }) async {
+    await _repo.decrementOrDelete(
+      storeId: storeId,
+      batchId: batchId,
+      amount: quantity,
+    );
+    await _repo.dispensationsCol().add({
+      'tenantId': tenantId,
+      'storeId': storeId,
+      'itemId': itemId,
+      'quantity': quantity,
+      'reason': reason,
+      'timestamp': FieldValue.serverTimestamp(),
+      ...extra,
+    });
+  }
+
+  Future<void> _disposeNow({
+    required String storeId,
+    required String itemId,
+    required String batchId,
+    required int quantity,
+    required String reason,
+    required Map<String, dynamic> extra,
+  }) async {
+    await _repo.decrementOrDelete(
+      storeId: storeId,
+      batchId: batchId,
+      amount: quantity,
+    );
+    await _repo.disposalsCol().add({
+      'tenantId': tenantId,
+      'storeId': storeId,
+      'itemId': itemId,
+      'quantity': quantity,
+      'reason': reason,
+      'timestamp': FieldValue.serverTimestamp(),
+      ...extra,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Guards
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _guardDeliveryLock(bool enforce) async {
+    if (!enforce) return;
+    final session = ref.read(deliverySessionEngineProvider);
+    if (session.isActive) {
+      final email = session.enteredByEmail ?? '(unknown)';
+      throw DeliveryLockedException(
+        'Stock changes are blocked while delivery ${session.deliveryId} is open for $email.',
+      );
     }
   }
 }

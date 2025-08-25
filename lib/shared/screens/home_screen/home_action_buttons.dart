@@ -1,3 +1,4 @@
+import 'package:afyakit/features/auth_users/providers/current_auth_user_providers.dart';
 import 'package:afyakit/features/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/shared/screens/hq_dashboard_screen.dart';
 import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
@@ -9,8 +10,6 @@ import 'package:afyakit/features/inventory_view/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/reports/screens/reports_dashboard_screen.dart';
 import 'package:afyakit/shared/screens/admin_dashboard_screen.dart';
-
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
 
 class HomeActionButtons extends ConsumerWidget {
   const HomeActionButtons({super.key});

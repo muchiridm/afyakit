@@ -1,9 +1,9 @@
 // lib/users/providers/engine_providers.dart
 import 'package:afyakit/features/auth_users/user_manager/services/global_users_service.dart';
 import 'package:afyakit/features/auth_users/user_manager/services/user_manager_service.dart';
+import 'package:afyakit/features/api/api_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
-import 'package:afyakit/shared/api/providers/api_client_provider.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/features/auth_users/user_manager/engines/user_manager_engine.dart';
 
 /// ─────────────────────────────────────────────────────────

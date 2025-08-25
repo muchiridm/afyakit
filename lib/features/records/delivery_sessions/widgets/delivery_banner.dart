@@ -1,22 +1,42 @@
-import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_state.dart';
+// lib/features/records/delivery_sessions/widgets/delivery_banner.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
+
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_engine.dart';
+import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_state.dart';
 import 'package:afyakit/features/records/delivery_sessions/screens/delivery_session_review_screen.dart';
+import 'package:afyakit/features/records/delivery_sessions/providers/delivery_banner_provider.dart';
+// 🔗 use the active temp-session stream to “prime” the engine before navigating
+import 'package:afyakit/features/records/delivery_sessions/providers/active_delivery_session_provider.dart';
 
 class DeliveryBanner extends ConsumerWidget {
   const DeliveryBanner({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(deliverySessionControllerProvider);
-    if (session.deliveryId == null) return const SizedBox.shrink();
+    // Gate visibility from Firestore so it won’t be “sticky”
+    final visibleAsync = ref.watch(deliveryBannerVisibleProvider);
 
-    return _buildBannerContainer(context: context, session: session);
+    return visibleAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (visible) {
+        if (!visible) return const SizedBox.shrink();
+
+        // For display text we can read the engine (cheap); it’s OK if null.
+        final session = ref.watch(deliverySessionEngineProvider);
+        return _buildBannerContainer(
+          context: context,
+          ref: ref,
+          session: session,
+        );
+      },
+    );
   }
 
   Widget _buildBannerContainer({
     required BuildContext context,
+    required WidgetRef ref,
     required DeliverySessionState session,
   }) {
     return Container(
@@ -29,53 +49,83 @@ class DeliveryBanner extends ConsumerWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 400;
-          return isNarrow
-              ? Column(
-                  // Fallback for narrow screens
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(child: _buildSessionText(session)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _buildReviewButton(context),
-                    ),
-                  ],
-                )
-              : Row(
+          final isNarrow = constraints.maxWidth < 420;
+          final text = _buildSessionText(session);
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
                     const Icon(Icons.info_outline, size: 20),
                     const SizedBox(width: 8),
-                    Expanded(child: _buildSessionText(session)),
-                    const SizedBox(width: 12),
-                    _buildReviewButton(context),
+                    Expanded(child: text),
                   ],
-                );
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildReviewButton(context, ref),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              const Icon(Icons.info_outline, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: text),
+              const SizedBox(width: 12),
+              _buildReviewButton(context, ref),
+            ],
+          );
         },
       ),
     );
   }
 
   Widget _buildSessionText(DeliverySessionState session) {
-    return Text('Ongoing Delivery: ${session.deliveryId}');
+    final id = (session.deliveryId ?? '').trim();
+    final source = (session.lastSource ?? '').trim();
+    final store = (session.lastStoreId ?? '').trim();
+
+    final parts = <String>[
+      if (id.isNotEmpty) 'Ongoing Delivery: $id' else 'Ongoing Delivery',
+      if (store.isNotEmpty) ' • Store: $store',
+      if (source.isNotEmpty) ' • Source: $source',
+    ];
+
+    return Text(parts.join(), maxLines: 2, overflow: TextOverflow.ellipsis);
   }
 
-  Widget _buildReviewButton(BuildContext context) {
+  Widget _buildReviewButton(BuildContext context, WidgetRef ref) {
     return ElevatedButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const DeliverySessionReviewScreen(),
-          ),
-        );
+      onPressed: () async {
+        // 🔄 Make sure the engine is pointing at the active temp session
+        final active = await ref.read(activeDeliverySessionProvider.future);
+        if (active != null) {
+          await ref
+              .read(deliverySessionEngineProvider.notifier)
+              .ensureActive(
+                enteredByName: active.enteredByName ?? active.enteredByEmail,
+                enteredByEmail: active.enteredByEmail,
+                source: active.lastSource ?? '',
+                storeId: active.lastStoreId ?? '',
+              );
+        }
+
+        // ➡️ then navigate to the review screen
+        // (engine is primed so the screen won’t show “No active session”)
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const DeliverySessionReviewScreen(),
+            ),
+          );
+        }
       },
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

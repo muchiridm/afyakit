@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'package:afyakit/features/inventory/models/item_type_enum.dart';
 import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
-import 'package:afyakit/shared/api/providers/api_route_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/shared/utils/payload_sanitizer.dart';
 

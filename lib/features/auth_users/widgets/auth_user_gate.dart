@@ -1,9 +1,9 @@
 // lib/users/widgets/auth_user_gate.dart
+import 'package:afyakit/features/auth_users/providers/current_auth_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart'; // <= uses currentAuthUserProvider
 
 class AuthUserGate extends ConsumerWidget {
   final bool Function(AuthUser user) allow;

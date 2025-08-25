@@ -62,11 +62,12 @@ class SessionEngine {
   /// Ensures claims are valid and that the active tenant claim equals [tenantId].
   /// If claims are missing, we nudge the server via checkUserStatus and sync.
   /// If profile bits look stale, we hydrate from model (via checkUserStatus).
+
   Future<void> _ensureTenantSelected({
     required String email,
     required String reason,
   }) async {
-    // Always start from a fresh token snapshot
+    // Start from a fresh token snapshot
     await ops.refreshToken();
     var claims = await ops.getClaims();
 
@@ -77,30 +78,41 @@ class SessionEngine {
       );
     }
 
-    // If the active tenant in the token doesn't match, fix it first.
     if (claimTenant != tenantId) {
-      // Seed/confirm server session for this tenant (optional but harmless)
-      await ops.checkUserStatus(email: email);
+      try {
+        // Seed server session for this tenant (safe if already present)
+        await ops.checkUserStatus(email: email);
 
-      // Ask backend to set correct tenant claim, then refresh token
-      await ops.ensureTenantClaimSelected(
-        tenantId,
-        reason: 'SessionEngine.$reason',
-      );
-
-      // Re-read claims after correction
-      claims = await ops.getClaims();
+        // Ask backend to flip the active tenant claim → then refresh token
+        await ops.ensureTenantClaimSelected(
+          tenantId,
+          reason: 'SessionEngine.$reason',
+        );
+        claims = await ops.getClaims();
+      } catch (e) {
+        // Don’t brick the app: log, re-probe membership via backend,
+        // and allow the gate to decide based on membership.
+        _log('⚠️ Tenant claim sync failed ($claimTenant → $tenantId): $e');
+        try {
+          await ops.checkUserStatus(email: email);
+        } catch (_) {}
+      }
     }
 
-    // Now claims should be present; if not, nudge server again
+    // If claims missing or stale, nudge server; don’t throw
     if (!ClaimValidator.isValid(claims)) {
-      await ops.checkUserStatus(email: email);
-      claims = await ops.getClaims();
+      try {
+        await ops.checkUserStatus(email: email);
+        claims = await ops.getClaims();
+      } catch (e) {
+        _log('⚠️ Claim validate/hydrate failed: $e');
+      }
     }
 
-    // If mirrored fields look stale, hydrate from model
     if (ClaimValidator.shouldHydrateFromModel(claims)) {
-      await ops.checkUserStatus(email: email);
+      try {
+        await ops.checkUserStatus(email: email);
+      } catch (_) {}
     }
   }
 

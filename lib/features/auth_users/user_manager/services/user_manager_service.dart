@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/api_routes.dart';
+import 'package:afyakit/features/api/api_client.dart';
+import 'package:afyakit/features/api/api_routes.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';

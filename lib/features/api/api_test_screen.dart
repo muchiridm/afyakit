@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/api/api_client.dart';
-import 'package:afyakit/shared/api/providers/api_client_provider.dart';
+import 'package:afyakit/features/api/api_client.dart';
 
 class ApiTestScreen extends ConsumerStatefulWidget {
   const ApiTestScreen({super.key});

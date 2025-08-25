@@ -4,8 +4,6 @@ class TempSession {
   final String? enteredByName;
   final String enteredByEmail;
   final List<String> sources;
-
-  // ⬇️ New prefill fields
   final String? lastStoreId;
   final String? lastSource;
 

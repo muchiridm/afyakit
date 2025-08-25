@@ -13,7 +13,7 @@ import 'package:afyakit/features/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 
 // NEW: policy provider
 import 'package:afyakit/features/records/issues/providers/issue_engine_providers.dart';

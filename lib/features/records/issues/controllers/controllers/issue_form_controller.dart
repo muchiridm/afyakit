@@ -11,7 +11,7 @@ import 'package:afyakit/features/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/auth_users/user_operations/providers/current_user_providers.dart';
+import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 
