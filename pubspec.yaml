@@ -67,8 +67,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/tenants/danabtmc.json
-    - assets/tenants/dawapap.json
-    - assets/tenants/afyakit.json
-    - assets/branding/

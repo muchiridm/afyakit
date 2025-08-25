@@ -215,33 +215,64 @@ class IssueDetailsScreen extends ConsumerWidget {
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores,
   ) {
-    if (allStores is! AsyncData) return [];
+    if (allStores is! AsyncData) {
+      debugPrint(
+        '[Buttons] Stores not ready yet for issue=${issue.id} '
+        '(state=${allStores.runtimeType})',
+      );
+      return [];
+    }
 
+    final stores = allStores.value ?? const <InventoryLocation>[];
     final actions = controller.getAvailableActions(
       user: user,
       record: issue,
-      allStores: allStores.value ?? [],
+      allStores: stores,
     );
 
-    return actions
-        .map(
-          (btn) => ElevatedButton.icon(
-            onPressed: () => btn.onPressed(context),
-            icon: Icon(btn.icon, color: Colors.white),
-            label: Text(
-              btn.label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: btn.color,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-            ),
+    debugPrint(
+      '[Buttons] issue=${issue.id} '
+      'status=${issue.status} from=${issue.fromStore} to=${issue.toStore} '
+      'user=${user.uid} role=${user.role.name} '
+      'stores=${stores.length} '
+      '→ actions=[${actions.map((a) => a.label).join(', ')}]',
+    );
+
+    if (actions.isEmpty) {
+      debugPrint('[Buttons] No available actions for issue=${issue.id}');
+    }
+
+    return actions.map((btn) {
+      return ElevatedButton.icon(
+        onPressed: () async {
+          debugPrint('[Buttons] TAP "${btn.label}" issue=${issue.id}');
+          try {
+            btn.onPressed(context); // ← await so errors surface
+            debugPrint('[Buttons] DONE "${btn.label}" issue=${issue.id}');
+          } catch (e, st) {
+            debugPrint(
+              '[Buttons][ERR] "${btn.label}" issue=${issue.id}: $e\n$st',
+            );
+            // Optional: show a quick toast/snack for the user
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Action "${btn.label}" failed: $e')),
+            );
+          }
+        },
+        icon: Icon(btn.icon, color: Colors.white),
+        label: Text(
+          btn.label,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
-        )
-        .toList();
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: btn.color,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        ),
+      );
+    }).toList();
   }
 
   Widget _info(String label, String? value, {Color? color}) {

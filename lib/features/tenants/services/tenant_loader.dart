@@ -1,71 +1,71 @@
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:afyakit/features/tenants/services/tenant_config.dart';
-import 'package:afyakit/features/tenants/services/tenant_service.dart';
-import 'package:afyakit/features/api/api_client.dart';
-import 'package:afyakit/features/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
 
-typedef LogFn = void Function(String);
+typedef Json = Map<String, dynamic>;
 
-Future<TenantConfig> loadTenantConfig(
-  String tenantId, {
-  TokenProvider? tokenProvider,
-  bool preferBackend = true,
-  String assetFallback = 'afyakit',
-  LogFn? log,
-}) async {
-  log ??= debugPrint;
-  final sw = Stopwatch()..start();
-  log('🔎 TenantLoader: "$tenantId"');
+class TenantConfigLoader {
+  TenantConfigLoader(this._db);
+  final FirebaseFirestore _db;
 
-  // 1) Backend (public if no token; authenticated if token provider exists)
-  if (preferBackend) {
+  static const _cachePrefix = 'tenant_cfg_v1:'; // bump on shape changes
+
+  Future<TenantConfig> load(String slug, {bool useCache = true}) async {
+    final sw = Stopwatch()..start();
+
+    // 1) live Firestore
     try {
-      final api = await ApiClient.create(
-        tenantId: tenantId,
-        tokenProvider: tokenProvider,
-        withAuth: tokenProvider != null,
-      );
-      final routes = ApiRoutes(tenantId);
-      final svc = TenantService(client: api, routes: routes);
+      final snap = await _db.collection('tenants').doc(slug).get();
+      if (!snap.exists) throw StateError('Tenant "$slug" not found');
 
-      final t = await svc.getTenant(tenantId);
-      final cfg = TenantConfig.fromFirestore(tenantId, {
-        'displayName': t.displayName,
-        'primaryColor': t.primaryColor,
-        'logoPath': t.logoPath,
-        'flags': <String, dynamic>{},
+      final d = snap.data() ?? const {};
+      final status = (d['status'] ?? 'active').toString();
+      if (status != 'active') throw StateError('Tenant "$slug" is $status');
+
+      final cfg = TenantConfig.fromFirestore(slug, {
+        'displayName': d['displayName'],
+        'primaryColor': d['primaryColor'] ?? d['primaryColorHex'],
+        'logoPath': d['logoPath'],
+        'flags': d['flagsPublic'] ?? d['flags'] ?? const <String, dynamic>{},
       });
+
+      await _saveCache(slug, cfg);
       sw.stop();
-      log(
-        '✅ TenantLoader(API) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
+      debugPrint(
+        '✅ TenantLoader(Firestore) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
       );
       return cfg;
     } catch (e) {
-      log('⚠️ TenantLoader(API) failed: $e');
+      debugPrint('⚠️ TenantLoader live fetch failed: $e');
+      if (!useCache) rethrow;
     }
+
+    // 2) last-known cache
+    final cached = await _readCache(slug);
+    if (cached != null) {
+      debugPrint('🛟 TenantLoader(cache) → ${cached.displayName}');
+      return cached;
+    }
+
+    throw StateError('Unable to load tenant "$slug" (no live data, no cache).');
   }
 
-  // 2) Asset: assets/tenants/<id>.json
-  try {
-    final raw = await rootBundle.loadString('assets/tenants/$tenantId.json');
-    final cfg = TenantConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
-    sw.stop();
-    log(
-      '✅ TenantLoader(asset) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
-    );
-    return cfg;
-  } catch (_) {}
+  Future<void> _saveCache(String slug, TenantConfig cfg) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_cachePrefix$slug', jsonEncode(cfg.toJson()));
+  }
 
-  // 3) Default asset
-  final raw = await rootBundle.loadString('assets/tenants/$assetFallback.json');
-  final cfg = TenantConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
-  sw.stop();
-  log(
-    '🛟 TenantLoader(default) ${sw.elapsedMilliseconds}ms → ${cfg.displayName}',
-  );
-  return cfg;
+  Future<TenantConfig?> _readCache(String slug) async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString('$_cachePrefix$slug');
+    if (s == null || s.isEmpty) return null;
+    try {
+      final m = jsonDecode(s) as Json;
+      return TenantConfig.fromFirestore(slug, m);
+    } catch (_) {
+      return null;
+    }
+  }
 }

@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
@@ -9,8 +10,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
-import 'package:afyakit/features/tenants/utils/tenant_picker.dart'; // decideTenant()
-import 'package:afyakit/features/tenants/services/tenant_loader.dart'; // loadTenantConfig
+import 'package:afyakit/features/tenants/services/tenant_resolver.dart'; // resolveTenantSlug()
+import 'package:afyakit/features/tenants/services/tenant_loader.dart'; // TenantConfigLoader
 import 'package:afyakit/features/tenants/services/tenant_config.dart'; // TenantConfig + color
 
 import 'package:afyakit/features/auth_users/providers/user_operations_engine_providers.dart';
@@ -33,35 +34,40 @@ Future<void> main() async {
     await Firebase.initializeApp();
   }
 
-  // Firestore (safe on all platforms)
+  // Firestore settings (safe on all platforms)
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
   debugPrint('✅ Firebase initialized');
 
-  // URL/deeplink bits
+  // URL / deeplink parsing
   final uri = Uri.base;
   final segs = uri.pathSegments;
   final uid = uri.queryParameters['uid'];
-  final isInviteFlow =
+  final bool isInviteFlow =
       segs.length >= 2 &&
       segs[0] == 'invite' &&
       segs[1] == 'accept' &&
       uid != null;
 
-  // Tenant
-  final tenant = decideTenant(); // ?tenant=, host, path, else fallback
+  // ── Tenant resolution (domain → slug, with ?tenant= override) ───────────────
+  final String tenant = resolveTenantSlug(defaultSlug: 'afyakit');
   debugPrint('🏢 Using tenant: $tenant');
 
-  // Load tenant config (backend if available → asset → default)
-  final cfg = await loadTenantConfig(
-    tenant,
-    tokenProvider: null, // no token at boot; loader goes public
-    preferBackend: true, // try API unauth first (no warnings)
-    assetFallback: 'afyakit', // safety net
-  );
+  // ── Firestore-only tenant config load (no assets, no API hop) ───────────────
+  final loader = TenantConfigLoader(FirebaseFirestore.instance);
+  late final TenantConfig cfg;
+  try {
+    cfg = await loader.load(
+      tenant,
+    ); // throws if not found/suspended and no cache
+  } catch (e, st) {
+    debugPrint('❌ Tenant config load failed: $e\n$st');
+    runApp(const _ErrorApp(message: 'Unable to load tenant configuration.'));
+    return;
+  }
 
-  // Provide tenant id + config into the root container
+  // ── Provide tenant id + config into the root container ─────────────────────
   final container = ProviderContainer(
     overrides: [
       tenantIdProvider.overrideWithValue(tenant),
@@ -82,7 +88,9 @@ Future<void> main() async {
       container: container,
       child: AfyaKitApp(
         isInviteFlow: isInviteFlow,
-        inviteParams: isInviteFlow ? {'tenant': tenant, 'uid': uid} : null,
+        inviteParams: isInviteFlow
+            ? <String, String>{'tenant': tenant, 'uid': uid}
+            : null,
       ),
     ),
   );
@@ -113,6 +121,30 @@ class AfyaKitApp extends ConsumerWidget {
       home: isInviteFlow
           ? InviteAcceptScreen(inviteParams: inviteParams!)
           : const AuthGate(),
+    );
+  }
+}
+
+class _ErrorApp extends StatelessWidget {
+  final String message;
+  const _ErrorApp({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

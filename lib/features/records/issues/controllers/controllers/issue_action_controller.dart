@@ -5,6 +5,7 @@ import 'package:afyakit/features/records/issues/controllers/engines/issue_policy
 import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 import 'package:afyakit/features/inventory_locations/inventory_location.dart';
 import 'package:afyakit/features/records/issues/models/enums/issue_action_enum.dart';
@@ -21,7 +22,21 @@ import 'package:afyakit/features/records/issues/providers/issue_engine_providers
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantIdProvider);
   final user = ref.watch(currentUserProvider).asData?.value;
-  if (user == null) return null;
+  if (user == null) {
+    if (kDebugMode) {
+      debugPrint(
+        '[IssueActionController] user=null (tenant=$tenantId) → not ready',
+      );
+    }
+    return null;
+  }
+
+  if (kDebugMode) {
+    debugPrint(
+      '[IssueActionController] init tenant=$tenantId '
+      'user=${user.uid} role=${user.role.name}',
+    );
+  }
 
   final lifecycle = IssueLifecycleController(
     ref: ref,
@@ -73,23 +88,45 @@ class IssueActionController {
     IssueAction.dispense: Icons.medical_services_outlined,
   };
 
-  // Minimal UI wrapper → calls lifecycle (unchanged behavior)
-  Future<void> _execute(BuildContext ctx, IssueAction a, IssueRecord r) {
-    switch (a) {
-      case IssueAction.approve:
-        return lifecycle.approve(ctx, r);
-      case IssueAction.reject:
-        return lifecycle.reject(ctx, r);
-      case IssueAction.cancel:
-        return lifecycle.cancel(ctx, r);
-      case IssueAction.issue:
-        return lifecycle.markAsIssued(ctx, r);
-      case IssueAction.receive:
-        return lifecycle.markAsReceived(ctx, r);
-      case IssueAction.dispose:
-        return lifecycle.markAsDisposed(ctx, r);
-      case IssueAction.dispense:
-        return lifecycle.markAsDispensed(ctx, r, 'Dispensed via UI action');
+  // Minimal UI wrapper → calls lifecycle (now with robust logs + error surfacing)
+  Future<void> _execute(BuildContext ctx, IssueAction a, IssueRecord r) async {
+    if (kDebugMode) {
+      debugPrint(
+        '[Action] TAP "${_labels[a]}" issue=${r.id} status=${r.status}',
+      );
+    }
+    try {
+      switch (a) {
+        case IssueAction.approve:
+          await lifecycle.approve(ctx, r);
+          break;
+        case IssueAction.reject:
+          await lifecycle.reject(ctx, r);
+          break;
+        case IssueAction.cancel:
+          await lifecycle.cancel(ctx, r);
+          break;
+        case IssueAction.issue:
+          await lifecycle.markAsIssued(ctx, r);
+          break;
+        case IssueAction.receive:
+          await lifecycle.markAsReceived(ctx, r);
+          break;
+        case IssueAction.dispose:
+          await lifecycle.markAsDisposed(ctx, r);
+          break;
+        case IssueAction.dispense:
+          await lifecycle.markAsDispensed(ctx, r, 'Dispensed via UI action');
+          break;
+      }
+      if (kDebugMode) {
+        debugPrint('[Action] DONE "${_labels[a]}" issue=${r.id}');
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[Action][ERR] "${_labels[a]}" issue=${r.id}: $e\n$st');
+      }
+      rethrow; // let caller show a snack if they want
     }
   }
 
@@ -100,6 +137,16 @@ class IssueActionController {
   }) {
     // NEW: ask the policy which actions are allowed
     final actions = policy.actionsFor(user: user, record: record);
+
+    if (kDebugMode) {
+      debugPrint(
+        '[Actions] resolve user=${user.uid} role=${user.role.name} '
+        'issue=${record.id} status=${record.status} '
+        'from=${record.fromStore} to=${record.toStore} '
+        'stores=${allStores.length} '
+        '→ [${actions.map((a) => _labels[a]).join(', ')}]',
+      );
+    }
 
     // Build buttons exactly like before
     return actions.map((a) {

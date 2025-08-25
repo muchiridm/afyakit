@@ -1,61 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
+  match /databases/{db}/documents {
 
-    // ── helpers ────────────────────────────────────────────────
-    function authed() { return request.auth != null; }
-
-    function isSuper() {
-      return authed() &&
-             (request.auth.token.superadmin == true ||
-              request.auth.token.superAdmin == true);
+    // ⚠️ TEMP WINDOW — change the date to ~24h in the future, then REVERT.
+    function tempOpen() {
+      return request.time < timestamp.date(2025, 8, 26); // YYYY, M, D
     }
 
-    // prefer token.tenantId, else legacy token.tenant
-    function claimTenant() {
-      return authed()
-        ? (request.auth.token.tenantId != null
-            ? request.auth.token.tenantId
-            : request.auth.token.tenant)
-        : null;
-    }
-
-    // path-scoped check (when we know {tid} from the path)
-    function sameTenantPath(tid) {
-      return isSuper() || (authed() && claimTenant() == tid);
-    }
-
-    // doc-scoped check (for collection-group queries)
-    function sameTenantDoc() {
-      return isSuper() ||
-             (authed() && resource.data.tenantId == claimTenant());
-    }
-
-    // ── main tenant space: full CRUD for your own tenant ───────
-    match /tenants/{tid}/{document=**} {
-      allow read, write: if sameTenantPath(tid);
-    }
-
-    // ── collection-group access (needed for CG queries) ────────
-    // Add rules here only for collections you actually query via CG.
-    match /{path=**}/batches/{docId} {
-      allow read, write: if sameTenantDoc();
-    }
-
-    match /{path=**}/memberships/{docId} {
-      allow read, write: if sameTenantDoc();
-    }
-
-    // (add more CG collections later if you start CG-querying them)
-
-    // ── user profile docs outside tenant tree (self-only) ──────
-    match /users/{uid} {
-      allow read, write: if authed() && request.auth.uid == uid;
-    }
-
-    // deny everything else
+    // Open everything (read + write) for the temp window
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if tempOpen();
     }
   }
 }
