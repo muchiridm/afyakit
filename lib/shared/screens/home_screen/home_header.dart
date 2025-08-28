@@ -1,10 +1,10 @@
 // lib/features/home/widgets/home_header.dart
-import 'package:afyakit/features/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
-import 'package:afyakit/features/records/delivery_sessions/widgets/delivery_banner.dart';
-import 'package:afyakit/features/auth_users/widgets/logout_button.dart';
+import 'package:afyakit/core/records/delivery_sessions/widgets/delivery_banner.dart';
+import 'package:afyakit/core/auth_users/widgets/logout_button.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});

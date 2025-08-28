@@ -1,4 +1,4 @@
-import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 
 /// Returns the best user-facing identifier:
 /// displayName → email → phone → uid

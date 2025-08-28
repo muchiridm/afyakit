@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,10 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/tenants/services/tenant_resolver.dart';
-import 'package:afyakit/features/tenants/services/tenant_loader.dart';
-import 'package:afyakit/features/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_resolver.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_loader.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
 
 Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -3,13 +3,13 @@ import 'package:afyakit/shared/models/activity_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/inventory_locations/inventory_location_controller.dart';
-import 'package:afyakit/features/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/features/records/delivery_sessions/providers/delivery_records_stream_provider.dart';
-import 'package:afyakit/features/records/issues/providers/issues_stream_provider.dart';
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/features/records/delivery_sessions/widgets/delivery_record_tile.dart';
-import 'package:afyakit/features/records/issues/widgets/issue_record_tile.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
+import 'package:afyakit/core/records/delivery_sessions/providers/delivery_records_stream_provider.dart';
+import 'package:afyakit/core/records/issues/providers/issues_stream_provider.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/core/records/delivery_sessions/widgets/delivery_record_tile.dart';
+import 'package:afyakit/core/records/issues/widgets/issue_record_tile.dart';
 
 class LatestActivityPanel extends ConsumerWidget {
   const LatestActivityPanel({super.key});

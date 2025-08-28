@@ -1,5 +1,6 @@
 // lib/main.dart
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/app/afyakit_app.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,15 +11,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
-import 'package:afyakit/features/tenants/services/tenant_resolver.dart'; // resolveTenantSlug()
-import 'package:afyakit/features/tenants/services/tenant_loader.dart'; // TenantConfigLoader
-import 'package:afyakit/features/tenants/services/tenant_config.dart'; // TenantConfig + color
+import 'package:afyakit/hq/core/tenants/services/tenant_resolver.dart'; // resolveTenantSlug()
+import 'package:afyakit/hq/core/tenants/services/tenant_loader.dart'; // TenantConfigLoader
+import 'package:afyakit/hq/core/tenants/services/tenant_config.dart'; // TenantConfig + color
 
-import 'package:afyakit/features/auth_users/providers/user_operations_engine_providers.dart';
-import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
-import 'package:afyakit/features/auth_users/screens/invite_accept_screen.dart';
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+import 'package:afyakit/core/auth_users/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
+import 'package:afyakit/core/auth_users/screens/invite_accept_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

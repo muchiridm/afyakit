@@ -1,13 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-
-    // ⚠️ TEMP WINDOW — change the date to ~24h in the future, then REVERT.
+    // DEV-ONLY. Do not ship.
     function tempOpen() {
-      return request.time < timestamp.date(2025, 8, 26); // YYYY, M, D
+      return request.time < timestamp.date(2025, 8, 29);
     }
-
-    // Open everything (read + write) for the temp window
     match /{document=**} {
       allow read, write: if tempOpen();
     }

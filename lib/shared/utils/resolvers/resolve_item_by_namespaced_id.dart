@@ -1,6 +1,6 @@
 //lib/shared/utils/resolve/resolve_item_by_namespaced_id.dart
 
-import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
+import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 
 BaseInventoryItem? resolveItemByNamespacedId(
   List<BaseInventoryItem> items,

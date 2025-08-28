@@ -1,4 +1,4 @@
-import 'package:afyakit/features/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/models/item_type_enum.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 
 ItemType parseItemType(dynamic raw) {

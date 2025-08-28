@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 
-import 'package:afyakit/features/inventory/models/items/base_inventory_item.dart';
+import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 
-import 'package:afyakit/features/inventory/models/item_type_enum.dart';
-import 'package:afyakit/features/inventory/controllers/forms/medication_controller.dart';
-import 'package:afyakit/features/inventory/controllers/forms/consumable_controller.dart';
-import 'package:afyakit/features/inventory/controllers/forms/equipment_controller.dart';
+import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/controllers/forms/medication_controller.dart';
+import 'package:afyakit/core/inventory/controllers/forms/consumable_controller.dart';
+import 'package:afyakit/core/inventory/controllers/forms/equipment_controller.dart';
 
 T? findItemById<T extends BaseInventoryItem>(
   Ref ref,

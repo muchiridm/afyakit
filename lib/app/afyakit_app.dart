@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/features/tenants/services/tenant_config.dart';
-import 'package:afyakit/features/auth_users/widgets/auth_gate.dart';
-import 'package:afyakit/features/auth_users/screens/invite_accept_screen.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
+import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
+import 'package:afyakit/core/auth_users/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

@@ -1,14 +1,13 @@
-import 'package:afyakit/features/auth_users/providers/current_auth_user_providers.dart';
-import 'package:afyakit/features/records/shared/records_dashboard_screen.dart';
-import 'package:afyakit/shared/screens/hq_dashboard_screen.dart';
-import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/features/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/providers/current_auth_user_providers.dart';
+import 'package:afyakit/core/records/shared/records_dashboard_screen.dart';
+import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/inventory_view/screens/stock_screen.dart';
-import 'package:afyakit/features/inventory_view/utils/inventory_mode_enum.dart';
-import 'package:afyakit/features/reports/screens/reports_dashboard_screen.dart';
+import 'package:afyakit/core/inventory_view/screens/stock_screen.dart';
+import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';
+import 'package:afyakit/core/reports/screens/reports_dashboard_screen.dart';
 import 'package:afyakit/shared/screens/admin_dashboard_screen.dart';
 
 class HomeActionButtons extends ConsumerWidget {
@@ -92,14 +91,6 @@ class HomeActionButtons extends ConsumerWidget {
 
   Map<String, PermissionedAction> _buildActionsMap() {
     return {
-      'hq': PermissionedAction(
-        icon: Icons.corporate_fare,
-        label: 'HQ',
-        destination: const HqDashboardScreen(),
-        allowed: (u) => u.isSuperAdmin, // 🔒 Only super admins
-        // If you use a different check, e.g.:
-        // allowed: (u) => u.hasRole(UserRole.superAdmin),
-      ),
       'stockIn': PermissionedAction(
         icon: Icons.inventory,
         label: 'Stock In',

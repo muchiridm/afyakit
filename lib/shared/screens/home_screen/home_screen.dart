@@ -4,8 +4,8 @@ import 'package:afyakit/shared/screens/home_screen/latest_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/features/auth_users/providers/current_user_session_providers.dart';
-import 'package:afyakit/features/records/delivery_sessions/controllers/delivery_session_controller.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
+import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_controller.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});

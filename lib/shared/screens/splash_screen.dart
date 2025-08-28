@@ -1,4 +1,4 @@
-import 'package:afyakit/features/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

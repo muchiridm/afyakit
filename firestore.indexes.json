@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "claims.superadmin", "order": "ASCENDING" },
+        { "fieldPath": "emailLower", "order": "ASCENDING" }
+      ]
+    },
+
+    {
       "collectionGroup": "batches",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -100,11 +109,5 @@
       ]
     }
   ],
-  "fieldOverrides": [
-    {
-      "collectionGroup": "batches",
-      "fieldPath": "tenantId",
-      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }]
-    }
-  ]
+  "fieldOverrides": []
 }

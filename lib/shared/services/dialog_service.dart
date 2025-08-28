@@ -1,8 +1,8 @@
 // lib/shared/services/dialog_service.dart
 
-import 'package:afyakit/features/inventory_locations/inventory_location.dart';
+import 'package:afyakit/app/afyakit_app.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/main.dart' show navigatorKey;
 
 /// Centralized dialogs with a safe context fallback.
 /// Prefers an explicitly passed [context]; otherwise uses [navigatorKey.currentContext].

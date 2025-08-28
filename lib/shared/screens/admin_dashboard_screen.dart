@@ -1,14 +1,14 @@
-import 'package:afyakit/features/backup/backup_screen.dart';
-import 'package:afyakit/features/api/api_test_screen.dart';
-import 'package:afyakit/features/item_preferences/item_preferences_screen.dart';
-import 'package:afyakit/features/inventory_locations/screens/inventory_locations_screen.dart';
-import 'package:afyakit/features/auth_users/user_manager/extensions/auth_user_x.dart';
-import 'package:afyakit/features/auth_users/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/features/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/core/backup/backup_screen.dart';
+import 'package:afyakit/api/api_test_screen.dart';
+import 'package:afyakit/core/item_preferences/item_preferences_screen.dart';
+import 'package:afyakit/core/inventory_locations/screens/inventory_locations_screen.dart';
+import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_users/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
-import 'package:afyakit/features/import/import_inventory_screen.dart';
-import 'package:afyakit/features/auth_users/widgets/auth_user_gate.dart';
+import 'package:afyakit/core/import/import_inventory_screen.dart';
+import 'package:afyakit/core/auth_users/widgets/auth_user_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
