@@ -1,4 +1,4 @@
-//lib/features/auth_users/screens/login_screen.dart
+// lib/core/auth_users/screens/login_screen.dart
 
 import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
 import 'package:flutter/material.dart';
@@ -22,14 +22,34 @@ class LoginScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FF),
-      body: Center(
-        child: _buildLoginCard(
-          context: context,
-          controller: controller,
-          state: state,
-          displayName: displayName,
-          logoPath: logoPath, // ← rename + allow null
-          primary: primary,
+      // allow body to move when keyboard shows
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 24, 16, 16 + bottomInset),
+              child: ConstrainedBox(
+                // ensures centering when there’s plenty of height,
+                // but allows scrolling when there isn’t
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: _buildLoginCard(
+                      context: context,
+                      controller: controller,
+                      state: state,
+                      displayName: displayName,
+                      logoPath: logoPath,
+                      primary: primary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -44,36 +64,34 @@ class LoginScreen extends ConsumerWidget {
     required LoginController controller,
     required LoginFormState state,
     required String displayName,
-    required String? logoPath, // ← allow null
+    required String? logoPath,
     required Color primary,
   }) {
     return Card(
-      margin: const EdgeInsets.all(32),
+      margin: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 4,
+      elevation: 3,
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildBrandHeader(
-                displayName: displayName,
-                logoPath: logoPath, // ← pass through
-                primary: primary,
-              ),
-              const SizedBox(height: 24),
-              _buildTitle(),
-              const SizedBox(height: 24),
-              _buildEmailField(state),
-              const SizedBox(height: 16),
-              _buildPasswordField(controller),
-              _buildForgotPasswordButton(context, controller),
-              const SizedBox(height: 16),
-              _buildLoginButton(context, controller, state, primary),
-            ],
-          ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          // shrink to content; lets the outer scroll view handle small screens
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildBrandHeader(
+              displayName: displayName,
+              logoPath: logoPath,
+              primary: primary,
+            ),
+            const SizedBox(height: 20),
+            _buildTitle(),
+            const SizedBox(height: 20),
+            _buildEmailField(state),
+            const SizedBox(height: 12),
+            _buildPasswordField(controller),
+            _buildForgotPasswordButton(context, controller),
+            const SizedBox(height: 16),
+            _buildLoginButton(context, controller, state, primary),
+          ],
         ),
       ),
     );
@@ -85,7 +103,6 @@ class LoginScreen extends ConsumerWidget {
     required Color primary,
   }) {
     final radius = BorderRadius.circular(8.0);
-
     final hasLogo = logoPath != null && logoPath.trim().isNotEmpty;
 
     Widget logo() {
@@ -126,6 +143,7 @@ class LoginScreen extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(
           displayName,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -188,10 +206,12 @@ class LoginScreen extends ConsumerWidget {
     return TextField(
       controller: state.emailController,
       keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
       decoration: const InputDecoration(
         labelText: 'Email Address',
         border: OutlineInputBorder(),
         hintText: 'e.g. user@example.com',
+        isDense: true,
       ),
     );
   }
@@ -199,9 +219,11 @@ class LoginScreen extends ConsumerWidget {
   Widget _buildPasswordField(LoginController controller) {
     return TextField(
       obscureText: true,
+      onSubmitted: (_) => controller.login(),
       decoration: const InputDecoration(
         labelText: 'Password',
         border: OutlineInputBorder(),
+        isDense: true,
       ),
       onChanged: controller.setPassword,
     );

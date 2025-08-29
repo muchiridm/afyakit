@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/shared/screens/splash_screen.dart';
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
-import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/core/auth_users/screens/login_screen.dart';
 
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
@@ -80,45 +79,39 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         if (authUser == null) {
           if (kDebugMode) {
             debugPrint(
-              '🚫 AuthGate: signed in, but no membership for $tenantId',
+              '🚫 AuthGate: signed in, but no membership for $tenantId → auto sign-out',
             );
           }
-          return const _Blocked(
-            msg: 'No access to this tenant. Ask an admin to invite you.',
-            showSignOut: true,
-          );
+          // auto sign-out, then show login
+          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
+          return const SplashScreen();
+        }
+
+        final statusEnum = UserStatus.fromString(authUser.status);
+
+        // Invited (not active) → auto sign-out
+        if (statusEnum.isInvited) {
+          if (kDebugMode)
+            debugPrint('📝 AuthGate: status=invited → auto sign-out');
+          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
+          return const SplashScreen();
+        }
+
+        // Disabled/unknown → auto sign-out
+        if (!statusEnum.isActive) {
+          if (kDebugMode) {
+            debugPrint('⛔ AuthGate: status=${authUser.status} → auto sign-out');
+          }
+          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
+          return const SplashScreen();
         }
 
         if (kDebugMode) {
           debugPrint(
-            '✅ AuthGate: membership OK '
-            'tenant=$tenantId uid=${authUser.uid} '
+            '✅ AuthGate: membership OK tenant=$tenantId uid=${authUser.uid} '
             'status=${authUser.status} role=${authUser.role}',
           );
         }
-
-        final statusEnum = UserStatus.fromString(authUser.status);
-        if (statusEnum.isInvited) {
-          if (kDebugMode) {
-            debugPrint('📝 AuthGate: status=invited → profile editor');
-          }
-          return UserProfileEditorScreen(
-            tenantId: tenantId,
-            inviteParams: widget.inviteParams,
-          );
-        }
-
-        if (!statusEnum.isActive) {
-          if (kDebugMode) {
-            debugPrint('⛔ AuthGate: status=${authUser.status} → blocked');
-          }
-          return const _Blocked(
-            msg: 'Your access to this tenant is not active.',
-            showSignOut: true,
-          );
-        }
-
-        if (kDebugMode) debugPrint('🏠 AuthGate: launching HomeScreen');
         return const HomeScreen();
       },
     );

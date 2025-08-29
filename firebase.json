@@ -2,7 +2,7 @@
   "hosting": [
     {
       "target": "afyakit-hq",
-      "public": "build/hq_web",
+      "public": "build/web",
       "cleanUrls": true,
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
       "headers": [
@@ -16,6 +16,10 @@
         },
         {
           "source": "/manifest.webmanifest",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
+          "source": "/manifest.json",
           "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
         },
         {
@@ -38,6 +42,15 @@
         },
         {
           "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/icons/**",
           "headers": [
             {
               "key": "Cache-Control",
@@ -73,8 +86,19 @@
           ]
         }
       ],
-      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+      "rewrites": [
+        {
+          "source": "/manifest.webmanifest",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        {
+          "source": "/manifest.json",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        { "source": "**", "destination": "/index.html" }
+      ]
     },
+
     {
       "target": "afyakit",
       "public": "build/web",
@@ -94,6 +118,10 @@
           "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
         },
         {
+          "source": "/manifest.json",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
           "source": "/**/*.js",
           "headers": [
             {
@@ -113,6 +141,15 @@
         },
         {
           "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/icons/**",
           "headers": [
             {
               "key": "Cache-Control",
@@ -148,8 +185,19 @@
           ]
         }
       ],
-      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+      "rewrites": [
+        {
+          "source": "/manifest.webmanifest",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        {
+          "source": "/manifest.json",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        { "source": "**", "destination": "/index.html" }
+      ]
     },
+
     {
       "target": "danabtmc",
       "public": "build/web",
@@ -169,6 +217,10 @@
           "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
         },
         {
+          "source": "/manifest.json",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
           "source": "/**/*.js",
           "headers": [
             {
@@ -188,6 +240,15 @@
         },
         {
           "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/icons/**",
           "headers": [
             {
               "key": "Cache-Control",
@@ -223,8 +284,19 @@
           ]
         }
       ],
-      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+      "rewrites": [
+        {
+          "source": "/manifest.webmanifest",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        {
+          "source": "/manifest.json",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        { "source": "**", "destination": "/index.html" }
+      ]
     },
+
     {
       "target": "dawapap",
       "public": "build/web",
@@ -244,6 +316,10 @@
           "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
         },
         {
+          "source": "/manifest.json",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
           "source": "/**/*.js",
           "headers": [
             {
@@ -263,6 +339,15 @@
         },
         {
           "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/icons/**",
           "headers": [
             {
               "key": "Cache-Control",
@@ -298,7 +383,17 @@
           ]
         }
       ],
-      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+      "rewrites": [
+        {
+          "source": "/manifest.webmanifest",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        {
+          "source": "/manifest.json",
+          "function": { "functionId": "manifest", "region": "europe-west1" }
+        },
+        { "source": "**", "destination": "/index.html" }
+      ]
     }
   ],
   "firestore": {

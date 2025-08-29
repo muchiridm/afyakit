@@ -1,4 +1,4 @@
-// lib/users/services/user_operations_service.dart
+// lib/core/auth_users/services/user_operations_service.dart
 import 'dart:async';
 import 'dart:convert';
 
@@ -43,6 +43,7 @@ class UserOperationsService {
   final ApiClient? _client; // present when backend-enabled
   final ApiRoutes? _routes; // present when backend-enabled
   final TokenProvider? _tokens; // present when backend-enabled
+  final String? _tenantId;
 
   // purely informative; not used for conditional logic anymore
 
@@ -52,7 +53,11 @@ class UserOperationsService {
     this._routes,
     this._tokens, {
     String? tenantId,
-  });
+  }) : _tenantId = tenantId; // <— store it
+
+  // expose a helper
+  bool get hasBackend => _client != null && _routes != null && _tokens != null;
+  String? get expectedTenantId => _tenantId;
 
   /// Firebase-only (no backend calls)
   factory UserOperationsService.firebaseOnly() =>
@@ -126,6 +131,44 @@ class UserOperationsService {
     if (user == null) throw Exception('❌ Firebase Auth token missing');
     final res = await user.getIdTokenResult(true);
     return Map<String, dynamic>.from(res.claims ?? const {});
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Strict membership precheck (backend only, no Firebase fallback)
+  // ─────────────────────────────────────────────────────────────
+  // Strict precheck: only ACTIVE members can attempt sign-in.
+  // Optionally allow invited only when you are *explicitly* on the invite-accept flow.
+  Future<bool> isTenantMemberEmail(
+    String email, {
+    bool allowInvitedForInviteFlow = false,
+  }) async {
+    final cleaned = EmailHelper.normalize(email);
+    if (cleaned.isEmpty) return false;
+
+    if (!hasBackend) {
+      debugPrint(
+        '⚠️ isTenantMemberEmail called without backend — blocking for safety',
+      );
+      return false; // never fall back to global Firebase
+    }
+
+    try {
+      final user = await checkUserStatus(email: cleaned);
+      if (allowInvitedForInviteFlow) {
+        return user.status == 'active' || user.status == 'invited';
+      }
+      return user.status == 'active';
+    } on DioException catch (e) {
+      final code = e.response?.statusCode ?? 0;
+      if (code == 404) return false; // not a member of this tenant
+      debugPrint(
+        '🔴 isTenantMemberEmail backend error: ${e.message} status=$code',
+      );
+      return false;
+    } catch (e) {
+      debugPrint('🔴 isTenantMemberEmail error: $e');
+      return false;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────

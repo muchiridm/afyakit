@@ -1,4 +1,4 @@
-// lib/users/engines/session_engine.dart
+// lib/core/auth_users/user_operations/engines/session_engine.dart
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
@@ -91,7 +91,10 @@ class SessionEngine {
 
     if (claimTenant != tenantId) {
       try {
+        // Verify membership first
         await ops.checkUserStatus(email: email);
+
+        // Sync/force the correct tenant into the token; throws if no membership
         await ops.ensureTenantClaimSelected(
           tenantId,
           reason: 'SessionEngine.$reason',
@@ -99,9 +102,12 @@ class SessionEngine {
         claims = await ops.getClaims();
       } catch (e) {
         _log('⚠️ Tenant claim sync failed ($claimTenant → $tenantId): $e');
+
+        // Hard boot on membership failure: do not keep a logged-in user for the wrong tenant.
         try {
-          await ops.checkUserStatus(email: email);
+          await ops.signOut();
         } catch (_) {}
+        rethrow; // surface to caller; UI can show a toast/banner
       }
     }
 

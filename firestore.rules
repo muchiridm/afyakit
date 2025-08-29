@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{db}/documents {
     // DEV-ONLY. Do not ship.
     function tempOpen() {
-      return request.time < timestamp.date(2025, 8, 29);
+      return request.time < timestamp.date(2025, 9, 1);
     }
     match /{document=**} {
       allow read, write: if tempOpen();

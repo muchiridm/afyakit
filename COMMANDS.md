@@ -1,53 +1,50 @@
-# 📜 AfyaKit / DanabTMC / DawaPap Dev Commands
+# 📜 AfyaKit / DanabTMC / DawaPap – Dev Commands (Dynamic)
 
-Common commands for building, running, and deploying **AfyaKit**, **DanabTMC**, and **DawaPap**.  
-Run these from the project root.
+Run these from the project root. The tenant slug is dynamic at **run/deploy** time.  
+**Web is a single shared build** used by all tenant sites.
 
 ---
 
 ## 🏃 Run the App
 
-| Tenant       | Run Command       | Run on Web / CHROME   |
-| ------------ | ----------------- | --------------------- |
-| **AfyaKit**  | make run afyakit  | make run-web afyakit  |
-| **DanabTMC** | make run danabtmc | make run-web danabtmc |
-| **DawaPap**  | make run dawapap  | make run-web dawapap  |
+| Tenant       | Android (auto device) | Web (Chrome)            |
+| ------------ | --------------------- | ----------------------- |
+| **AfyaKit**  | `make run afyakit`    | `make run-web afyakit`  |
+| **DanabTMC** | `make run danabtmc`   | `make run-web danabtmc` |
+| **DawaPap**  | `make run dawapap`    | `make run-web dawapap`  |
 
 > List devices:
 >
 > ```bash
-> flutter devices
+> make devices
+> ```
+>
+> Force a specific device:
+>
+> ```bash
+> DEVICE=sdk_gphone64_x86_64 make run afyakit
+> ```
+>
+> Extra flutter args (e.g., debug):
+>
+> ```bash
+> EXTRA="--debug" make run afyakit
 > ```
 
 ---
 
-## 📦 Build (Web)
+## 📦 Build (Web) — **ONE shared bundle**
 
-| Tenant       | Build Command       |
-| ------------ | ------------------- |
-| **AfyaKit**  | `make web afyakit`  |
-| **DanabTMC** | `make web danabtmc` |
-| **DawaPap**  | `make web dawapap`  |
+Build once for all tenants:
 
----
+make deploy afyakit
+make deploy danabtmc
+make deploy dawapap
 
-## 🚀 Deploy to Firebase Hosting
+or
 
-| Tenant       | Deploy Command         |
-| ------------ | ---------------------- |
-| **AfyaKit**  | `make deploy afyakit`  |
-| **DanabTMC** | `make deploy danabtmc` |
-| **DawaPap**  | `make deploy dawapap`  |
-
-> **Note:** Multi-site hosting in Firebase means you **don’t** use `--public`.  
-> The correct `public` path is set in `firebase.json` per tenant.
-
----
-
-## 🔍 Device & Emulator Commands
+make release-web afyakit
 
 ```bash
-flutter devices                  # Show connected devices
-flutter emulators                # List available emulators
-flutter emulators --launch <id>  # Start a specific emulator
+make web
 ```
