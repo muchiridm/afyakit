@@ -1,69 +1,49 @@
-// lib/users/user_manager/extensions/user_role_x.dart
+// lib/core/auth_users/extensions/user_role_x.dart
 
-/// NOTE: 'superadmin' is handled via claims (AuthUser.isSuperAdmin),
-/// not as a membership role. If you see 'superadmin' as a string, we
-/// map it to an admin-like role in parsing to avoid breaking UI gates.
+/// Tenant-scoped roles. Keep this list minimal & ordered by authority.
 enum UserRole {
+  owner,
   admin,
   manager,
   staff,
-
-  // New roles for multi-tenant lifecycle
-  owner,
   client;
 
-  /// Back-compat: tolerant parser with a few synonyms.
+  /// Strict parser with least-privilege fallback.
   static UserRole fromString(String input) {
     final s = input.trim().toLowerCase();
-    switch (s) {
-      case 'admin':
-        return UserRole.admin;
-      case 'manager':
-        return UserRole.manager;
-      case 'staff':
-        return UserRole.staff;
-
-      // New roles (safe)
-      case 'owner':
-      case 'tenantowner':
-      case 'tenant_owner':
-        return UserRole.owner;
-
-      case 'client':
-      case 'customer':
-        return UserRole.client;
-
-      // Treat superadmin as admin-like for UI gates;
-      // true superadmin is still detected via claims.
-      case 'superadmin':
-        return UserRole.admin;
-
-      default:
-        // Fallback for unknown/legacy inputs.
-        return UserRole.staff;
+    for (final r in UserRole.values) {
+      if (r.name == s) return r;
     }
+    return UserRole.client;
+  }
+
+  /// Nullable parser; returns null when unknown.
+  static UserRole? tryParse(String? input) {
+    if (input == null) return null;
+    final s = input.trim().toLowerCase();
+    for (final r in UserRole.values) {
+      if (r.name == s) return r;
+    }
+    return null;
   }
 
   /// Stable, backend-facing name.
   String get wire => toString().split('.').last;
 
-  /// Back-compat: previous code may call .name directly.
+  /// Back-compat convenience (same as [wire]).
   String get name => wire;
 }
 
 extension UserRoleX on UserRole {
   // ── Identity checks
   bool get isOwner => this == UserRole.owner;
-  bool get isAdmin =>
-      this == UserRole.admin || this == UserRole.owner; // owner is admin-like
+  // Owner is considered admin-like for app permissions.
+  bool get isAdmin => this == UserRole.admin || this == UserRole.owner;
   bool get isManager => this == UserRole.manager;
   bool get isStaff => this == UserRole.staff;
   bool get isClient => this == UserRole.client;
 
   // ── Capability gates (owner inherits admin)
-  bool get canViewEverything => true;
-  bool get canRequestStock => true;
-
   bool get canAccessAdminPanel => isAdmin;
   bool get canManageUsers => isAdmin;
   bool get canManageAllStores => isAdmin;
@@ -73,19 +53,29 @@ extension UserRoleX on UserRole {
   bool get canReceiveBatches => isAdmin || isManager;
   bool get canApproveIssues => isAdmin || isManager;
   bool get canDisposeStock => isAdmin || isManager;
-  bool get canViewReports => true;
 
+  bool get canViewReports => true;
+  bool get canRequestStock => true;
+
+  // Owner-only governance (not granted to plain admins)
+  bool get canManageTenantSettings => isOwner;
+  bool get canManageBilling => isOwner;
+  bool get canTransferOwnership => isOwner;
+  bool get canExportAllData => isOwner;
+  bool get canDeleteTenant => isOwner;
+
+  // View-only UX hints (adjust if staff should edit)
   bool get isViewOnly => isStaff || isClient;
 
   String get label => switch (this) {
+    UserRole.owner => 'Owner',
     UserRole.admin => 'Admin',
     UserRole.manager => 'Manager',
     UserRole.staff => 'Staff',
-    UserRole.owner => 'Owner',
     UserRole.client => 'Client',
   };
 
-  /// Role precedence for simple comparisons/sorting
+  /// Role precedence for sorting/comparison
   int get level => switch (this) {
     UserRole.owner => 4,
     UserRole.admin => 3,
@@ -94,22 +84,35 @@ extension UserRoleX on UserRole {
     UserRole.client => 0,
   };
 
-  /// Who can assign what (front-end guardrails; backend is authoritative).
+  /// Simple comparator based on [level].
+  int compare(UserRole other) => level.compareTo(other.level);
+
+  /// Who can assign what (front-end guardrails; backend authoritative).
   bool canAssignRole(UserRole target) {
-    // Owner can assign any tenant role (including promoting/demoting admins)
-    if (isOwner) return true;
-
-    // Admin cannot assign owner
-    if (this == UserRole.admin) return target != UserRole.owner;
-
-    // Manager can assign only non-elevated roles
+    if (isOwner) return true; // full control
+    if (isAdmin) return target != UserRole.owner;
     if (isManager) {
       return target == UserRole.manager ||
           target == UserRole.staff ||
           target == UserRole.client;
     }
-
-    // Staff/Client cannot assign
     return false;
+  }
+
+  /// Convenience for UIs (role pickers, etc.)
+  List<UserRole> assignableTargets() {
+    if (isOwner) return UserRole.values;
+    if (isAdmin) {
+      return const [
+        UserRole.admin,
+        UserRole.manager,
+        UserRole.staff,
+        UserRole.client,
+      ];
+    }
+    if (isManager) {
+      return const [UserRole.manager, UserRole.staff, UserRole.client];
+    }
+    return const [];
   }
 }

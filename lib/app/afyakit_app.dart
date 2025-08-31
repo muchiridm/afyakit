@@ -1,7 +1,8 @@
+import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/core/tenants/utils/color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 import 'package:afyakit/core/auth_users/screens/invite_accept_screen.dart';
 

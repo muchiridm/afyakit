@@ -1,4 +1,4 @@
-// lib/users/extensions/auth_user_x.dart
+// lib/core/auth_users/extensions/auth_user_x.dart
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -7,13 +7,12 @@ import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
-  // status
-  UserStatus get statusEnum => UserStatus.fromString(status);
-  bool get isActive => statusEnum.isActive;
-  bool get isInvited => statusEnum.isInvited;
+  // status (enum-aware)
+  bool get isActive => status.isActive;
+  bool get isInvited => status.isInvited;
   bool get isPending => !isActive;
 
-  // 👇 MODEL WINS. Do NOT let stale claims override your migrated data.
+  // MODEL WINS. Do NOT let stale claims override your migrated data.
   UserRole get effectiveRole => role;
 
   bool get isAdmin => effectiveRole.isAdmin;
@@ -35,7 +34,7 @@ extension AuthUserX on AuthUser {
   bool canManageStoreById(String storeId) =>
       hasScopedPermission((r) => r.canManageSku, storeId);
 
-  // inventory/batches (unchanged)
+  // inventory/batches
   bool canViewItem(BaseInventoryItem item) => true;
   bool canManageItem(BaseInventoryItem item) =>
       hasScopedPermission((r) => r.canManageSku, item.storeId);

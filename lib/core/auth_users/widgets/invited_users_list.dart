@@ -18,7 +18,7 @@ final invitedUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
 ) async {
   final ctrl = ref.read(authUserControllerProvider.notifier);
   final all = await ctrl.getAllUsers();
-  final invited = all.where((u) => u.statusEnum == UserStatus.invited).toList()
+  final invited = all.where((u) => u.status == UserStatus.invited).toList()
     ..sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
   return invited;
 });

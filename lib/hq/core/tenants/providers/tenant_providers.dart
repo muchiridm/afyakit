@@ -1,20 +1,37 @@
+// lib/hq/core/tenants/providers/tenant_providers.dart
+
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:afyakit/shared/utils/firestore_instance.dart';
-
+import 'package:afyakit/hq/core/tenants/models/tenant_config.dart';
 import 'package:afyakit/hq/core/tenants/models/tenant_model.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/hq/core/tenants/models/team_member_dto.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/hq/core/all_users/all_user_model.dart';
 import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
 
 /// ─────────────────────────────────────────────────────────────
-/// Firestore typed collection for /tenants
+/// Tenant Config (override at bootstrap)
 /// ─────────────────────────────────────────────────────────────
+
+/// Override this in main() with the loaded TenantConfig.
+final tenantConfigProvider = Provider<TenantConfig>((ref) {
+  throw UnimplementedError('Override tenantConfigProvider in main()');
+});
+
+/// Smaller rebuild surface for common needs.
+final tenantDisplayNameProvider = Provider<String>(
+  (ref) => ref.watch(tenantConfigProvider).displayName,
+);
+
+/// ─────────────────────────────────────────────────────────────
+/// Firestore: /tenants typed collection + helpers
+/// ─────────────────────────────────────────────────────────────
+
 final _tenantsRefProvider = Provider.autoDispose<CollectionReference<Tenant>>((
   ref,
 ) {
@@ -30,10 +47,14 @@ final _tenantsRefProvider = Provider.autoDispose<CollectionReference<Tenant>>((
 Tenant _tenantFromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
   final data = d.data() ?? <String, dynamic>{};
   final m = Map<String, dynamic>.from(data);
+
   m.putIfAbsent('slug', () => d.id);
 
+  // Normalize createdAt for the model (ISO or leave if already DateTime)
   final created = m['createdAt'];
-  if (created is Timestamp) m['createdAt'] = created.toDate().toIso8601String();
+  if (created is Timestamp) {
+    m['createdAt'] = created.toDate().toIso8601String();
+  }
 
   m.putIfAbsent('displayName', () => m['name'] ?? d.id);
   m.putIfAbsent('status', () => 'active');
@@ -42,7 +63,11 @@ Tenant _tenantFromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
   return Tenant.fromJson(m);
 }
 
-/// All tenants (live), newest first
+/// ─────────────────────────────────────────────────────────────
+/// Tenants: lists & singletons
+/// ─────────────────────────────────────────────────────────────
+
+/// All tenants (live), newest first.
 final tenantsStreamProvider = StreamProvider.autoDispose<List<Tenant>>((ref) {
   final col = ref.watch(_tenantsRefProvider);
   return col
@@ -51,7 +76,7 @@ final tenantsStreamProvider = StreamProvider.autoDispose<List<Tenant>>((ref) {
       .map((snap) => snap.docs.map((d) => d.data()).toList());
 });
 
-/// Alphabetical by displayName (fallback slug)
+/// Alphabetical by displayName (fallback slug).
 final tenantsStreamProviderSorted = StreamProvider.autoDispose<List<Tenant>>((
   ref,
 ) {
@@ -69,7 +94,7 @@ final tenantsStreamProviderSorted = StreamProvider.autoDispose<List<Tenant>>((
   });
 });
 
-/// Single tenant (live) by slug
+/// Single tenant (live) by slug.
 final tenantStreamBySlugProvider = StreamProvider.autoDispose
     .family<Tenant, String>((ref, slug) {
       final col = ref.watch(_tenantsRefProvider);
@@ -79,18 +104,10 @@ final tenantStreamBySlugProvider = StreamProvider.autoDispose
       });
     });
 
-/// One-off fetch (non-live)
-final tenantBySlugOnceProvider = FutureProvider.autoDispose
-    .family<Tenant, String>((ref, slug) async {
-      final col = ref.watch(_tenantsRefProvider);
-      final doc = await col.doc(slug).get();
-      if (!doc.exists) throw StateError('tenant-not-found');
-      return doc.data()!;
-    });
-
 /// ─────────────────────────────────────────────────────────────
 /// Tenant admins list (live) — Owner/Admin/Manager + active
 /// ─────────────────────────────────────────────────────────────
+
 const _adminRoles = <String>['owner', 'admin', 'manager'];
 
 final tenantAdminsStreamProvider = StreamProvider.autoDispose
@@ -143,9 +160,10 @@ final tenantAdminsStreamProvider = StreamProvider.autoDispose
     });
 
 /// ─────────────────────────────────────────────────────────────
-/// Firestore tenant-guard:
-/// makes sure non-superadmin claims match selected tenant; refreshes token if not
+/// Firestore tenant-guard
+/// Ensures non-superadmin token claims match selected tenant; refreshes if not.
 /// ─────────────────────────────────────────────────────────────
+
 final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   ref,
 ) async {
@@ -157,27 +175,25 @@ final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
   ref.onResume(() => purge?.cancel());
 
-  Future<Map<String, dynamic>> readClaims() async {
-    final map = await ops.getClaims();
-    if (kDebugMode) debugPrint('🔎 [guard] claims after read: $map');
-    return map;
+  Future<Map<String, dynamic>> _readClaims() async {
+    final claims = await ops.getClaims();
+    if (kDebugMode) debugPrint('🔎 [guard] claims after read: $claims');
+    return claims;
   }
 
-  var tokenClaims = await readClaims();
-  final initialTenant =
-      (tokenClaims['tenantId'] ?? tokenClaims['tenant']) as String?;
-  final isSuper = tokenClaims['superadmin'] == true;
+  var claims = await _readClaims();
+  final initialTenant = (claims['tenantId'] ?? claims['tenant']) as String?;
+  final isSuper = claims['superadmin'] == true;
 
   if (!isSuper && initialTenant != tenantId) {
     debugPrint(
       '🛠 [guard] claimTenant=$initialTenant ≠ selected=$tenantId → syncing…',
     );
     await ops.syncClaimsAndRefresh();
-    tokenClaims = await readClaims();
+    claims = await _readClaims();
   }
 
-  final finalTenant =
-      (tokenClaims['tenantId'] ?? tokenClaims['tenant']) as String?;
+  final finalTenant = (claims['tenantId'] ?? claims['tenant']) as String?;
   if (!isSuper && finalTenant != tenantId) {
     throw StateError(
       'Tenant claim mismatch after sync (claim=$finalTenant, selected=$tenantId)',

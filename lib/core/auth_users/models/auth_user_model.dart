@@ -1,27 +1,31 @@
-// lib/users/models/auth_user_model.dart
-import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
+// lib/core/auth_users/models/auth_user_model.dart
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 
-import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
+import 'package:afyakit/core/auth_users/extensions/user_badge_x.dart';
 
 class AuthUser {
   // ── auth / session fields
   final String uid;
   final String email;
   final String? phoneNumber;
-  final String status; // 'invited' | 'active' | 'disabled'
+  final UserStatus status; // ✅ enum now
   final String tenantId;
   final DateTime? invitedOn;
   final DateTime? activatedOn;
   final Map<String, dynamic>? claims;
 
-  // ── profile fields (moved here)
+  // ── profile fields
   final String displayName; // '' by default
-  final UserRole role; // claims win at runtime; stored as fallback
-  final List<String> stores; // normalized, deduped
+  final UserRole role; // Model wins; claims are fallback only
+  final List<String> stores;
   final String? avatarUrl;
+
+  // ── professional tags (non-authoritative for permissions)
+  final List<UserBadge> badges;
 
   const AuthUser({
     required this.uid,
@@ -33,9 +37,10 @@ class AuthUser {
     this.activatedOn,
     this.claims,
     this.displayName = '',
-    this.role = UserRole.staff,
+    this.role = UserRole.client, // safer default for self-signup
     this.stores = const [],
     this.avatarUrl,
+    this.badges = const [],
   });
 
   bool get isSuperAdmin => claims?['superadmin'] == true;
@@ -44,7 +49,7 @@ class AuthUser {
     String? uid,
     String? email,
     String? phoneNumber,
-    String? status,
+    UserStatus? status,
     String? tenantId,
     DateTime? invitedOn,
     DateTime? activatedOn,
@@ -53,6 +58,7 @@ class AuthUser {
     UserRole? role,
     List<String>? stores,
     String? avatarUrl,
+    List<UserBadge>? badges,
   }) {
     return AuthUser(
       uid: uid ?? this.uid,
@@ -67,12 +73,12 @@ class AuthUser {
       role: role ?? this.role,
       stores: stores ?? this.stores,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      badges: badges ?? this.badges,
     );
   }
 
-  // ✅ Updated: prefer top-level fields, fallback to `claims`
+  // ✅ Prefer top-level fields, fallback to claims.
   factory AuthUser.fromMap(String uid, Map<String, dynamic> json) {
-    // Pull claims early (and make it a proper map)
     final Map<String, dynamic>? claims = (json['claims'] is Map)
         ? Map<String, dynamic>.from(json['claims'])
         : null;
@@ -96,14 +102,17 @@ class AuthUser {
                     ? s(claims?['tenantId'])
                     : s(claims?['tenant_id'])));
 
-    // status
-    final status = s(json['status']).isNotEmpty ? s(json['status']) : 'invited';
+    // status → enum
+    final statusStr = s(json['status']).isNotEmpty
+        ? s(json['status'])
+        : 'invited';
+    final status = UserStatus.fromString(statusStr);
 
-    // role (top-level → claims → staff)
+    // role (top-level → claims → default client)
     final rawRole = s(json['role']);
     final claimRole = s(claims?['role']);
     final roleStr = rawRole.isNotEmpty ? rawRole : claimRole;
-    final role = parseUserRole(roleStr.isNotEmpty ? roleStr : 'staff');
+    final role = UserRole.fromString(roleStr.isNotEmpty ? roleStr : 'client');
 
     // displayName (top-level → claims.displayName/name)
     final displayName = s(json['displayName']).isNotEmpty
@@ -118,6 +127,11 @@ class AuthUser {
     if (storesModel.isEmpty && storesClaims.isNotEmpty) {
       storesModel = storesClaims;
     }
+
+    // badges (top-level → claims.badges)
+    final topBadges = badgesFromAny(json['badges']);
+    final claimBadges = badgesFromAny(claims?['badges']);
+    final badges = topBadges.isNotEmpty ? topBadges : claimBadges;
 
     final obj = AuthUser(
       uid: uid,
@@ -134,12 +148,14 @@ class AuthUser {
       avatarUrl: (s(json['avatarUrl']).isNotEmpty)
           ? s(json['avatarUrl'])
           : null,
+      badges: badges,
     );
 
     if (kDebugMode) {
       debugPrint(
         '🧩 [AuthUser.fromMap] uid=${obj.uid} email=${obj.email} '
-        'status=${obj.status} role=${obj.role.name} stores=${obj.stores}',
+        'status=${obj.status.wire} role=${obj.role.name} stores=${obj.stores} '
+        'badges=${obj.badges.map((b) => b.name).toList()}',
       );
     }
 
@@ -157,7 +173,6 @@ class AuthUser {
     return obj;
   }
 
-  // JSON variant (rarely used client-side)
   factory AuthUser.fromJson(Map<String, dynamic> json) =>
       AuthUser.fromMap((json['uid'] ?? '').toString(), json);
 
@@ -165,7 +180,7 @@ class AuthUser {
     return {
       'email': email,
       'phoneNumber': phoneNumber,
-      'status': status,
+      'status': status.wire, // ✅ write as string to Firestore
       'tenantId': tenantId,
       'invitedOn': invitedOn?.toIso8601String(),
       'activatedOn': activatedOn?.toIso8601String(),
@@ -174,6 +189,7 @@ class AuthUser {
       'role': role.name,
       'stores': stores,
       if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      if (badges.isNotEmpty) 'badges': badges.map((b) => b.name).toList(),
     };
   }
 

@@ -1,6 +1,7 @@
-// lib/users/controllers/auth_session_controller.dart
+// lib/core/auth_users/user_operations/controllers/session_controller.dart
 import 'dart:async';
 import 'package:afyakit/app/afyakit_app.dart';
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/providers/user_operations_engine_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/dev/dev_auth_manager.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
-import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
@@ -99,12 +99,21 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
     // Re-run engine to hydrate/verify after dev sign-in
     final res = await _engine!.ensureReady();
-    final signedIn = res is Ok<AuthUser?> && res.value != null;
+    final auth = (res is Ok<AuthUser?>) ? res.value : null;
+    final signedIn = auth != null;
 
     if (!signedIn) return false;
-    if (!result.claimsSynced) {
-      SnackService.showError('Signed in, but claims not synced.');
+
+    // If claims didn't sync, only consider warning for ACTIVE users.
+    if (!result.claimsSynced && (auth.status.isActive)) {
+      // No snack: this is usually transient; we'll just log and move on.
+      debugPrint(
+        'ℹ️ Dev fallback: active user but claims not yet synced (will settle).',
+      );
+      // Optionally kick a silent refresh in the background:
+      // unawaited(_engine!.reload());
     }
+
     return true;
   }
 

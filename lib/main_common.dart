@@ -1,3 +1,4 @@
+import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,8 +9,7 @@ import 'firebase_options.dart';
 import 'package:afyakit/app/afyakit_app.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/hq/core/tenants/services/tenant_resolver.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_loader.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/services/tenant_config_loader.dart';
 
 Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
   WidgetsFlutterBinding.ensureInitialized();

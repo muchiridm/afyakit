@@ -1,6 +1,6 @@
 // lib/core/auth_users/screens/login_screen.dart
 
-import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth_users/user_operations/controllers/login_controller.dart';

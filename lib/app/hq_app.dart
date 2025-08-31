@@ -1,7 +1,7 @@
 // lib/app/hq_app.dart
 import 'package:flutter/material.dart';
 
-import '../hq/screens/hq_gate.dart';
+import '../hq/auth/hq_gate.dart';
 import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 

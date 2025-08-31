@@ -1,14 +1,17 @@
 // lib/core/auth_users/services/user_operations_service.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:afyakit/api/api_client.dart';
 import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/shared/providers/token_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ─────────────────────────────────────────────────────────────
 
 /// Always backend-enabled for the given tenantId.
-/// If you need Firebase-only behavior, use [firebaseOnlyUserOpsProvider] explicitly.
+/// If you need Firebase-only behavior, use [firebaseOnlyUserOpsProvider].
 final userOperationsServiceProvider =
     FutureProvider.family<UserOperationsService, String>((ref, tenantId) async {
       final tokens = ref.read(tokenProvider);
@@ -33,29 +36,34 @@ final firebaseOnlyUserOpsProvider = Provider<UserOperationsService>(
   (_) => UserOperationsService.firebaseOnly(),
 );
 
+class _Timed<T> {
+  final T value;
+  final DateTime at;
+  static const _statusTtl = Duration(seconds: 8);
+  _Timed(this.value) : at = DateTime.now();
+  bool get fresh => DateTime.now().difference(at) < _statusTtl;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Service
 // ─────────────────────────────────────────────────────────────
 
 class UserOperationsService {
-  final FirebaseAuth _auth;
-
-  final ApiClient? _client; // present when backend-enabled
-  final ApiRoutes? _routes; // present when backend-enabled
-  final TokenProvider? _tokens; // present when backend-enabled
-  final String? _tenantId;
-
-  // purely informative; not used for conditional logic anymore
-
   UserOperationsService._(
     this._auth,
     this._client,
     this._routes,
     this._tokens, {
     String? tenantId,
-  }) : _tenantId = tenantId; // <— store it
+  }) : _tenantId = tenantId;
 
-  // expose a helper
+  // Core deps
+  final FirebaseAuth _auth;
+  final ApiClient? _client; // present when backend-enabled
+  final ApiRoutes? _routes; // present when backend-enabled
+  final TokenProvider? _tokens; // present when backend-enabled
+  final String? _tenantId;
+
   bool get hasBackend => _client != null && _routes != null && _tokens != null;
   String? get expectedTenantId => _tenantId;
 
@@ -86,8 +94,9 @@ class UserOperationsService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Helpers
+  // Private helpers
   // ─────────────────────────────────────────────────────────────
+
   Dio get _dio {
     final c = _client?.dio;
     if (c == null) {
@@ -110,6 +119,7 @@ class UserOperationsService {
   }
 
   String _clean(String? s) => (s ?? '').trim();
+  String _normalizeEmail(String s) => EmailHelper.normalize(s);
 
   String? _tenantFromClaims(Map<String, dynamic> claims) {
     final t = claims['tenantId'] ?? claims['tenant'];
@@ -126,41 +136,87 @@ class UserOperationsService {
     );
   }
 
-  Future<Map<String, dynamic>> _getFreshClaims() async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('❌ Firebase Auth token missing');
-    final res = await user.getIdTokenResult(true);
-    return Map<String, dynamic>.from(res.claims ?? const {});
+  Future<T> _retry<T>({
+    required int maxAttempts,
+    required Duration baseDelay,
+    required Future<T> Function(int attempt) run,
+    bool Function(Object error)? retryIf,
+  }) async {
+    Object? lastErr;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await run(attempt);
+      } catch (e) {
+        lastErr = e;
+        final ok = retryIf?.call(e) ?? false;
+        if (!ok || attempt == maxAttempts) rethrow;
+        final waitMs = baseDelay.inMilliseconds * math.pow(2, attempt - 1);
+        await Future.delayed(Duration(milliseconds: waitMs.toInt()));
+      }
+    }
+    // Should never reach here
+    // ignore: only_throw_errors
+    throw lastErr!;
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Strict membership precheck (backend only, no Firebase fallback)
+  // Tiny status cache to avoid double-hitting check-user-status
   // ─────────────────────────────────────────────────────────────
-  // Strict precheck: only ACTIVE members can attempt sign-in.
-  // Optionally allow invited only when you are *explicitly* on the invite-accept flow.
+
+  final Map<String, _Timed<AuthUser>> _statusCache = {};
+
+  String _statusKey({String? email, String? phoneNumber}) =>
+      '${(email ?? '').trim().toLowerCase()}|${(phoneNumber ?? '').trim()}';
+
+  AuthUser? getCachedUserStatus({String? email, String? phoneNumber}) {
+    final k = _statusKey(email: email, phoneNumber: phoneNumber);
+    final hit = _statusCache[k];
+    return (hit != null && hit.fresh) ? hit.value : null;
+  }
+
+  void _cacheUserStatus(AuthUser u, {String? email, String? phoneNumber}) {
+    final k = _statusKey(email: email, phoneNumber: phoneNumber);
+    _statusCache[k] = _Timed(u);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Strict membership precheck (backend only)
+  // ─────────────────────────────────────────────────────────────
+
   Future<bool> isTenantMemberEmail(
     String email, {
     bool allowInvitedForInviteFlow = false,
   }) async {
-    final cleaned = EmailHelper.normalize(email);
+    final cleaned = _normalizeEmail(email);
     if (cleaned.isEmpty) return false;
 
     if (!hasBackend) {
       debugPrint(
-        '⚠️ isTenantMemberEmail called without backend — blocking for safety',
+        '⚠️ isTenantMemberEmail: no backend (blocking) tenant=$_tenantId',
       );
-      return false; // never fall back to global Firebase
+      return false;
     }
 
     try {
-      final user = await checkUserStatus(email: cleaned);
-      if (allowInvitedForInviteFlow) {
-        return user.status == 'active' || user.status == 'invited';
-      }
-      return user.status == 'active';
+      final cached = getCachedUserStatus(email: cleaned);
+      final user = cached ?? await checkUserStatus(email: cleaned);
+      final st = user.status;
+      final ok = allowInvitedForInviteFlow
+          ? (st.isActive || st.isInvited)
+          : st.isActive;
+
+      debugPrint(
+        '✅ isTenantMemberEmail verdict (tenant=$_tenantId email=$cleaned status=${st.name}) → $ok',
+      );
+      return ok;
     } on DioException catch (e) {
       final code = e.response?.statusCode ?? 0;
-      if (code == 404) return false; // not a member of this tenant
+      if (code == 404) {
+        debugPrint(
+          'ℹ️ isTenantMemberEmail: 404 not a member (tenant=$_tenantId, $cleaned)',
+        );
+        return false;
+      }
       debugPrint(
         '🔴 isTenantMemberEmail backend error: ${e.message} status=$code',
       );
@@ -174,13 +230,14 @@ class UserOperationsService {
   // ─────────────────────────────────────────────────────────────
   // Sign In / Out
   // ─────────────────────────────────────────────────────────────
+
   User? get currentUser => _auth.currentUser;
 
   Future<UserCredential> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
-    final normalized = EmailHelper.normalize(email);
+    final normalized = _normalizeEmail(email);
     final cred = await _auth.signInWithEmailAndPassword(
       email: normalized,
       password: password,
@@ -190,6 +247,7 @@ class UserOperationsService {
   }
 
   Future<void> signOut() async {
+    _statusCache.clear(); // avoid stale precheck results
     final email = _auth.currentUser?.email;
     await _auth.signOut();
     debugPrint('🔒 User signed out: $email');
@@ -198,31 +256,46 @@ class UserOperationsService {
   // ─────────────────────────────────────────────────────────────
   // Session / Hydration
   // ─────────────────────────────────────────────────────────────
+
   Future<bool> isLoggedIn() async => _auth.currentUser != null;
 
   Future<void> waitForUser() async {
-    final completer = Completer<void>();
-    late final StreamSubscription<User?> sub;
-    sub = _auth.authStateChanges().listen((user) async {
+    try {
+      await _auth.authStateChanges().first.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => null,
+      );
+      final u = _auth.currentUser;
       debugPrint(
-        user != null
-            ? '✅ Firebase user restored: ${user.email}'
+        u != null
+            ? '✅ Firebase user restored: ${u.email}'
             : '👻 No Firebase user',
       );
-      if (!completer.isCompleted) completer.complete();
-      await sub.cancel();
-    });
-    return completer.future.timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        debugPrint('⏳ FirebaseAuth hydration timed out.');
-      },
-    );
+    } catch (_) {
+      debugPrint('⏳ FirebaseAuth hydration timed out.');
+    }
+  }
+
+  Future<void> waitForUserSignIn({
+    Duration timeout = const Duration(seconds: 6),
+    Duration checkEvery = const Duration(milliseconds: 200),
+  }) async {
+    final sw = Stopwatch()..start();
+    while (_auth.currentUser == null) {
+      if (sw.elapsed > timeout) {
+        throw TimeoutException(
+          '⏰ User not signed in after ${timeout.inSeconds}s',
+        );
+      }
+      await Future.delayed(checkEvery);
+    }
+    debugPrint('✅ Firebase user ready after ${sw.elapsedMilliseconds}ms');
   }
 
   // ─────────────────────────────────────────────────────────────
   // Tokens + Claims
   // ─────────────────────────────────────────────────────────────
+
   Future<String?> getIdToken({bool forceRefresh = false}) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -230,7 +303,7 @@ class UserOperationsService {
       return null;
     }
     final token = await user.getIdToken(forceRefresh);
-    debugPrint('🪙 Token fetched (length: ${token?.length ?? 0})');
+    debugPrint('🪙 Token fetched (length: ${token!.length})');
     return token;
   }
 
@@ -238,37 +311,57 @@ class UserOperationsService {
     final user = _auth.currentUser;
     if (user == null) throw Exception('❌ Cannot refresh — no user signed in');
     final token = await user.getIdToken(true);
-    debugPrint('🔄 Token force-refreshed (length: ${token?.length ?? 0})');
+    debugPrint('🔄 Token force-refreshed (length: ${token!.length})');
   }
 
-  Future<Map<String, dynamic>> getClaims({int retries = 5}) async {
+  /// Get claims, optionally forcing token refresh; retries with small backoff if empty.
+  Future<Map<String, dynamic>> getClaims({
+    int retries = 5,
+    bool force = true,
+  }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('❌ Firebase Auth token missing');
 
-    for (int i = 0; i < retries; i++) {
-      final tokenResult = await user.getIdTokenResult(true);
-      final claims = Map<String, dynamic>.from(tokenResult.claims ?? const {});
-      debugPrint('🔐 Attempt ${i + 1} → Claims: $claims');
-      if (claims.isNotEmpty) return claims;
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
-    throw Exception('❌ Failed to load Firebase claims after $retries retries');
+    return _retry<Map<String, dynamic>>(
+      maxAttempts: math.max(1, retries),
+      baseDelay: const Duration(milliseconds: 250),
+      retryIf: (_) => true,
+      run: (attempt) async {
+        final tokenResult = await user.getIdTokenResult(force);
+        final claims = Map<String, dynamic>.from(
+          tokenResult.claims ?? const {},
+        );
+        debugPrint('🔐 Attempt $attempt (force=$force) → Claims: $claims');
+        if (claims.isEmpty) throw StateError('claims-empty');
+        return claims;
+      },
+    );
   }
 
-  Future<void> logClaims() async {
+  Future<void> logClaims({bool force = true}) async {
     try {
-      final claims = await getClaims();
+      final claims = await getClaims(force: force);
       _logClaimsBrief(claims, prefix: '🔍 Current user claims');
     } catch (e) {
       debugPrint('❌ Failed to log claims: $e');
     }
   }
 
+  Future<void> forceRefreshIdToken() async {
+    await fb.FirebaseAuth.instance.currentUser?.getIdToken(true);
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Backend session ops (tenant-scoped)
   // ─────────────────────────────────────────────────────────────
 
-  Future<AuthUser> checkUserStatus({String? email, String? phoneNumber}) async {
+  /// Checks if a user exists/active for this tenant.
+  /// Set [useCache]=false to bypass the short-lived memory cache.
+  Future<AuthUser> checkUserStatus({
+    String? email,
+    String? phoneNumber,
+    bool useCache = true,
+  }) async {
     final routes = _requireBackend(_routes, 'checkUserStatus');
     final tokens = _requireBackend(_tokens, 'checkUserStatus');
 
@@ -276,6 +369,19 @@ class UserOperationsService {
     final cleanedPhone = _clean(phoneNumber);
     if (cleanedEmail.isEmpty && cleanedPhone.isEmpty) {
       throw ArgumentError('Either email or phoneNumber must be provided.');
+    }
+
+    if (useCache) {
+      final cached = getCachedUserStatus(
+        email: cleanedEmail.isNotEmpty ? cleanedEmail : null,
+        phoneNumber: cleanedPhone.isNotEmpty ? cleanedPhone : null,
+      );
+      if (cached != null) {
+        debugPrint(
+          '🧠 (cache) checkUserStatus → ${cached.email}/${cached.uid}',
+        );
+        return cached;
+      }
     }
 
     final token = await tokens.tryGetToken();
@@ -296,39 +402,60 @@ class UserOperationsService {
     );
 
     final json = jsonDecode(jsonEncode(response.data)) as Map<String, dynamic>;
-    return AuthUser.fromJson(json);
+    final user = AuthUser.fromJson(json);
+    _cacheUserStatus(user, email: cleanedEmail, phoneNumber: cleanedPhone);
+    return user;
   }
 
-  /// POST /auth/session/sync-claims → refresh ID token → return refreshed claims.
+  /// POST /auth/session/sync-claims → force-refresh ID token → return refreshed claims.
   Future<Map<String, dynamic>> syncClaimsAndRefresh() async {
     final routes = _requireBackend(_routes, 'syncClaimsAndRefresh');
     final uri = routes.syncClaims();
 
-    Future<void> doPost() => _dio.postUri(uri);
-
     // ensure we have a recent token before the POST
     await _auth.currentUser?.getIdToken(true);
 
-    try {
-      await doPost();
-    } on DioException catch (e) {
-      final code = e.response?.statusCode ?? 0;
-      if (code == 401 || code == 403) {
-        await _auth.currentUser?.getIdToken(true);
-        await doPost();
-      } else {
-        rethrow;
-      }
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-token-expired') {
-        await _auth.currentUser?.getIdToken(true);
-        await doPost();
-      } else {
-        rethrow;
-      }
-    }
+    Future<void> doPost() => _dio.postUri(uri);
 
-    final claims = await _getFreshClaims();
+    await _retry<void>(
+      maxAttempts: 2,
+      baseDelay: const Duration(milliseconds: 200),
+      retryIf: (e) {
+        if (e is DioException) {
+          final sc = e.response?.statusCode ?? 0;
+          return sc == 401 || sc == 403;
+        }
+        if (e is FirebaseAuthException) {
+          return e.code == 'user-token-expired' ||
+              e.code == 'requires-recent-login';
+        }
+        return false;
+      },
+      run: (attempt) async {
+        try {
+          await doPost();
+        } on DioException catch (e) {
+          // Refresh on auth errors and retry once
+          final sc = e.response?.statusCode ?? 0;
+          if (sc == 401 || sc == 403) {
+            await _auth.currentUser?.getIdToken(true);
+            rethrow;
+          }
+          rethrow;
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'user-token-expired' ||
+              e.code == 'requires-recent-login') {
+            await _auth.currentUser?.getIdToken(true);
+            rethrow;
+          }
+          rethrow;
+        }
+      },
+    );
+
+    // Pick up the fresh claims after backend wrote them
+    await forceRefreshIdToken();
+    final claims = await getClaims(force: true);
     _logClaimsBrief(claims, prefix: '✅ Claims synced & refreshed');
     return claims;
   }
@@ -338,7 +465,7 @@ class UserOperationsService {
     String tenantId, {
     String? reason,
   }) async {
-    final before = await _getFreshClaims();
+    final before = await getClaims(force: false);
     final beforeTenant = _tenantFromClaims(before);
     debugPrint(
       '🧭 ensureTenantClaimSelected($tenantId)${reason != null ? ' reason=$reason' : ''} '
@@ -353,6 +480,7 @@ class UserOperationsService {
     debugPrint(
       '🛠️ Tenant claim mismatch ($beforeTenant → $tenantId). Syncing…',
     );
+
     final after = await syncClaimsAndRefresh();
     final afterTenant = _tenantFromClaims(after);
 
@@ -372,12 +500,13 @@ class UserOperationsService {
   // ─────────────────────────────────────────────────────────────
   // Password reset
   // ─────────────────────────────────────────────────────────────
+
   Future<void> sendPasswordResetEmail(
     String email, {
     ActionCodeSettings? actionCodeSettings,
     bool viaBackend = false,
   }) async {
-    final cleanedEmail = EmailHelper.normalize(email);
+    final cleanedEmail = _normalizeEmail(email);
     if (cleanedEmail.isEmpty) {
       throw ArgumentError('❌ Email is required');
     }
@@ -408,7 +537,7 @@ class UserOperationsService {
 
   /// Tenant-aware registration probe.
   Future<bool> isEmailRegistered(String email) async {
-    final cleaned = EmailHelper.normalize(email);
+    final cleaned = _normalizeEmail(email);
     if (cleaned.isEmpty) return false;
 
     try {
@@ -438,21 +567,6 @@ class UserOperationsService {
   // ─────────────────────────────────────────────────────────────
   // Back-compat shims
   // ─────────────────────────────────────────────────────────────
-  Future<User?> getCurrentUser() async => _auth.currentUser;
 
-  Future<void> waitForUserSignIn({
-    Duration timeout = const Duration(seconds: 6),
-    Duration checkEvery = const Duration(milliseconds: 200),
-  }) async {
-    final sw = Stopwatch()..start();
-    while (_auth.currentUser == null) {
-      if (sw.elapsed > timeout) {
-        throw TimeoutException(
-          '⏰ User not signed in after ${timeout.inSeconds}s',
-        );
-      }
-      await Future.delayed(checkEvery);
-    }
-    debugPrint('✅ Firebase user ready after ${sw.elapsedMilliseconds}ms');
-  }
+  Future<User?> getCurrentUser() async => _auth.currentUser;
 }

@@ -1,5 +1,4 @@
-// lib/users/user_manager/extensions/user_status_x.dart
-
+// lib/core/auth_users/extensions/user_status_x.dart
 enum UserStatus {
   active,
   invited,
@@ -14,7 +13,6 @@ enum UserStatus {
       case 'disabled':
         return UserStatus.disabled;
       default:
-        // fallback for legacy/missing data
         return UserStatus.invited;
     }
   }

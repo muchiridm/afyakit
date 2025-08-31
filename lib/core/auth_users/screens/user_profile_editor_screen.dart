@@ -1,4 +1,5 @@
 // lib/users/screens/user_profile_editor_screen.dart
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/providers/user_display_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +11,6 @@ import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.da
 import 'package:afyakit/core/auth_users/controllers/auth_user_controller.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
 
@@ -342,7 +342,7 @@ class _ReadOnlyFields extends ConsumerWidget {
           ),
         const SizedBox(height: 16),
         TextFormField(
-          initialValue: user.statusEnum.label,
+          initialValue: user.status.label,
           readOnly: true,
           decoration: const InputDecoration(
             labelText: 'Account Status',

@@ -1,98 +1,117 @@
-// lib/core/auth_users/user_operations/engines/login_engine.dart
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/models/login_outcome.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart' show DioException;
 
-class LoginOutcome {
-  final bool registered;
-  final bool signedIn;
-  const LoginOutcome({required this.registered, required this.signedIn});
-}
-
 class LoginEngine {
   final UserOperationsService ops;
-
-  /// Infer HQ mode from compile-time define; you can also pass it manually.
-  final bool isHq;
 
   /// Allow INVITED users during explicit invite-accept flow.
   /// For normal login keep false (ACTIVE only).
   final bool allowInvitedForInviteFlow;
 
-  LoginEngine({
-    required this.ops,
-    bool? isHq,
-    this.allowInvitedForInviteFlow = false,
-  }) : isHq =
-           isHq ??
-           (const String.fromEnvironment('APP_MODE', defaultValue: 'tenant') ==
-               'hq');
+  LoginEngine({required this.ops, this.allowInvitedForInviteFlow = false});
 
   Future<Result<LoginOutcome>> login(
     String rawEmail,
     String rawPassword,
   ) async {
     try {
+      // ── sanitize ──────────────────────────────────────────────
       final email = EmailHelper.normalize(rawEmail);
       final password = rawPassword.trim();
       if (email.isEmpty || password.isEmpty) {
         return Err(AppError('auth/invalid-input', 'Email & password required'));
       }
 
-      // 1) STRICT precheck for tenants (blocks wrong/inactive before hitting Firebase)
-      if (!isHq) {
-        final ok = await ops.isTenantMemberEmail(
-          email,
-          allowInvitedForInviteFlow: allowInvitedForInviteFlow,
-        );
-        if (!ok) {
+      // ── 1) Membership probe (fresh) ───────────────────────────
+      late final AuthUser membership;
+      try {
+        membership = await ops.checkUserStatus(email: email, useCache: false);
+      } on DioException catch (e) {
+        final sc = e.response?.statusCode ?? 0;
+        if (sc == 404) {
           return Err(
             AppError(
               'auth/not-tenant-member',
-              allowInvitedForInviteFlow
-                  ? "This account isn't invited/active on this tenant."
-                  : "This account isn't active on this tenant.",
+              "This account isn't on this tenant.",
             ),
           );
         }
-      } else {
-        debugPrint('🔐 [LoginEngine] HQ mode → skip pre-check');
+        return Err(AppError('auth/network', 'Network error', cause: e));
+      } catch (e) {
+        return Err(
+          AppError(
+            'auth/lookup-failed',
+            'Failed to verify membership',
+            cause: e,
+          ),
+        );
       }
 
-      // 2) Firebase Auth sign-in
-      await ops.signInWithEmailAndPassword(email: email, password: password);
-      await ops.waitForUserSignIn();
-      await ops.getIdToken(forceRefresh: true); // ensure fresh token
+      if (membership.status.isDisabled) {
+        return Err(
+          AppError(
+            'auth/user-disabled',
+            'This account has been disabled on this tenant.',
+          ),
+        );
+      }
 
-      // 3) Post sign-in enforcement
-      if (isHq) {
-        final claims = await ops.getClaims(retries: 5);
-        final allowed =
-            (claims['hq'] == true) || (claims['superadmin'] == true);
-        if (!allowed) {
-          await ops.signOut();
-          return Err(
-            AppError(
-              'auth/no-hq-access',
-              'HQ access required for this account.',
-            ),
-          );
-        }
-      } else {
-        final expected = ops.expectedTenantId; // set by createWithBackend
-        if (expected != null && expected.isNotEmpty) {
-          try {
-            // Throws if membership missing or not ACTIVE (after backend hardening)
-            await ops.ensureTenantClaimSelected(
-              expected,
-              reason: 'LoginEngine.login',
+      final isActive = membership.status.isActive;
+
+      // ── 2) Firebase sign-in ──────────────────────────────────
+      try {
+        debugPrint('🔐 Signing in Firebase user: $email');
+        await ops.signInWithEmailAndPassword(email: email, password: password);
+      } on FirebaseAuthException catch (e) {
+        debugPrint('❌ Firebase sign-in error: ${e.code}');
+        switch (e.code) {
+          case 'user-disabled':
+            return Err(
+              AppError('auth/user-disabled', 'This account has been disabled.'),
             );
-          } catch (e) {
+          case 'user-not-found':
+          case 'wrong-password':
+          case 'invalid-credential':
+            return Err(
+              AppError('auth/bad-credentials', 'Incorrect email or password.'),
+            );
+          default:
+            return Err(AppError('auth/login-failed', 'Login failed', cause: e));
+        }
+      }
+
+      await ops.waitForUserSignIn();
+
+      // ── 3) Claims (ACTIVE only) ───────────────────────────────
+      final expected = ops.expectedTenantId; // from createWithBackend
+      var claimsSynced = false;
+
+      if (isActive && expected != null && expected.isNotEmpty) {
+        debugPrint('🧭 Enforcing tenant claim → expected=$expected');
+        try {
+          await ops.ensureTenantClaimSelected(
+            expected,
+            reason: 'LoginEngine.login',
+          );
+          claimsSynced = true;
+          debugPrint('✅ Tenant claim enforced for $expected');
+        } catch (e) {
+          debugPrint('❌ Tenant claim enforcement failed: $e');
+          final mapped = _mapSyncClaimsError(e);
+          final code = mapped?.code;
+          if (code == 'auth/membership-not-found' ||
+              code == 'auth/user-not-active' ||
+              code == 'auth/forbidden' ||
+              code == 'auth/wrong-tenant') {
             await ops.signOut();
-            final mapped = _mapSyncClaimsError(e);
             return Err(
               mapped ??
                   AppError(
@@ -101,11 +120,21 @@ class LoginEngine {
                   ),
             );
           }
+          // Transient: continue signed-in without claims; SessionEngine/guards will keep you safe.
+          debugPrint('⚠️ Proceeding without claims due to transient error.');
         }
+      } else if (!isActive) {
+        debugPrint('ℹ️ Invited/inactive → limited mode (no claim sync).');
       }
 
-      return Ok(const LoginOutcome(registered: true, signedIn: true));
+      return Ok(
+        LoginOutcome(
+          mode: isActive ? LoginMode.active : LoginMode.limited,
+          claimsSynced: claimsSynced,
+        ),
+      );
     } catch (e) {
+      debugPrint('❌ Login error: $e');
       return Err(AppError('auth/login-failed', 'Login failed', cause: e));
     }
   }
@@ -117,19 +146,17 @@ class LoginEngine {
         return Err(AppError('auth/bad-email', 'Invalid email'));
       }
 
-      // Tenant: pre-check existence to avoid leaking info; HQ skips.
-      if (!isHq) {
-        final isKnown = await ops.isEmailRegistered(email);
-        if (!isKnown) {
-          return Err(AppError('auth/not-registered', 'Email not registered'));
-        }
-      } else {
-        debugPrint('🔧 [LoginEngine] HQ mode → skip reset pre-check');
+      // Pre-check existence to give clean UX.
+      final isKnown = await ops.isEmailRegistered(email);
+      debugPrint('📨 reset precheck(email=$email) → $isKnown');
+      if (!isKnown) {
+        return Err(AppError('auth/not-registered', 'Email not registered'));
       }
 
       await ops.sendPasswordResetEmail(email, viaBackend: true);
       return const Ok(null);
     } catch (e) {
+      debugPrint('❌ Password reset error: $e');
       return Err(
         AppError('auth/reset-failed', 'Password reset failed', cause: e),
       );

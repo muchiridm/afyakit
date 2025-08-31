@@ -140,7 +140,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
       email: user.email,
       phoneNumber: user.phoneNumber,
       role: user.effectiveRole.name, // via AuthUserX
-      status: user.statusEnum.label, // via AuthUserStatusX
+      status: user.status.label, // via AuthUserStatusX
       storeLabels: readableStores,
       onAvatarTapped: () async {
         final newUrl = await DialogService.prompt(

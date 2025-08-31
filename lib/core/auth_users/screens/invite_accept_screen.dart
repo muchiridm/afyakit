@@ -1,7 +1,6 @@
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/screens/login_screen.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_config.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,8 +42,7 @@ class InviteAcceptScreen extends ConsumerWidget {
         }
 
         // Use your status extension if you have it; otherwise compare string
-        final isInvited =
-            user.statusEnum.isInvited; // or: user.status == 'invited'
+        final isInvited = user.status.isInvited; // or: user.status == 'invited'
         final profileIncomplete = (user.displayName).trim().isEmpty;
 
         if (isInvited || profileIncomplete) {

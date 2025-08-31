@@ -15,7 +15,7 @@ import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/shared/types/dtos.dart';
-import 'package:afyakit/hq/controllers/hq_controller.dart';
+import 'package:afyakit/hq/base/hq_controller.dart';
 
 final superAdminsControllerProvider =
     StateNotifierProvider.autoDispose<SuperAdminsController, SuperAdminsState>((

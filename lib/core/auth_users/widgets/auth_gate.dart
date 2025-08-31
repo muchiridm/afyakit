@@ -87,12 +87,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           return const SplashScreen();
         }
 
-        final statusEnum = UserStatus.fromString(authUser.status);
+        final statusEnum = authUser.status;
 
         // Invited (not active) → auto sign-out
         if (statusEnum.isInvited) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint('📝 AuthGate: status=invited → auto sign-out');
+          }
           Future.microtask(() => fb.FirebaseAuth.instance.signOut());
           return const SplashScreen();
         }
