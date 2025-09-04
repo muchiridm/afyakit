@@ -48,54 +48,24 @@ class ApiRoutes {
   // ─────────────────────────────────────────────
   // 🔐 Public (tenant-scoped, no auth required)
   // ─────────────────────────────────────────────
-
-  /// POST { email? | phoneNumber? } → check registration + status
   Uri checkUserStatus() => _uri('auth/session/check-user-status');
-
-  /// POST { email } → send password reset email
   Uri sendPasswordResetEmail() => _uri('auth/session/send-password-reset');
-
-  /// POST dev-only login (non-prod backends)
   Uri devLogin() => _uri('dev/login');
 
   // ─────────────────────────────────────────────
   // 👤 Auth Session (tenant-scoped, authenticated)
   // ─────────────────────────────────────────────
-
-  /// GET current authenticated user (AuthUser)
   Uri getCurrentUser() => _uri('auth/session/me');
-
-  /// POST → ensure tenant claim + sync role/stores from profile
   Uri syncClaims() => _uri('auth/session/sync-claims');
 
   // ─────────────────────────────────────────────
   // 👥 Auth Users (tenant-scoped)
   // ─────────────────────────────────────────────
-
-  /// GET all auth users
   Uri getAllUsers() => _uri('auth_users');
-
-  /// GET a single auth user by UID
   Uri getUserById(String uid) => _uri('auth_users/${_seg(uid)}');
-
-  /// PATCH small fields (e.g. { status }, { email }, { phoneNumber })
-  Uri updateUser(String uid) => _uri('auth_users/${_seg(uid)}');
-
-  /// PATCH { displayName?, phoneNumber?, avatarUrl? }
-  Uri updateAuthUserProfile(String uid) =>
-      _uri('auth_users/${_seg(uid)}/profile');
-
-  /// PATCH { role: 'admin'|'manager'|'staff' }
-  Uri updateAuthUserRole(String uid) => _uri('auth_users/${_seg(uid)}/role');
-
-  /// PATCH { stores: [...] }
-  Uri updateAuthUserStores(String uid) =>
-      _uri('auth_users/${_seg(uid)}/stores');
-
-  /// DELETE membership for this tenant
+  Uri updateUser(String uid) =>
+      _uri('auth_users/${_seg(uid)}'); // ← single generic
   Uri deleteUser(String uid) => _uri('auth_users/${_seg(uid)}');
-
-  /// POST invite body { email? phoneNumber? role? forceResend? }
   Uri inviteUser() => _uri('auth_users/invite');
 
   // ─────────────────────────────────────────────
@@ -112,20 +82,10 @@ class ApiRoutes {
           'limit': '$limit',
         },
       );
-
-  /// GET list of a user’s memberships across tenants
   Uri fetchUserMemberships(String uid) =>
       _uriCore('users/${_seg(uid)}/memberships');
-
-  /// GET superadmins
   Uri listSuperAdmins() => _uriCore('superadmins');
-
-  /// POST { value: bool } set/unset superadmin
   Uri setSuperAdmin(String uid) => _uriCore('superadmins/${_seg(uid)}');
-
-  // lib/api/api_routes.dart (add near other HQ/core routes)
-  /// GET all users in a target tenant (with optional ?search= and ?limit=50)
-  /// (Superadmin) List a tenant's users (HQ view; core base).
   Uri hqListTenantUsers(
     String targetTenantId, {
     String? search,
@@ -137,12 +97,8 @@ class ApiRoutes {
       'limit': '$limit',
     },
   );
-
-  /// (Superadmin) Invite a user into ANY tenant
   Uri hqInviteUser(String targetTenantId) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/invite');
-
-  /// (Superadmin) Delete a user's membership from ANY tenant
   Uri hqDeleteUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
@@ -175,6 +131,8 @@ class ApiRoutes {
   /// POST body { email?: string, uid?: string } — exactly one required
   /// Transfer tenant ownership (server resolves and updates owner fields).
   Uri setTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
+  // ApiRoutes (near setTenantOwner)
+  Uri removeTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
 
   /// Domains (also HQ/global)
   Uri listDomains(String slug) => _uriCore('tenants/${_seg(slug)}/domains');

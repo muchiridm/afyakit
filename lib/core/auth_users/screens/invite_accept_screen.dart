@@ -1,11 +1,11 @@
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/auth_users/screens/login_screen.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 

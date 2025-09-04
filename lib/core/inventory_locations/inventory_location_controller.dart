@@ -1,7 +1,7 @@
 import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';

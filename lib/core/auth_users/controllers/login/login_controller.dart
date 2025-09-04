@@ -1,15 +1,11 @@
-//lib/core/auth_users/user_operations/controllers/login_controller.dart
-
 import 'package:afyakit/app/afyakit_app.dart';
 import 'package:afyakit/core/auth_users/models/login_outcome.dart';
 import 'package:afyakit/shared/types/result.dart';
-import 'package:afyakit/core/auth_users/user_operations/controllers/session_controller.dart';
-import 'package:afyakit/core/auth_users/user_operations/engines/login_engine.dart';
-import 'package:afyakit/core/auth_users/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
+import 'package:afyakit/core/auth_users/controllers/login/login_engine.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
@@ -76,8 +72,8 @@ class LoginController extends StateNotifier<LoginFormState> {
 
     try {
       await _ensureDeps();
-      final res = await _engine!.login(email, password);
 
+      final res = await _engine!.login(email, password);
       if (res is Err<LoginOutcome>) {
         debugPrint('❌ Login error: ${res.error.code} - ${res.error.message}');
         SnackService.showError(res.error.message);
@@ -86,23 +82,21 @@ class LoginController extends StateNotifier<LoginFormState> {
 
       final outcome = (res as Ok<LoginOutcome>).value;
 
-      // Hydrate session (safe even in limited mode)
+      // Hydrate session (safe even in limited/invited mode)
       await ref.read(sessionControllerProvider(tenantId).notifier).reload();
 
-      // Navigate to home
+      // ⛳️ Always hand off to the AuthGate — it decides Home vs Profile.
       navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const AuthGate()),
         (_) => false,
       );
 
-      // 🔔 Show the message *after* HomeScreen is on stage
-      // (attach to the new ScaffoldMessenger)
+      // 🔔 Toast after navigation
       await Future<void>.delayed(Duration.zero);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (outcome.isActive) {
           SnackService.showSuccess('Welcome back, $email!');
         } else {
-          // Keep it friendly but not noisy for invited users
           SnackService.showInfo(
             'Welcome, $email. Your account is invited and awaiting activation.',
           );

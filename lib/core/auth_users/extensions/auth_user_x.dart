@@ -7,6 +7,9 @@ import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
+  // Merge token claims into your AuthUser model.
+  AuthUser withMergedClaims(Map<String, dynamic> tokenClaims) =>
+      copyWith(claims: {...(claims ?? const {}), ...tokenClaims});
   // status (enum-aware)
   bool get isActive => status.isActive;
   bool get isInvited => status.isInvited;

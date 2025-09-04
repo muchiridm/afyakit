@@ -1,3 +1,5 @@
+import 'package:afyakit/api/api_client.dart';
+import 'package:afyakit/api/api_routes.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
@@ -7,16 +9,29 @@ import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 
 import 'package:afyakit/core/auth_users/services/auth_user_service.dart';
-import 'package:afyakit/shared/types/dtos.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final authUserEngineProvider = FutureProvider.family<AuthUserEngine, String>((
+  ref,
+  tenantId,
+) async {
+  // Authenticated ApiClient (already tenant-aware via tenantIdProvider)
+  final client = await ref.read(apiClientProvider.future);
+
+  // Tenant-scoped routes & service
+  final routes = ApiRoutes(tenantId);
+  final tenantSvc = AuthUserService(client: client, routes: routes);
+  return AuthUserEngine(tenantSvc);
+});
 
 /// Tenant-only engine: invites, reads, updates, deletes.
-/// No HQ/global/superadmin stuff lives here anymore.
+/// All writes go through a single generic PATCH.
 class AuthUserEngine {
   final AuthUserService _svc;
   AuthUserEngine(this._svc);
 
   // ─────────────────────────────────────────────────────────────
-  // Invites (string role → enum, tolerant)
+  // Invites
   // ─────────────────────────────────────────────────────────────
   Future<Result<void>> invite({
     String? email,
@@ -70,144 +85,53 @@ class AuthUserEngine {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Writes (profile / membership / status)
-  // Supported keys: displayName, phoneNumber, avatarUrl, role, status, stores
+  // Generic write (profile / role / status / stores / email/phone)
+  // Supported keys: displayName, phoneNumber, avatarUrl, role, status, stores, email
   // ─────────────────────────────────────────────────────────────
   Future<Result<void>> updateFields(
     String uid,
     Map<String, dynamic> updates,
   ) async {
     try {
-      String? s0(String key) {
-        final v = updates[key];
-        if (v == null) return null;
-        final s = v.toString().trim();
-        return s.isEmpty ? null : s;
-      }
-
-      // profile
-      final profileReq = UpdateProfileRequest(
-        displayName: s0('displayName'),
-        phoneNumber: s0('phoneNumber'),
-        avatarUrl: s0('avatarUrl'),
-      );
-      if (profileReq.toJson().isNotEmpty) {
-        await _svc.updateProfile(uid, profileReq);
-      }
-
-      // role
-      final roleStr = s0('role');
-      if (roleStr != null) {
-        await _svc.assignRole(uid, _parseRole(roleStr));
-      }
-
-      // status
-      final statusStr = s0('status');
-      if (statusStr != null) {
-        await _svc.setStatus(uid, _parseStatus(statusStr));
-      }
-
-      // stores
-      final storesRaw = updates['stores'];
-      final List<String>? stores = switch (storesRaw) {
-        List l =>
-          l.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList(),
-        String s when s.trim().isNotEmpty =>
-          s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
-        _ => null,
-      };
-      if (stores != null) {
-        await _svc.setStores(uid, stores);
-      }
-
+      final body = _normalizeUpdatePayload(updates);
+      await _svc.updateUserFields(uid, body);
       return const Ok(null);
     } catch (e) {
       return Err(AppError('auth/update-failed', 'Update failed', cause: e));
     }
   }
 
+  // Convenience wrappers (implemented via generic PATCH)
   Future<Result<void>> setProfile(
     String uid, {
     String? displayName,
     String? phoneNumber,
     String? avatarUrl,
-  }) async {
-    try {
-      final req = UpdateProfileRequest(
-        displayName: displayName,
-        phoneNumber: phoneNumber,
-        avatarUrl: avatarUrl,
-      );
-      await _svc.updateProfile(uid, req);
-      return const Ok(null);
-    } catch (e) {
-      return Err(
-        AppError(
-          'auth/update-profile-failed',
-          'Profile update failed',
-          cause: e,
-        ),
-      );
-    }
-  }
+  }) => updateFields(uid, {
+    if (displayName != null) 'displayName': displayName,
+    if (phoneNumber != null) 'phoneNumber': phoneNumber,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+  });
 
-  Future<Result<void>> setRole(String uid, String role) async {
-    try {
-      await _svc.assignRole(uid, _parseRole(role));
-      return const Ok(null);
-    } catch (e) {
-      return Err(
-        AppError('auth/update-role-failed', 'Role update failed', cause: e),
-      );
-    }
-  }
+  Future<Result<void>> setRole(String uid, String role) =>
+      updateFields(uid, {'role': role});
 
-  Future<Result<void>> setStores(String uid, List<String> stores) async {
-    try {
-      await _svc.setStores(uid, stores);
-      return const Ok(null);
-    } catch (e) {
-      return Err(
-        AppError('auth/update-stores-failed', 'Stores update failed', cause: e),
-      );
-    }
-  }
+  Future<Result<void>> setStores(String uid, List<String> stores) =>
+      updateFields(uid, {'stores': stores});
 
-  Future<Result<void>> activate(String uid) async {
-    try {
-      await _svc.activateUser(uid);
-      return const Ok(null);
-    } catch (e) {
-      return Err(AppError('auth/activate-failed', 'Activate failed', cause: e));
-    }
-  }
+  Future<Result<void>> activate(String uid) =>
+      updateFields(uid, {'status': 'active'});
 
-  Future<Result<void>> disable(String uid) async {
-    try {
-      await _svc.disableUser(uid);
-      return const Ok(null);
-    } catch (e) {
-      return Err(AppError('auth/disable-failed', 'Disable failed', cause: e));
-    }
-  }
+  Future<Result<void>> disable(String uid) =>
+      updateFields(uid, {'status': 'disabled'});
 
-  /// Convenience: invited → active (+ optional phone)
-  Future<Result<void>> promoteInvite(String uid, {String? phoneNumber}) async {
-    try {
-      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
-        await _svc.updateProfile(
-          uid,
-          UpdateProfileRequest(phoneNumber: phoneNumber.trim()),
-        );
-      }
-      await _svc.activateUser(uid);
-      return const Ok(null);
-    } catch (e) {
-      return Err(
-        AppError('auth/promote-failed', 'Failed to promote invite', cause: e),
-      );
-    }
-  }
+  /// Convenience: invited → active (optionally set phone in same PATCH)
+  Future<Result<void>> promoteInvite(String uid, {String? phoneNumber}) =>
+      updateFields(uid, {
+        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          'phoneNumber': phoneNumber.trim(),
+        'status': 'active',
+      });
 
   // ─────────────────────────────────────────────────────────────
   // Delete (tenant membership)
@@ -251,5 +175,54 @@ class AuthUserEngine {
       default:
         return UserStatus.invited;
     }
+  }
+
+  /// Normalize arbitrary UI updates to the backend PATCH shape.
+  Map<String, Object?> _normalizeUpdatePayload(Map<String, dynamic> src) {
+    final out = <String, Object?>{};
+    String? s(Object? v) {
+      if (v == null) return null;
+      final t = v.toString().trim();
+      return t.isEmpty ? null : t;
+    }
+
+    // strings
+    final displayName = s(src['displayName']);
+    final phoneNumber = s(src['phoneNumber']);
+    final avatarUrl = s(src['avatarUrl']);
+    final email = s(src['email']);
+    final roleStr = s(src['role']);
+    final statusStr = s(src['status']);
+
+    if (displayName != null) out['displayName'] = displayName;
+    if (phoneNumber != null) out['phoneNumber'] = phoneNumber;
+    if (avatarUrl != null) out['avatarUrl'] = avatarUrl;
+    if (email != null) out['email'] = EmailHelper.normalize(email);
+
+    if (roleStr != null) out['role'] = _parseRole(roleStr).wire;
+
+    if (statusStr != null) {
+      // keep server contract as string
+      final st = _parseStatus(statusStr);
+      out['status'] = st.wire; // 'active' | 'disabled' | 'invited'
+    }
+
+    // stores: accept List<String> or comma string
+    final storesRaw = src['stores'];
+    if (storesRaw is List) {
+      final stores = storesRaw
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (stores.isNotEmpty) out['stores'] = stores;
+    } else if (storesRaw is String && storesRaw.trim().isNotEmpty) {
+      out['stores'] = storesRaw
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
+    return out;
   }
 }

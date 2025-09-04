@@ -1,35 +1,34 @@
-// lib/shared/providers/streams/app_users_stream_provider.dart
+// lib/core/auth_users/providers/auth_user_stream_provider.dart
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 
+List<AuthUser> _sortedByEmail(Iterable<AuthUser> users) {
+  final out = users.toList()
+    ..sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
+  return out;
+}
+
 final authUserStreamProvider = StreamProvider.autoDispose<List<AuthUser>>((
   ref,
 ) {
   final tenantId = ref.watch(tenantIdProvider);
-
   final query = db.collection('tenants/$tenantId/auth_users').orderBy('email');
 
   return query.snapshots().map((snapshot) {
-    final out = <AuthUser>[];
-    for (final doc in snapshot.docs) {
-      if (!doc.exists) continue;
-      final raw = doc.data();
-      if (raw.isEmpty) continue;
-
-      // Be tolerant: some legacy docs may miss tenantId
-      final data = Map<String, dynamic>.from(raw);
-      data['tenantId'] ??= tenantId;
-
+    final mapped = snapshot.docs.where((d) => d.exists).map((doc) {
+      final data = Map<String, dynamic>.from(doc.data());
+      data['tenantId'] ??= tenantId; // tolerate legacy
       try {
-        out.add(AuthUser.fromMap(doc.id, data));
+        return AuthUser.fromMap(doc.id, data);
       } catch (e) {
         if (kDebugMode) debugPrint('⚠️ Skipping ${doc.id}: $e');
+        return null;
       }
-    }
-    out.sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
-    return out;
+    }).whereType<AuthUser>();
+
+    return _sortedByEmail(mapped);
   });
 });

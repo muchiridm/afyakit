@@ -61,9 +61,10 @@ class AllUsersService {
     String search = '',
     int limit = 50,
   }) async {
+    final q = search.trim().toLowerCase();
     final uri = routes.listGlobalUsers(
       tenant: tenantId,
-      search: search,
+      search: q,
       limit: limit,
     );
     debugPrint('🛰️ [AllUsersService] GET $uri');
@@ -97,15 +98,28 @@ class AllUsersService {
     final ok = ((r.statusCode ?? 0) ~/ 100) == 2;
     if (!ok) _bad(r, 'Fetch memberships');
 
+    // Accept either:
+    // A) { memberships: { "<tid>": { role, active }, ... } }
+    // B) { "<tid>": { role, active }, ... } (top-level)
+    // C) legacy list: [ { tenantId, role, active }, ... ]
     final data = _asMap(r.data);
-    final items = _asList(data['memberships'] ?? r.data);
-    debugPrint('✅ [AllUsersService] memberships for $uid → ${items.length}');
+    final raw = data.containsKey('memberships') ? data['memberships'] : r.data;
 
-    final map = <String, Map<String, Object?>>{};
-    for (final m in items) {
-      final tid = (m['tenantId'] ?? m['id'] ?? '').toString();
-      map[tid] = {'role': m['role'], 'active': m['active']};
+    final out = <String, Map<String, Object?>>{};
+
+    // Map-of-objects: { "<tid>": {...} }
+    if (raw is Map) {
+      final m = Map<String, dynamic>.from(raw);
+      m.forEach((tid, val) {
+        final v = _asMap(val);
+        out[tid.toString()] = {
+          'role': v['role'],
+          'active': v['active'] == true,
+        };
+      });
+      return out;
     }
-    return map;
+
+    return out;
   }
 }

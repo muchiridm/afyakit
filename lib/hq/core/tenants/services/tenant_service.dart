@@ -8,7 +8,7 @@ import 'package:afyakit/hq/core/tenants/extensions/tenant_status_x.dart';
 import 'package:afyakit/hq/core/tenants/models/domain_binding.dart';
 import 'package:afyakit/hq/core/tenants/models/tenant_model.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -236,23 +236,46 @@ class TenantService {
       'Provide exactly one of email or uid',
     );
 
-    // Build minimal payload; server validates and applies.
     final payload = <String, dynamic>{
-      if (email != null) 'email': email,
-      if (uid != null) 'uid': uid,
+      if (email != null) 'email': email.trim(),
+      if (uid != null) 'uid': uid.trim(),
     };
 
+    if (kDebugMode) {
+      debugPrint('🛰️ [TenantService] POST ${routes.setTenantOwner(slug)}');
+      debugPrint('🛰️ [TenantService] payload=$payload');
+    }
+
     final r = await _dio.postUri(
-      routes.setTenantOwner(slug), // ← see ApiRoutes note below
+      routes.setTenantOwner(slug),
       data: payload,
-      options: Options(contentType: _json),
+      options: Options(
+        contentType: Headers.jsonContentType,
+        // 👇 accept all <500 so we can read the JSON body on 4xx
+        validateStatus: (s) => s != null && s < 500,
+        receiveDataWhenStatusError: true,
+      ),
     );
 
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Transfer owner');
     if (kDebugMode) {
-      final who = email ?? uid!;
-      debugPrint('✅ $_tag Owner of $slug transferred to $who');
+      debugPrint(
+        '🛰️ [TenantService] ← ${r.statusCode} type=${r.data.runtimeType}',
+      );
+      debugPrint('🛰️ [TenantService] body: ${r.data}');
     }
+
+    // Success
+    if (r.statusCode == 204 || r.statusCode == 200) {
+      final who = email ?? uid!;
+      if (kDebugMode) debugPrint('✅ [TenantService] Owner of $slug → $who');
+      return;
+    }
+
+    // 4xx: show server error clearly
+    final body = _asMap(r.data);
+    final code = (body['error'] ?? 'error').toString();
+    final msg = (body['message'] ?? 'Request failed').toString();
+    throw Exception('$code: $msg'); // caught by your controller & toasted
   }
 
   Future<List<DomainBinding>> listTenantDomains(String slug) async {
@@ -293,5 +316,59 @@ class TenantService {
     final r = await _dio.deleteUri(routes.removeDomain(slug, domain));
     final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
     if (!ok) _bad(r, 'Remove domain');
+  }
+
+  // TenantService
+
+  /// Remove owner by uid. By default we DEMOTE (safer). Pass `hard=true` to remove membership.
+  Future<void> removeOwnerByUid({
+    required String slug,
+    required String uid,
+    bool hard = false, // false = demote to admin, true = remove membership
+  }) async {
+    final uri = routes
+        .removeTenantOwner(slug)
+        .replace(
+          queryParameters: {
+            'uid': uid.trim(),
+            if (hard) 'mode': 'remove', // default is 'demote'
+          },
+        );
+
+    final r = await _dio.deleteUri(uri);
+    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    if (!ok) _bad(r, 'Remove owner by uid');
+    if (kDebugMode) {
+      debugPrint(
+        '🗑️ [TenantService] Owner removed (mode=${hard ? 'remove' : 'demote'}) tenant=$slug uid=$uid',
+      );
+    }
+  }
+
+  /// Remove owner by email (server resolves email→uid).
+  Future<void> removeOwnerByEmail({
+    required String slug,
+    required String email,
+    bool hard = false,
+  }) async {
+    final target = email.trim().toLowerCase();
+    if (target.isEmpty) {
+      throw ArgumentError.value(email, 'email', 'must not be empty');
+    }
+
+    final uri = routes
+        .removeTenantOwner(slug)
+        .replace(
+          queryParameters: {'email': target, if (hard) 'mode': 'remove'},
+        );
+
+    final r = await _dio.deleteUri(uri);
+    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    if (!ok) _bad(r, 'Remove owner by email');
+    if (kDebugMode) {
+      debugPrint(
+        '🗑️ [TenantService] Owner removed (mode=${hard ? 'remove' : 'demote'}) tenant=$slug email=$target',
+      );
+    }
   }
 }

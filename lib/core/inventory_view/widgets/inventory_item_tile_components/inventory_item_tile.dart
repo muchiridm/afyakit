@@ -1,3 +1,4 @@
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_item_tile_components/inventory_tile_header.dart';
@@ -5,7 +6,6 @@ import 'package:afyakit/core/inventory_view/widgets/inventory_item_tile_componen
 import 'package:afyakit/core/inventory/screens/inventory_editor_screen.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

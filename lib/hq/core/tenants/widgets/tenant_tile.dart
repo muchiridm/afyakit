@@ -123,7 +123,10 @@ class TenantTile extends ConsumerWidget {
   }
 
   Widget _owner(BuildContext context, TenantController c, Tenant t) {
+    final hasOwner =
+        (t.ownerEmail?.isNotEmpty == true) || (t.ownerUid?.isNotEmpty == true);
     final label = t.ownerEmail ?? t.ownerUid ?? '—';
+
     return SectionBlock(
       title: 'Owner',
       child: Row(
@@ -140,6 +143,52 @@ class TenantTile extends ConsumerWidget {
             icon: const Icon(Icons.swap_horiz),
             label: const Text('Transfer'),
             onPressed: () => c.configureTenantWithDialog(context, tenant: t),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: 'Owner actions',
+            enabled: hasOwner && !t.status.isDeleted,
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'demote',
+                child: ListTile(
+                  leading: Icon(Icons.arrow_downward),
+                  title: Text('Demote to admin'),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'remove',
+                child: ListTile(
+                  leading: Icon(Icons.person_remove_alt_1),
+                  title: Text('Remove from tenant'),
+                ),
+              ),
+            ],
+            onSelected: (value) {
+              final email = t.ownerEmail;
+              final uid = t.ownerUid;
+              if (value == 'demote') {
+                c.removeOwner(
+                  context,
+                  slug: t.slug,
+                  email: email,
+                  uid: uid,
+                  hard: false,
+                );
+              } else if (value == 'remove') {
+                c.removeOwner(
+                  context,
+                  slug: t.slug,
+                  email: email,
+                  uid: uid,
+                  hard: true,
+                );
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: Icon(Icons.more_vert),
+            ),
           ),
         ],
       ),

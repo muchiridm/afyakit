@@ -1,15 +1,13 @@
-// lib/shared/providers/token_provider.dart
-import 'package:flutter/material.dart';
+import 'package:afyakit/core/auth_users/services/login_service.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Import the service that exposes firebaseOnly provider
-import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
-
 /// Infra-level token access (no engines).
-/// Uses a Firebase-only UserOperationsService to avoid dependency cycles.
+/// Uses Firebase-only LoginService for session hydration + token fetch.
 final tokenProvider = Provider<TokenProvider>((ref) {
-  final ops = ref.read(firebaseOnlyUserOpsProvider);
-  return TokenProvider(ops);
+  final loginSvc = ref.read(loginServiceFirebaseOnlyProvider);
+  return TokenProvider(loginSvc);
 });
 
 class AuthTokenException implements Exception {
@@ -20,8 +18,8 @@ class AuthTokenException implements Exception {
 }
 
 class TokenProvider {
-  final UserOperationsService _ops;
-  TokenProvider(this._ops);
+  final LoginService _login;
+  TokenProvider(this._login);
 
   /// Ensures a valid Firebase ID token is returned or throws
   Future<String> getToken({bool forceRefresh = true}) async {
@@ -40,7 +38,7 @@ class TokenProvider {
     if (!hasUser) return null;
 
     try {
-      final token = await _ops.getIdToken(forceRefresh: forceRefresh);
+      final token = await _login.getIdToken(forceRefresh: forceRefresh);
       if (token != null) {
         debugPrint('✅ TokenProvider.tryGetToken → Token retrieved');
       }
@@ -59,10 +57,16 @@ class TokenProvider {
     if (!hasUser) return null;
 
     try {
+      // If caller wants freshest, force-refresh the ID token first.
       if (forceRefresh) {
-        await _ops.refreshToken();
+        await _login.getIdToken(forceRefresh: true);
       }
-      final claims = await _ops.getClaims(); // throws if no user
+
+      final user = _login.currentUser ?? fb.FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+
+      final tr = await user.getIdTokenResult(false);
+      final claims = Map<String, dynamic>.from(tr.claims ?? const {});
       debugPrint(
         '📜 TokenProvider.getDecodedClaims → '
         '${claims.isEmpty ? "No claims" : claims}',
@@ -96,8 +100,8 @@ class TokenProvider {
 
   /// Ensure Firebase user is hydrated
   Future<bool> _ensureUser() async {
-    await _ops.waitForUser();
-    final user = await _ops.getCurrentUser();
+    await _login.waitForUser();
+    final user = _login.currentUser ?? fb.FirebaseAuth.instance.currentUser;
     return user != null;
   }
 }

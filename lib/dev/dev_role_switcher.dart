@@ -1,9 +1,10 @@
+import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_engine.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
-import 'package:afyakit/core/auth_users/providers/auth_users_provider.dart'; // list invalidation
-import 'package:afyakit/core/auth_users/providers/user_engine_providers.dart';
-import 'package:afyakit/core/auth_users/user_operations/controllers/session_controller.dart'; // reload if self
+import 'package:afyakit/core/auth_users/providers/auth_user/auth_users_provider.dart'; // list invalidation
+
+import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart'; // reload if self
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
 import 'package:flutter/material.dart';

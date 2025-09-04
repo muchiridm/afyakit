@@ -1,3 +1,4 @@
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';
@@ -10,7 +11,6 @@ import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_item_tile_components/inventory_item_tile.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_search_utils.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 

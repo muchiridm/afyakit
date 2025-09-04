@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +13,6 @@ import 'package:afyakit/hq/core/tenants/models/team_member_dto.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/hq/core/all_users/all_user_model.dart';
-import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
 
 /// ─────────────────────────────────────────────────────────────
 /// Tenant Config (override at bootstrap)
@@ -168,20 +168,20 @@ final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantIdProvider);
-  final ops = await ref.watch(userOperationsServiceProvider(tenantId).future);
+  final ops = await ref.watch(authSessionServiceProvider(tenantId).future);
 
   final link = ref.keepAlive();
   Timer? purge;
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
   ref.onResume(() => purge?.cancel());
 
-  Future<Map<String, dynamic>> _readClaims() async {
+  Future<Map<String, dynamic>> readClaims() async {
     final claims = await ops.getClaims();
     if (kDebugMode) debugPrint('🔎 [guard] claims after read: $claims');
     return claims;
   }
 
-  var claims = await _readClaims();
+  var claims = await readClaims();
   final initialTenant = (claims['tenantId'] ?? claims['tenant']) as String?;
   final isSuper = claims['superadmin'] == true;
 
@@ -190,7 +190,7 @@ final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
       '🛠 [guard] claimTenant=$initialTenant ≠ selected=$tenantId → syncing…',
     );
     await ops.syncClaimsAndRefresh();
-    claims = await _readClaims();
+    claims = await readClaims();
   }
 
   final finalTenant = (claims['tenantId'] ?? claims['tenant']) as String?;

@@ -1,4 +1,5 @@
-import 'package:afyakit/core/auth_users/providers/current_auth_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,7 +33,7 @@ class UserBadge extends ConsumerWidget {
         return _buildBadge(
           context,
           displayName: user.displayLabel(), // <— unified resolver
-          roleLabel: _roleLabel(user.role.toString()),
+          roleLabel: roleLabel(user.role.toString()),
           onTap: () {
             Navigator.push(
               context,
@@ -102,12 +103,4 @@ class UserBadge extends ConsumerWidget {
   }
 
   /// Turns enums like `UserRole.admin` or raw strings like `admin` into `Admin`.
-  String _roleLabel(String rawRole) {
-    final raw = rawRole.trim();
-    if (raw.isEmpty) return '—';
-    final cleaned = raw.contains('.') ? raw.split('.').last : raw;
-    return cleaned.isEmpty
-        ? '—'
-        : '${cleaned[0].toUpperCase()}${cleaned.substring(1)}';
-  }
 }

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 

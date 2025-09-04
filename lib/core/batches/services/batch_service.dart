@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:afyakit/api/api_routes.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth_users/providers/current_auth_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';

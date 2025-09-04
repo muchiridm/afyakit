@@ -1,14 +1,20 @@
-import 'package:afyakit/core/backup/backup_screen.dart';
+// lib/core/admin/screens/admin_dashboard_screen.dart
+
 import 'package:afyakit/api/api_test_screen.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+
+import 'package:afyakit/core/backup/backup_screen.dart';
+import 'package:afyakit/core/import/import_inventory_screen.dart';
 import 'package:afyakit/core/item_preferences/item_preferences_screen.dart';
 import 'package:afyakit/core/inventory_locations/screens/inventory_locations_screen.dart';
+
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/core/auth_users/widgets/permission_guard.dart';
+
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
-import 'package:afyakit/core/import/import_inventory_screen.dart';
-import 'package:afyakit/core/auth_users/widgets/auth_user_gate.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,23 +23,41 @@ class AdminDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider);
+    final meAsync = ref.watch(currentAuthUserProvider);
 
-    return AuthUserGate(
-      allow: (user) => user.canAccessAdminPanel,
-      builder: (_) => BaseScreen(
-        scrollable: false,
-        maxContentWidth: 800,
-        header: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: ScreenHeader('Admin Dashboard'),
-        ),
-        body: Center(child: _buildAdminActions(context, tenantId)),
+    return meAsync.when(
+      loading: () =>
+          const BaseScreen(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => BaseScreen(
+        body: Center(child: Text('❌ Failed to load current user: $e')),
       ),
+      data: (me) {
+        return PermissionGuard(
+          user: me,
+          allowed: (u) => u.canAccessAdminPanel,
+          fallback: const BaseScreen(
+            body: Center(
+              child: Text('🚫 You do not have access to this page.'),
+            ),
+          ),
+          child: BaseScreen(
+            scrollable: false,
+            maxContentWidth: 800,
+            header: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: ScreenHeader('Admin Dashboard'),
+            ),
+            body: Center(child: _AdminActions()),
+          ),
+        );
+      },
     );
   }
+}
 
-  Widget _buildAdminActions(BuildContext context, String tenantId) {
+class _AdminActions extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Wrap(
       spacing: 20,
       runSpacing: 20,
@@ -45,7 +69,6 @@ class AdminDashboardScreen extends ConsumerWidget {
           label: 'Manage Users',
           destination: UserProfileManagerScreen(),
         ),
-
         _adminActionButton(
           context,
           icon: Icons.settings,

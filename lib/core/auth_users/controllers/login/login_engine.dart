@@ -1,24 +1,44 @@
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/models/login_outcome.dart';
-import 'package:afyakit/shared/types/result.dart';
+import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
+import 'package:afyakit/core/auth_users/services/login_service.dart';
 import 'package:afyakit/shared/types/app_error.dart';
+import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
+import 'package:dio/dio.dart' show DioException;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:dio/dio.dart' show DioException;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final loginEngineProvider = FutureProvider.family
+    .autoDispose<LoginEngine, String>((ref, tenantId) async {
+      final loginSvc = await ref.read(loginServiceProvider(tenantId).future);
+      final session = await ref.read(
+        authSessionServiceProvider(tenantId).future,
+      );
+      return LoginEngine(loginSvc: loginSvc, session: session);
+    });
 
 class LoginEngine {
-  final UserOperationsService ops;
+  final LoginService loginSvc; // ⬅️ renamed to avoid clash
+  final AuthSessionService session;
 
   /// Allow INVITED users during explicit invite-accept flow.
   /// For normal login keep false (ACTIVE only).
   final bool allowInvitedForInviteFlow;
 
-  LoginEngine({required this.ops, this.allowInvitedForInviteFlow = false});
+  LoginEngine({
+    required this.loginSvc,
+    required this.session,
+    this.allowInvitedForInviteFlow = false,
+  });
 
-  Future<Result<LoginOutcome>> login(
+  // ⛳️ Shim to keep your controller API the same.
+  Future<Result<LoginOutcome>> login(String email, String password) =>
+      loginWithEmailPassword(email, password);
+
+  Future<Result<LoginOutcome>> loginWithEmailPassword(
     String rawEmail,
     String rawPassword,
   ) async {
@@ -30,10 +50,13 @@ class LoginEngine {
         return Err(AppError('auth/invalid-input', 'Email & password required'));
       }
 
-      // ── 1) Membership probe (fresh) ───────────────────────────
+      // ── 1) Membership probe (fresh) via SESSION service ───────
       late final AuthUser membership;
       try {
-        membership = await ops.checkUserStatus(email: email, useCache: false);
+        membership = await session.checkUserStatus(
+          email: email,
+          useCache: false,
+        );
       } on DioException catch (e) {
         final sc = e.response?.statusCode ?? 0;
         if (sc == 404) {
@@ -66,10 +89,13 @@ class LoginEngine {
 
       final isActive = membership.status.isActive;
 
-      // ── 2) Firebase sign-in ──────────────────────────────────
+      // ── 2) Firebase sign-in via LOGIN service ─────────────────
       try {
         debugPrint('🔐 Signing in Firebase user: $email');
-        await ops.signInWithEmailAndPassword(email: email, password: password);
+        await loginSvc.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
       } on FirebaseAuthException catch (e) {
         debugPrint('❌ Firebase sign-in error: ${e.code}');
         switch (e.code) {
@@ -88,16 +114,16 @@ class LoginEngine {
         }
       }
 
-      await ops.waitForUserSignIn();
+      await loginSvc.waitForUser();
 
-      // ── 3) Claims (ACTIVE only) ───────────────────────────────
-      final expected = ops.expectedTenantId; // from createWithBackend
+      // ── 3) Claims (ACTIVE only) via SESSION service ───────────
+      final expected = loginSvc.expectedTenantId; // from createWithBackend
       var claimsSynced = false;
 
       if (isActive && expected != null && expected.isNotEmpty) {
         debugPrint('🧭 Enforcing tenant claim → expected=$expected');
         try {
-          await ops.ensureTenantClaimSelected(
+          await session.ensureTenantClaimSelected(
             expected,
             reason: 'LoginEngine.login',
           );
@@ -111,7 +137,7 @@ class LoginEngine {
               code == 'auth/user-not-active' ||
               code == 'auth/forbidden' ||
               code == 'auth/wrong-tenant') {
-            await ops.signOut();
+            await loginSvc.signOut();
             return Err(
               mapped ??
                   AppError(
@@ -147,13 +173,13 @@ class LoginEngine {
       }
 
       // Pre-check existence to give clean UX.
-      final isKnown = await ops.isEmailRegistered(email);
+      final isKnown = await loginSvc.isEmailRegistered(email);
       debugPrint('📨 reset precheck(email=$email) → $isKnown');
       if (!isKnown) {
         return Err(AppError('auth/not-registered', 'Email not registered'));
       }
 
-      await ops.sendPasswordResetEmail(email, viaBackend: true);
+      await loginSvc.sendPasswordResetEmail(email, viaBackend: true);
       return const Ok(null);
     } catch (e) {
       debugPrint('❌ Password reset error: $e');
@@ -165,18 +191,18 @@ class LoginEngine {
 
   Future<Result<void>> signOut() async {
     try {
-      await ops.signOut();
+      await loginSvc.signOut();
       return const Ok(null);
     } catch (e) {
       return Err(AppError('auth/signout-failed', 'Sign out failed', cause: e));
     }
   }
 
-  Future<bool> isSignedIn() async => await ops.isLoggedIn();
+  Future<bool> isSignedIn() async => await loginSvc.isLoggedIn();
 
   Future<Result<void>> refreshIdToken() async {
     try {
-      await ops.getIdToken(forceRefresh: true);
+      await loginSvc.getIdToken(forceRefresh: true);
       return const Ok(null);
     } catch (e) {
       return Err(

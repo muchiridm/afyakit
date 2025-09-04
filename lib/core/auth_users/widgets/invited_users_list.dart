@@ -1,5 +1,5 @@
 // lib/users/widgets/invited_users_list.dart
-import 'package:afyakit/core/auth_users/controllers/auth_user_controller.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_controller.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';

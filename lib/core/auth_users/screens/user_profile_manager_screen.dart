@@ -1,11 +1,12 @@
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/controllers/auth_user_controller.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_controller.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/providers/auth_user_stream_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/auth_user/auth_user_stream_provider.dart';
 import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
 
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
@@ -136,7 +137,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
     }).toList();
 
     return UserProfileCard(
-      displayName: _displayLabelFor(user),
+      displayName: displayLabelFromUser(user),
       email: user.email,
       phoneNumber: user.phoneNumber,
       role: user.effectiveRole.name, // via AuthUserX
@@ -185,17 +186,4 @@ class UserProfileManagerScreen extends ConsumerWidget {
   // ────────────────────────────────────────────────────────────
   // Helpers
   // ────────────────────────────────────────────────────────────
-
-  String _displayLabelFor(AuthUser u) {
-    final claimName = (u.claims?['displayName'] as String?)?.trim();
-    if (claimName != null && claimName.isNotEmpty) return claimName;
-
-    // If your AuthUser model now has displayName, prefer it:
-    final modelName = (u as dynamic).displayName;
-    if (modelName is String && modelName.trim().isNotEmpty) return modelName;
-
-    if (u.email.trim().isNotEmpty) return u.email.trim();
-    if (u.phoneNumber?.trim().isNotEmpty == true) return u.phoneNumber!.trim();
-    return u.uid;
-  }
 }

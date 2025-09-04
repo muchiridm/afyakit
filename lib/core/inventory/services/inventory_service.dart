@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/shared/utils/payload_sanitizer.dart';
 
 import '../models/items/medication_item.dart';

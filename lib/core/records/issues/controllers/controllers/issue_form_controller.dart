@@ -1,3 +1,4 @@
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/engines/issue_form_engine.dart';
 import 'package:afyakit/core/records/issues/services/inventory_snapshot.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +12,6 @@ import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 

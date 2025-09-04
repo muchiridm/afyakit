@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,20 +9,31 @@ import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
-import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 
 import '../../../shared/types/dtos.dart';
 
+/// Thin HTTP client for tenant-scoped Auth User operations.
+/// - Keeps request/response parsing local
+/// - Leaves business rules to the Engine/Controller layers
 class AuthUserService {
   AuthUserService({required this.client, required this.routes});
+
   final ApiClient client;
   final ApiRoutes routes;
 
   Dio get _dio => client.dio;
+
+  // ─────────────────────────────────────────────
+  // Consts / Logging
+  // ─────────────────────────────────────────────
   static const _json = Headers.jsonContentType;
   static const _tag = '[UserManagerService]';
 
-  // ── helpers ──────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
+
+  /// Best-effort map coercion from unknown shapes.
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
@@ -30,6 +42,7 @@ class AuthUserService {
     );
   }
 
+  /// Extracts a list of maps from common response shapes.
   List<Map<String, dynamic>> _asList(Object? raw) {
     if (raw is List) {
       return raw
@@ -53,7 +66,11 @@ class AuthUserService {
     throw Exception('❌ $op failed (${r.statusCode}): ${reason ?? 'Unknown'}');
   }
 
-  // ── 1) Invite (tenant-scoped) ────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Public API
+  // ─────────────────────────────────────────────
+
+  // CREATE (Invite)
   Future<InviteResult> inviteUser({
     String? email,
     String? phoneNumber,
@@ -79,6 +96,7 @@ class AuthUserService {
       options: Options(contentType: _json),
     );
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Invite');
+
     if (kDebugMode) {
       debugPrint(
         '✅ $_tag Invite sent → ${cleanedEmail.isNotEmpty ? cleanedEmail : cleanedPhone} as ${role.wire}',
@@ -87,13 +105,16 @@ class AuthUserService {
     return InviteResult.fromJson(_asMap(r.data));
   }
 
-  // ── 2) Reads (tenant-scoped list + single) ───────────────────
+  // READS
   Future<List<AuthUser>> getAllUsers() async {
     final r = await _dio.getUri(routes.getAllUsers());
     final users = _asList(
       r.data,
     ).map(AuthUser.fromJson).where((u) => u.uid.isNotEmpty).toList();
-    if (kDebugMode) debugPrint('✅ $_tag Loaded ${users.length} users');
+
+    if (kDebugMode) {
+      debugPrint('✅ $_tag Loaded ${users.length} users');
+    }
     return users;
   }
 
@@ -102,73 +123,38 @@ class AuthUserService {
     final user = AuthUser.fromJson(
       _asMap(r.data)..putIfAbsent('uid', () => uid),
     );
+
     if (kDebugMode) {
       debugPrint('✅ $_tag Loaded user: ${user.email} (${user.uid})');
     }
     return user;
   }
 
-  // ── 3) Role ──────────────────────────────────────────────────
-  Future<void> assignRole(String uid, UserRole role) async {
-    final r = await _dio.patchUri(
-      routes.updateAuthUserRole(uid),
-      data: {'role': role.wire},
-      options: Options(contentType: _json),
-    );
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Assign role');
-    if (kDebugMode) debugPrint('✅ $_tag Role updated → $uid : ${role.wire}');
-  }
+  // UPDATE
+  Future<void> updateUserFields(String uid, Map<String, Object?> fields) async {
+    // prune nulls & empty strings
+    final body = Map<String, Object?>.from(fields)
+      ..removeWhere((_, v) => v == null || (v is String && v.trim().isEmpty));
+    if (body.isEmpty) return;
 
-  // ── 4) Stores ────────────────────────────────────────────────
-  Future<void> setStores(String uid, List<String> stores) async {
-    final payload = {
-      'stores': stores.map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
-    };
-    final r = await _dio.patchUri(
-      routes.updateAuthUserStores(uid),
-      data: payload,
-      options: Options(contentType: _json),
-    );
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Set stores');
-    if (kDebugMode) {
-      debugPrint('✅ $_tag Stores updated → $uid : ${payload['stores']}');
-    }
-  }
-
-  // ── 5) Status ────────────────────────────────────────────────
-  Future<void> setStatus(String uid, UserStatus status) async {
     final r = await _dio.patchUri(
       routes.updateUser(uid),
-      data: {'status': status.wire},
-      options: Options(contentType: _json),
-    );
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Set status');
-    if (kDebugMode) {
-      debugPrint('✅ $_tag Status updated → $uid : ${status.wire}');
-    }
-  }
-
-  Future<void> activateUser(String uid) => setStatus(uid, UserStatus.active);
-  Future<void> disableUser(String uid) => setStatus(uid, UserStatus.disabled);
-
-  // ── 6) Profile ───────────────────────────────────────────────
-  Future<void> updateProfile(String uid, UpdateProfileRequest req) async {
-    final body = req.toJson();
-    if (body.isEmpty) return;
-    final r = await _dio.patchUri(
-      routes.updateAuthUserProfile(uid),
       data: body,
       options: Options(contentType: _json),
     );
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Update profile');
-    if (kDebugMode) debugPrint('✅ $_tag Profile updated → $uid : $body');
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Update user');
+
+    if (kDebugMode) {
+      debugPrint('✅ $_tag Updated $uid → $body');
+    }
   }
 
-  // ── 7) Delete (tenant membership) ────────────────────────────
+  // DELETE
   Future<void> deleteUser(String uid) async {
     final r = await _dio.deleteUri(routes.deleteUser(uid));
     final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
     if (!ok) _bad(r, 'Delete user');
+
     if (kDebugMode) {
       debugPrint('🗑️ $_tag Removed tenant membership: $uid');
     }

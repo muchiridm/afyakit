@@ -1,5 +1,5 @@
 import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';

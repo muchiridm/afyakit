@@ -1,6 +1,5 @@
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
-import 'package:afyakit/core/auth_users/providers/user_display_providers.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';

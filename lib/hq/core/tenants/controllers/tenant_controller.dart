@@ -306,6 +306,55 @@ class TenantController {
     }
   }
 
+  /// Remove (demote/remove) the current owner using email or uid.
+  /// If both provided, email wins.
+  Future<void> removeOwner(
+    BuildContext context, {
+    required String slug,
+    String? email,
+    String? uid,
+    required bool hard, // false = demote to admin, true = remove membership
+  }) async {
+    final who = (email?.trim().isNotEmpty == true)
+        ? email!.trim()
+        : (uid?.trim().isNotEmpty == true ? uid!.trim() : '');
+
+    if (who.isEmpty) {
+      _toast(context, 'No owner set');
+      return;
+    }
+
+    final verb = hard ? 'Remove owner from tenant' : 'Demote owner to admin';
+    final ok = await _confirm(
+      context,
+      title: hard ? 'Remove owner?' : 'Demote owner?',
+      message: hard
+          ? 'This will remove the current owner from this tenant.'
+          : 'This will change the owner’s role to admin.',
+      confirmLabel: hard ? 'Remove' : 'Demote',
+    );
+    if (ok != true) return;
+
+    try {
+      final svc = await _svc();
+      if (email?.trim().isNotEmpty == true) {
+        await svc.removeOwnerByEmail(
+          slug: slug,
+          email: email!.trim(),
+          hard: hard,
+        );
+      } else {
+        await svc.removeOwnerByUid(slug: slug, uid: uid!, hard: hard);
+      }
+      _toast(context, '$verb ✓');
+      refreshTenant(slug);
+      refreshAllTenants();
+    } catch (e) {
+      _toast(context, 'Failed: $e');
+      rethrow;
+    }
+  }
+
   /// Open the full config dialog, gather changes, and apply.
   Future<void> configureTenantWithDialog(
     BuildContext context, {

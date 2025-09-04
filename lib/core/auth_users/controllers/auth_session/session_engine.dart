@@ -1,14 +1,20 @@
-// lib/core/auth_users/user_operations/engines/session_engine.dart
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
-import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/utils/claim_validator.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final sessionEngineProvider = FutureProvider.family
+    .autoDispose<SessionEngine, String>((ref, tenantId) async {
+      final ops = await ref.read(authSessionServiceProvider(tenantId).future);
+      return SessionEngine(ops: ops, tenantId: tenantId);
+    });
 
 class SessionEngine {
-  final UserOperationsService ops;
+  final AuthSessionService ops;
   final String tenantId;
 
   // Treat HQ as a distinct mode (no tenant claim work / no tenant session calls)
@@ -26,7 +32,7 @@ class SessionEngine {
         return const Ok<AuthUser?>(null);
       }
 
-      final u = await ops.getCurrentUser();
+      final u = ops.getCurrentUser();
       if (u == null) return const Ok<AuthUser?>(null);
 
       final email = (u.email ?? '').trim().toLowerCase();
@@ -47,7 +53,7 @@ class SessionEngine {
 
   Future<Result<AuthUser?>> reload() async {
     try {
-      final u = await ops.getCurrentUser();
+      final u = ops.getCurrentUser();
       if (u == null) return const Ok<AuthUser?>(null);
 
       final email = (u.email ?? '').trim().toLowerCase();
@@ -59,6 +65,38 @@ class SessionEngine {
       _log('❌ SessionEngine.reload error: $e\n$st');
       return Err(
         AppError('session/reload-failed', 'Failed to reload session', cause: e),
+      );
+    }
+  }
+
+  Future<Result<AuthUser?>> refreshTokenAndClaimsAndUser() async {
+    try {
+      if (_hqMode) {
+        await ops
+            .forceRefreshIdToken(); // still pick up any server-side changes
+        return const Ok<AuthUser?>(null);
+      }
+
+      final fbUser = ops.getCurrentUser();
+      if (fbUser == null) return const Ok<AuthUser?>(null);
+
+      final email = (fbUser.email ?? '').trim().toLowerCase();
+      if (email.isEmpty) {
+        return Err(AppError('auth/no-email', 'Firebase user has no email'));
+      }
+
+      await ops.forceRefreshIdToken();
+      await _ensureTenantSelected(email: email, reason: 'soft-refresh');
+      final authUser = await ops.checkUserStatus(email: email);
+      return Ok(authUser);
+    } catch (e, st) {
+      _log('❌ SessionEngine.refreshTokenAndClaimsAndUser error: $e\n$st');
+      return Err(
+        AppError(
+          'session/soft-refresh-failed',
+          'Failed to softly refresh session',
+          cause: e,
+        ),
       );
     }
   }
@@ -103,7 +141,6 @@ class SessionEngine {
 
     final isActive = authUser.status.isActive;
     if (!isActive) {
-      // Invited / disabled: SKIP claim sync; continue in limited mode.
       _log(
         'ℹ️ User is ${authUser.status.name} on $tenantId → skipping claims sync; continuing limited mode.',
       );
@@ -117,22 +154,22 @@ class SessionEngine {
         reason: 'SessionEngine.$reason',
       );
       await ops.forceRefreshIdToken(); // pick up fresh claims
-      claims = await ops.getClaims(force: true); // verify we actually have them
+      claims = await ops.getClaims(force: true); // verify
     } catch (e) {
       _log('⚠️ Tenant claim sync failed ($claimTenant → $tenantId): $e');
-      // Only hard boot on true membership errors; transient token issues are handled upstream.
+
+      // Only hard boot on definitive membership errors — NOT on transient 'auth/forbidden'
       if (e is AppError &&
           (e.code == 'auth/membership-not-found' ||
-              e.code == 'auth/user-not-active' ||
-              e.code == 'auth/forbidden')) {
+              e.code == 'auth/user-not-active')) {
         try {
           await ops.signOut();
         } catch (_) {}
       }
+
       rethrow;
     }
 
-    // Final tighten for actives only; invited users were returned earlier.
     if (!ClaimValidator.isValid(claims)) {
       try {
         await ops.checkUserStatus(email: email);

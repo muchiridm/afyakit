@@ -1,17 +1,19 @@
-// lib/features/auth_users/widgets/auth_gate.dart
-import 'package:flutter/material.dart';
+import 'dart:async'; // for unawaited()
+
+import 'package:afyakit/core/auth_users/widgets/blocked.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/shared/screens/splash_screen.dart';
-import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
-import 'package:afyakit/core/auth_users/screens/login_screen.dart';
-
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/core/auth_users/providers/current_auth_user_providers.dart';
-import 'package:afyakit/core/auth_users/user_operations/controllers/session_controller.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
+
+import 'package:afyakit/core/auth_users/screens/login_screen.dart';
+import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
+import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
+import 'package:afyakit/shared/screens/splash_screen.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   final Map<String, String>? inviteParams;
@@ -25,14 +27,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   void initState() {
     super.initState();
-    // kick the session engine early (non-blocking)
+    // Warm the session (non-blocking)
     Future.microtask(() {
       final tenantId = ref.read(tenantIdProvider);
       if (kDebugMode) {
         final u = fb.FirebaseAuth.instance.currentUser;
         debugPrint(
-          '🔧 AuthGate.init → ensureReady() tenant=$tenantId '
-          'fb.uid=${u?.uid} fb.email=${u?.email}',
+          '🔧 AuthGate.init → ensureReady() tenant=$tenantId fb.uid=${u?.uid} fb.email=${u?.email}',
         );
       }
       ref.read(sessionControllerProvider(tenantId).notifier).ensureReady();
@@ -42,122 +43,59 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final tenantId = ref.watch(tenantIdProvider);
-    final fbUser = fb.FirebaseAuth.instance.currentUser;
 
-    if (kDebugMode) {
-      debugPrint(
-        '🔑 AuthGate.build tenant=$tenantId '
-        'fb.uid=${fbUser?.uid} fb.email=${fbUser?.email}',
-      );
-    }
+    // ✅ Keep it simple: drive the app off the session controller alone.
+    final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
-    // ⛳️ If NOT signed in → go to your LoginScreen (email/password flow you provided)
-    if (fbUser == null) {
-      if (kDebugMode) debugPrint('👤 No Firebase user → show LoginScreen');
-      return const LoginScreen();
-    }
-
-    // Signed in → check authoritative membership for this tenant
-    final authUserAsync = ref.watch(currentAuthUserProvider);
-
-    return authUserAsync.when(
+    return sessionAsync.when(
       loading: () {
-        if (kDebugMode) {
-          debugPrint('⌛ AuthGate: waiting for currentAuthUser...');
-        }
+        if (kDebugMode) debugPrint('⌛ AuthGate: session loading…');
         return const SplashScreen();
       },
-      error: (e, st) {
-        if (kDebugMode) {
-          debugPrint('💥 AuthGate: currentAuthUser ERROR: $e');
-          debugPrint('$st');
-        }
-        return _Blocked(msg: 'Error checking access: $e', showSignOut: true);
+      error: (e, _) {
+        if (kDebugMode) debugPrint('💥 AuthGate: session error: $e');
+        return const Blocked(
+          msg: 'Error checking access. You can try signing out.',
+          showSignOut: true,
+        );
       },
-      data: (authUser) {
-        // Signed in but no membership for this tenant
-        if (authUser == null) {
-          if (kDebugMode) {
-            debugPrint(
-              '🚫 AuthGate: signed in, but no membership for $tenantId → auto sign-out',
-            );
+      data: (user) {
+        // No app-user resolved yet
+        if (user == null) {
+          final hasFbUser = fb.FirebaseAuth.instance.currentUser != null;
+
+          // If Firebase still has a user, we’re rehydrating → stay on Splash & nudge engine.
+          if (hasFbUser) {
+            if (kDebugMode) {
+              debugPrint(
+                '🧊 Firebase has user but session==null → keep Splash',
+              );
+            }
+            Future.microtask(() {
+              ref
+                  .read(sessionControllerProvider(tenantId).notifier)
+                  .ensureReady();
+            });
+            return const SplashScreen();
           }
-          // auto sign-out, then show login
-          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
-          return const SplashScreen();
+
+          if (kDebugMode) debugPrint('👤 No session user → Login');
+          return const LoginScreen();
         }
 
-        final statusEnum = authUser.status;
-
-        // Invited (not active) → auto sign-out
-        if (statusEnum.isInvited) {
-          if (kDebugMode) {
-            debugPrint('📝 AuthGate: status=invited → auto sign-out');
-          }
-          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
-          return const SplashScreen();
-        }
-
-        // Disabled/unknown → auto sign-out
-        if (!statusEnum.isActive) {
-          if (kDebugMode) {
-            debugPrint('⛔ AuthGate: status=${authUser.status} → auto sign-out');
-          }
-          Future.microtask(() => fb.FirebaseAuth.instance.signOut());
-          return const SplashScreen();
-        }
-
-        if (kDebugMode) {
-          debugPrint(
-            '✅ AuthGate: membership OK tenant=$tenantId uid=${authUser.uid} '
-            'status=${authUser.status} role=${authUser.role}',
+        // Invited → complete profile (one simple flow)
+        if (user.status.isInvited) {
+          if (kDebugMode) debugPrint('📝 Invited → ProfileEditor');
+          return UserProfileEditorScreen(
+            tenantId: tenantId,
+            inviteParams: widget.inviteParams,
           );
         }
+
+        // Active → go Home
+        if (kDebugMode) debugPrint('✅ AuthGate OK → Home');
         return const HomeScreen();
       },
-    );
-  }
-}
-
-class _Blocked extends StatelessWidget {
-  const _Blocked({required this.msg, this.showSignOut = false});
-  final String msg;
-  final bool showSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock, size: 48),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(msg, textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: const Text('OK'),
-                ),
-                if (showSignOut)
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await fb.FirebaseAuth.instance.signOut();
-                    },
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign out'),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -1,9 +1,10 @@
 // lib/core/auth_users/screens/login_screen.dart
 
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/auth_users/user_operations/controllers/login_controller.dart';
+import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
@@ -164,7 +165,7 @@ class LoginScreen extends ConsumerWidget {
     required Color primary,
     required BorderRadius radius,
   }) {
-    final initials = _initials(displayName);
+    final initials = initialsFromName(displayName);
     return Container(
       width: 48,
       height: 48,
@@ -182,17 +183,6 @@ class LoginScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  String _initials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
   Widget _buildTitle() {

@@ -11,7 +11,7 @@ import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';
 import 'package:afyakit/core/inventory/services/inventory_service.dart';
 import 'package:afyakit/core/batches/services/batch_service.dart';
-import 'package:afyakit/shared/providers/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';

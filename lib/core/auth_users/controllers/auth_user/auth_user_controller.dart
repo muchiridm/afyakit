@@ -11,15 +11,41 @@ import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
-import 'package:afyakit/core/auth_users/controllers/auth_user_state.dart';
 
-import 'package:afyakit/core/auth_users/providers/user_engine_providers.dart';
-import 'package:afyakit/core/auth_users/controllers/auth_user_engine.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_engine.dart';
 
 final authUserControllerProvider =
     StateNotifierProvider.autoDispose<AuthUserController, AuthUserState>(
       (ref) => AuthUserController(ref),
     );
+
+class AuthUserState {
+  final String email;
+  final UserRole role;
+  final Set<String> selectedStoreIds;
+  final bool isLoading;
+
+  const AuthUserState({
+    this.email = '',
+    this.role = UserRole.staff,
+    this.selectedStoreIds = const {},
+    this.isLoading = false,
+  });
+
+  AuthUserState copyWith({
+    String? email,
+    UserRole? role,
+    Set<String>? selectedStoreIds,
+    bool? isLoading,
+  }) {
+    return AuthUserState(
+      email: email ?? this.email,
+      role: role ?? this.role,
+      selectedStoreIds: selectedStoreIds ?? this.selectedStoreIds,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
 
 /// Tenant-only controller. Reads via Firestore providers (elsewhere),
 /// writes/mutations via AuthUserEngine. No HQ/global actions here.

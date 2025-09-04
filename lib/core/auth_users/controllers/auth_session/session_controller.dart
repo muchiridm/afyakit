@@ -1,8 +1,7 @@
-// lib/core/auth_users/user_operations/controllers/session_controller.dart
 import 'dart:async';
 import 'package:afyakit/app/afyakit_app.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth_users/providers/user_operations_engine_providers.dart';
+import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +14,7 @@ import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 
 // Engines & providers
-import 'package:afyakit/core/auth_users/user_operations/engines/session_engine.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_session/session_engine.dart';
 // ^ If your file is named differently (e.g. user_operations_engine_providers.dart),
 //   change the import to match your project.
 
@@ -40,23 +39,38 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   // ─────────────────────────────────────────────
   // 🚦 Public Lifecycle
   // ─────────────────────────────────────────────
+
   Future<void> ensureReady() {
+    final t = DevTrace('session.ensureReady');
     _initCompleter ??= Completer<void>();
-    if (_sessionInitialized) return _initCompleter!.future;
+    if (_sessionInitialized) {
+      t.done('already-initialized');
+      return _initCompleter!.future;
+    }
 
     _sessionInitialized = true;
+    t.log('initialize');
     _initialize()
-        .then((_) => _initCompleter?.complete())
-        .catchError((e, st) => _initCompleter?.completeError(e, st));
+        .then((_) {
+          t.done('ok');
+          _initCompleter?.complete();
+        })
+        .catchError((e, st) {
+          t.done('error: $e');
+          _initCompleter?.completeError(e, st);
+        });
 
     return _initCompleter!.future;
   }
 
   Future<void> reload({bool forceRefresh = false}) async {
-    if (forceRefresh) _sessionInitialized = false;
-    await ensureReady();
+    // Don’t ever sign-out here.
+    await ensureReady(); // warm the engine if needed
     if (_engine == null) return;
-    final res = await _engine!.reload();
+
+    // Prefer a soft path: refresh ID token + re-fetch backend user.
+    final res = await _engine!
+        .refreshTokenAndClaimsAndUser(); // implement this as: getIdToken(true) + GET /me
     _applyResult('Failed to reload session', res);
   }
 

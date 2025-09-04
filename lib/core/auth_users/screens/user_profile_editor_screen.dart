@@ -1,22 +1,19 @@
-// lib/users/screens/user_profile_editor_screen.dart
-import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth_users/providers/user_display_providers.dart';
+// lib/core/auth_users/screens/user_profile_editor_screen.dart
+import 'package:afyakit/core/auth_users/controllers/auth_user/profile_controller.dart';
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
+
+import 'package:afyakit/shared/screens/base_screen.dart';
+import 'package:afyakit/shared/screens/screen_header.dart';
 
 import 'package:afyakit/dev/dev_role_switcher.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
-
-import 'package:afyakit/core/auth_users/controllers/auth_user_controller.dart';
-import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_session_providers.dart';
-import 'package:afyakit/core/auth_users/services/user_operations_service.dart';
-
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/screen_header.dart';
-import 'package:afyakit/shared/services/dialog_service.dart';
 
 class UserProfileEditorScreen extends ConsumerStatefulWidget {
   final String tenantId;
@@ -36,180 +33,126 @@ class UserProfileEditorScreen extends ConsumerStatefulWidget {
 class _UserProfileEditorScreenState
     extends ConsumerState<UserProfileEditorScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _phone = TextEditingController();
-  bool _seeded = false;
-  bool _syncedOnce = false; // ensure we only auto-sync once
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _phone.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final paramUid = widget.inviteParams?['uid']?.trim();
-    final sessionAsync = ref.watch(currentUserProvider);
+    final scope = ProfileScope(
+      tenantId: widget.tenantId,
+      inviteUid: widget.inviteParams?['uid']?.trim(),
+    );
 
-    final effectiveUid = (paramUid != null && paramUid.isNotEmpty)
-        ? paramUid
-        : sessionAsync.maybeWhen(
-            data: (u) => (u?.uid ?? '').trim(),
-            orElse: () => '',
-          );
+    // init controller once
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(profileControllerProvider(scope).notifier).init();
+    });
 
-    if (effectiveUid.isEmpty) {
-      return sessionAsync.when(
-        loading: () =>
-            const BaseScreen(body: Center(child: CircularProgressIndicator())),
-        error: (e, _) => BaseScreen(
-          body: Center(child: Text('⚠️ Failed to load session: $e')),
-        ),
-        data: (_) => const BaseScreen(
-          body: Center(child: Text('⚠️ No user id provided.')),
+    final state = ref.watch(profileControllerProvider(scope));
+    final ctrl = ref.read(profileControllerProvider(scope).notifier);
+
+    if (state.uid.isEmpty) {
+      return const BaseScreen(
+        body: Center(child: Text('⚠️ No user id provided.')),
+      );
+    }
+
+    if (state.loading && state.user == null) {
+      return const BaseScreen(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (state.user == null) {
+      return BaseScreen(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('⚠️ No user found.'),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: ctrl.retrySync,
+                icon: const Icon(Icons.sync),
+                label: const Text('Retry (sync)'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    final userAsync = ref.watch(authUserByIdProvider(effectiveUid));
+    final user = state.user!;
 
-    // Auto-sync claims once if we landed here from an invite OR if the doc is missing.
-    ref.listen<AsyncValue<AuthUser?>>(authUserByIdProvider(effectiveUid), (
-      prev,
-      next,
-    ) async {
-      if (_syncedOnce) return;
-      final fromInvite = (widget.inviteParams ?? {}).isNotEmpty;
-      final missing = next.hasValue && next.value == null;
-
-      if (fromInvite || missing) {
-        _syncedOnce = true;
-        try {
-          final svc = await ref.read(
-            userOperationsServiceProvider(widget.tenantId).future,
-          );
-          await svc.syncClaimsAndRefresh();
-          ref.invalidate(authUserByIdProvider(effectiveUid));
-        } catch (_) {
-          // best-effort
-        }
-      }
-    });
-
-    return userAsync.when(
-      loading: () =>
-          const BaseScreen(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) =>
-          BaseScreen(body: Center(child: Text('⚠️ Failed to load user: $e'))),
-      data: (user) {
-        if (user == null) return _buildMissingUser(effectiveUid);
-
-        // Seed form fields once.
-        if (!_seeded) {
-          _name.text = _displayLabelFor(user);
-          _phone.text = user.phoneNumber ?? '';
-          _seeded = true;
-        }
-
-        return BaseScreen(
-          maxContentWidth: 640,
-          scrollable: true,
-          header: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: ScreenHeader('My Profile'),
-          ),
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildHeaderBlock(user, effectiveUid),
-                const SizedBox(height: 24),
-                _buildEditableFields(),
-                const SizedBox(height: 32),
-                _ReadOnlyFields(user: user),
-                const SizedBox(height: 32),
-                if (user.email == 'muchiridm@gmail.com')
-                  DevRoleSwitcher(user: user, tenantId: widget.tenantId),
-                const SizedBox(height: 24),
-                _buildSaveButton(context, effectiveUid),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────
-  // Private builders
-  // ────────────────────────────────────────────────────────────
-
-  Widget _buildMissingUser(String uid) {
     return BaseScreen(
-      body: Center(
+      maxContentWidth: 640,
+      scrollable: true,
+      header: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: ScreenHeader('My Profile'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('⚠️ No user found.'),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () async {
-                try {
-                  final svc = await ref.read(
-                    userOperationsServiceProvider(widget.tenantId).future,
-                  );
-                  await svc.syncClaimsAndRefresh();
-                } finally {
-                  ref.invalidate(authUserByIdProvider(uid));
-                }
+            _buildHeaderBlock(
+              context,
+              user,
+              onEditAvatar: () {
+                ctrl.changeAvatar(context);
               },
-              icon: const Icon(Icons.sync),
-              label: const Text('Retry (sync)'),
             ),
+            const SizedBox(height: 24),
+            _buildEditableFields(state),
+            const SizedBox(height: 32),
+            _ReadOnlyFields(user: user),
+            const SizedBox(height: 32),
+            if (user.email == 'muchiridm@gmail.com')
+              DevRoleSwitcher(user: user, tenantId: widget.tenantId),
+            const SizedBox(height: 24),
+            _buildSaveButton(context, ctrl, state),
           ],
         ),
       ),
     );
   }
 
-  /// Header with avatar + role chip + (optional) quick edit for avatar.
-  Widget _buildHeaderBlock(AuthUser user, String uid) {
-    final display = _name.text.trim().isEmpty
-        ? _fallbackName(user)
-        : _name.text.trim();
+  // ── UI blocks ───────────────────────────────────────────────
+
+  Widget _buildHeaderBlock(
+    BuildContext context,
+    AuthUser user, {
+    required VoidCallback onEditAvatar,
+  }) {
+    final display = displayLabelFromUser(
+      user,
+    ); // smart displayName/email/phone/uid
+
     return Column(
       children: [
         _AvatarBlock(
           displayName: display,
           avatarUrl: user.avatarUrl,
-          onEditAvatar: () async {
-            final newUrl = await DialogService.prompt(
-              title: 'Update Avatar URL',
-              initialValue: user.avatarUrl ?? '',
-            );
-            if (newUrl == null || newUrl.trim().isEmpty) return;
-            await ref.read(authUserControllerProvider.notifier).updateFields(
-              uid,
-              {'avatarUrl': newUrl.trim()},
-            );
-            ref.invalidate(authUserByIdProvider(uid));
-          },
+          onEditAvatar: onEditAvatar,
         ),
         const SizedBox(height: 8),
-        _RoleChip(label: _roleLabel(user)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _RoleChip(
+              label: roleLabel(user.role),
+            ), // ✅ pass the role, not the whole user
+            const SizedBox(width: 8),
+            _RoleChip(label: user.status.label), // optional but nice
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildEditableFields() {
+  Widget _buildEditableFields(ProfileFormState state) {
     return Form(
       key: _formKey,
       child: Column(
         children: [
           TextFormField(
-            controller: _name,
+            controller: state.nameController,
             decoration: const InputDecoration(
               labelText: 'Display Name',
               hintText: 'e.g. Dr. John Doe',
@@ -221,7 +164,7 @@ class _UserProfileEditorScreenState
           ),
           const SizedBox(height: 16),
           TextFormField(
-            controller: _phone,
+            controller: state.phoneController,
             decoration: const InputDecoration(labelText: 'WhatsApp Number'),
             keyboardType: TextInputType.phone,
           ),
@@ -230,10 +173,12 @@ class _UserProfileEditorScreenState
     );
   }
 
-  Widget _buildSaveButton(BuildContext context, String uid) {
-    final isBusy = ref.watch(authUserControllerProvider).isLoading;
-    final ctrl = ref.read(authUserControllerProvider.notifier);
-
+  Widget _buildSaveButton(
+    BuildContext context,
+    ProfileController ctrl,
+    ProfileFormState state,
+  ) {
+    final isBusy = state.loading;
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -249,47 +194,18 @@ class _UserProfileEditorScreenState
             ? null
             : () async {
                 if (!(_formKey.currentState?.validate() ?? false)) return;
-                final updates = <String, dynamic>{
-                  'displayName': _name.text.trim(),
-                  'phoneNumber': _phone.text.trim(),
-                };
-                await ctrl.updateFields(uid, updates);
-                ref.invalidate(authUserByIdProvider(uid));
-                if (context.mounted) Navigator.pop(context);
+                await ctrl.save(context);
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
               },
       ),
     );
   }
-
-  // ────────────────────────────────────────────────────────────
-  // Helpers
-  // ────────────────────────────────────────────────────────────
-
-  String _fallbackName(AuthUser u) {
-    if (u.displayName.trim().isNotEmpty) return u.displayName.trim();
-    if (u.email.trim().isNotEmpty) return u.email.trim();
-    if ((u.phoneNumber ?? '').trim().isNotEmpty) return u.phoneNumber!.trim();
-    return u.uid;
-  }
-
-  String _displayLabelFor(AuthUser u) {
-    if (u.displayName.trim().isNotEmpty) return u.displayName.trim();
-    final claimName = (u.claims?['displayName'] as String?)?.trim();
-    if (claimName != null && claimName.isNotEmpty) return claimName;
-    return _fallbackName(u);
-  }
-
-  /// Produces a pretty label from raw role string: "admin" → "Admin"
-  String _roleLabel(AuthUser u) {
-    final raw = (u.role).toString().trim();
-    if (raw.isEmpty) return '—';
-    final cleaned = raw.contains('.') ? raw.split('.').last : raw;
-    return cleaned[0].toUpperCase() + cleaned.substring(1);
-  }
 }
 
 // ──────────────────────────────────────────────────────────────
-// Read-only fields block (now includes Role)
+// Read-only fields block (unchanged except imports)
 // ──────────────────────────────────────────────────────────────
 
 class _ReadOnlyFields extends ConsumerWidget {
@@ -399,16 +315,9 @@ class _AvatarBlock extends StatelessWidget {
   final String? avatarUrl;
   final VoidCallback onEditAvatar;
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ').where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final initials = _initials(displayName);
+    final initials = initialsFromName(displayName);
 
     return Column(
       children: [
