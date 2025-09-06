@@ -1,12 +1,12 @@
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/records/issues/controllers/engines/issue_form_engine.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_engine.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/inventory_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/records/issues/controllers/states/issue_record_state.dart';
-import 'package:afyakit/core/records/issues/controllers/controllers/multi_cart_controller.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_state.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
@@ -16,14 +16,14 @@ import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
 final issueFormControllerProvider =
-    StateNotifierProvider.autoDispose<IssueFormController, IssueRecordState>(
+    StateNotifierProvider.autoDispose<IssueFormController, IssueFormState>(
       (ref) => IssueFormController(ref),
     );
 
-class IssueFormController extends SafeStateNotifier<IssueRecordState> {
+class IssueFormController extends SafeStateNotifier<IssueFormState> {
   final Ref ref;
 
-  IssueFormController(this.ref) : super(IssueRecordState());
+  IssueFormController(this.ref) : super(IssueFormState());
 
   void setType(IssueType type) {
     state = state.copyWith(type: type);

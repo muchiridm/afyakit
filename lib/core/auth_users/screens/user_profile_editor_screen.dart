@@ -1,6 +1,7 @@
 // lib/core/auth_users/screens/user_profile_editor_screen.dart
 import 'package:afyakit/core/auth_users/controllers/auth_user/profile_controller.dart';
 import 'package:afyakit/core/auth_users/utils/user_format.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -120,9 +121,7 @@ class _UserProfileEditorScreenState
     AuthUser user, {
     required VoidCallback onEditAvatar,
   }) {
-    final display = displayLabelFromUser(
-      user,
-    ); // smart displayName/email/phone/uid
+    final display = user.displayLabel();
 
     return Column(
       children: [

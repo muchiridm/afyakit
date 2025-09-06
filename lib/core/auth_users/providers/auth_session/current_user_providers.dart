@@ -6,7 +6,6 @@ import 'package:dio/dio.dart' show DioException;
 import 'package:afyakit/shared/utils/provider_utils.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
-import 'package:afyakit/core/auth_users/utils/user_format.dart';
 
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -231,7 +230,7 @@ final userDisplayProvider = FutureProvider.autoDispose.family<String, String>((
   } catch (_) {
     user = null;
   }
-  if (user != null) return displayLabelFromUser(user);
+  if (user != null) return user.displayLabel();
 
   final me = fb.FirebaseAuth.instance.currentUser;
   if (me?.uid == uid) {
@@ -251,13 +250,10 @@ final currentUserDisplayProvider = Provider.autoDispose<String?>((ref) {
   if (uid == null || uid.isEmpty) return null;
 
   final meAsync = ref.watch(authUserByIdProvider(uid));
-  return meAsync.maybeWhen(
-    data: (u) => displayLabelFromUser(u),
-    orElse: () => null,
-  );
+  return meAsync.maybeWhen(data: (u) => u!.displayLabel(), orElse: () => null);
 });
 
 final userDisplayNameProvider = Provider.autoDispose<String?>((ref) {
   final me = ref.watch(currentAuthUserProvider);
-  return me.maybeWhen(data: (u) => displayLabelFromUser(u), orElse: () => null);
+  return me.maybeWhen(data: (u) => u!.displayLabel(), orElse: () => null);
 });

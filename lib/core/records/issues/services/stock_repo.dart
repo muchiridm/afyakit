@@ -1,4 +1,6 @@
+// lib/core/records/issues/services/stock_repo.dart
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // for FirebaseException, FieldValue, Timestamp
 
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
@@ -70,32 +72,85 @@ class StockRepo {
     }
   }
 
+  /// Decrement quantity or delete the batch if it reaches zero.
+  /// Web-safe: don’t throw inside the transaction (avoids boxed “converted Future”).
   Future<void> decrementOrDelete({
     required String storeId,
     required String batchId,
     required int amount,
   }) async {
     final ref = batchesCol(storeId).doc(batchId);
-    await db.runTransaction((tx) async {
-      final s = await tx.get(ref);
-      if (!s.exists) throw StateError('❌ Batch not found: $batchId');
-      final m = s.data()!;
-      final cur = (m['quantity'] is num)
-          ? (m['quantity'] as num).toInt()
-          : int.tryParse('${m['quantity']}') ?? 0;
-      if (cur < amount) {
-        throw StateError('❌ Insufficient stock in $batchId');
+
+    // Preflight (outside tx) so errors are explicit and not boxed.
+    try {
+      final pre = await ref.get();
+      if (!pre.exists) {
+        throw StateError('not-found: path=${ref.path}');
       }
-      final next = cur - amount;
-      if (next > 0) {
-        tx.update(ref, {
-          'quantity': next,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        tx.delete(ref);
+      final data = pre.data()!;
+      final have = (data['quantity'] as num?)?.toInt() ?? 0;
+
+      if (amount <= 0) {
+        throw StateError('invalid-amount: $amount (path=${ref.path})');
       }
-    });
+      if (have < amount) {
+        throw StateError(
+          'underflow: have=$have, subtract=$amount (path=${ref.path})',
+        );
+      }
+    } on FirebaseException catch (e, st) {
+      debugPrint(
+        '🔥 [preflight] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
+      );
+      throw StateError('firebase-${e.code}: ${e.message} (path=${ref.path})');
+    }
+
+    String? softError; // set inside tx instead of throwing
+
+    try {
+      await db.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) {
+          softError = 'not-found: path=${ref.path}';
+          return;
+        }
+
+        final data = snap.data()!;
+        final current = (data['quantity'] as num?)?.toInt() ?? 0;
+
+        if (amount <= 0) {
+          softError = 'invalid-amount: $amount (path=${ref.path})';
+          return;
+        }
+        if (current < amount) {
+          softError =
+              'underflow: have=$current, subtract=$amount (path=${ref.path})';
+          return;
+        }
+
+        final next = current - amount;
+        if (next > 0) {
+          tx.update(ref, {
+            'quantity': next,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          tx.delete(ref);
+        }
+      });
+
+      if (softError != null) {
+        throw StateError(softError!);
+      }
+    } on FirebaseException catch (e, st) {
+      debugPrint(
+        '🔥 [decrementOrDelete] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
+      );
+      throw StateError('firebase-${e.code}: ${e.message} (path=${ref.path})');
+    } catch (e, st) {
+      debugPrint('🔥 [decrementOrDelete] Unexpected at ${ref.path}: $e\n$st');
+      throw StateError('decrementOrDelete failed at ${ref.path}: $e');
+    }
   }
 
   Future<DocumentReference<Map<String, dynamic>>> createBatch(

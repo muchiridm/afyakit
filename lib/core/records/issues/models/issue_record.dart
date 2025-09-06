@@ -1,8 +1,6 @@
-import 'package:afyakit/core/records/issues/models/enums/issue_status_x.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_x.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_status_enum.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
 import 'package:afyakit/shared/utils/parsers/parse_date.dart';
 
 class IssueRecord {

@@ -4,7 +4,7 @@ import 'dart:math' as math; // ← for short request ids
 import 'package:afyakit/api/api_config.dart';
 import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
-import 'package:afyakit/shared/utils/dev_trace.dart'; // ← ADD
+import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
@@ -17,6 +17,17 @@ final apiClientProvider = FutureProvider<ApiClient>((ref) async {
   final tokenRepo = ref.watch(tokenProvider);
   return ApiClient.create(tenantId: tenantId, tokenProvider: tokenRepo);
 });
+
+// ──────────────────────────────────────────────────────────────
+// Helpers to identify public auth routes
+// ──────────────────────────────────────────────────────────────
+bool _isPublicAuthRoute(String path) {
+  // Keep these in sync with backend /:tenantId/auth_login/*
+  return path.contains('/auth_login/check-user-status') ||
+      path.contains('/auth_login/wa/start') ||
+      path.contains('/auth_login/wa/verify') ||
+      path.contains('/auth_login/email/reset');
+}
 
 class ApiClient {
   final Dio dio;
@@ -97,7 +108,6 @@ class ApiClient {
           options.extra['t0'] = DateTime.now().millisecondsSinceEpoch;
 
           final rid = options.extra['rid'];
-          // Carry correlation id to backend logs
           options.headers['X-Request-Id'] = rid;
 
           if (kDebugMode) {
@@ -107,12 +117,20 @@ class ApiClient {
             );
           }
 
+          // ⛔️ Public auth routes: do not attach Authorization, do not wait on refresh
+          final isPublic =
+              options.extra['skipAuth'] == true ||
+              _isPublicAuthRoute(options.uri.path);
+          if (isPublic) {
+            return handler.next(options);
+          }
+
+          // Normal (protected) requests → attach token; ride any in-flight refresh
           try {
             final token = await tokenProvider.tryGetToken();
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
             }
-            // If a refresh is in-flight, wait to ride on the fresh token
             if (refreshing != null) {
               final fresh = await refreshOnce();
               if ((fresh ?? '').isNotEmpty) {
@@ -143,6 +161,14 @@ class ApiClient {
           final status = e.response?.statusCode ?? 0;
           final wasRetried = e.requestOptions.extra['retried'] == true;
           final rid = e.requestOptions.extra['rid'];
+          final isPublic =
+              e.requestOptions.extra['skipAuth'] == true ||
+              _isPublicAuthRoute(e.requestOptions.uri.path);
+
+          // ⛔️ Never refresh/retry for public routes
+          if (isPublic) {
+            return handler.next(e);
+          }
 
           // Only these get refresh+single retry
           final shouldRetryWithRefresh =
@@ -173,10 +199,14 @@ class ApiClient {
             if (kDebugMode) {
               debugPrint('⚠️ (#$rid) refresh failed → surface $status');
             }
-            // fall through to propagate the original error
           }
 
-          // IMPORTANT: Let all other 4xx propagate as errors (don’t "resolve"/passthrough).
+          if (kDebugMode) {
+            debugPrint(
+              '❌ ${e.type} ${e.response?.statusCode ?? 0} on ${e.requestOptions.uri} '
+              '(#${e.requestOptions.extra['rid']}) data=${e.response?.data}',
+            );
+          }
           return handler.next(e);
         },
       ),

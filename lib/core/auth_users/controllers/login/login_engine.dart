@@ -1,6 +1,8 @@
+// lib/core/auth_users/controllers/login/login_engine.dart
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/models/login_outcome.dart';
+import 'package:afyakit/core/auth_users/models/wa_start_response.dart';
 import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
 import 'package:afyakit/core/auth_users/services/login_service.dart';
 import 'package:afyakit/shared/types/app_error.dart';
@@ -21,7 +23,7 @@ final loginEngineProvider = FutureProvider.family
     });
 
 class LoginEngine {
-  final LoginService loginSvc; // ⬅️ renamed to avoid clash
+  final LoginService loginSvc;
   final AuthSessionService session;
 
   /// Allow INVITED users during explicit invite-accept flow.
@@ -34,29 +36,26 @@ class LoginEngine {
     this.allowInvitedForInviteFlow = false,
   });
 
-  // ⛳️ Shim to keep your controller API the same.
+  // ⛳️ shim
   Future<Result<LoginOutcome>> login(String email, String password) =>
       loginWithEmailPassword(email, password);
 
+  // ── Email + Password ────────────────────────────────────────
   Future<Result<LoginOutcome>> loginWithEmailPassword(
     String rawEmail,
     String rawPassword,
   ) async {
     try {
-      // ── sanitize ──────────────────────────────────────────────
       final email = EmailHelper.normalize(rawEmail);
       final password = rawPassword.trim();
       if (email.isEmpty || password.isEmpty) {
         return Err(AppError('auth/invalid-input', 'Email & password required'));
       }
 
-      // ── 1) Membership probe (fresh) via SESSION service ───────
+      // 1) Membership probe (fresh) via service
       late final AuthUser membership;
       try {
-        membership = await session.checkUserStatus(
-          email: email,
-          useCache: false,
-        );
+        membership = await loginSvc.checkUserStatus(email: email);
       } on DioException catch (e) {
         final sc = e.response?.statusCode ?? 0;
         if (sc == 404) {
@@ -86,10 +85,9 @@ class LoginEngine {
           ),
         );
       }
-
       final isActive = membership.status.isActive;
 
-      // ── 2) Firebase sign-in via LOGIN service ─────────────────
+      // 2) Firebase sign-in
       try {
         debugPrint('🔐 Signing in Firebase user: $email');
         await loginSvc.signInWithEmailAndPassword(
@@ -97,7 +95,6 @@ class LoginEngine {
           password: password,
         );
       } on FirebaseAuthException catch (e) {
-        debugPrint('❌ Firebase sign-in error: ${e.code}');
         switch (e.code) {
           case 'user-disabled':
             return Err(
@@ -116,41 +113,24 @@ class LoginEngine {
 
       await loginSvc.waitForUser();
 
-      // ── 3) Claims (ACTIVE only) via SESSION service ───────────
-      final expected = loginSvc.expectedTenantId; // from createWithBackend
+      // 3) Tenant claim (ACTIVE only)
+      final expected = loginSvc.expectedTenantId;
       var claimsSynced = false;
-
       if (isActive && expected != null && expected.isNotEmpty) {
-        debugPrint('🧭 Enforcing tenant claim → expected=$expected');
         try {
           await session.ensureTenantClaimSelected(
             expected,
-            reason: 'LoginEngine.login',
+            reason: 'LoginEngine.email',
           );
           claimsSynced = true;
-          debugPrint('✅ Tenant claim enforced for $expected');
         } catch (e) {
-          debugPrint('❌ Tenant claim enforcement failed: $e');
           final mapped = _mapSyncClaimsError(e);
-          final code = mapped?.code;
-          if (code == 'auth/membership-not-found' ||
-              code == 'auth/user-not-active' ||
-              code == 'auth/forbidden' ||
-              code == 'auth/wrong-tenant') {
+          if (mapped != null) {
             await loginSvc.signOut();
-            return Err(
-              mapped ??
-                  AppError(
-                    'auth/wrong-tenant',
-                    'This account does not belong to this tenant.',
-                  ),
-            );
+            return Err(mapped);
           }
-          // Transient: continue signed-in without claims; SessionEngine/guards will keep you safe.
-          debugPrint('⚠️ Proceeding without claims due to transient error.');
+          debugPrint('⚠️ Proceeding without claims (transient).');
         }
-      } else if (!isActive) {
-        debugPrint('ℹ️ Invited/inactive → limited mode (no claim sync).');
       }
 
       return Ok(
@@ -160,29 +140,112 @@ class LoginEngine {
         ),
       );
     } catch (e) {
-      debugPrint('❌ Login error: $e');
       return Err(AppError('auth/login-failed', 'Login failed', cause: e));
     }
   }
 
+  // ── WhatsApp OTP ────────────────────────────────────────────
+  Future<Result<WaStartResponse>> waStart(String phoneE164) async {
+    try {
+      final res = await loginSvc.waStartLogin(
+        phoneE164: phoneE164.trim(),
+        purpose: 'login',
+        codeLength: 6,
+      );
+      return Ok(res);
+    } catch (e) {
+      return Err(
+        AppError(
+          'auth/wa-start-failed',
+          'Failed to start WhatsApp login',
+          cause: e,
+        ),
+      );
+    }
+  }
+
+  Future<Result<LoginOutcome>> waVerifyAndSignIn({
+    required String phoneE164,
+    required String code,
+    String? attemptId,
+  }) async {
+    try {
+      // 1) Probe membership by phone (optional but gives UX mode)
+      AuthUser? membership;
+      try {
+        membership = await loginSvc.checkUserStatus(
+          phoneNumber: phoneE164.trim(),
+        );
+      } catch (_) {
+        // Non-fatal; server may accept login and return custom token anyway.
+      }
+      final isActive = membership?.status.isActive ?? false;
+      if (membership?.status.isDisabled == true) {
+        return Err(
+          AppError(
+            'auth/user-disabled',
+            'This account has been disabled on this tenant.',
+          ),
+        );
+      }
+
+      // 2) Verify code → custom token → sign in
+      await loginSvc.waVerifyAndSignIn(
+        phoneE164: phoneE164.trim(),
+        code: code.trim(),
+        attemptId: (attemptId ?? '').trim().isEmpty ? null : attemptId!.trim(),
+      );
+      await loginSvc.waitForUser();
+
+      // 3) Tenant claim (ACTIVE only)
+      final expected = loginSvc.expectedTenantId;
+      var claimsSynced = false;
+      if (isActive && expected != null && expected.isNotEmpty) {
+        try {
+          await session.ensureTenantClaimSelected(
+            expected,
+            reason: 'LoginEngine.wa',
+          );
+          claimsSynced = true;
+        } catch (e) {
+          final mapped = _mapSyncClaimsError(e);
+          if (mapped != null) {
+            await loginSvc.signOut();
+            return Err(mapped);
+          }
+          debugPrint('⚠️ Proceeding without claims (transient).');
+        }
+      }
+
+      return Ok(
+        LoginOutcome(
+          mode: isActive ? LoginMode.active : LoginMode.limited,
+          claimsSynced: claimsSynced,
+        ),
+      );
+    } catch (e) {
+      return Err(
+        AppError('auth/wa-verify-failed', 'Verification failed', cause: e),
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Utilities
+  // ─────────────────────────────────────────────────────────────
   Future<Result<void>> sendPasswordReset(String rawEmail) async {
     try {
       final email = EmailHelper.normalize(rawEmail);
-      if (!EmailHelper.isValid(email)) {
+      if (email.isEmpty) {
         return Err(AppError('auth/bad-email', 'Invalid email'));
       }
-
-      // Pre-check existence to give clean UX.
       final isKnown = await loginSvc.isEmailRegistered(email);
-      debugPrint('📨 reset precheck(email=$email) → $isKnown');
       if (!isKnown) {
         return Err(AppError('auth/not-registered', 'Email not registered'));
       }
-
       await loginSvc.sendPasswordResetEmail(email, viaBackend: true);
       return const Ok(null);
     } catch (e) {
-      debugPrint('❌ Password reset error: $e');
       return Err(
         AppError('auth/reset-failed', 'Password reset failed', cause: e),
       );
@@ -211,9 +274,6 @@ class LoginEngine {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Private: map backend sync errors to clean UX messages
-  // ─────────────────────────────────────────────────────────────
   AppError? _mapSyncClaimsError(Object e) {
     if (e is! DioException) return null;
     final status = e.response?.statusCode ?? 0;
@@ -233,6 +293,9 @@ class LoginEngine {
         'auth/no-membership',
         'No access to this tenant. Ask an admin to invite you.',
       );
+    }
+    if (status == 403 && code == 'FORBIDDEN') {
+      return AppError('auth/forbidden', 'You are not allowed on this tenant.');
     }
     return null;
   }

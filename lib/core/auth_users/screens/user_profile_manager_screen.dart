@@ -6,7 +6,6 @@ import 'package:afyakit/core/auth_users/providers/auth_session/current_user_prov
 import 'package:afyakit/core/auth_users/providers/auth_user/auth_user_stream_provider.dart';
 import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
 
-import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
@@ -17,6 +16,7 @@ import 'package:afyakit/core/auth_users/widgets/user_profile_card.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -137,7 +137,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
     }).toList();
 
     return UserProfileCard(
-      displayName: displayLabelFromUser(user),
+      displayName: user.displayLabel(),
       email: user.email,
       phoneNumber: user.phoneNumber,
       role: user.effectiveRole.name, // via AuthUserX
@@ -182,8 +182,4 @@ class UserProfileManagerScreen extends ConsumerWidget {
       },
     );
   }
-
-  // ────────────────────────────────────────────────────────────
-  // Helpers
-  // ────────────────────────────────────────────────────────────
 }

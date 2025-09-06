@@ -1,10 +1,14 @@
-// lib/features/records/issues/engines/issue_policy_engine.dart
-import 'package:afyakit/core/records/issues/models/enums/issue_action_enum.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_status_enum.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_action_x.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final issuePolicyEngineProvider = Provider<IssuePolicyEngine>(
+  (ref) => IssuePolicyEngine(),
+);
 
 class IssuePolicyEngine {
   // ── Permissions (single source of truth) ─────────────────────

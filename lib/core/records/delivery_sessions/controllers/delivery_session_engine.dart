@@ -7,7 +7,7 @@ import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dar
 
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_state.dart';
 import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/view_models/delivery_review_summary.dart';
+import 'package:afyakit/core/records/delivery_sessions/models/delivery_review_summary.dart';
 import 'package:afyakit/core/records/delivery_sessions/services/delivery_session_service.dart';
 
 /// Engine: holds state + logic. Single source of truth for delivery sessions.

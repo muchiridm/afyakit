@@ -1,6 +1,7 @@
 // lib/features/dev/dev_auth_manager.dart
+import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/services/login_service.dart';
-import 'package:afyakit/core/auth_users/services/auth_session_service.dart'; // ⬅️ NEW
+import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
 import 'package:afyakit/core/auth_users/utils/claim_validator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +16,10 @@ class DevAuthManager {
   static const _devPassword = 'letmein';
   static String? _lastAttemptedEmail;
 
-  static bool get isLocalhost => Uri.base.host == 'localhost';
+  static bool get isLocalhost {
+    final host = Uri.base.host;
+    return host == 'localhost' || host == '127.0.0.1';
+  }
 
   static bool isDevEmail(String? email) {
     final normalized = EmailHelper.normalize(email ?? '');
@@ -28,9 +32,7 @@ class DevAuthManager {
     );
     final currentUser = ref.read(loginServiceFirebaseOnlyProvider).currentUser;
     final currentEmail = EmailHelper.normalize(currentUser?.email ?? '');
-
     final match = isDevEmail(queryEmail) || isDevEmail(currentEmail);
-
     debugPrint(
       '🔍 Dev Login Intent → query="$queryEmail", current="$currentEmail", match=$match',
     );
@@ -42,7 +44,8 @@ class DevAuthManager {
     String? overrideEmail,
     bool forceRetry = false,
   }) async {
-    final loginSvc = ref.read(loginServiceFirebaseOnlyProvider);
+    final tenantId = ref.read(tenantIdProvider);
+    final loginSvc = await ref.read(loginServiceProvider(tenantId).future);
 
     final email = EmailHelper.normalize(
       overrideEmail ??
@@ -59,12 +62,10 @@ class DevAuthManager {
         message: 'Dev login skipped: email missing.',
       );
     }
-
     if (_lastAttemptedEmail == email && !forceRetry) {
       debugPrint('⏭️ Dev login already attempted for $email.');
       return const DevAuthResult(success: true, claimsSynced: true);
     }
-
     if (!kDebugMode || !isLocalhost || !isDevEmail(email)) {
       debugPrint(
         '🚫 Dev login skipped (debug=$kDebugMode, localhost=$isLocalhost, email=$email)',
@@ -80,7 +81,7 @@ class DevAuthManager {
     debugPrint('🧪 Attempting dev login with: $email');
 
     try {
-      // 1) Firebase sign-in (client-only)
+      // 1) Sign in
       await loginSvc.signInWithEmailAndPassword(
         email: email,
         password: _devPassword,
@@ -88,30 +89,42 @@ class DevAuthManager {
       await loginSvc.waitForUser();
       debugPrint('✅ Firebase signed in as ${loginSvc.currentUser?.email}');
 
-      // 2) Session ops (backend membership + claims path)
-      final tenantId = ref.read(tenantIdProvider);
+      // 2) MUST be a member of the CURRENT tenant
+      try {
+        final membership = await loginSvc.checkUserStatus(email: email);
+        if (!membership.status.isActive) {
+          await loginSvc.signOut();
+          return const DevAuthResult(
+            success: false,
+            claimsSynced: false,
+            message: 'Dev user not active on this tenant.',
+          );
+        }
+      } catch (e) {
+        // 404 etc.
+        try {
+          await loginSvc.signOut();
+        } catch (_) {}
+        return const DevAuthResult(
+          success: false,
+          claimsSynced: false,
+          message: 'Dev user not a member of this tenant.',
+        );
+      }
+
+      // 3) Sync claims for this tenant
       final sessionOps = await ref.read(
         authSessionServiceProvider(tenantId).future,
       );
-
-      // Probe membership (non-fatal if backend still warming)
-      try {
-        await sessionOps.checkUserStatus(email: email, useCache: false);
-      } catch (probeErr) {
-        debugPrint('ℹ️ Membership probe failed/late (continuing): $probeErr');
-      }
-
-      // Ask server to sync claims, then hydrate locally (best-effort)
       try {
         await sessionOps.syncClaimsAndRefresh();
       } catch (syncErr) {
         debugPrint('⚠️ Claim/session sync failed: $syncErr');
       }
 
-      // 3) Retry for claims to show up (tight loop, small N)
+      // 4) Observe claims (fast retries)
       bool claimsReady = false;
       Map<String, dynamic> claims = {};
-
       for (var attempt = 1; attempt <= 3; attempt++) {
         await sessionOps.forceRefreshIdToken();
         try {
@@ -119,9 +132,7 @@ class DevAuthManager {
         } catch (_) {
           claims = const {};
         }
-
         debugPrint('🔐 Attempt $attempt → Claims: $claims');
-
         if (ClaimValidator.isValid(claims, verbose: true)) {
           claimsReady = true;
           break;
@@ -130,14 +141,12 @@ class DevAuthManager {
       }
 
       if (!claimsReady) {
-        debugPrint('❌ Claims still missing after retries (continuing).');
         return DevAuthResult(
           success: true,
           claimsSynced: false,
           message: 'Signed in, but claims not available after retries.',
         );
       }
-
       return const DevAuthResult(success: true, claimsSynced: true);
     } catch (e, st) {
       debugPrint('❌ Dev login failed: $e\n$st');

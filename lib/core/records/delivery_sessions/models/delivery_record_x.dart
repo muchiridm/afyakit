@@ -1,4 +1,3 @@
-// lib/features/models/delivery_record_x.dart
 import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
 
 extension DeliveryRecordX on DeliveryRecord {

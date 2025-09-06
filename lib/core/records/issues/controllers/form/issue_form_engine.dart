@@ -1,14 +1,19 @@
-// lib/features/records/issues/controllers/engines/issue_submit_engine.dart
-
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';
-import 'package:afyakit/core/records/issues/controllers/states/multi_cart_state.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_state.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/build_issue_submission_from_cart.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_validator.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
+  final tenantId = ref.watch(tenantIdProvider);
+  return IssueFormEngine(IssueService(tenantId));
+});
 
 class SubmitResult {
   final bool allSuccess;

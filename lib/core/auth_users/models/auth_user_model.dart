@@ -19,8 +19,8 @@ class AuthUser {
   final Map<String, dynamic>? claims;
 
   // ── profile fields
-  final String displayName; // '' by default
-  final UserRole role; // Model wins; claims are fallback only
+  final String displayName;
+  final UserRole role;
   final List<String> stores;
   final String? avatarUrl;
 

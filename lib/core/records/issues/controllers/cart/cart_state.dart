@@ -1,5 +1,5 @@
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 
 class CartState {
   final Map<String, Map<String, int>> batchQuantities;

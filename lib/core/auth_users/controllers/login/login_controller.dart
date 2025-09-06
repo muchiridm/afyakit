@@ -1,3 +1,4 @@
+// lib/core/auth_users/controllers/login/login_controller.dart
 import 'package:afyakit/app/afyakit_app.dart';
 import 'package:afyakit/core/auth_users/models/login_outcome.dart';
 import 'package:afyakit/shared/types/result.dart';
@@ -12,21 +13,46 @@ import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 class LoginFormState {
-  final TextEditingController emailController;
+  final TextEditingController loginController;
   final String password;
   final bool loading;
 
+  // WhatsApp OTP state
+  final bool waSending;
+  final bool waVerifying;
+  final bool waCodeSent;
+  final String? waAttemptId;
+  final String? waPhoneE164;
+
   LoginFormState({
-    required this.emailController,
+    required this.loginController,
     this.password = '',
     this.loading = false,
+    this.waSending = false,
+    this.waVerifying = false,
+    this.waCodeSent = false,
+    this.waAttemptId,
+    this.waPhoneE164,
   });
 
-  LoginFormState copyWith({String? password, bool? loading}) {
+  LoginFormState copyWith({
+    String? password,
+    bool? loading,
+    bool? waSending,
+    bool? waVerifying,
+    bool? waCodeSent,
+    String? waAttemptId,
+    String? waPhoneE164,
+  }) {
     return LoginFormState(
-      emailController: emailController,
+      loginController: loginController,
       password: password ?? this.password,
       loading: loading ?? this.loading,
+      waSending: waSending ?? this.waSending,
+      waVerifying: waVerifying ?? this.waVerifying,
+      waCodeSent: waCodeSent ?? this.waCodeSent,
+      waAttemptId: waAttemptId ?? this.waAttemptId,
+      waPhoneE164: waPhoneE164 ?? this.waPhoneE164,
     );
   }
 }
@@ -42,9 +68,9 @@ class LoginController extends StateNotifier<LoginFormState> {
   final String tenantId;
 
   LoginController(this.ref, {required this.tenantId})
-    : super(LoginFormState(emailController: TextEditingController()));
+    : super(LoginFormState(loginController: TextEditingController()));
 
-  TextEditingController get emailController => state.emailController;
+  TextEditingController get emailController => state.loginController;
 
   void setPassword(String value) {
     state = state.copyWith(password: value);
@@ -56,11 +82,10 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────
-  // 🔑 Login
+  // 🔑 Email login
   // ─────────────────────────────────────────────
-
   Future<void> login() async {
-    final email = EmailHelper.normalize(state.emailController.text);
+    final email = EmailHelper.normalize(state.loginController.text);
     final password = state.password.trim();
 
     if (email.isEmpty || password.isEmpty) {
@@ -75,31 +100,25 @@ class LoginController extends StateNotifier<LoginFormState> {
 
       final res = await _engine!.login(email, password);
       if (res is Err<LoginOutcome>) {
-        debugPrint('❌ Login error: ${res.error.code} - ${res.error.message}');
         SnackService.showError(res.error.message);
         return;
       }
 
       final outcome = (res as Ok<LoginOutcome>).value;
 
-      // Hydrate session (safe even in limited/invited mode)
+      // Hydrate session and navigate
       await ref.read(sessionControllerProvider(tenantId).notifier).reload();
-
-      // ⛳️ Always hand off to the AuthGate — it decides Home vs Profile.
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
         (_) => false,
       );
 
-      // 🔔 Toast after navigation
       await Future<void>.delayed(Duration.zero);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (outcome.isActive) {
           SnackService.showSuccess('Welcome back, $email!');
         } else {
-          SnackService.showInfo(
-            'Welcome, $email. Your account is invited and awaiting activation.',
-          );
+          SnackService.showInfo('Welcome, $email. Awaiting activation.');
         }
       });
     } catch (e, st) {
@@ -111,7 +130,7 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────
-  // 🔓 Logout (engine-only)
+  // 🔓 Logout
   // ─────────────────────────────────────────────
   Future<void> logout() async {
     try {
@@ -125,10 +144,9 @@ class LoginController extends StateNotifier<LoginFormState> {
       ref.invalidate(sessionControllerProvider);
       ref.invalidate(sessionControllerProvider(tenantId));
 
-      state = LoginFormState(emailController: TextEditingController());
+      state = LoginFormState(loginController: TextEditingController());
 
       await Future.delayed(const Duration(milliseconds: 300));
-
       navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
         (_) => false,
@@ -140,7 +158,7 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────
-  // 🔄 Session Hydration (engine-only)
+  // 🔄 Session Hydration
   // ─────────────────────────────────────────────
   Future<void> initialize(Future<void> Function() onSessionReady) async {
     try {
@@ -164,14 +182,11 @@ class LoginController extends StateNotifier<LoginFormState> {
   }
 
   // ─────────────────────────────────────────────
-  // 📧 Password Reset (engine-only)
+  // 📧 Password Reset
   // ─────────────────────────────────────────────
   Future<void> sendPasswordReset() async {
-    final rawInput = state.emailController.text;
+    final rawInput = state.loginController.text;
     final email = EmailHelper.normalize(rawInput);
-
-    debugPrint('📨 Raw input: $rawInput');
-    debugPrint('📨 Normalized email: $email');
 
     if (email.isEmpty) {
       SnackService.showError(
@@ -183,17 +198,105 @@ class LoginController extends StateNotifier<LoginFormState> {
     try {
       await _ensureDeps();
       final res = await _engine!.sendPasswordReset(email);
-
       if (res is Err<void>) {
         SnackService.showError('This email is not registered in the system.');
         return;
       }
-
       SnackService.showSuccess('Password reset link sent to $email');
     } catch (e, stack) {
-      debugPrint('❌ Password reset error: $e');
-      debugPrint('🧱 Stack trace:\n$stack');
+      debugPrint('❌ Password reset error: $e\n$stack');
       SnackService.showError('Something went wrong. Please try again.');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 🟢 WhatsApp OTP flow
+  // ─────────────────────────────────────────────
+  Future<void> sendWaCode(String rawPhone) async {
+    final phone = rawPhone.trim();
+    if (phone.isEmpty) {
+      SnackService.showError('Enter your WhatsApp number (E.164).');
+      return;
+    }
+
+    state = state.copyWith(waSending: true);
+    try {
+      await _ensureDeps();
+      final res = await _engine!.waStart(phone);
+      if (res is Err) {
+        SnackService.showError('Failed to send code. Try again.');
+        return;
+      }
+      final start = (res as Ok).value;
+      if (start.throttled) {
+        SnackService.showInfo(
+          'Please wait a moment before requesting another code.',
+        );
+      }
+      state = state.copyWith(
+        waSending: false,
+        waCodeSent: true,
+        waAttemptId: start.attemptId,
+        waPhoneE164: phone,
+      );
+      SnackService.showSuccess('Code sent to WhatsApp.');
+    } catch (e) {
+      SnackService.showError('Failed to send code. Try again.');
+    } finally {
+      state = state.copyWith(waSending: false);
+    }
+  }
+
+  Future<void> verifyWaCode(String rawCode) async {
+    final code = rawCode.trim();
+    final phone = (state.waPhoneE164 ?? '').trim();
+
+    if (phone.isEmpty) {
+      SnackService.showError('Enter your WhatsApp number first.');
+      return;
+    }
+    if (code.length < 4) {
+      SnackService.showError('Enter the 6-digit code.');
+      return;
+    }
+
+    state = state.copyWith(waVerifying: true);
+    try {
+      await _ensureDeps();
+      final res = await _engine!.waVerifyAndSignIn(
+        phoneE164: phone,
+        code: code,
+        attemptId: state.waAttemptId,
+      );
+      if (res is Err<LoginOutcome>) {
+        SnackService.showError(res.error.message);
+        return;
+      }
+      final outcome = (res as Ok<LoginOutcome>).value;
+
+      // Hydrate & navigate
+      await ref.read(sessionControllerProvider(tenantId).notifier).reload();
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (_) => false,
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (outcome.isActive) {
+          SnackService.showSuccess('Welcome back!');
+        } else {
+          SnackService.showInfo(
+            'Welcome. Your account is invited and awaiting activation.',
+          );
+        }
+      });
+    } catch (e) {
+      SnackService.showError(
+        'Verification failed. Check the code and try again.',
+      );
+    } finally {
+      state = state.copyWith(waVerifying: false);
     }
   }
 }

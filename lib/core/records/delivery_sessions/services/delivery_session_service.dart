@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_state.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/view_models/delivery_review_summary.dart';
+import 'package:afyakit/core/records/delivery_sessions/models/delivery_review_summary.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_name.dart';

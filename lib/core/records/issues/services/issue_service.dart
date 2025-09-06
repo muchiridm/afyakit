@@ -59,7 +59,7 @@ class IssueService {
     try {
       await _docRef(id).set(record.toMap());
     } catch (e) {
-      print('❌ Failed to add issue: $e');
+      debugPrint('❌ Failed to add issue: $e');
       rethrow;
     }
   }
@@ -69,7 +69,7 @@ class IssueService {
     try {
       await _docRef(record.id).update(record.toMap());
     } catch (e) {
-      print('❌ Failed to update issue: $e');
+      debugPrint('❌ Failed to update issue: $e');
       rethrow;
     }
   }
@@ -79,7 +79,7 @@ class IssueService {
     try {
       await _docRef(id).delete();
     } catch (e) {
-      print('❌ Failed to delete issue record: $e');
+      debugPrint('❌ Failed to delete issue record: $e');
       rethrow;
     }
   }
@@ -96,7 +96,7 @@ class IssueService {
 
       await batch.commit();
     } catch (e) {
-      print('❌ Failed to delete entries for issue $issueId: $e');
+      debugPrint('❌ Failed to delete entries for issue $issueId: $e');
       rethrow;
     }
   }
@@ -112,7 +112,7 @@ class IssueService {
           .map((doc) => IssueRecord.fromMap(doc.id, doc.data()))
           .toList();
     } catch (e) {
-      print('❌ Failed to load issues: $e');
+      debugPrint('❌ Failed to load issues: $e');
       return [];
     }
   }
@@ -124,7 +124,7 @@ class IssueService {
       if (!doc.exists) return null;
       return IssueRecord.fromMap(doc.id, doc.data()!);
     } catch (e) {
-      print('❌ Failed to fetch issue $id: $e');
+      debugPrint('❌ Failed to fetch issue $id: $e');
       return null;
     }
   }
@@ -138,7 +138,7 @@ class IssueService {
           .map((doc) => IssueEntry.fromMap(doc.id, doc.data()))
           .toList();
     } catch (e) {
-      print('❌ Failed to fetch entries for issue $issueId: $e');
+      debugPrint('❌ Failed to fetch entries for issue $issueId: $e');
       return [];
     }
   }

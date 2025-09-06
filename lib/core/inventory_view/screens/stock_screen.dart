@@ -1,8 +1,8 @@
 // lib/features/src/inventory_view/screens/stock_screen.dart
 
 import 'package:afyakit/core/inventory_view/widgets/inventory_speed_dial.dart';
-import 'package:afyakit/core/records/issues/controllers/controllers/multi_cart_controller.dart';
-import 'package:afyakit/core/records/issues/controllers/states/multi_cart_state.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_state.dart';
 import 'package:afyakit/core/records/issues/widgets/cart_drawer.dart';
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_controller.dart';

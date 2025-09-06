@@ -1,7 +1,7 @@
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
 
-class IssueRecordState {
+class IssueFormState {
   final IssueType type;
   final DateTime requestDate;
 
@@ -13,7 +13,7 @@ class IssueRecordState {
   final List<IssueRecord> issuedRecords;
   final IssueRecord? selectedIssue;
 
-  IssueRecordState({
+  IssueFormState({
     this.type = IssueType.dispense, // ✅ Default now matches expected workflow
     DateTime? requestDate,
     this.fromStore,
@@ -24,7 +24,7 @@ class IssueRecordState {
     this.selectedIssue,
   }) : requestDate = requestDate ?? DateTime.now();
 
-  IssueRecordState copyWith({
+  IssueFormState copyWith({
     IssueType? type,
     DateTime? requestDate,
     String? fromStore,
@@ -34,7 +34,7 @@ class IssueRecordState {
     List<IssueRecord>? issuedRecords,
     IssueRecord? selectedIssue,
   }) {
-    return IssueRecordState(
+    return IssueFormState(
       type: type ?? this.type,
       requestDate: requestDate ?? this.requestDate,
       fromStore: fromStore ?? this.fromStore,

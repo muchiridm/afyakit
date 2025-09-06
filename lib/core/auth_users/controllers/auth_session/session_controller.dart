@@ -11,12 +11,8 @@ import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/shared/types/result.dart';
-import 'package:afyakit/shared/types/app_error.dart';
 
-// Engines & providers
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_engine.dart';
-// ^ If your file is named differently (e.g. user_operations_engine_providers.dart),
-//   change the import to match your project.
 
 final sessionControllerProvider =
     StateNotifierProviderFamily<
@@ -140,15 +136,14 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       return;
     }
     final err = (res as Err<AuthUser?>).error;
-    _handleNonFatal(ctx, err);
-    state = const AsyncValue<AuthUser?>.data(null);
-  }
 
-  void _handleNonFatal(String context, AppError error) {
-    debugPrint(
-      '❌ $context: ${error.code} - ${error.message} | cause: ${error.cause}',
-    );
-    // Keep UI chill; just set state/null and optionally toast in calling sites if needed.
+    if (err.code == 'auth/membership-not-found' ||
+        err.code == 'auth/user-not-active') {
+      debugPrint('ℹ️ $ctx → ${err.code}. Showing Login for this workspace.');
+    } else {
+      debugPrint('❌ $ctx: ${err.code} - ${err.message} | cause: ${err.cause}');
+    }
+    state = const AsyncValue<AuthUser?>.data(null);
   }
 
   void _handleFatal(String context, Object error, StackTrace st) {

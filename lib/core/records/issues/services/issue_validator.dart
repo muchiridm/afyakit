@@ -1,7 +1,7 @@
 import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
 import 'package:afyakit/core/records/issues/models/validation_result.dart';
 
 class IssueValidator {

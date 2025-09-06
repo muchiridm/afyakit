@@ -1,9 +1,11 @@
 // lib/core/auth_users/screens/login_screen.dart
 
-import 'package:afyakit/core/auth_users/utils/user_format.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
+import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+
 import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
 
 class LoginScreen extends ConsumerWidget {
@@ -11,63 +13,59 @@ class LoginScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Controllers/state
-    final controller = ref.watch(loginControllerProvider.notifier);
-    final state = ref.watch(loginControllerProvider);
+    return _buildScaffold(context, ref);
+  }
 
-    // Per-tenant config
+  Widget _buildScaffold(BuildContext context, WidgetRef ref) {
     final cfg = ref.watch(tenantConfigProvider);
     final displayName = cfg.displayName;
-    final logoPath = cfg.logoPath; // String? now
+    final logoPath = cfg.logoPath;
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8FF),
-      // allow body to move when keyboard shows
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(16, 24, 16, 16 + bottomInset),
-              child: ConstrainedBox(
-                // ensures centering when there’s plenty of height,
-                // but allows scrolling when there isn’t
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: _buildLoginCard(
-                      context: context,
-                      controller: controller,
-                      state: state,
-                      displayName: displayName,
-                      logoPath: logoPath,
-                      primary: primary,
+        child: DefaultTabController(
+          length: 2,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+              return SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(16, 24, 16, 16 + bottomInset),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: _buildContentCard(
+                        context: context,
+                        ref: ref,
+                        displayName: displayName,
+                        logoPath: logoPath,
+                        primary: primary,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Private builders
-  // ────────────────────────────────────────────────────────────────────────────
-
-  Widget _buildLoginCard({
+  Widget _buildContentCard({
     required BuildContext context,
-    required LoginController controller,
-    required LoginFormState state,
+    required WidgetRef ref,
     required String displayName,
     required String? logoPath,
     required Color primary,
   }) {
+    final loginCtrl = ref.watch(loginControllerProvider.notifier);
+    final loginState = ref.watch(loginControllerProvider);
+
     return Card(
       margin: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -75,7 +73,6 @@ class LoginScreen extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          // shrink to content; lets the outer scroll view handle small screens
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildBrandHeader(
@@ -84,14 +81,28 @@ class LoginScreen extends ConsumerWidget {
               primary: primary,
             ),
             const SizedBox(height: 20),
-            _buildTitle(),
-            const SizedBox(height: 20),
-            _buildEmailField(state),
-            const SizedBox(height: 12),
-            _buildPasswordField(controller),
-            _buildForgotPasswordButton(context, controller),
+            const TabBar(
+              tabs: [
+                Tab(text: 'Email'),
+                Tab(text: 'WhatsApp'),
+              ],
+            ),
             const SizedBox(height: 16),
-            _buildLoginButton(context, controller, state, primary),
+            SizedBox(
+              height: 300,
+              child: TabBarView(
+                children: [
+                  _buildEmailTab(context, loginCtrl, loginState, primary),
+                  _buildWhatsAppTab(
+                    sending: loginState.waSending,
+                    verifying: loginState.waVerifying,
+                    codeSent: loginState.waCodeSent,
+                    onSendCode: (phone) => loginCtrl.sendWaCode(phone),
+                    onVerify: (code) => loginCtrl.verifyWaCode(code),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -185,87 +196,224 @@ class LoginScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTitle() {
-    return const Text(
-      'Sign in with Email',
-      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-    );
-  }
-
-  Widget _buildEmailField(LoginFormState state) {
-    return TextField(
-      controller: state.emailController,
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
-      decoration: const InputDecoration(
-        labelText: 'Email Address',
-        border: OutlineInputBorder(),
-        hintText: 'e.g. user@example.com',
-        isDense: true,
-      ),
-    );
-  }
-
-  Widget _buildPasswordField(LoginController controller) {
-    return TextField(
-      obscureText: true,
-      onSubmitted: (_) => controller.login(),
-      decoration: const InputDecoration(
-        labelText: 'Password',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
-      onChanged: controller.setPassword,
-    );
-  }
-
-  Widget _buildForgotPasswordButton(
-    BuildContext context,
-    LoginController controller,
-  ) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: TextButton(
-        onPressed: () async {
-          FocusScope.of(context).unfocus();
-          await controller.sendPasswordReset();
-        },
-        child: const Text('Reset password?'),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton(
+  // Email Tab
+  Widget _buildEmailTab(
     BuildContext context,
     LoginController controller,
     LoginFormState state,
     Color primary,
   ) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: state.loading
-            ? null
-            : () async {
-                FocusScope.of(context).unfocus();
-                await controller.login();
-              },
-        icon: state.loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.lock_open),
-        label: const Text('Login'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Sign in with Email',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: state.loginController,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            labelText: 'Email Address',
+            border: OutlineInputBorder(),
+            hintText: 'e.g. user@example.com',
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          obscureText: true,
+          onSubmitted: (_) => controller.login(),
+          decoration: const InputDecoration(
+            labelText: 'Password',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          onChanged: controller.setPassword,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () async {
+              FocusScope.of(context).unfocus();
+              await controller.sendPasswordReset();
+            },
+            child: const Text('Reset password?'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: state.loading
+                ? null
+                : () async {
+                    FocusScope.of(context).unfocus();
+                    await controller.login();
+                  },
+            icon: state.loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.lock_open),
+            label: const Text('Login'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // WhatsApp Tab
+  Widget _buildWhatsAppTab({
+    required bool sending,
+    required bool verifying,
+    required bool codeSent,
+    required ValueChanged<String> onSendCode,
+    required ValueChanged<String> onVerify,
+  }) {
+    return _WhatsAppLoginTab(
+      sending: sending,
+      verifying: verifying,
+      codeSent: codeSent,
+      onSendCode: onSendCode,
+      onVerify: onVerify,
+    );
+  }
+}
+
+class _WhatsAppLoginTab extends StatefulWidget {
+  final bool sending;
+  final bool verifying;
+  final bool codeSent;
+  final ValueChanged<String> onSendCode;
+  final ValueChanged<String> onVerify;
+
+  const _WhatsAppLoginTab({
+    required this.sending,
+    required this.verifying,
+    required this.codeSent,
+    required this.onSendCode,
+    required this.onVerify,
+  });
+
+  @override
+  State<_WhatsAppLoginTab> createState() => _WhatsAppLoginTabState();
+}
+
+class _WhatsAppLoginTabState extends State<_WhatsAppLoginTab> {
+  final _phone = TextEditingController();
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.codeSent) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Sign in with WhatsApp',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _phone,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'WhatsApp number (E.164)',
+              hintText: '+2547...',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: widget.sending
+                  ? null
+                  : () => widget.onSendCode(_phone.text),
+              child: widget.sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Send WhatsApp code'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Code entry
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Enter the 6-digit code from WhatsApp',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _code,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '6-digit code',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          onSubmitted: (_) => widget.onVerify(_code.text),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: widget.verifying
+                ? null
+                : () => widget.onVerify(_code.text),
+            child: widget.verifying
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Verify & Sign in'),
+          ),
+        ),
+      ],
     );
   }
 }

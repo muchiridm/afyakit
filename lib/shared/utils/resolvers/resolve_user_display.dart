@@ -1,3 +1,5 @@
+// lib/shared/utils/resolvers/resolve_user_display.dart
+
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 
 /// Returns the best user-facing identifier:

@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_state.dart';
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/view_models/delivery_review_summary.dart';
+import 'package:afyakit/core/records/delivery_sessions/models/delivery_review_summary.dart';
 
 /// Controller: UI-facing façade over the engine. No direct service calls.
 final deliverySessionControllerProvider =

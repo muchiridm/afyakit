@@ -1,14 +1,14 @@
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/providers/grouped_cart_provider.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/core/records/issues/controllers/controllers/issue_form_controller.dart';
-import 'package:afyakit/core/records/issues/controllers/controllers/multi_cart_controller.dart';
-import 'package:afyakit/core/records/issues/controllers/states/issue_record_state.dart';
-import 'package:afyakit/core/records/issues/controllers/states/multi_cart_state.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_controller.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_state.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_state.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
@@ -205,7 +205,7 @@ class IssueRequestScreen extends ConsumerWidget {
   Widget _buildSubmitButton(
     BuildContext context,
     IssueFormController controller,
-    IssueRecordState state,
+    IssueFormState state,
     MultiCartState cart,
   ) {
     final hasItems = cart.cartsByStore.values.any((c) => c.isNotEmpty);

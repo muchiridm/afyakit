@@ -1,3 +1,5 @@
+// lib/core/records/issues/services/issue_batch_service.dart
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/stock_repo.dart';
 import 'package:afyakit/core/records/issues/services/transfer_service.dart';
 import 'package:flutter/material.dart';
@@ -8,15 +10,14 @@ import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
 import 'package:afyakit/core/records/delivery_sessions/utils/delivery_locked_exception.dart';
-import 'package:afyakit/core/records/issues/controllers/controllers/issue_form_controller.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_controller.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // for QueryDocumentSnapshot, FirebaseException, FieldValue, Timestamp
 
 class IssueBatchService {
   final String tenantId;
   final Ref ref;
 
-  // small collaborators
   late final StockRepo _repo = StockRepo(tenantId);
   late final TransferService _transfer = TransferService(_repo);
 
@@ -34,10 +35,17 @@ class IssueBatchService {
     required int quantity,
     required BuildContext context,
     Map<String, dynamic> metadata = const {},
-    bool enforceDeliveryLock = true,
+    bool enforceDeliveryLock = true, // global lock only
   }) async {
+    // 1) Block if a delivery session is open.
     await _guardDeliveryLock(enforceDeliveryLock);
+
     if (quantity <= 0) throw StateError('❌ Quantity must be positive.');
+
+    debugPrint(
+      '⚙️ [adjustBatchQuantity] type=$type from=$fromStore to=${toStore ?? '-'} '
+      'batch=$batchId item=$itemId qty=$quantity lock=$enforceDeliveryLock',
+    );
 
     switch (type) {
       case IssueType.transfer:
@@ -79,7 +87,6 @@ class IssueBatchService {
     }
   }
 
-  /// Legacy transit receive (kept as-is, uses repo helpers).
   Future<void> receiveTransit(String docId, Map<String, dynamic> data) async {
     await db.runTransaction((tx) async {
       final transitRef = _repo.transitDoc(docId);
@@ -183,7 +190,7 @@ class IssueBatchService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Smaller mutations
+  // Smaller mutations (wrapped to avoid boxed web errors)
   // ─────────────────────────────────────────────────────────────
   Future<void> _dispenseNow({
     required String storeId,
@@ -193,20 +200,27 @@ class IssueBatchService {
     required String reason,
     required Map<String, dynamic> extra,
   }) async {
-    await _repo.decrementOrDelete(
-      storeId: storeId,
-      batchId: batchId,
-      amount: quantity,
-    );
-    await _repo.dispensationsCol().add({
-      'tenantId': tenantId,
-      'storeId': storeId,
-      'itemId': itemId,
-      'quantity': quantity,
-      'reason': reason,
-      'timestamp': FieldValue.serverTimestamp(),
-      ...extra,
-    });
+    final pathHint = 'store=$storeId batch=$batchId';
+    try {
+      debugPrint('💊 [_dispenseNow] $pathHint qty=$quantity');
+      await _repo.decrementOrDelete(
+        storeId: storeId,
+        batchId: batchId,
+        amount: quantity,
+      );
+      await _repo.dispensationsCol().add({
+        'tenantId': tenantId,
+        'storeId': storeId,
+        'itemId': itemId,
+        'quantity': quantity,
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+        ...extra,
+      });
+    } catch (e, st) {
+      debugPrint('💥 [_dispenseNow] $pathHint → $e\n$st');
+      throw StateError('Failed to dispense [$pathHint]: $e');
+    }
   }
 
   Future<void> _disposeNow({
@@ -217,24 +231,31 @@ class IssueBatchService {
     required String reason,
     required Map<String, dynamic> extra,
   }) async {
-    await _repo.decrementOrDelete(
-      storeId: storeId,
-      batchId: batchId,
-      amount: quantity,
-    );
-    await _repo.disposalsCol().add({
-      'tenantId': tenantId,
-      'storeId': storeId,
-      'itemId': itemId,
-      'quantity': quantity,
-      'reason': reason,
-      'timestamp': FieldValue.serverTimestamp(),
-      ...extra,
-    });
+    final pathHint = 'store=$storeId batch=$batchId';
+    try {
+      debugPrint('🗑️ [_disposeNow] $pathHint qty=$quantity');
+      await _repo.decrementOrDelete(
+        storeId: storeId,
+        batchId: batchId,
+        amount: quantity,
+      );
+      await _repo.disposalsCol().add({
+        'tenantId': tenantId,
+        'storeId': storeId,
+        'itemId': itemId,
+        'quantity': quantity,
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+        ...extra,
+      });
+    } catch (e, st) {
+      debugPrint('💥 [_disposeNow] $pathHint → $e\n$st');
+      throw StateError('Failed to dispose [$pathHint]: $e');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Guards
+  // Lock guard only (no “require session”)
   // ─────────────────────────────────────────────────────────────
   Future<void> _guardDeliveryLock(bool enforce) async {
     if (!enforce) return;

@@ -1,16 +1,13 @@
-class TempSession {
+class ActiveTempSession {
   final String deliveryId;
-  final String? enteredByName;
   final String enteredByEmail;
-  final List<String> sources;
+  final String? enteredByName;
   final String? lastStoreId;
   final String? lastSource;
-
-  TempSession({
+  ActiveTempSession({
     required this.deliveryId,
-    required this.enteredByName,
     required this.enteredByEmail,
-    required this.sources,
+    this.enteredByName,
     this.lastStoreId,
     this.lastSource,
   });

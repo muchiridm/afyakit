@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_controller.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
@@ -139,7 +138,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       _afterFrame(() {
         state = state.copyWith(user: user, loading: false);
         if (!state.seeded && user != null) {
-          state.nameController.text = displayLabelFromUser(user);
+          state.nameController.text = user.displayName;
           state.phoneController.text = user.phoneNumber ?? '';
           state = state.copyWith(seeded: true);
         }

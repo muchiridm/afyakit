@@ -1,8 +1,8 @@
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/screens/issue_details_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_status_enum.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 
@@ -22,7 +22,7 @@ class IssueRecordTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = getIssueStatusColor(issue.statusEnum);
+    final color = issue.statusEnum.color;
     final date = issue.dateIssuedOrReceived ?? issue.dateRequested;
     final timeStr = formatDate(date);
 

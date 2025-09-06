@@ -1,105 +1,95 @@
-// lib/features/records/issues/engines/issue_engine.dart
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/core/records/issues/models/enums/issue_status_enum.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_status_x.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_validator.dart';
+import 'package:afyakit/core/records/issues/models/audit_actor.dart';
+import 'package:afyakit/core/records/issues/models/issue_outcome.dart';
 
-/// Lightweight result type (no dartz dependency)
-class Result<T> {
-  final T? value;
-  final String? error;
-  final String? message;
-
-  const Result._({this.value, this.error, this.message});
-
-  static Result<T> ok<T>(T v, {String? message}) =>
-      Result._(value: v, message: message);
-  static Result<T> fail<T>(String e) => Result._(error: e);
-
-  bool get isOk => error == null;
-}
+import 'package:afyakit/shared/types/result.dart';
+import 'package:afyakit/shared/types/app_error.dart';
 
 /// Business logic for Issue lifecycle transitions.
-/// NOTE: This engine accepts BuildContext so it can call IssueBatchService.adjustBatchQuantity,
-/// which requires `context`. If you later want a pure engine, we can return a plan of adjustments
-/// and let the controller apply them.
 class IssueLifecycleEngine {
   final IssueService issueService;
   final IssueBatchService batchService;
 
-  // current user metadata for audit fields
-  final String currentUserUid;
-  final String currentUserName;
-  final String currentUserRole;
+  /// Snapshot of the acting user (uid, resolved name, role) at action time.
+  AuditActor actor;
 
   IssueLifecycleEngine({
     required this.issueService,
     required this.batchService,
-    required this.currentUserUid,
-    required this.currentUserName,
-    required this.currentUserRole,
+    required this.actor,
   });
 
-  Result<IssueRecord> _requireStatus(
+  /// Allow controller to refresh the actor just-in-time.
+  void setActor(AuditActor a) => actor = a;
+
+  // ── guards ───────────────────────────────────────────────────
+  Result<void> _requireStatus(
     IssueRecord r,
     IssueStatus required,
     String action,
   ) {
     if (r.statusEnum != required) {
-      return Result.fail('Must be ${required.label} to $action.');
+      return Err(
+        AppError('invalid_status', 'Must be ${required.label} to $action.'),
+      );
     }
-    return Result.ok(r);
+    return const Ok(null);
   }
 
-  Future<Result<IssueRecord>> approve(IssueRecord r) async {
+  String get _actorName =>
+      actor.name.trim().isNotEmpty ? actor.name : actor.uid;
+
+  // ── transitions ──────────────────────────────────────────────
+  Future<Result<IssueOutcome>> approve(IssueRecord r) async {
     final guard = _requireStatus(r, IssueStatus.pending, 'approve');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
 
     final updated = r.copyWith(
       status: IssueStatus.approved.name,
       dateApproved: DateTime.now(),
-      approvedByUid: currentUserUid,
+      approvedByUid: actor.uid,
     );
-    // Persistence applied by caller.
-    return Result.ok(updated, message: '✅ Request approved.');
+    return Ok(IssueOutcome(updated, '✅ Request approved.'));
   }
 
-  Future<Result<IssueRecord>> reject(IssueRecord r) async {
+  Future<Result<IssueOutcome>> reject(IssueRecord r) async {
     final guard = _requireStatus(r, IssueStatus.pending, 'reject');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
 
     final updated = r.copyWith(
       status: IssueStatus.rejected.name,
       dateApproved: DateTime.now(),
-      approvedByUid: currentUserUid,
+      approvedByUid: actor.uid,
     );
-    return Result.ok(updated, message: '🚫 Request rejected.');
+    return Ok(IssueOutcome(updated, '🚫 Request rejected.'));
   }
 
-  Future<Result<IssueRecord>> cancel(IssueRecord r) async {
+  Future<Result<IssueOutcome>> cancel(IssueRecord r) async {
     if (r.statusEnum == IssueStatus.cancelled) {
-      return Result.fail('⚠️ Already cancelled.');
+      return Err(AppError('already_cancelled', '⚠️ Already cancelled.'));
     }
     final updated = r.copyWith(
       status: IssueStatus.cancelled.name,
-      actionedByUid: currentUserUid,
-      actionedByName: currentUserName,
-      actionedByRole: currentUserRole,
+      actionedByUid: actor.uid,
+      actionedByName: _actorName,
+      actionedByRole: actor.role,
     );
-    return Result.ok(updated, message: '❌ Request cancelled.');
+    return Ok(IssueOutcome(updated, '❌ Request cancelled.'));
   }
 
-  Future<Result<IssueRecord>> markAsIssued(
+  Future<Result<IssueOutcome>> markAsIssued(
     BuildContext context,
     IssueRecord r,
   ) async {
     final guard = _requireStatus(r, IssueStatus.approved, 'issue');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
 
     final entries = await issueService.getEntriesForIssue(r.id);
     final validation = IssueValidator.validateSubmission(
@@ -107,10 +97,14 @@ class IssueLifecycleEngine {
       entries: entries,
     );
     if (!validation.isValid) {
-      return Result.fail(validation.errorMessage ?? '❌ Invalid issue.');
+      return Err(
+        AppError(
+          'invalid_issue',
+          validation.errorMessage ?? '❌ Invalid issue.',
+        ),
+      );
     }
 
-    // Deduct from source (or create transit) via batchService
     for (final entry in entries) {
       if (entry.batchId == null) continue;
       await batchService.adjustBatchQuantity(
@@ -120,7 +114,7 @@ class IssueLifecycleEngine {
         batchId: entry.batchId!,
         itemId: entry.itemId,
         quantity: entry.quantity,
-        context: context, // ← required by IssueBatchService
+        context: context,
         metadata: {'issueId': r.id, 'entryId': entry.id},
       );
     }
@@ -128,19 +122,23 @@ class IssueLifecycleEngine {
     final updated = r.copyWith(
       status: IssueStatus.issued.name,
       dateIssuedOrReceived: DateTime.now(),
-      actionedByUid: currentUserUid,
-      actionedByName: currentUserName,
-      actionedByRole: currentUserRole,
+      actionedByUid: actor.uid,
+      actionedByName: _actorName,
+      actionedByRole: actor.role,
     );
-    return Result.ok(updated, message: '📦 Stock issued.');
+    return Ok(IssueOutcome(updated, '📦 Stock issued.'));
   }
 
-  Future<Result<IssueRecord>> markAsReceived(IssueRecord r) async {
+  Future<Result<IssueOutcome>> markAsReceived(IssueRecord r) async {
     final guard = _requireStatus(r, IssueStatus.issued, 'receive');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
 
     final docs = await batchService.getUnreceivedTransitDocs(r.id);
-    if (docs.isEmpty) return Result.fail('❌ No pending transit records found.');
+    if (docs.isEmpty) {
+      return Err(
+        AppError('no_transit_docs', '❌ No pending transit records found.'),
+      );
+    }
 
     for (final doc in docs) {
       await batchService.receiveTransit(doc.id, doc.data());
@@ -149,25 +147,27 @@ class IssueLifecycleEngine {
     final updated = r.copyWith(
       status: IssueStatus.received.name,
       dateIssuedOrReceived: DateTime.now(),
-      actionedByUid: currentUserUid,
-      actionedByName: currentUserName,
-      actionedByRole: currentUserRole,
+      actionedByUid: actor.uid,
+      actionedByName: _actorName,
+      actionedByRole: actor.role,
     );
-    return Result.ok(updated, message: '✅ Stock received.');
+    return Ok(IssueOutcome(updated, '✅ Stock received.'));
   }
 
-  Future<Result<IssueRecord>> markAsDisposed(
+  Future<Result<IssueOutcome>> markAsDisposed(
     BuildContext context,
     IssueRecord r,
   ) async {
     final guard = _requireStatus(r, IssueStatus.approved, 'dispose');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
     if (r.type != IssueType.dispose) {
-      return Result.fail('⚠️ Not a disposal request.');
+      return Err(AppError('not_disposal', '⚠️ Not a disposal request.'));
     }
 
     final entries = await issueService.getEntriesForIssue(r.id);
-    if (entries.isEmpty) return Result.fail('⚠️ No items to dispose.');
+    if (entries.isEmpty) {
+      return Err(AppError('no_items', '⚠️ No items to dispose.'));
+    }
 
     for (final entry in entries) {
       if (entry.batchId == null) continue;
@@ -177,7 +177,7 @@ class IssueLifecycleEngine {
         batchId: entry.batchId!,
         itemId: entry.itemId,
         quantity: entry.quantity,
-        context: context, // ← required by IssueBatchService
+        context: context,
         metadata: {'reason': 'Disposed via issue ${r.id}'},
       );
     }
@@ -185,26 +185,28 @@ class IssueLifecycleEngine {
     final updated = r.copyWith(
       status: IssueStatus.disposed.name,
       dateIssuedOrReceived: DateTime.now(),
-      actionedByUid: currentUserUid,
-      actionedByName: currentUserName,
-      actionedByRole: currentUserRole,
+      actionedByUid: actor.uid,
+      actionedByName: _actorName,
+      actionedByRole: actor.role,
     );
-    return Result.ok(updated, message: '🗑️ Items disposed.');
+    return Ok(IssueOutcome(updated, '🗑️ Items disposed.'));
   }
 
-  Future<Result<IssueRecord>> markAsDispensed(
+  Future<Result<IssueOutcome>> markAsDispensed(
     BuildContext context,
     IssueRecord r,
     String reason,
   ) async {
     final guard = _requireStatus(r, IssueStatus.approved, 'dispense');
-    if (!guard.isOk) return Result.fail(guard.error!);
+    if (guard.isErr) return Err(guard.errorOrNull()!);
     if (r.type != IssueType.dispense) {
-      return Result.fail('⚠️ Not a dispensing request.');
+      return Err(AppError('not_dispense', '⚠️ Not a dispensing request.'));
     }
 
     final entries = await issueService.getEntriesForIssue(r.id);
-    if (entries.isEmpty) return Result.fail('⚠️ No items to dispense.');
+    if (entries.isEmpty) {
+      return Err(AppError('no_items', '⚠️ No items to dispense.'));
+    }
 
     for (final entry in entries) {
       if (entry.batchId == null) continue;
@@ -214,7 +216,7 @@ class IssueLifecycleEngine {
         batchId: entry.batchId!,
         itemId: entry.itemId,
         quantity: entry.quantity,
-        context: context, // ← required by IssueBatchService
+        context: context,
         metadata: {'reason': reason},
       );
     }
@@ -222,10 +224,10 @@ class IssueLifecycleEngine {
     final updated = r.copyWith(
       status: IssueStatus.dispensed.name,
       dateIssuedOrReceived: DateTime.now(),
-      actionedByUid: currentUserUid,
-      actionedByName: currentUserName,
-      actionedByRole: currentUserRole,
+      actionedByUid: actor.uid,
+      actionedByName: _actorName,
+      actionedByRole: actor.role,
     );
-    return Result.ok(updated, message: '💊 Items dispensed.');
+    return Ok(IssueOutcome(updated, '💊 Items dispensed.'));
   }
 }

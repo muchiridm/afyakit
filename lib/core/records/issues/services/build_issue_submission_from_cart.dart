@@ -1,9 +1,9 @@
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
 
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';

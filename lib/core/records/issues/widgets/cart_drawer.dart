@@ -2,7 +2,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/records/issues/models/view_models/cart_item_models.dart';
-import 'package:afyakit/core/records/issues/controllers/controllers/multi_cart_controller.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/core/records/issues/providers/grouped_cart_provider.dart';
 import 'package:afyakit/core/records/issues/screens/issue_request_screen.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';

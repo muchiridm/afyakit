@@ -1,5 +1,6 @@
-import 'package:afyakit/core/records/issues/models/enums/issue_type_enum.dart';
 import 'package:flutter/material.dart';
+
+enum IssueType { transfer, dispense, dispose }
 
 extension IssueTypeX on IssueType {
   /// Converts a string to IssueType enum, defaults to `transfer` if unknown or null

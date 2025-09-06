@@ -1,38 +1,51 @@
+// lib/core/auth_users/controllers/auth_session/session_engine.dart
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
+import 'package:afyakit/core/auth_users/services/login_service.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/utils/claim_validator.dart';
+import 'package:dio/dio.dart' show DioException; // ⬅️ add
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final sessionEngineProvider = FutureProvider.family
     .autoDispose<SessionEngine, String>((ref, tenantId) async {
-      final ops = await ref.read(authSessionServiceProvider(tenantId).future);
-      return SessionEngine(ops: ops, tenantId: tenantId);
+      final sessionOps = await ref.read(
+        authSessionServiceProvider(tenantId).future,
+      );
+      final loginOps = await ref.read(loginServiceProvider(tenantId).future);
+      return SessionEngine(
+        session: sessionOps,
+        loginSvc: loginOps,
+        tenantId: tenantId,
+      );
     });
 
 class SessionEngine {
-  final AuthSessionService ops;
+  final AuthSessionService session;
+  final LoginService loginSvc;
   final String tenantId;
-
-  // Treat HQ as a distinct mode (no tenant claim work / no tenant session calls)
   final bool _hqMode;
 
-  SessionEngine({required this.ops, required this.tenantId, bool? hqMode})
-    : _hqMode = hqMode ?? (tenantId == 'hq');
+  SessionEngine({
+    required this.session,
+    required this.loginSvc,
+    required this.tenantId,
+    bool? hqMode,
+  }) : _hqMode = hqMode ?? (tenantId == 'hq');
 
   Future<Result<AuthUser?>> ensureReady() async {
     try {
-      await ops.waitForUser();
+      await session.waitForUser();
 
       if (_hqMode) {
         _log('[HQ] ensureReady → skip tenant status & claims');
         return const Ok<AuthUser?>(null);
       }
 
-      final u = ops.getCurrentUser();
+      final u = session.getCurrentUser();
       if (u == null) return const Ok<AuthUser?>(null);
 
       final email = (u.email ?? '').trim().toLowerCase();
@@ -41,8 +54,11 @@ class SessionEngine {
       }
 
       await _ensureTenantSelected(email: email, reason: 'ensureReady');
-      final authUser = await ops.checkUserStatus(email: email);
+      final authUser = await _probeMembership(email);
       return Ok(authUser);
+    } on AppError catch (ae) {
+      _log('❌ ensureReady app-error: ${ae.code} ${ae.message}');
+      return Err(ae);
     } catch (e, st) {
       _log('❌ SessionEngine.ensureReady error: $e\n$st');
       return Err(
@@ -53,14 +69,16 @@ class SessionEngine {
 
   Future<Result<AuthUser?>> reload() async {
     try {
-      final u = ops.getCurrentUser();
+      final u = session.getCurrentUser();
       if (u == null) return const Ok<AuthUser?>(null);
 
       final email = (u.email ?? '').trim().toLowerCase();
       await _ensureTenantSelected(email: email, reason: 'reload');
 
-      final authUser = await ops.checkUserStatus(email: email);
+      final authUser = await _probeMembership(email);
       return Ok(authUser);
+    } on AppError catch (ae) {
+      return Err(ae);
     } catch (e, st) {
       _log('❌ SessionEngine.reload error: $e\n$st');
       return Err(
@@ -72,12 +90,11 @@ class SessionEngine {
   Future<Result<AuthUser?>> refreshTokenAndClaimsAndUser() async {
     try {
       if (_hqMode) {
-        await ops
-            .forceRefreshIdToken(); // still pick up any server-side changes
+        await session.forceRefreshIdToken();
         return const Ok<AuthUser?>(null);
       }
 
-      final fbUser = ops.getCurrentUser();
+      final fbUser = session.getCurrentUser();
       if (fbUser == null) return const Ok<AuthUser?>(null);
 
       final email = (fbUser.email ?? '').trim().toLowerCase();
@@ -85,10 +102,12 @@ class SessionEngine {
         return Err(AppError('auth/no-email', 'Firebase user has no email'));
       }
 
-      await ops.forceRefreshIdToken();
+      await session.forceRefreshIdToken();
       await _ensureTenantSelected(email: email, reason: 'soft-refresh');
-      final authUser = await ops.checkUserStatus(email: email);
+      final authUser = await _probeMembership(email);
       return Ok(authUser);
+    } on AppError catch (ae) {
+      return Err(ae);
     } catch (e, st) {
       _log('❌ SessionEngine.refreshTokenAndClaimsAndUser error: $e\n$st');
       return Err(
@@ -101,12 +120,42 @@ class SessionEngine {
     }
   }
 
+  // ── internal ─────────────────────────────────────────────────
+
+  /// Normalize backend responses: 404/403 → AppError
+  Future<AuthUser> _probeMembership(String email) async {
+    try {
+      return await loginSvc.checkUserStatus(email: email);
+    } on DioException catch (e) {
+      final sc = e.response?.statusCode ?? 0;
+      final code =
+          (e.response?.data is Map && (e.response!.data)['error'] is String)
+          ? e.response!.data['error'] as String
+          : null;
+
+      if (sc == 404) {
+        throw AppError(
+          'auth/membership-not-found',
+          'No access to this tenant.',
+          cause: e,
+        );
+      }
+      if (sc == 403 && code == 'USER_NOT_ACTIVE') {
+        throw AppError(
+          'auth/user-not-active',
+          'Your access to this tenant is not active.',
+          cause: e,
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _ensureTenantSelected({
     required String email,
     required String reason,
   }) async {
-    // Peek current claims without forcing a refresh
-    var claims = await ops.getClaims(force: false);
+    var claims = await session.getClaims(force: false);
     final claimTenant = _tenantFromClaims(claims);
 
     if (kDebugMode) {
@@ -115,14 +164,12 @@ class SessionEngine {
       );
     }
 
-    // Already on the right tenant? Nothing to do.
     if (claimTenant == tenantId) {
-      // Optional light validation; do not fail hard for invited users.
       if (!ClaimValidator.isValid(claims)) {
         try {
-          await ops.checkUserStatus(email: email);
-          await ops.forceRefreshIdToken();
-          claims = await ops.getClaims(force: true);
+          await _probeMembership(email);
+          await session.forceRefreshIdToken();
+          claims = await session.getClaims(force: true);
         } catch (e) {
           _log('⚠️ Claim validate/hydrate (already-correct tenant) failed: $e');
         }
@@ -130,60 +177,48 @@ class SessionEngine {
       return;
     }
 
-    // Not on the right tenant → check membership
-    AuthUser authUser;
+    // Not on right tenant → membership gate
+    late final AuthUser authUser;
     try {
-      authUser = await ops.checkUserStatus(email: email);
-    } catch (e) {
-      _log('⚠️ Membership probe failed (tenant=$tenantId, email=$email): $e');
-      rethrow; // real membership errors should surface
+      authUser = await _probeMembership(email);
+    } on AppError catch (ae) {
+      // Wrong tenant: sign out to avoid carrying stale claims
+      if (ae.code == 'auth/membership-not-found' ||
+          ae.code == 'auth/user-not-active') {
+        try {
+          await loginSvc.signOut();
+        } catch (_) {}
+      }
+      throw ae;
     }
 
-    final isActive = authUser.status.isActive;
-    if (!isActive) {
+    if (!authUser.status.isActive) {
       _log(
-        'ℹ️ User is ${authUser.status.name} on $tenantId → skipping claims sync; continuing limited mode.',
+        'ℹ️ User is ${authUser.status.name} on $tenantId → limited mode; skip claim sync.',
       );
       return;
     }
 
-    // Active member → perform claim sync and verify
     try {
-      await ops.ensureTenantClaimSelected(
+      await session.ensureTenantClaimSelected(
         tenantId,
         reason: 'SessionEngine.$reason',
       );
-      await ops.forceRefreshIdToken(); // pick up fresh claims
-      claims = await ops.getClaims(force: true); // verify
+      await session.forceRefreshIdToken();
+      claims = await session.getClaims(force: true);
     } catch (e) {
       _log('⚠️ Tenant claim sync failed ($claimTenant → $tenantId): $e');
-
-      // Only hard boot on definitive membership errors — NOT on transient 'auth/forbidden'
-      if (e is AppError &&
-          (e.code == 'auth/membership-not-found' ||
-              e.code == 'auth/user-not-active')) {
-        try {
-          await ops.signOut();
-        } catch (_) {}
-      }
-
       rethrow;
     }
 
     if (!ClaimValidator.isValid(claims)) {
       try {
-        await ops.checkUserStatus(email: email);
-        await ops.forceRefreshIdToken();
-        claims = await ops.getClaims(force: true);
+        await _probeMembership(email);
+        await session.forceRefreshIdToken();
+        await session.getClaims(force: true);
       } catch (e) {
         _log('⚠️ Claim validate/hydrate (post-sync) failed: $e');
       }
-    }
-
-    if (ClaimValidator.shouldHydrateFromModel(claims)) {
-      try {
-        await ops.checkUserStatus(email: email);
-      } catch (_) {}
     }
   }
 

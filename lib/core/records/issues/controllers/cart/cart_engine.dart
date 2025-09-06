@@ -1,4 +1,7 @@
-// library: lib/features/records/issues/controllers/engines/cart_engine.dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final cartEngineProvider = Provider<CartEngine>((ref) => CartEngine());
+
 class CartEngine {
   Map<String, Map<String, int>> _clone(Map<String, Map<String, int>> current) {
     return {

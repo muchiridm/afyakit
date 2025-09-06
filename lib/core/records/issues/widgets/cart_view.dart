@@ -1,4 +1,4 @@
-import 'package:afyakit/core/records/issues/controllers/controllers/multi_cart_controller.dart';
+import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
