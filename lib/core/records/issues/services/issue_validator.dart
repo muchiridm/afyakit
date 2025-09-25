@@ -1,4 +1,4 @@
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';

@@ -7,7 +7,7 @@ import 'package:afyakit/shared/utils/provider_utils.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';

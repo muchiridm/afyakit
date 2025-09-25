@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 class InventorySpeedDial extends StatelessWidget {
   final void Function(ItemType type)? onAdd;

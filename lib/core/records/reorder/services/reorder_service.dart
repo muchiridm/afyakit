@@ -1,4 +1,4 @@
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/records/reorder/models/reorder_record.dart';
 import 'package:afyakit/core/reports/models/stock_report.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';

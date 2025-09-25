@@ -5,7 +5,7 @@ import 'package:afyakit/core/inventory/controllers/forms/medication_controller.d
 import 'package:afyakit/core/inventory/screens/inventory_editor_components/forms/consumable_form.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_components/forms/equipment_form.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_components/forms/medication_form.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';

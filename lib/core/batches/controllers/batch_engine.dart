@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/batches/controllers/batch_like.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/batches/services/batch_service.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
 import '../services/batch_record_validator.dart';

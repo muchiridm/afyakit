@@ -14,7 +14,7 @@ import 'package:afyakit/core/records/issues/extensions/issue_action_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/core/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantIdProvider);
@@ -151,7 +151,7 @@ class IssueActionController {
         label: _labels[a]!,
         icon: _icons[a]!,
         color: getIssueActionColor(a),
-        onPressed: (ctx) => _execute(ctx, a, record),
+        handler: (ctx) => _execute(ctx, a, record),
       );
     }).toList();
   }

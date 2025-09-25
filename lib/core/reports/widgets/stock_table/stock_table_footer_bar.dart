@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/reports/extensions/stock_order_filter_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_view_mode_enum.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 // 👇 wrappers that expose plain List<InventoryLocation>
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart'

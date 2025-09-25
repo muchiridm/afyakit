@@ -1,4 +1,4 @@
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/api/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
@@ -172,6 +172,29 @@ class ApiRoutes {
       _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
   Uri deleteBatch(String storeId, String batchId) =>
       _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
+
+  // ─────────────────────────────────────────────
+  // 📥 Imports (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+  Uri importInventory({
+    required String type,
+    bool dryRun = true,
+    bool persist = false,
+  }) => _uri(
+    'imports/inventory',
+    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+  );
+
+  Uri importInventoryRaw({
+    required String type,
+    bool dryRun = true,
+    bool persist = false,
+  }) => _uri(
+    'imports/inventory-raw',
+    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+  );
+
+  Uri importTemplate(String type) => _uri('imports/templates/$type');
 
   // ─────────────────────────────────────────────
   // 🏓 Ping (tenant-scoped; public or auth—server decides)

@@ -6,9 +6,9 @@ import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/controllers/forms/equipment_controller.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_components/inventory_field_helpers.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_components/inventory_form_builder.dart';
-import 'package:afyakit/core/item_preferences/item_preference_autocomplete_field.dart';
+import 'package:afyakit/core/item_preferences/widgets/item_preference_autocomplete_field.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 class EquipmentForm extends ConsumerStatefulWidget {
   final EquipmentItem? item;

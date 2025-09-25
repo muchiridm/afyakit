@@ -1,6 +1,6 @@
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/core/import/import_inventory_screen.dart';
 import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,11 +8,11 @@ import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory/services/inventory_service.dart';
 import 'package:afyakit/core/batches/services/batch_service.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 

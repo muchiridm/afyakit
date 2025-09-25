@@ -1,13 +1,15 @@
+// lib/core/records/issues/controllers/form/issue_form_engine.dart
+
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_state.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/core/records/issues/services/build_issue_submission_from_cart.dart';
+import 'package:afyakit/core/records/issues/services/issue_submission.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_validator.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
@@ -32,6 +34,8 @@ class IssueFormEngine {
 
   IssueFormEngine(this.service);
 
+  /// Creates one issue per `fromStore` in the cart in an **idempotent** way.
+  /// Supply a stable `requestKeyBase` (e.g., generated when the screen opens).
   Future<SubmitResult> submitMultiCart({
     required String userId,
     required MultiCartState cartState,
@@ -39,9 +43,11 @@ class IssueFormEngine {
     required List<MedicationItem> meds,
     required List<ConsumableItem> cons,
     required List<EquipmentItem> equips,
+    required String requestKeyBase, // 👈 NEW
   }) async {
     var allSuccess = true;
     final errors = <String, String>{};
+    final okStores = <String>[];
 
     for (final entry in cartState.cartsByStore.entries) {
       final storeId = entry.key;
@@ -55,7 +61,6 @@ class IssueFormEngine {
         errors[storeId] = 'Destination missing for store $storeId';
         continue;
       }
-
       if (cart.fromStore?.trim().isEmpty ?? true) {
         allSuccess = false;
         errors[storeId] = 'Origin store not set for $storeId';
@@ -88,28 +93,45 @@ class IssueFormEngine {
         continue;
       }
 
-      for (final s in submissions) {
-        final result = IssueValidator.validateSubmission(
+      var storeOk = true;
+      for (var i = 0; i < submissions.length; i++) {
+        final s = submissions[i];
+
+        final validation = IssueValidator.validateSubmission(
           record: s.record,
           entries: s.entries,
         );
-
-        if (!result.isValid) {
+        if (!validation.isValid) {
           allSuccess = false;
+          storeOk = false;
           errors[storeId] =
-              result.errorMessage ?? 'Invalid submission for $storeId';
-          continue;
+              validation.errorMessage ?? 'Invalid submission for $storeId';
+          break;
         }
 
         try {
-          await service.addIssueWithEntries(s.record, s.entries);
+          // 👇 Idempotent create with deterministic doc id per (screen, store, index)
+          final requestKey = '$requestKeyBase-$storeId-$i';
+          await service.createIssueWithEntriesIdempotent(
+            requestKey: requestKey,
+            issueDraft: s.record.copyWith(id: ''), // service assigns id
+            entries: s.entries,
+          );
         } catch (e) {
           allSuccess = false;
+          storeOk = false;
           errors[storeId] = 'Submission failed for $storeId: $e';
+          break;
         }
       }
+
+      if (storeOk) okStores.add(storeId);
     }
 
-    return SubmitResult(allSuccess: allSuccess, storeErrors: errors);
+    return SubmitResult(
+      allSuccess: allSuccess,
+      storeErrors: errors,
+      okStores: okStores,
+    );
   }
 }

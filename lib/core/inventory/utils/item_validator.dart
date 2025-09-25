@@ -1,4 +1,4 @@
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final itemValidatorProvider = Provider<ItemValidator>((ref) => ItemValidator());

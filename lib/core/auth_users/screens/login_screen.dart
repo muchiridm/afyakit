@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/utils/user_format.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
 

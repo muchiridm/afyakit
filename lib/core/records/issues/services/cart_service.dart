@@ -10,7 +10,7 @@ import 'package:afyakit/core/batches/models/batch_record.dart';
 
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
 import 'package:flutter/material.dart';

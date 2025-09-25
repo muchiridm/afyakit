@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:universal_html/html.dart' as html;
 
 import 'package:afyakit/core/reports/models/stock_report.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/reports/extensions/stock_view_mode_enum.dart';
 
 // 👇 use the shared resolver util exactly as provided

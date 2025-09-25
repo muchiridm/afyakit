@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'hq_controller.dart';
-import '../core/tenants/hq_tenants_tab.dart';
-import '../core/all_users/widgets/hq_all_users_tab.dart';
-import '../core/super_admins/hq_superadmins_tab.dart';
+import '../tenants/hq_tenants_tab.dart';
+import '../users/all_users/widgets/hq_all_users_tab.dart';
+import '../users/super_admins/hq_superadmins_tab.dart';
+// ⬇️ NEW: Catalog Medications tab
+import 'package:afyakit/hq/catalog/medication/hq_catalog_medications_tab.dart';
 
 class HqShell extends ConsumerWidget {
   const HqShell({super.key});
@@ -26,7 +28,14 @@ class HqShell extends ConsumerWidget {
 
     // Email for account menu label (pure data, no logic)
     final email = ref.watch(hqCurrentEmailProvider) ?? 'Account';
-    final pages = const [HqTenantsTab(), HqAllUsersTab(), HqSuperadminsTab()];
+
+    // ⬇️ Add the new Catalog tab screen here (dumb screen; controller-driven)
+    final pages = const [
+      HqTenantsTab(),
+      HqAllUsersTab(),
+      HqSuperadminsTab(),
+      HqCatalogMedicationsTab(), // NEW
+    ];
 
     return Stack(
       children: [
@@ -52,6 +61,11 @@ class HqShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(Icons.verified_user),
                 label: 'HQ Admins',
+              ),
+              // ⬇️ NEW destination for Catalog
+              NavigationDestination(
+                icon: Icon(Icons.medication_outlined),
+                label: 'Catalog',
               ),
             ],
           ),

@@ -1,5 +1,5 @@
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
@@ -7,7 +7,7 @@ import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:afyakit/core/inventory/controllers/inventory_controller.dart';
 import 'package:afyakit/core/inventory/utils/item_validator.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory/controllers/inventory_editable_base.dart';
 import 'package:collection/collection.dart';
 

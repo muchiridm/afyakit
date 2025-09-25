@@ -1,3 +1,5 @@
+// lib/core/records/issues/controllers/form/issue_form_controller.dart
+
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/form/issue_form_engine.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
@@ -11,9 +13,9 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
-
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:uuid/uuid.dart'; // 👈 NEW
 
 final issueFormControllerProvider =
     StateNotifierProvider.autoDispose<IssueFormController, IssueFormState>(
@@ -22,6 +24,9 @@ final issueFormControllerProvider =
 
 class IssueFormController extends SafeStateNotifier<IssueFormState> {
   final Ref ref;
+
+  // 👇 Single stable key per screen/session to prevent dupes on double-click
+  final String _requestKey = const Uuid().v4(); // 👈 NEW
 
   IssueFormController(this.ref) : super(IssueFormState());
 
@@ -58,7 +63,6 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
       return;
     }
 
-    // Cheap fast-fail: nothing selected across all stores
     final hasAnyItems = cartState.cartsByStore.values.any((c) => c.isNotEmpty);
     if (!hasAnyItems) {
       SnackService.showError('Nothing to submit');
@@ -69,10 +73,8 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     try {
       final snap = readInventorySnapshot(ref);
 
-      // Engine (construct directly or via provider)
       final tenantId = ref.read(tenantIdProvider);
       final engine = IssueFormEngine(IssueService(tenantId));
-      // If you expose a provider: final engine = ref.read(issueFormEngineProvider);
 
       final result = await engine.submitMultiCart(
         userId: user.uid,
@@ -81,6 +83,7 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
         meds: snap.meds,
         cons: snap.cons,
         equips: snap.equips,
+        requestKeyBase: _requestKey, // 👈 NOW VALID
       );
 
       if (result.allSuccess) {

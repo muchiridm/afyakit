@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:afyakit/api/api_routes.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 class ItemPreferenceService {
   final ApiRoutes apiRoutes;

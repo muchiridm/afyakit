@@ -189,7 +189,7 @@ class SessionEngine {
           await loginSvc.signOut();
         } catch (_) {}
       }
-      throw ae;
+      rethrow;
     }
 
     if (!authUser.status.isActive) {

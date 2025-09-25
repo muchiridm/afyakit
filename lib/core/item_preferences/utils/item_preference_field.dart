@@ -3,7 +3,8 @@ enum ItemPreferenceField {
   formulation,
   route,
   unit,
-  package;
+  package,
+  unknown;
 
   String get key => name;
 
@@ -19,6 +20,8 @@ enum ItemPreferenceField {
         return 'Unit';
       case ItemPreferenceField.package:
         return 'Package';
+      case ItemPreferenceField.unknown:
+        return 'Unknown'; // ✅ consistent
     }
   }
 }

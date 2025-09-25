@@ -1,4 +1,4 @@
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
 
 final Map<ItemType, List<ItemPreferenceField>> preferenceFieldsByType = {

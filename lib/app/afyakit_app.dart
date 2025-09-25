@@ -1,5 +1,5 @@
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/core/tenants/utils/color.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/utils/color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/services/snack_service.dart';

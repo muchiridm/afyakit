@@ -1,6 +1,5 @@
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:collection/collection.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,8 +10,8 @@ import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.da
 import 'package:afyakit/core/records/issues/controllers/action/issue_action_controller.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/records/issues/providers/issues_stream_provider.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 import 'package:afyakit/shared/screens/base_screen.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
@@ -25,26 +24,27 @@ class IssueDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
-    final asyncIssues = ref.watch(hydratedIssuesStreamProvider(tenantId));
+    final key = (tenantId: tenantId, issueId: issueId);
+    final issueAsync = ref.watch(
+      issueFullProvider(key),
+    ); // ← combined doc+entries
     final asyncUser = ref.watch(currentUserProvider);
-
     final asyncStores = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
     );
     final asyncDispensaries = ref.watch(
       inventoryLocationProvider(InventoryLocationType.dispensary),
     );
-
     final controller = ref.watch(issueActionControllerProvider);
 
-    return asyncIssues.when(
+    // Gate on issue stream
+    return issueAsync.when(
       loading: _buildLoading,
       error: (e, _) => _buildError('issue', e),
-      data: (issues) {
-        final issue = issues.firstWhereOrNull((i) => i.id == issueId);
+      data: (issue) {
         if (issue == null) return _buildNotFound('Issue');
 
-        // 🔹 Resolve "Requested By" with the shared provider (uid → name/email)
+        // Resolve "Requested By" display (uid → name/email)
         final requestedBy = ref
             .watch(userDisplayProvider(issue.requestedByUid))
             .maybeWhen(data: (v) => v, orElse: () => issue.requestedByUid);
@@ -77,9 +77,9 @@ class IssueDetailsScreen extends ConsumerWidget {
               context,
               issue,
               user,
-              requestedBy, // ← pass resolved display string
+              requestedBy,
               controller,
-              asyncStores, // keep passing AsyncValue for actions
+              asyncStores,
               fromStoreName: fromStoreName,
               toStoreName: toStoreName,
             );
@@ -104,7 +104,7 @@ class IssueDetailsScreen extends ConsumerWidget {
     BuildContext context,
     IssueRecord issue,
     AuthUser user,
-    String requestedByDisplay, // ← simplified
+    String requestedByDisplay,
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores, {
     required String fromStoreName,
@@ -135,11 +135,7 @@ class IssueDetailsScreen extends ConsumerWidget {
       spacing: 32,
       runSpacing: 12,
       children: [
-        _info(
-          'Status',
-          issue.statusLabel, // from your IssueRecord getter
-          color: issue.statusEnum.color, // from the extension
-        ),
+        _info('Status', issue.statusLabel, color: issue.statusEnum.color),
         _info('Note', issue.note ?? '-'),
         _info('From Store', fromStore),
         _info('To Store', toStore),
@@ -213,13 +209,7 @@ class IssueDetailsScreen extends ConsumerWidget {
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores,
   ) {
-    if (allStores is! AsyncData) {
-      debugPrint(
-        '[Buttons] Stores not ready yet for issue=${issue.id} '
-        '(state=${allStores.runtimeType})',
-      );
-      return [];
-    }
+    if (allStores is! AsyncData) return [];
 
     final stores = allStores.value ?? const <InventoryLocation>[];
     final actions = controller.getAvailableActions(
@@ -228,32 +218,19 @@ class IssueDetailsScreen extends ConsumerWidget {
       allStores: stores,
     );
 
-    debugPrint(
-      '[Buttons] issue=${issue.id} '
-      'status=${issue.status} from=${issue.fromStore} to=${issue.toStore} '
-      'user=${user.uid} role=${user.role.name} '
-      'stores=${stores.length} '
-      '→ actions=[${actions.map((a) => a.label).join(', ')}]',
-    );
-
-    if (actions.isEmpty) {
-      debugPrint('[Buttons] No available actions for issue=${issue.id}');
-    }
-
     return actions.map((btn) {
       return ElevatedButton.icon(
         onPressed: () async {
-          debugPrint('[Buttons] TAP "${btn.label}" issue=${issue.id}');
           try {
-            btn.onPressed(context); // ← await so errors surface
-            debugPrint('[Buttons] DONE "${btn.label}" issue=${issue.id}');
+            await btn.onPressed(context); // ← await fixes the “tap twice” issue
           } catch (e, st) {
-            debugPrint(
-              '[Buttons][ERR] "${btn.label}" issue=${issue.id}: $e\n$st',
-            );
-            // Optional: show a quick toast/snack for the user
+            // optional: toast/snack
+            // ignore: use_build_context_synchronously
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Action "${btn.label}" failed: $e')),
+            );
+            debugPrint(
+              '[Buttons][ERR] "${btn.label}" issue=${issue.id}: $e\n$st',
             );
           }
         },

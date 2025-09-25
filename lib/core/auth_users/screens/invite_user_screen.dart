@@ -107,7 +107,7 @@ class _InviteUserForm extends StatelessWidget {
               const SizedBox(height: 16),
               DropdownButtonFormField<UserRole>(
                 // ⬇️ use `value` so it updates when state changes
-                value: formState.role,
+                initialValue: formState.role,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: UserRole.values
                     .map(

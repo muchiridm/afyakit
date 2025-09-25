@@ -1,5 +1,5 @@
 import 'package:afyakit/core/inventory/models/has_id.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 abstract class BaseInventoryItem implements HasId {
   @override

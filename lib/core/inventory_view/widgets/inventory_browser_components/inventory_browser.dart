@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_browser_components/inventory_list_view.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_browser_components/stock_search_bar.dart';

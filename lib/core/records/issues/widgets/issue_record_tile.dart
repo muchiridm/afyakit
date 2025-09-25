@@ -26,9 +26,16 @@ class IssueRecordTile extends StatelessWidget {
     final date = issue.dateIssuedOrReceived ?? issue.dateRequested;
     final timeStr = formatDate(date);
 
-    final itemNames = issue.entries.map((e) => e.itemName).toSet().join(', ');
-    final itemCount = issue.entries.length;
-    final totalQty = issue.entries.fold<int>(0, (sum, e) => sum + e.quantity);
+    final hasLines = issue.entries.isNotEmpty;
+
+    final itemNames = hasLines
+        ? issue.entries.map((e) => e.itemName).toSet().join(', ')
+        : issue.firstItemName; // safe fallback
+
+    final itemCount = hasLines ? issue.entries.length : 1;
+    final totalQty = hasLines
+        ? issue.totalQuantity
+        : 0; // unknown until details hydrate
 
     final from = resolveLocationName(issue.fromStore, stores, []);
     final to = resolveLocationName(issue.toStore, [
@@ -41,7 +48,6 @@ class IssueRecordTile extends StatelessWidget {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
-        // keep it tight, but allow enough vertical room
         dense: true,
         visualDensity: VisualDensity.compact,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -65,11 +71,10 @@ class IssueRecordTile extends StatelessWidget {
   }
 
   Widget _buildSubtitle(int itemCount, int totalQty, String from, String to) {
-    // Column that **shrinks** to fit the tile’s height → no overflow
     return Padding(
       padding: const EdgeInsets.only(top: 2.0),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // <- important
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -90,12 +95,11 @@ class IssueRecordTile extends StatelessWidget {
   }
 
   Widget _buildTrailing(Color color, String timeStr) {
-    // Wrap in FittedBox so, on narrow tiles, it scales down instead of overflowing
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerRight,
       child: Column(
-        mainAxisSize: MainAxisSize.min, // <- important
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(timeStr, style: const TextStyle(fontSize: 11)),

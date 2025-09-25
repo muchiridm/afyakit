@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/shared/utils/parsers/parse_date.dart';
 import 'package:afyakit/shared/utils/parsers/parse_item_type.dart';
 import 'package:flutter/foundation.dart';

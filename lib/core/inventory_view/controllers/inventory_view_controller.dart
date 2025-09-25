@@ -1,6 +1,6 @@
 // lib/features/inventory_view/controllers/inventory_view_controller.dart
 import 'package:afyakit/core/batches/controllers/batch_args.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +11,7 @@ import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_screen.dart';
@@ -21,7 +21,7 @@ import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_sess
 import 'package:afyakit/core/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_state.dart';
 
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 

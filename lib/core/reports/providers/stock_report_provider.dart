@@ -1,13 +1,13 @@
 // lib/features/reports/providers/stock_report_provider.dart
 import 'dart:async';
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/inventory/services/inventory_repo_service.dart';
 import 'package:afyakit/core/reports/services/stock_report_service.dart';
 import 'package:afyakit/core/batches/services/batch_repo.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
 final batchRepoProvider = Provider.autoDispose<BatchRepo>((_) => BatchRepo());
 

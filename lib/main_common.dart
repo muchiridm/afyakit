@@ -1,6 +1,6 @@
 // lib/main_common.dart
 
-import 'package:afyakit/hq/core/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
@@ -11,9 +11,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_resolver.dart';
-import 'package:afyakit/hq/core/tenants/services/tenant_config_loader.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
+import 'package:afyakit/hq/tenants/services/tenant_config_loader.dart';
 
 /// Optional: expose whether the Auth emulator is enabled to the UI (for a banner, etc.)
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);

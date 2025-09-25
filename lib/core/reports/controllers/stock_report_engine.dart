@@ -15,7 +15,7 @@ import 'package:afyakit/core/reports/extensions/stock_order_filter_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_availability_filter_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_expiry_filter_option_enum.dart';
 
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/reports/controllers/stock_report_state.dart';
 import 'package:afyakit/core/reports/providers/stock_report_services_providers.dart';
 

@@ -195,7 +195,7 @@ class LoginService {
       throw ArgumentError('Either email or phoneNumber must be provided.');
     }
 
-    String _maskPhone(String p) {
+    String maskPhone(String p) {
       if (p.isEmpty) return p;
       if (p.length <= 6) return '${p.substring(0, math.min(3, p.length))}…';
       return '${p.substring(0, 4)}…${p.substring(p.length - 2)}';
@@ -207,7 +207,7 @@ class LoginService {
       context: {
         'tenant': _routes.tenantId,
         'email': cleanedEmail.isNotEmpty ? cleanedEmail : null,
-        'phone': cleanedPhone.isNotEmpty ? _maskPhone(cleanedPhone) : null,
+        'phone': cleanedPhone.isNotEmpty ? maskPhone(cleanedPhone) : null,
       },
     );
 

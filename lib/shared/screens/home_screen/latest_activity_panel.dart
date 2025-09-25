@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/records/delivery_sessions/providers/delivery_records_stream_provider.dart';
-import 'package:afyakit/core/records/issues/providers/issues_stream_provider.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/records/delivery_sessions/widgets/delivery_record_tile.dart';
 import 'package:afyakit/core/records/issues/widgets/issue_record_tile.dart';
 
@@ -18,7 +18,7 @@ class LatestActivityPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
 
-    final issuesAsync = ref.watch(hydratedIssuesStreamProvider(tenantId));
+    final issuesAsync = ref.watch(issuesStreamProvider(tenantId));
     final deliveriesAsync = ref.watch(deliveryRecordsStreamProvider(tenantId));
     final storesAsync = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
@@ -69,7 +69,6 @@ class LatestActivityPanel extends ConsumerWidget {
         .sorted((a, b) => b.date.compareTo(a.date))
         .take(3)
         .toList();
-
     if (latest.isEmpty) return const SizedBox.shrink();
 
     return Column(

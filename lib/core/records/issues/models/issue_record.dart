@@ -43,7 +43,7 @@ class IssueRecord {
   // 🔁 Firestore serialization
   Map<String, dynamic> toMap() => {
     'fromStore': fromStore,
-    'toStore': toStore, // ✅ FIXED: was 'to'
+    'toStore': toStore, // ✅ keep canonical
     'type': type.name,
     'status': status,
     'dateRequested': dateRequested.toIso8601String(),
@@ -55,7 +55,7 @@ class IssueRecord {
     'actionedByName': actionedByName,
     'actionedByRole': actionedByRole,
     'note': note,
-    // ⚠️ Entries usually stored in subcollection, not here.
+    // ⚠️ Entries are in subcollection; keep doc lean.
   };
 
   factory IssueRecord.fromMap(String id, Map<String, dynamic> map) {
@@ -70,13 +70,12 @@ class IssueRecord {
               ),
             )
             .toList() ??
-        [];
+        <IssueEntry>[];
 
     return IssueRecord(
       id: id,
       fromStore: map['fromStore'] ?? '',
-      toStore:
-          map['toStore'] ?? map['to'] ?? '', // ✅ Fallback for legacy fields
+      toStore: map['toStore'] ?? map['to'] ?? '', // legacy fallback
       type: parsedType,
       status: map['status'] ?? 'pending',
       dateRequested: parseDate(map['dateRequested'])!,
@@ -128,7 +127,7 @@ class IssueRecord {
     );
   }
 
-  // ───── Computed Getters ─────────────────────
+  // ───── Computed Getters (safe) ─────────────────────
   IssueStatus get statusEnum => IssueStatusX.fromString(status);
   String get statusLabel => statusEnum.label;
   bool get isFinalStatus => statusEnum.isFinal;
@@ -136,9 +135,11 @@ class IssueRecord {
   int get totalQuantity => entries.fold(0, (sum, e) => sum + e.quantity);
 
   String get firstItemName =>
-      entries.isEmpty ? 'Unnamed Item' : entries.first.itemName;
+      entries.isEmpty ? 'Items' : entries.first.itemName;
 
-  String get displayTitle => entries.length == 1
-      ? entries.first.itemName
-      : '${entries.first.itemName} + ${entries.length - 1}';
+  String get displayTitle {
+    if (entries.isEmpty) return 'Items';
+    if (entries.length == 1) return entries.first.itemName;
+    return '${entries.first.itemName} + ${entries.length - 1}';
+  }
 }

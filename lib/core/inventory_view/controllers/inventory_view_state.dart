@@ -1,6 +1,6 @@
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:flutter/foundation.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 

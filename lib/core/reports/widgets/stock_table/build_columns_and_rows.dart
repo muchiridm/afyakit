@@ -1,7 +1,7 @@
 import 'package:afyakit/core/reports/extensions/stock_report_x.dart';
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/reports/extensions/stock_table_column_id_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_view_mode_enum.dart';

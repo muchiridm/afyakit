@@ -4,7 +4,7 @@ import 'package:afyakit/core/auth_users/providers/auth_session/current_user_prov
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/reports/extensions/stock_view_mode_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_order_filter_enum.dart';
 import 'package:afyakit/core/reports/extensions/stock_expiry_filter_option_enum.dart';

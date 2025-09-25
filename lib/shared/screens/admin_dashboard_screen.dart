@@ -1,11 +1,11 @@
 // lib/core/admin/screens/admin_dashboard_screen.dart
 
-import 'package:afyakit/api/api_test_screen.dart';
+import 'package:afyakit/api/tests/api_test_screen.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 
 import 'package:afyakit/core/backup/backup_screen.dart';
-import 'package:afyakit/core/import/import_inventory_screen.dart';
-import 'package:afyakit/core/item_preferences/item_preferences_screen.dart';
+import 'package:afyakit/core/import/importer/import_inventory_screen.dart';
+import 'package:afyakit/core/item_preferences/widgets/item_preferences_screen.dart';
 import 'package:afyakit/core/inventory_locations/screens/inventory_locations_screen.dart';
 
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';

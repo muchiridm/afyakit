@@ -1,18 +1,19 @@
-// lib/core/records/issues/services/issue_batch_service.dart
-import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/core/records/issues/services/stock_repo.dart';
-import 'package:afyakit/core/records/issues/services/transfer_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/utils/firestore_instance.dart';
+import 'package:afyakit/shared/utils/firestore_instance.dart'; // db
 import 'package:afyakit/shared/services/snack_service.dart';
+
+import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
+import 'package:afyakit/core/records/issues/models/issue_record.dart';
+import 'package:afyakit/core/records/issues/models/issue_resume_progress.dart';
+import 'package:afyakit/core/records/issues/controllers/form/issue_form_controller.dart';
+
+import 'package:afyakit/core/records/issues/services/stock_repo.dart';
+import 'package:afyakit/core/records/issues/services/transfer_service.dart';
 
 import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
 import 'package:afyakit/core/records/delivery_sessions/utils/delivery_locked_exception.dart';
-import 'package:afyakit/core/records/issues/controllers/form/issue_form_controller.dart';
-import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // for QueryDocumentSnapshot, FirebaseException, FieldValue, Timestamp
 
 class IssueBatchService {
   final String tenantId;
@@ -26,6 +27,7 @@ class IssueBatchService {
   // ─────────────────────────────────────────────────────────────
   // Public API
   // ─────────────────────────────────────────────────────────────
+
   Future<void> adjustBatchQuantity({
     required IssueType type,
     required String fromStore,
@@ -35,17 +37,10 @@ class IssueBatchService {
     required int quantity,
     required BuildContext context,
     Map<String, dynamic> metadata = const {},
-    bool enforceDeliveryLock = true, // global lock only
+    bool enforceDeliveryLock = true,
   }) async {
-    // 1) Block if a delivery session is open.
     await _guardDeliveryLock(enforceDeliveryLock);
-
     if (quantity <= 0) throw StateError('❌ Quantity must be positive.');
-
-    debugPrint(
-      '⚙️ [adjustBatchQuantity] type=$type from=$fromStore to=${toStore ?? '-'} '
-      'batch=$batchId item=$itemId qty=$quantity lock=$enforceDeliveryLock',
-    );
 
     switch (type) {
       case IssueType.transfer:
@@ -53,13 +48,21 @@ class IssueBatchService {
         if (dest.isEmpty) {
           throw StateError('❌ Destination store is required for transfers.');
         }
+
+        final meta = {...metadata};
+        final issueId = (meta['issueId'] ?? '').toString();
+        final entryId = (meta['entryId'] ?? '').toString();
+        if (issueId.isNotEmpty && entryId.isNotEmpty) {
+          meta['transitId'] = 'transit_${issueId}_$entryId';
+        }
+
         await _transfer.transfer(
           fromStore: fromStore,
           toStore: dest,
           sourceBatchId: batchId,
           itemId: itemId,
           quantity: quantity,
-          metadata: metadata,
+          metadata: meta,
         );
         break;
 
@@ -87,6 +90,7 @@ class IssueBatchService {
     }
   }
 
+  /// Create destination batch + mark transit received (atomic).
   Future<void> receiveTransit(String docId, Map<String, dynamic> data) async {
     await db.runTransaction((tx) async {
       final transitRef = _repo.transitDoc(docId);
@@ -97,8 +101,7 @@ class IssueBatchService {
 
       final t = transitSnap.data()!;
       if ((t['received'] as bool?) == true) {
-        debugPrint('↪️ Transit $docId already received. Skipping.');
-        return;
+        return; // already received → no-op
       }
 
       final toStore = StockRepo.asString(t['toStore'] ?? data['toStore']);
@@ -112,6 +115,7 @@ class IssueBatchService {
         throw StateError('❌ Invalid transit payload for $docId');
       }
 
+      // Ensure destination store exists
       final storeRef = _repo.storeDoc(toStore);
       final storeSnap = await tx.get(storeRef);
       if (!storeSnap.exists) {
@@ -122,6 +126,7 @@ class IssueBatchService {
         });
       }
 
+      // Create destination batch
       final newBatchRef = _repo.batchesCol(toStore).doc();
       tx.set(newBatchRef, {
         'tenantId': tenantId,
@@ -141,15 +146,12 @@ class IssueBatchService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      // Mark transit received
       tx.update(transitRef, {
         'received': true,
         'newBatchId': newBatchRef.id,
         'receivedAt': FieldValue.serverTimestamp(),
       });
-
-      debugPrint(
-        '📦 [receiveTransit] new batch ${newBatchRef.id} in [$toStore].',
-      );
     });
   }
 
@@ -169,9 +171,6 @@ class IssueBatchService {
     String message,
   ) async {
     try {
-      debugPrint(
-        '📝 [applyStatusUpdate] issueId=${updated.id} status=${updated.status}',
-      );
       await _repo.issuesCol().doc(updated.id).update(updated.toMap());
       SnackService.showSuccess(message);
       await ref.read(issueFormControllerProvider.notifier).loadIssuedRecords();
@@ -190,8 +189,93 @@ class IssueBatchService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Smaller mutations (wrapped to avoid boxed web errors)
+  // Bulk helpers (resume & receive-all)
   // ─────────────────────────────────────────────────────────────
+
+  Future<IssueResumeProgress> resumeIssueIssuance(
+    IssueRecord issue, {
+    bool enforceDeliveryLock = true,
+  }) async {
+    await _guardDeliveryLock(enforceDeliveryLock);
+
+    final total = issue.entries.length;
+    var processed = 0, missing = 0, insufficient = 0, other = 0;
+
+    final fromStoreName =
+        await _repo.readStoreName(issue.fromStore) ?? issue.fromStore;
+
+    for (final e in issue.entries) {
+      try {
+        final batchId = (e.batchId ?? '').trim();
+        if (batchId.isEmpty) {
+          missing++;
+          debugPrint('↯ [resumeIssueIssuance] entry=${e.id} → missing batchId');
+          continue;
+        }
+
+        final meta = <String, dynamic>{
+          'issueId': issue.id,
+          'entryId': e.id,
+          'itemType': e.itemType.key,
+          'fromStoreName': fromStoreName,
+          'source': 'transfer',
+          'transitId': 'transit_${issue.id}_${e.id}', // deterministic
+        };
+
+        await _transfer.transfer(
+          fromStore: issue.fromStore,
+          toStore: issue.toStore,
+          sourceBatchId: batchId,
+          itemId: e.itemId,
+          quantity: e.quantity,
+          metadata: meta,
+        );
+
+        processed++;
+      } on StateError catch (err) {
+        final msg = err.toString();
+        if (msg.contains('Source batch not found')) {
+          missing++;
+        } else if (msg.contains('Insufficient stock')) {
+          insufficient++;
+        } else {
+          other++;
+        }
+        debugPrint('↯ [resumeIssueIssuance] entry=${e.id} → $msg');
+      } catch (err, st) {
+        other++;
+        debugPrint('↯ [resumeIssueIssuance] entry=${e.id} → $err\n$st');
+      }
+    }
+
+    final prog = IssueResumeProgress(
+      total: total,
+      processed: processed,
+      missingBatch: missing,
+      insufficient: insufficient,
+      otherErrors: other,
+    );
+    return prog;
+  }
+
+  Future<int> receiveAllUnreceivedTransits(String issueId) async {
+    final docs = await getUnreceivedTransitDocs(issueId);
+    var received = 0;
+    for (final d in docs) {
+      try {
+        await receiveTransit(d.id, d.data());
+        received++;
+      } catch (e, st) {
+        debugPrint('↯ [receiveAllUnreceivedTransits] ${d.id} → $e\n$st');
+      }
+    }
+    return received;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Smaller mutations
+  // ─────────────────────────────────────────────────────────────
+
   Future<void> _dispenseNow({
     required String storeId,
     required String itemId,
@@ -202,7 +286,6 @@ class IssueBatchService {
   }) async {
     final pathHint = 'store=$storeId batch=$batchId';
     try {
-      debugPrint('💊 [_dispenseNow] $pathHint qty=$quantity');
       await _repo.decrementOrDelete(
         storeId: storeId,
         batchId: batchId,
@@ -233,7 +316,6 @@ class IssueBatchService {
   }) async {
     final pathHint = 'store=$storeId batch=$batchId';
     try {
-      debugPrint('🗑️ [_disposeNow] $pathHint qty=$quantity');
       await _repo.decrementOrDelete(
         storeId: storeId,
         batchId: batchId,
@@ -255,8 +337,9 @@ class IssueBatchService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Lock guard only (no “require session”)
+  // Lock guard
   // ─────────────────────────────────────────────────────────────
+
   Future<void> _guardDeliveryLock(bool enforce) async {
     if (!enforce) return;
     final session = ref.read(deliverySessionEngineProvider);

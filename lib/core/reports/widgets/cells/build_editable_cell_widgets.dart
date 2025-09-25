@@ -1,6 +1,6 @@
 import 'package:afyakit/core/reports/widgets/cells/reactive_cell_field.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/core/inventory/models/item_type_enum.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 /// 📝 Builds a reactive editable text cell
 Widget buildTextCell({

@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'dart:math' as math; // ← for short request ids
 import 'package:afyakit/api/api_config.dart';
-import 'package:afyakit/hq/core/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:dio/dio.dart';
@@ -50,7 +50,7 @@ class ApiClient {
     if (kDebugMode) debugPrint('🔗 ApiClient Base URL: $baseUrl');
 
     final http = Dio(
-      BaseOptions(baseUrl: baseUrl, contentType: 'application/json'),
+      BaseOptions(baseUrl: baseUrl), // let per-request set contentType
     );
 
     if (!withAuth) {
