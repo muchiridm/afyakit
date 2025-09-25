@@ -1,5 +1,4 @@
 // lib/shared/utils/resolvers/resolve_location_name.dart
-
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 
@@ -8,14 +7,15 @@ String resolveLocationName(
   List<InventoryLocation> stores,
   List<InventoryLocation> dispensaries,
 ) {
-  if (id == null) return 'Unknown';
+  if (id == null || id.trim().isEmpty) return 'Unknown';
 
+  final lookup = id.trim().toLowerCase();
   final match = [...stores, ...dispensaries].firstWhere(
-    (loc) => loc.id.trim().toLowerCase() == id.trim().toLowerCase(),
+    (loc) => (loc.id.trim().toLowerCase() == lookup),
     orElse: () => InventoryLocation(
       id: id,
       tenantId: 'unknown',
-      name: id,
+      name: id, // fallback to showing the raw id
       type: InventoryLocationType.store,
     ),
   );

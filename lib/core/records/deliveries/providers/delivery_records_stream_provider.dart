@@ -1,6 +1,6 @@
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
 
 final deliveryRecordsStreamProvider = StreamProvider.family
     .autoDispose<List<DeliveryRecord>, String>((ref, tenantId) {

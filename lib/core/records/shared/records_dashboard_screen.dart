@@ -1,4 +1,4 @@
-import 'package:afyakit/core/records/delivery_sessions/screens/delivery_records_screen.dart';
+import 'package:afyakit/core/records/deliveries/screens/delivery_records_screen.dart';
 import 'package:afyakit/core/records/issues/screens/issue_records_screen.dart';
 import 'package:afyakit/core/records/reorder/screens/reorder_records_screen.dart';
 import 'package:afyakit/shared/screens/base_screen.dart';

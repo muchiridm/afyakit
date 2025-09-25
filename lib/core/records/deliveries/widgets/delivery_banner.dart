@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_state.dart';
-import 'package:afyakit/core/records/delivery_sessions/screens/delivery_session_review_screen.dart';
-import 'package:afyakit/core/records/delivery_sessions/providers/delivery_banner_provider.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_state.dart';
+import 'package:afyakit/core/records/deliveries/screens/delivery_session_review_screen.dart';
+import 'package:afyakit/core/records/deliveries/providers/delivery_banner_provider.dart';
 // 🔗 use the active temp-session stream to “prime” the engine before navigating
-import 'package:afyakit/core/records/delivery_sessions/providers/active_delivery_session_provider.dart';
+import 'package:afyakit/core/records/deliveries/providers/active_delivery_session_provider.dart';
 
 class DeliveryBanner extends ConsumerWidget {
   const DeliveryBanner({super.key});

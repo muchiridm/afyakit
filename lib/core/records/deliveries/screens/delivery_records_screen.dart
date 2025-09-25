@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
-import 'package:afyakit/core/records/delivery_sessions/widgets/delivery_record_tile.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/widgets/delivery_record_tile.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/core/records/delivery_sessions/providers/delivery_records_stream_provider.dart';
+import 'package:afyakit/core/records/deliveries/providers/delivery_records_stream_provider.dart';
 
 class DeliveryRecordsScreen extends ConsumerWidget {
   const DeliveryRecordsScreen({super.key});

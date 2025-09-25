@@ -8,7 +8,7 @@ import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/shared/screens/detail_record_screen.dart';
 import 'package:afyakit/shared/screens/screen_header.dart';

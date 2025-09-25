@@ -1,6 +1,12 @@
 // lib/features/batches/controllers/batch_controller.dart
 import 'dart:async';
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
+import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
+import 'package:afyakit/shared/services/dialog_service.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/batches/controllers/batch_args.dart';
@@ -8,7 +14,7 @@ import 'package:afyakit/core/batches/controllers/batch_engine.dart';
 import 'package:afyakit/core/batches/controllers/batch_state.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
 final batchEditorProvider = StateNotifierProvider.autoDispose
@@ -190,8 +196,37 @@ class BatchEditorController extends StateNotifier<BatchState> {
     }
   }
 
-  Future<bool> delete() async {
+  Future<bool> delete({BuildContext? context}) async {
     if (!isEditing || batch == null) return false;
+
+    // Resolve a friendly store name (fallback to ID if lists not ready)
+    final stores = ref
+        .read(inventoryLocationProvider(InventoryLocationType.store))
+        .maybeWhen(
+          data: (d) => d.cast<InventoryLocation>(),
+          orElse: () => <InventoryLocation>[],
+        );
+    final dispensaries = ref
+        .read(inventoryLocationProvider(InventoryLocationType.dispensary))
+        .maybeWhen(
+          data: (d) => d.cast<InventoryLocation>(),
+          orElse: () => <InventoryLocation>[],
+        );
+    final storeName = resolveLocationName(batch!.storeId, stores, dispensaries);
+
+    // Ask the user first (uses passed context or navigatorKey fallback).
+    final ok = await DialogService.confirm(
+      context: context,
+      title: 'Delete batch?',
+      content:
+          'This will permanently remove batch "${batch!.id}" from "$storeName".\n'
+          'This cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      // confirmColor: Colors.redAccent, // DialogService already defaults to red
+    );
+    if (!ok) return false;
+
     try {
       final engine = ref.read(batchEngineProvider(tenantId).notifier);
       await engine.deleteBatch(batch!);

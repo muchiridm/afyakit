@@ -1,6 +1,6 @@
 // lib/core/records/issues/controllers/lifecycle/issue_lifecycle_controller.dart
 
-import 'package:afyakit/core/records/delivery_sessions/utils/delivery_locked_exception.dart';
+import 'package:afyakit/core/records/deliveries/utils/delivery_locked_exception.dart';
 import 'package:afyakit/core/records/issues/controllers/lifecycle/issue_lifecycle_engine.dart';
 import 'package:afyakit/core/records/issues/models/audit_actor.dart';
 import 'package:afyakit/core/records/issues/models/issue_outcome.dart';

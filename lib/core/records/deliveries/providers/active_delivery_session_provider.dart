@@ -1,5 +1,5 @@
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/active_temp_session.dart';
+import 'package:afyakit/core/records/deliveries/models/active_temp_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';

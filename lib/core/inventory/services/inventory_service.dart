@@ -16,7 +16,6 @@ import '../models/items/equipment_item.dart';
 final inventoryServiceProvider = Provider<InventoryService>((ref) {
   final token = ref.read(tokenProvider);
   final routes = ref.read(apiRouteProvider);
-
   return InventoryService(routes, token);
 });
 
@@ -71,11 +70,11 @@ class InventoryService {
     final payload = {...PayloadSanitizer.sanitize(data), 'itemType': itemType};
 
     final res = await _post(url, body: jsonEncode(payload));
-    if (res.statusCode != 201) {
+    if (!_ok(res.statusCode, expect: {201})) {
       throw Exception("Failed to create $itemType: ${res.body}");
     }
 
-    return jsonDecode(res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   // ─────────────────────────────────────
@@ -109,7 +108,7 @@ class InventoryService {
 
     debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
 
-    if (res.statusCode != 200) {
+    if (!_ok(res.statusCode)) {
       throw Exception("Failed to update $itemType [$id]: ${res.body}");
     }
   }
@@ -119,18 +118,15 @@ class InventoryService {
     Map<String, dynamic> fields,
   ) {
     final url = routes.itemById(id);
-    return _patchJson(url, fields); // ✅ return the backend response
+    return _patchJson(url, fields);
   }
-
-  /// Updates SKU fields.
-  /// Returns the updated item data from the backend.
 
   Future<Map<String, dynamic>> updateConsumableFields(
     String id,
     Map<String, dynamic> fields,
   ) {
     final url = routes.itemById(id);
-    return _patchJson(url, fields); // ✅ return the backend response
+    return _patchJson(url, fields);
   }
 
   Future<Map<String, dynamic>> updateEquipmentFields(
@@ -138,22 +134,57 @@ class InventoryService {
     Map<String, dynamic> fields,
   ) {
     final url = routes.itemById(id);
-    return _patchJson(url, fields); // ✅ return the backend response
+    return _patchJson(url, fields);
   }
 
   // ─────────────────────────────────────
-  // ❌ DELETE
+  // ❌ DELETE  (send itemType)
 
-  Future<void> deleteMedication(String id) => _deleteItem(id, 'medication');
-  Future<void> deleteConsumable(String id) => _deleteItem(id, 'consumable');
-  Future<void> deleteEquipment(String id) => _deleteItem(id, 'equipment');
+  Future<void> deleteMedication(String id) =>
+      deleteItem(itemId: id, type: ItemType.medication);
 
-  Future<void> _deleteItem(String id, String itemType) async {
-    final url = routes.itemById(id);
-    final res = await _delete(url);
-    if (res.statusCode != 200) {
-      throw Exception("Failed to delete $itemType [$id]: ${res.body}");
+  Future<void> deleteConsumable(String id) =>
+      deleteItem(itemId: id, type: ItemType.consumable);
+
+  Future<void> deleteEquipment(String id) =>
+      deleteItem(itemId: id, type: ItemType.equipment);
+
+  /// Generic delete by id + type (preferred).
+  Future<void> deleteItem({
+    required String itemId,
+    required ItemType type,
+  }) async {
+    final typeKey = type.key; // "medication" | "consumable" | "equipment"
+    final base = routes.itemById(itemId);
+    // Send as query param (some servers ignore DELETE bodies)
+    final url = base.replace(
+      queryParameters: {...base.queryParameters, 'itemType': typeKey},
+    );
+
+    // Also send JSON body for servers that accept it
+    final res = await _delete(url, body: jsonEncode({'itemType': typeKey}));
+
+    debugPrint('🗑️ DELETE $url');
+    debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
+
+    if (!_ok(res.statusCode)) {
+      throw Exception("Failed to delete $typeKey [$itemId]: ${res.body}");
     }
+  }
+
+  /// Convenience: delete using the runtime model.
+  Future<void> deleteItemByModel(BaseInventoryItem item) {
+    final id = (item.id ?? '').trim();
+    if (id.isEmpty) {
+      throw Exception('missing-itemId');
+    }
+    final t = item.type == ItemType.unknown
+        ? ItemTypeX.inferFromModel(item)
+        : item.type;
+    if (t == ItemType.unknown) {
+      throw Exception('missing-or-invalid-itemType');
+    }
+    return deleteItem(itemId: id, type: t);
   }
 
   // ─────────────────────────────────────
@@ -174,18 +205,28 @@ class InventoryService {
     return http.put(url, headers: _headers(token), body: body);
   }
 
-  Future<http.Response> _delete(Uri url) async {
+  Future<http.Response> _patch(Uri url, {required String body}) async {
     final token = await tokenProvider.getToken();
-    return http.delete(url, headers: _headers(token));
+    return http.patch(url, headers: _headers(token), body: body);
+  }
+
+  Future<http.Response> _delete(Uri url, {String? body}) async {
+    final token = await tokenProvider.getToken();
+    return http.delete(url, headers: _headers(token), body: body);
   }
 
   Map<String, String> _headers(String token) {
-    final headers = {
+    return {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
       'x-tenant-id': routes.tenantId,
     };
-    return headers;
+  }
+
+  bool _ok(int status, {Set<int>? expect}) {
+    if (expect != null) return expect.contains(status);
+    // Accept any 2xx (many APIs return 204 for DELETE)
+    return status >= 200 && status < 300;
   }
 
   Future<Map<String, dynamic>> _patchJson(
@@ -199,7 +240,7 @@ class InventoryService {
 
     if (payload.isEmpty) {
       debugPrint('⚠️ Skipping PATCH — empty payload');
-      return {}; // ✅ Return empty map instead of void
+      return {};
     }
 
     try {
@@ -207,20 +248,16 @@ class InventoryService {
       debugPrint('📤 PATCH Payload: $payload');
       debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
 
-      if (res.statusCode != 200) {
+      if (!_ok(res.statusCode)) {
         throw Exception("Failed to update item: ${res.body}");
       }
 
-      return jsonDecode(res.body)
-          as Map<String, dynamic>; // ✅ Return parsed backend response
+      return (res.body.isEmpty)
+          ? {}
+          : (jsonDecode(res.body) as Map<String, dynamic>);
     } catch (e, stack) {
       debugPrint('🔥 PATCH exception: $e\n$stack');
       rethrow;
     }
-  }
-
-  Future<http.Response> _patch(Uri url, {required String body}) async {
-    final token = await tokenProvider.getToken();
-    return http.patch(url, headers: _headers(token), body: body);
   }
 }

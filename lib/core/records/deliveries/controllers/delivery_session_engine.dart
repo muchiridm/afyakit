@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_state.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_review_summary.dart';
-import 'package:afyakit/core/records/delivery_sessions/services/delivery_session_service.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_state.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_review_summary.dart';
+import 'package:afyakit/core/records/deliveries/services/delivery_session_service.dart';
 
 /// Engine: holds state + logic. Single source of truth for delivery sessions.
 final deliverySessionEngineProvider =

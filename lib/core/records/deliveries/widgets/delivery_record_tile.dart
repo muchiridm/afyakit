@@ -3,8 +3,8 @@
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
-import 'package:afyakit/core/records/delivery_sessions/screens/delivery_details_screen.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/screens/delivery_details_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 
 class DeliveryRecordTile extends StatelessWidget {

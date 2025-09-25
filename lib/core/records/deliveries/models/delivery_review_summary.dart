@@ -1,4 +1,4 @@
-import 'package:afyakit/core/records/delivery_sessions/models/delivery_record.dart';
+import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
 
 class DeliveryReviewSummary {
   final DeliveryRecord summary;

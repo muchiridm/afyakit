@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
-import 'package:afyakit/core/records/delivery_sessions/providers/delivery_records_stream_provider.dart';
+import 'package:afyakit/core/records/deliveries/providers/delivery_records_stream_provider.dart';
 import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/core/records/delivery_sessions/widgets/delivery_record_tile.dart';
+import 'package:afyakit/core/records/deliveries/widgets/delivery_record_tile.dart';
 import 'package:afyakit/core/records/issues/widgets/issue_record_tile.dart';
 
 class LatestActivityPanel extends ConsumerWidget {

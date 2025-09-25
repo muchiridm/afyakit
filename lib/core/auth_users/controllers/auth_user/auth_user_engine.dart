@@ -178,6 +178,7 @@ class AuthUserEngine {
   }
 
   /// Normalize arbitrary UI updates to the backend PATCH shape.
+
   Map<String, Object?> _normalizeUpdatePayload(Map<String, dynamic> src) {
     final out = <String, Object?>{};
     String? s(Object? v) {
@@ -198,29 +199,24 @@ class AuthUserEngine {
     if (phoneNumber != null) out['phoneNumber'] = phoneNumber;
     if (avatarUrl != null) out['avatarUrl'] = avatarUrl;
     if (email != null) out['email'] = EmailHelper.normalize(email);
-
     if (roleStr != null) out['role'] = _parseRole(roleStr).wire;
+    if (statusStr != null) out['status'] = _parseStatus(statusStr).wire;
 
-    if (statusStr != null) {
-      // keep server contract as string
-      final st = _parseStatus(statusStr);
-      out['status'] = st.wire; // 'active' | 'disabled' | 'invited'
-    }
-
-    // stores: accept List<String> or comma string
+    // ── STORES: DO NOT DROP EMPTY ────────────────────────────────
     final storesRaw = src['stores'];
     if (storesRaw is List) {
       final stores = storesRaw
           .map((e) => e.toString().trim())
           .where((e) => e.isNotEmpty)
           .toList();
-      if (stores.isNotEmpty) out['stores'] = stores;
-    } else if (storesRaw is String && storesRaw.trim().isNotEmpty) {
-      out['stores'] = storesRaw
+      out['stores'] = stores; // <-- include [], clears stores on server
+    } else if (storesRaw is String) {
+      final stores = storesRaw
           .split(',')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
+      out['stores'] = stores; // can also be []
     }
 
     return out;

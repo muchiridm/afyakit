@@ -16,7 +16,7 @@ import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/core/inventory/screens/inventory_editor_screen.dart';
 
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_controller.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/core/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_state.dart';

@@ -12,8 +12,8 @@ import 'package:afyakit/core/records/issues/controllers/form/issue_form_controll
 import 'package:afyakit/core/records/issues/services/stock_repo.dart';
 import 'package:afyakit/core/records/issues/services/transfer_service.dart';
 
-import 'package:afyakit/core/records/delivery_sessions/controllers/delivery_session_engine.dart';
-import 'package:afyakit/core/records/delivery_sessions/utils/delivery_locked_exception.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
+import 'package:afyakit/core/records/deliveries/utils/delivery_locked_exception.dart';
 
 class IssueBatchService {
   final String tenantId;
