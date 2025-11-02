@@ -1,0 +1,14 @@
+[
+  {
+    "maxAgeSeconds": 3600,
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "origin": [
+      "http://localhost:36473",
+      "http://127.0.0.1:36473",
+      "http://localhost:5000",
+      "https://dawapap.com",
+      "https://www.dawapap.com"
+    ],
+    "responseHeader": ["Content-Type", "x-goog-meta-*", "x-goog-resumable"]
+  }
+]

@@ -1,37 +1,50 @@
+// lib/core/inventory/inventory_service.dart
+
 import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-
-import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/shared/utils/payload_sanitizer.dart';
 
 import '../models/items/medication_item.dart';
 import '../models/items/consumable_item.dart';
 import '../models/items/equipment_item.dart';
 
-final inventoryServiceProvider = Provider<InventoryService>((ref) {
-  final token = ref.read(tokenProvider);
-  final routes = ref.read(apiRouteProvider);
-  return InventoryService(routes, token);
+/// Provider (awaits AfyaKit client so Dio is ready)
+final inventoryServiceProvider = FutureProvider<InventoryService>((ref) async {
+  final tenantId = ref.watch(tenantIdProvider);
+  final client = await ref.watch(afyakitClientProvider.future);
+  final routes = AfyaKitRoutes(tenantId);
+  return InventoryService(routes: routes, dio: client.dio);
 });
 
 class InventoryService {
-  final ApiRoutes routes;
-  final TokenProvider tokenProvider;
+  final AfyaKitRoutes routes;
+  final Dio dio;
 
-  InventoryService(this.routes, this.tokenProvider);
+  InventoryService({required this.routes, required this.dio});
 
   // ─────────────────────────────────────
   // 🔍 READ
 
   Future<BaseInventoryItem> getItemById(String id, ItemType type) async {
-    final url = routes.itemById(id);
-    final res = await _get(url);
-    final map = jsonDecode(res.body);
+    final uri = routes.itemById(id);
+    final res = await dio.getUri(uri);
+
+    // Dio may already parse JSON, ensure Map
+    final map = switch (res.data) {
+      final Map<String, dynamic> m => m,
+      final String s => jsonDecode(s) as Map<String, dynamic>,
+      _ => throw StateError('Unexpected payload for GET $uri'),
+    };
 
     return switch (type) {
       ItemType.medication => MedicationItem.fromMap(id, map),
@@ -65,16 +78,28 @@ class InventoryService {
     String itemType,
     Map<String, dynamic> data,
   ) async {
-    final url = routes.createItem();
+    final uri = routes.createItem();
     data.remove('id'); // Don’t send frontend ID
     final payload = {...PayloadSanitizer.sanitize(data), 'itemType': itemType};
 
-    final res = await _post(url, body: jsonEncode(payload));
-    if (!_ok(res.statusCode, expect: {201})) {
-      throw Exception("Failed to create $itemType: ${res.body}");
+    final res = await dio.postUri(
+      uri,
+      data: payload,
+      options: Options(
+        // keep optional header if your BE uses it (usually redundant)
+        headers: {'x-tenant-id': routes.tenantId},
+      ),
+    );
+
+    if (!_ok(res.statusCode ?? 0, expect: {201})) {
+      throw Exception("Failed to create $itemType: ${res.data}");
     }
 
-    return jsonDecode(res.body) as Map<String, dynamic>;
+    return switch (res.data) {
+      final Map<String, dynamic> m => m,
+      final String s => jsonDecode(s) as Map<String, dynamic>,
+      _ => throw StateError('Unexpected payload for POST $uri'),
+    };
   }
 
   // ─────────────────────────────────────
@@ -98,18 +123,22 @@ class InventoryService {
       throw Exception('ID is required for update');
     }
 
-    final url = routes.itemById(id);
+    final uri = routes.itemById(id);
     final payload = {...PayloadSanitizer.sanitize(data), 'itemType': itemType};
 
-    debugPrint('📡 PUT $url');
+    debugPrint('📡 PUT $uri');
     debugPrint('📦 Payload: ${jsonEncode(payload)}');
 
-    final res = await _put(url, body: jsonEncode(payload));
+    final res = await dio.putUri(
+      uri,
+      data: payload,
+      options: Options(headers: {'x-tenant-id': routes.tenantId}),
+    );
 
-    debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
+    debugPrint('🔁 Response: ${res.statusCode} — ${res.data}');
 
-    if (!_ok(res.statusCode)) {
-      throw Exception("Failed to update $itemType [$id]: ${res.body}");
+    if (!_ok(res.statusCode ?? 0)) {
+      throw Exception("Failed to update $itemType [$id]: ${res.data}");
     }
   }
 
@@ -117,24 +146,24 @@ class InventoryService {
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id);
-    return _patchJson(url, fields);
+    final uri = routes.itemById(id);
+    return _patchJson(uri, fields);
   }
 
   Future<Map<String, dynamic>> updateConsumableFields(
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id);
-    return _patchJson(url, fields);
+    final uri = routes.itemById(id);
+    return _patchJson(uri, fields);
   }
 
   Future<Map<String, dynamic>> updateEquipmentFields(
     String id,
     Map<String, dynamic> fields,
   ) {
-    final url = routes.itemById(id);
-    return _patchJson(url, fields);
+    final uri = routes.itemById(id);
+    return _patchJson(uri, fields);
   }
 
   // ─────────────────────────────────────
@@ -155,20 +184,24 @@ class InventoryService {
     required ItemType type,
   }) async {
     final typeKey = type.key; // "medication" | "consumable" | "equipment"
+
     final base = routes.itemById(itemId);
-    // Send as query param (some servers ignore DELETE bodies)
-    final url = base.replace(
+    final uri = base.replace(
       queryParameters: {...base.queryParameters, 'itemType': typeKey},
     );
 
-    // Also send JSON body for servers that accept it
-    final res = await _delete(url, body: jsonEncode({'itemType': typeKey}));
+    // Send both query param and JSON body (some servers ignore DELETE bodies)
+    final res = await dio.deleteUri(
+      uri,
+      data: {'itemType': typeKey},
+      options: Options(headers: {'x-tenant-id': routes.tenantId}),
+    );
 
-    debugPrint('🗑️ DELETE $url');
-    debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
+    debugPrint('🗑️ DELETE $uri');
+    debugPrint('🔁 Response: ${res.statusCode} — ${res.data}');
 
-    if (!_ok(res.statusCode)) {
-      throw Exception("Failed to delete $typeKey [$itemId]: ${res.body}");
+    if (!_ok(res.statusCode ?? 0)) {
+      throw Exception("Failed to delete $typeKey [$itemId]: ${res.data}");
     }
   }
 
@@ -188,49 +221,15 @@ class InventoryService {
   }
 
   // ─────────────────────────────────────
-  // 🔧 HTTP HELPERS
-
-  Future<http.Response> _get(Uri url) async {
-    final token = await tokenProvider.getToken();
-    return http.get(url, headers: _headers(token));
-  }
-
-  Future<http.Response> _post(Uri url, {required String body}) async {
-    final token = await tokenProvider.getToken();
-    return http.post(url, headers: _headers(token), body: body);
-  }
-
-  Future<http.Response> _put(Uri url, {required String body}) async {
-    final token = await tokenProvider.getToken();
-    return http.put(url, headers: _headers(token), body: body);
-  }
-
-  Future<http.Response> _patch(Uri url, {required String body}) async {
-    final token = await tokenProvider.getToken();
-    return http.patch(url, headers: _headers(token), body: body);
-  }
-
-  Future<http.Response> _delete(Uri url, {String? body}) async {
-    final token = await tokenProvider.getToken();
-    return http.delete(url, headers: _headers(token), body: body);
-  }
-
-  Map<String, String> _headers(String token) {
-    return {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-      'x-tenant-id': routes.tenantId,
-    };
-  }
+  // 🔧 INTERNAL HELPERS
 
   bool _ok(int status, {Set<int>? expect}) {
     if (expect != null) return expect.contains(status);
-    // Accept any 2xx (many APIs return 204 for DELETE)
-    return status >= 200 && status < 300;
+    return status >= 200 && status < 300; // accept any 2xx
   }
 
   Future<Map<String, dynamic>> _patchJson(
-    Uri url,
+    Uri uri,
     Map<String, dynamic> data,
   ) async {
     debugPrint('🟡 patchJson() called with data: $data');
@@ -244,17 +243,23 @@ class InventoryService {
     }
 
     try {
-      final res = await _patch(url, body: jsonEncode(payload));
+      final res = await dio.patchUri(
+        uri,
+        data: payload,
+        options: Options(headers: {'x-tenant-id': routes.tenantId}),
+      );
       debugPrint('📤 PATCH Payload: $payload');
-      debugPrint('🔁 Response: ${res.statusCode} — ${res.body}');
+      debugPrint('🔁 Response: ${res.statusCode} — ${res.data}');
 
-      if (!_ok(res.statusCode)) {
-        throw Exception("Failed to update item: ${res.body}");
+      if (!_ok(res.statusCode ?? 0)) {
+        throw Exception("Failed to update item: ${res.data}");
       }
 
-      return (res.body.isEmpty)
-          ? {}
-          : (jsonDecode(res.body) as Map<String, dynamic>);
+      return switch (res.data) {
+        final Map<String, dynamic> m => m,
+        final String s => jsonDecode(s) as Map<String, dynamic>,
+        _ => <String, dynamic>{},
+      };
     } catch (e, stack) {
       debugPrint('🔥 PATCH exception: $e\n$stack');
       rethrow;

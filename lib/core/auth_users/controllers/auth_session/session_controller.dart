@@ -166,4 +166,13 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   // ─────────────────────────────────────────────
   String? get uid => state.value?.uid;
   AuthUser? get currentUser => state.value;
+
+  bool get isLimited {
+    final u = state.value;
+    // invited, pending, whatever ≠ active → limited
+    return u != null && !u.status.isActive;
+  }
+
+  /// even stricter: useful if you want to block *all* secure calls
+  bool get hasNoActiveMembership => isLimited || state.value == null;
 }

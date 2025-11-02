@@ -1,3 +1,5 @@
+// lib/core/import/importer/inventory_import_service.dart
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,13 +9,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart' as dio;
 import 'package:http/http.dart' as http;
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/api/afyakit/providers.dart'; // ⬅️ NEW (afyakitClientProvider)
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart'; // ⬅️ NEW (tenantId)
 import 'package:afyakit/core/import/importer/models/import_type_x.dart';
 import 'package:afyakit/core/import/importer/models/inventory_import_result.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 
-/// DI provider
+/// Service provider
 final inventoryImportServiceProvider = Provider<InventoryImportService>((ref) {
   return InventoryImportService(ref);
 });
@@ -69,10 +72,12 @@ class InventoryImportService {
   }
 
   Future<Uint8List> downloadTemplate({required ImportType type}) async {
-    final client = await _ref.read(apiClientProvider.future);
-    final routes = _ref.read(apiRouteProvider);
-    final uri = routes.importTemplate(type.name);
+    // Resolve tenant + client + routes
+    final tenantId = _ref.read(tenantIdProvider);
+    final client = await _ref.read(afyakitClientProvider.future);
+    final routes = AfyaKitRoutes(tenantId);
 
+    final uri = routes.importTemplate(type.name);
     _log('⬇️ downloadTemplate()', {'uri': uri.toString()});
 
     final resp = await client.dio.getUri<List<int>>(
@@ -110,10 +115,12 @@ class InventoryImportService {
       'groupMap.keys': groupMap?.keys.length ?? 0,
     });
 
-    final client = await _ref.read(apiClientProvider.future);
-    final routes = _ref.read(apiRouteProvider);
+    // Resolve tenant + client + routes
+    final tenantId = _ref.read(tenantIdProvider);
+    final client = await _ref.read(afyakitClientProvider.future);
+    final routes = AfyaKitRoutes(tenantId);
 
-    // ── Web: send raw bytes
+    // ── Web: send raw bytes (manual Authorization header)
     if (kIsWeb) {
       final uri = routes.importInventoryRaw(
         type: type.name,
@@ -155,7 +162,7 @@ class InventoryImportService {
       }
     }
 
-    // ── Native: multipart
+    // ── Native: multipart (Dio handles Authorization via AfyaKitClient)
     final uri = routes.importInventory(
       type: type.name,
       dryRun: dryRun,

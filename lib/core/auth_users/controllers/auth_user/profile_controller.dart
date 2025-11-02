@@ -8,7 +8,7 @@ import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_controll
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
+import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
 
 @immutable
 class ProfileScope {

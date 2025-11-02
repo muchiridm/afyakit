@@ -1,6 +1,6 @@
 // lib/core/records/issues/services/stock_repo.dart
 import 'package:flutter/foundation.dart';
-// for FirebaseException, FieldValue, Timestamp
+import 'package:cloud_firestore/cloud_firestore.dart'; // FirebaseException, FieldValue, Timestamp
 
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
@@ -10,12 +10,16 @@ class StockRepo {
   final String tenantId;
   StockRepo(this.tenantId);
 
-  // ── paths ─────────────────────────────────────────────────────
+  // ── base tenant paths ─────────────────────────────────────────────────────
   CollectionReference<Map<String, dynamic>> _tenantCol() =>
       db.collection('tenants');
 
   DocumentReference<Map<String, dynamic>> _tenantDoc() =>
       _tenantCol().doc(tenantId);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LEGACY store-based paths (what you already had)
+  // ──────────────────────────────────────────────────────────────────────────
 
   CollectionReference<Map<String, dynamic>> storesCol() =>
       _tenantDoc().collection('stores');
@@ -25,6 +29,44 @@ class StockRepo {
 
   CollectionReference<Map<String, dynamic>> batchesCol(String storeId) =>
       storeDoc(storeId).collection('batches');
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // NEW: location-aware paths
+  //
+  // You said you're now using 3 separate collections under the tenant:
+  //   • tenants/{tenant}/stores/...
+  //   • tenants/{tenant}/dispensaries/...
+  //   • tenants/{tenant}/sources/...
+  //
+  // We keep the old /stores/ API for backwards compatibility, but expose
+  // helpers that can point to any of the 3.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// e.g. locationType = 'stores' | 'dispensaries' | 'sources'
+  CollectionReference<Map<String, dynamic>> locationCol(String locationType) =>
+      _tenantDoc().collection(locationType);
+
+  DocumentReference<Map<String, dynamic>> locationDoc(
+    String locationType,
+    String locationId,
+  ) => locationCol(locationType).doc(locationId);
+
+  CollectionReference<Map<String, dynamic>> batchesAt(
+    String locationType,
+    String locationId,
+  ) => locationDoc(locationType, locationId).collection('batches');
+
+  DocumentReference<Map<String, dynamic>> batchDocAt({
+    required String locationType,
+    required String locationId,
+    required String batchId,
+  }) {
+    return batchesAt(locationType, locationId).doc(batchId);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Other collections (unchanged)
+  // ──────────────────────────────────────────────────────────────────────────
 
   CollectionReference<Map<String, dynamic>> transitCol() =>
       _tenantDoc().collection('batch_transit');
@@ -42,11 +84,27 @@ class StockRepo {
       _tenantDoc().collection('batch_disposals');
 
   // ── primitives ────────────────────────────────────────────────
+
+  /// LEGACY read (stores only)
   Future<Map<String, dynamic>?> readBatch(
     String storeId,
     String batchId,
   ) async {
     final snap = await batchesCol(storeId).doc(batchId).get();
+    return snap.data();
+  }
+
+  /// NEW read (location-aware)
+  Future<Map<String, dynamic>?> getBatch({
+    required String locationType,
+    required String locationId,
+    required String batchId,
+  }) async {
+    final snap = await batchDocAt(
+      locationType: locationType,
+      locationId: locationId,
+      batchId: batchId,
+    ).get();
     return snap.data();
   }
 
@@ -72,14 +130,25 @@ class StockRepo {
     }
   }
 
-  /// Decrement quantity or delete the batch if it reaches zero.
-  /// Web-safe: don’t throw inside the transaction (avoids boxed “converted Future”).
-  Future<void> decrementOrDelete({
-    required String storeId,
+  // ──────────────────────────────────────────────────────────────────────────
+  // decrement / delete (location-aware first, then legacy)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// NEW: Decrement quantity or delete the batch if it reaches zero,
+  /// for any location type (stores / dispensaries / sources).
+  ///
+  /// This is what dispense/dispose should call.
+  Future<void> decrementOrDeleteAt({
+    required String locationType,
+    required String locationId,
     required String batchId,
     required int amount,
   }) async {
-    final ref = batchesCol(storeId).doc(batchId);
+    final ref = batchDocAt(
+      locationType: locationType,
+      locationId: locationId,
+      batchId: batchId,
+    );
 
     // Preflight (outside tx) so errors are explicit and not boxed.
     try {
@@ -100,7 +169,7 @@ class StockRepo {
       }
     } on FirebaseException catch (e, st) {
       debugPrint(
-        '🔥 [preflight] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
+        '🔥 [preflight@$locationType] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
       );
       throw StateError('firebase-${e.code}: ${e.message} (path=${ref.path})');
     }
@@ -144,14 +213,36 @@ class StockRepo {
       }
     } on FirebaseException catch (e, st) {
       debugPrint(
-        '🔥 [decrementOrDelete] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
+        '🔥 [decrementOrDeleteAt@$locationType] Firebase(${e.code}) at ${ref.path}: ${e.message}\n$st',
       );
       throw StateError('firebase-${e.code}: ${e.message} (path=${ref.path})');
     } catch (e, st) {
-      debugPrint('🔥 [decrementOrDelete] Unexpected at ${ref.path}: $e\n$st');
-      throw StateError('decrementOrDelete failed at ${ref.path}: $e');
+      debugPrint(
+        '🔥 [decrementOrDeleteAt@$locationType] Unexpected at ${ref.path}: $e\n$st',
+      );
+      throw StateError('decrementOrDeleteAt failed at ${ref.path}: $e');
     }
   }
+
+  /// LEGACY: Decrement for /stores/... callers (keep for existing code).
+  ///
+  /// This just delegates to the location-aware version with locationType='stores'.
+  Future<void> decrementOrDelete({
+    required String storeId,
+    required String batchId,
+    required int amount,
+  }) async {
+    await decrementOrDeleteAt(
+      locationType: 'stores',
+      locationId: storeId,
+      batchId: batchId,
+      amount: amount,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Batch create / set (stores-only, as before)
+  // ──────────────────────────────────────────────────────────────────────────
 
   Future<DocumentReference<Map<String, dynamic>>> createBatch(
     String storeId,
@@ -169,6 +260,10 @@ class StockRepo {
   ) async {
     await batchesCol(storeId).doc(batchId).set(payload);
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Compensation (kept as-is; still store-based)
+  // ──────────────────────────────────────────────────────────────────────────
 
   Future<void> compensateSource({
     required String fromStore,

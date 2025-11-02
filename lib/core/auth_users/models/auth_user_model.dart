@@ -1,5 +1,7 @@
 // lib/core/auth_users/models/auth_user_model.dart
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+
 import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 
@@ -37,7 +39,7 @@ class AuthUser {
     this.activatedOn,
     this.claims,
     this.displayName = '',
-    this.role = UserRole.client, // safer default for self-signup
+    this.role = UserRole.client,
     this.stores = const [],
     this.avatarUrl,
     this.badges = const [],
@@ -77,64 +79,95 @@ class AuthUser {
     );
   }
 
-  // ✅ Prefer top-level fields, fallback to claims.
-  factory AuthUser.fromMap(String uid, Map<String, dynamic> json) {
+  /// Main factory.
+  ///
+  /// - `uid` → from API first, else from `fbUser`, else throw
+  /// - `email` / `phone` → API → claims → Firebase → throw if both missing
+  /// - `tenantId` → API → claims → fallbackTenantId → throw
+  factory AuthUser.fromMap(
+    String uid,
+    Map<String, dynamic> json, {
+    fb.User? fbUser,
+    String? fallbackTenantId,
+  }) {
     final Map<String, dynamic>? claims = (json['claims'] is Map)
         ? Map<String, dynamic>.from(json['claims'])
         : null;
 
     String s(dynamic v) => (v ?? '').toString().trim();
 
-    // email / phone
-    final email = s(json['email']);
-    final phone = s(json['phoneNumber']).isNotEmpty
-        ? s(json['phoneNumber'])
-        : (s(claims?['phone']).isNotEmpty
-              ? s(claims?['phone'])
-              : s(claims?['phone_number']));
+    // ── UID
+    // API may send empty uid; prefer a real one from Firebase if so
+    final apiUid = s(uid);
+    final fbUid = fbUser?.uid.trim();
+    final finalUid = apiUid.isNotEmpty ? apiUid : (fbUid ?? '');
+    if (finalUid.isEmpty) {
+      throw ArgumentError('❌ AuthUser must have a uid (API or Firebase).');
+    }
 
-    // tenantId (top-level → claims)
-    final tenantId = s(json['tenantId']).isNotEmpty
-        ? s(json['tenantId'])
-        : (s(claims?['tenant']).isNotEmpty
-              ? s(claims?['tenant'])
-              : (s(claims?['tenantId']).isNotEmpty
-                    ? s(claims?['tenantId'])
-                    : s(claims?['tenant_id'])));
+    // ── email / phone
+    final apiEmail = s(json['email']);
+    final claimsEmail = s(claims?['email']);
+    final fbEmail = fbUser?.email?.trim() ?? '';
 
-    // status → enum
+    final email = apiEmail.isNotEmpty
+        ? apiEmail
+        : (claimsEmail.isNotEmpty ? claimsEmail : fbEmail);
+
+    final apiPhone = s(json['phoneNumber']);
+    final claimsPhone = s(claims?['phone']).isNotEmpty
+        ? s(claims?['phone'])
+        : s(claims?['phone_number']);
+    final fbPhone = fbUser?.phoneNumber?.trim() ?? '';
+
+    final phone = apiPhone.isNotEmpty
+        ? apiPhone
+        : (claimsPhone.isNotEmpty ? claimsPhone : fbPhone);
+
+    // ── tenantId (API → claims → fallbackTenantId)
+    final apiTenant = s(json['tenantId']);
+    final claimsTenant = s(claims?['tenant']).isNotEmpty
+        ? s(claims?['tenant'])
+        : (s(claims?['tenantId']).isNotEmpty
+              ? s(claims?['tenantId'])
+              : s(claims?['tenant_id']));
+    final tenantId = apiTenant.isNotEmpty
+        ? apiTenant
+        : (claimsTenant.isNotEmpty ? claimsTenant : (fallbackTenantId ?? ''));
+
+    // ── status → enum
     final statusStr = s(json['status']).isNotEmpty
         ? s(json['status'])
         : 'invited';
     final status = UserStatus.fromString(statusStr);
 
-    // role (top-level → claims → default client)
+    // ── role (API → claims → default)
     final rawRole = s(json['role']);
     final claimRole = s(claims?['role']);
     final roleStr = rawRole.isNotEmpty ? rawRole : claimRole;
     final role = UserRole.fromString(roleStr.isNotEmpty ? roleStr : 'client');
 
-    // displayName (top-level → claims.displayName/name)
+    // ── displayName
     final displayName = s(json['displayName']).isNotEmpty
         ? s(json['displayName'])
         : (s(claims?['displayName']).isNotEmpty
               ? s(claims?['displayName'])
               : s(claims?['name']));
 
-    // stores (top-level → claims.stores)
+    // ── stores (API → claims)
     List<String> storesModel = _normalizeStores(json['stores']);
     final List<String> storesClaims = _normalizeStores(claims?['stores']);
     if (storesModel.isEmpty && storesClaims.isNotEmpty) {
       storesModel = storesClaims;
     }
 
-    // badges (top-level → claims.badges)
+    // ── badges (API → claims)
     final topBadges = badgesFromAny(json['badges']);
     final claimBadges = badgesFromAny(claims?['badges']);
     final badges = topBadges.isNotEmpty ? topBadges : claimBadges;
 
-    final obj = AuthUser(
-      uid: uid,
+    final user = AuthUser(
+      uid: finalUid,
       email: email,
       phoneNumber: phone.isNotEmpty ? phone : null,
       status: status,
@@ -153,26 +186,30 @@ class AuthUser {
 
     if (kDebugMode) {
       debugPrint(
-        '🧩 [AuthUser.fromMap] uid=${obj.uid} email=${obj.email} '
-        'status=${obj.status.wire} role=${obj.role.name} stores=${obj.stores} '
-        'badges=${obj.badges.map((b) => b.name).toList()}',
+        '🧩 [AuthUser.fromMap] uid=${user.uid} email=${user.email} '
+        'status=${user.status.wire} role=${user.role.name} tenant=${user.tenantId} '
+        'stores=${user.stores} badges=${user.badges.map((b) => b.name).toList()}',
       );
     }
 
-    // invariants
-    final hasEmail = obj.email.trim().isNotEmpty;
-    final hasPhone = obj.phoneNumber?.trim().isNotEmpty == true;
+    // ── invariants (after merging Firebase!)
+    final hasEmail = user.email.trim().isNotEmpty;
+    final hasPhone = user.phoneNumber?.trim().isNotEmpty == true;
     if (!hasEmail && !hasPhone) {
       throw ArgumentError(
-        '❌ AuthUser must have at least an email or phone number',
+        '❌ AuthUser must have at least an email or phone number (API+claims+Firebase all empty).',
       );
     }
-    if (obj.tenantId.trim().isEmpty) {
-      throw ArgumentError('❌ AuthUser must have a valid tenantId');
+    if (user.tenantId.trim().isEmpty) {
+      throw ArgumentError(
+        '❌ AuthUser must have a valid tenantId (API/claims/fallback).',
+      );
     }
-    return obj;
+
+    return user;
   }
 
+  /// Keep backward compat but now it can’t merge Firebase.
   factory AuthUser.fromJson(Map<String, dynamic> json) =>
       AuthUser.fromMap((json['uid'] ?? '').toString(), json);
 
@@ -180,7 +217,7 @@ class AuthUser {
     return {
       'email': email,
       'phoneNumber': phoneNumber,
-      'status': status.wire, // ✅ write as string to Firestore
+      'status': status.wire,
       'tenantId': tenantId,
       'invitedOn': invitedOn?.toIso8601String(),
       'activatedOn': activatedOn?.toIso8601String(),

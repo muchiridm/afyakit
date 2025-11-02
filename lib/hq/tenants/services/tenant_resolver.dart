@@ -1,3 +1,4 @@
+// lib/hq/tenants/services/tenant_resolver.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -7,19 +8,23 @@ String resolveTenantSlug({String defaultSlug = 'afyakit'}) {
 
   final uri = Uri.base;
 
-  // ?tenant= override (useful for staging)
+  // 1) explicit ?tenant=… always wins
   final q = (uri.queryParameters['tenant'] ?? '').trim().toLowerCase();
   if (q.isNotEmpty) return q;
 
-  // simple heuristics as a soft fallback
+  // 2) simple host heuristics (for real domains)
   final host = uri.host.toLowerCase();
   if (host.contains('danab')) return 'danabtmc';
   if (host.contains('dawapap')) return 'dawapap';
 
+  // 3) fallback
   return defaultSlug;
 }
 
 /// Strict resolver via Firestore /domains/{host}, with graceful fallback.
+/// On localhost/127.0.0.1/0.0.0.0 we **do not** try Firestore domain mapping,
+/// because it can force us into another tenant (e.g. dawapap) while the token
+/// is still for afyakit → 403 on the backend.
 Future<String> resolveTenantSlugAsync({
   required String defaultSlug,
   FirebaseFirestore? db,
@@ -28,12 +33,20 @@ Future<String> resolveTenantSlugAsync({
 
   final uri = Uri.base;
 
-  // ?tenant= override
+  // 1) explicit ?tenant=… still wins everywhere
   final q = (uri.queryParameters['tenant'] ?? '').trim().toLowerCase();
   if (q.isNotEmpty) return q;
 
-  // /domains/{host} lookup
   final host = uri.host.toLowerCase();
+
+  // 2) local dev → DON'T hit Firestore domains
+  const localHosts = {'localhost', '127.0.0.1', '0.0.0.0'};
+  if (localHosts.contains(host)) {
+    // keep old behaviour: use heuristic/default
+    return resolveTenantSlug(defaultSlug: defaultSlug);
+  }
+
+  // 3) real host → try Firestore /domains/{host}
   final firestore = db ?? FirebaseFirestore.instance;
   try {
     final snap = await firestore.collection('domains').doc(host).get();
@@ -43,6 +56,6 @@ Future<String> resolveTenantSlugAsync({
     // ignore and fall back
   }
 
-  // fall back to sync heuristic (which itself falls back to default)
+  // 4) fallback to heuristic/default
   return resolveTenantSlug(defaultSlug: defaultSlug);
 }

@@ -2,11 +2,11 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/client.dart';
+import 'package:afyakit/api/afyakit/config.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/models/wa_start_response.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -23,11 +23,14 @@ final loginServiceProvider = FutureProvider.family<LoginService, String>((
   ref,
   tenantId,
 ) async {
-  final api = await ApiClient.create(
-    tenantId: tenantId,
-    tokenProvider: ref.read(tokenProvider),
-    withAuth: true, // headers ignored by public routes; safe to keep
+  final base = apiBaseUrl(tenantId);
+
+  final api = await AfyaKitClient.create(
+    baseUrl: base,
+    // login endpoints are public; returning null is fine.
+    getToken: () async => null,
   );
+
   return LoginService.createWithBackend(tenantId: tenantId, client: api);
 });
 
@@ -35,17 +38,17 @@ class LoginService {
   LoginService._(this._auth, this._client, this._routes);
 
   final fb.FirebaseAuth _auth;
-  final ApiClient? _client; // needed for backend calls
-  final ApiRoutes? _routes;
+  final AfyaKitClient? _client; // needed for backend calls
+  final AfyaKitRoutes? _routes;
 
   factory LoginService.firebaseOnly() =>
       LoginService._(fb.FirebaseAuth.instance, null, null);
 
   static Future<LoginService> createWithBackend({
     required String tenantId,
-    required ApiClient client,
+    required AfyaKitClient client,
   }) async =>
-      LoginService._(fb.FirebaseAuth.instance, client, ApiRoutes(tenantId));
+      LoginService._(fb.FirebaseAuth.instance, client, AfyaKitRoutes(tenantId));
 
   String? get expectedTenantId => _routes?.tenantId;
 
@@ -184,8 +187,9 @@ class LoginService {
 
   // ── Public pre-checks ───────────────────────────────────────
   /// `/:tenantId/auth_login/check-user-status`
-  // in lib/core/auth_users/services/login_service.dart
-
+  ///
+  /// Important: if the backend says 404 → we MUST bubble it up so session
+  /// controller can treat this as "guest / no membership", not "invited".
   Future<AuthUser> checkUserStatus({String? email, String? phoneNumber}) async {
     _ensureBackend();
 
@@ -220,12 +224,33 @@ class LoginService {
           if (cleanedEmail.isNotEmpty) 'email': cleanedEmail,
           if (cleanedPhone.isNotEmpty) 'phoneNumber': cleanedPhone,
         },
-        // Public route: no Authorization header, no refresh dance.
+        // Public route: no Authorization header
         options: Options(extra: {'skipAuth': true}),
       );
 
+      final sc = res.statusCode ?? 0;
+      // 🔴 key fix: don't fabricate a user from 404/403
+      if (sc < 200 || sc >= 300) {
+        throw DioException(
+          requestOptions: res.requestOptions,
+          response: res,
+          type: DioExceptionType.badResponse,
+          error: 'check-user-status non-2xx ($sc)',
+        );
+      }
+
       final json = jsonDecode(jsonEncode(res.data)) as Map<String, dynamic>;
-      final user = AuthUser.fromJson(json);
+
+      // we can still merge fb user + fallback tenant for 2xx responses
+      final fbUser = _auth.currentUser;
+      final fallbackTenant = _routes.tenantId;
+
+      final user = AuthUser.fromMap(
+        (json['uid'] ?? fbUser?.uid ?? '').toString(),
+        json,
+        fbUser: fbUser,
+        fallbackTenantId: fallbackTenant,
+      );
 
       t.done('ok → ${user.status.name} uid=${user.uid}');
       return user;
@@ -237,7 +262,7 @@ class LoginService {
         '❌ check-user-status failed [$sc] ${uri.toString()} '
         'body=${body is Map ? jsonEncode(body) : body}',
       );
-      rethrow; // preserve existing error handling upstream
+      rethrow; // let SessionEngine decide (guest / logout / message)
     } catch (e) {
       t.done('error');
       debugPrint('❌ check-user-status unexpected error: $e');

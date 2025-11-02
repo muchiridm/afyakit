@@ -1,10 +1,9 @@
+// lib/hq/users/super_admins/super_admins_service.dart
 import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -15,15 +14,13 @@ import 'package:afyakit/shared/types/dtos.dart';
 /// Network layer for HQ superadmin features + cross-tenant user ops.
 ///
 /// Notes:
-/// - `GET /api/superadmins` returns a **top-level JSON array**.
-/// - All methods accept 2xx; deletes also accept 204.
+/// - `GET /api/superadmins` can return a top-level JSON array or a wrapped shape.
+/// - All methods accept any 2xx; deletes also accept 204.
 class SuperAdminsService {
-  SuperAdminsService({required this.client, required this.routes});
+  SuperAdminsService({required this.dio, required this.routes});
 
-  final ApiClient client;
-  final ApiRoutes routes;
-
-  Dio get _dio => client.dio;
+  final Dio dio;
+  final AfyaKitRoutes routes;
 
   static const _json = Headers.jsonContentType;
   static const _tag = '[SuperAdminsService]';
@@ -35,7 +32,6 @@ class SuperAdminsService {
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
-    // Fallback: only used by callers that expect a map.
     try {
       final enc = jsonEncode(raw);
       final dec = jsonDecode(enc);
@@ -46,11 +42,11 @@ class SuperAdminsService {
 
   /// Accepts:
   ///  - top-level array: `[ {...}, {...} ]`
-  ///  - wrapped: `{ users: [...] }` or `{ results: [...] }`
+  ///  - wrapped: `{ users: [...] }` / `{ results: [...] }` / `{ items: [...] }` / `{ data: [...] }`
+  ///  - map-of-objects keyed by id
   List<Map<String, dynamic>> _asList(Object? raw) {
     if (raw == null) return const <Map<String, dynamic>>[];
 
-    // Top-level array
     if (raw is List) {
       return raw
           .whereType<Map>()
@@ -58,13 +54,10 @@ class SuperAdminsService {
           .toList();
     }
 
-    // Top-level map that wraps the list or is a map-of-objects
     if (raw is Map) {
       final m = Map<String, dynamic>.from(raw);
 
-      // Common wrapper keys
-      final candidates = [m['users'], m['results'], m['items'], m['data']];
-      for (final c in candidates) {
+      for (final c in [m['users'], m['results'], m['items'], m['data']]) {
         if (c is List) {
           return c
               .whereType<Map>()
@@ -73,7 +66,6 @@ class SuperAdminsService {
         }
       }
 
-      // Map-of-objects keyed by id -> flatten values
       final values = m.values.toList();
       if (values.isNotEmpty && values.every((v) => v is Map)) {
         return values
@@ -82,11 +74,6 @@ class SuperAdminsService {
             .toList();
       }
     }
-
-    // Optional: if you sometimes get a JSON string, uncomment:
-    // if (raw is String) {
-    //   try { return _asList(jsonDecode(raw)); } catch (_) {}
-    // }
 
     return const <Map<String, dynamic>>[];
   }
@@ -114,7 +101,7 @@ class SuperAdminsService {
     final uri = routes.listSuperAdmins();
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
 
-    final r = await _dio.getUri(uri);
+    final r = await dio.getUri(uri);
 
     if (kDebugMode) {
       debugPrint('🛰️ $_tag ← ${r.statusCode}  type=${r.data.runtimeType}');
@@ -122,7 +109,6 @@ class SuperAdminsService {
     }
     if (!_ok(r)) _bad(r, 'List superadmins');
 
-    // Try the normal parse first
     List<Map<String, dynamic>> items = const [];
     try {
       items = _asList(r.data);
@@ -130,7 +116,6 @@ class SuperAdminsService {
       if (kDebugMode) debugPrint('🧨 $_tag parse error: $e\n$st');
     }
 
-    // Fallbacks for odd shapes: {superadmins:[...]}, {items:[...]}, map-of-objects
     if (items.isEmpty && r.data is Map) {
       final m = Map<String, dynamic>.from(r.data as Map);
       final altKey = [
@@ -141,13 +126,11 @@ class SuperAdminsService {
         'data',
       ].firstWhere((k) => m[k] is List, orElse: () => '');
       if (altKey.isNotEmpty) {
-        final list = (m[altKey] as List)
+        items = (m[altKey] as List)
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
-        items = list;
       } else if (m.values.isNotEmpty && m.values.every((v) => v is Map)) {
-        // map-of-objects keyed by uid
         items = m.values
             .cast<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -159,7 +142,6 @@ class SuperAdminsService {
 
     final out = items.map((raw) {
       final map = Map<String, dynamic>.from(raw);
-      // normalize ID field just in case
       map['uid'] = (map['uid'] ?? map['id'] ?? '').toString();
       return SuperAdmin.fromJson(map);
     }).toList();
@@ -182,7 +164,7 @@ class SuperAdminsService {
 
   /// POST /api/superadmins/:uid  { value: bool }
   Future<void> setSuperAdmin({required String uid, required bool value}) async {
-    final r = await _dio.postUri(
+    final r = await dio.postUri(
       routes.setSuperAdmin(uid),
       data: {'value': value},
       options: Options(contentType: _json),
@@ -204,18 +186,17 @@ class SuperAdminsService {
     String? search,
     int limit = 50,
   }) async {
-    final r = await _dio.getUri(
+    final r = await dio.getUri(
       routes.hqListTenantUsers(tenantId, search: search, limit: limit),
     );
     if (!_ok(r)) _bad(r, 'List tenant users');
 
-    // Ensure we have a typed list of maps, then map to AuthUser
-    final items = _asList(r.data); // List<Map<String,dynamic>>
+    final items = _asList(r.data);
     final users = items
         .map<Map<String, dynamic>>((m) {
           final map = Map<String, dynamic>.from(m);
           final uid = (map['uid'] ?? map['id'] ?? '').toString().trim();
-          if (uid.isEmpty) return const {}; // drop later
+          if (uid.isEmpty) return const {};
           map['uid'] = uid;
           return map;
         })
@@ -225,10 +206,10 @@ class SuperAdminsService {
             return AuthUser.fromJson(m);
           } catch (e, st) {
             if (kDebugMode) debugPrint('Skipping bad user row: $e\n$st');
-            return null; // ✅ return nullable
+            return null;
           }
         })
-        .whereType<AuthUser>() // ✅ strip nulls
+        .whereType<AuthUser>()
         .toList();
 
     if (kDebugMode) {
@@ -261,7 +242,7 @@ class SuperAdminsService {
       if (forceResend) 'forceResend': true,
     };
 
-    final r = await _dio.postUri(
+    final r = await dio.postUri(
       routes.hqInviteUser(targetTenantId),
       data: payload,
       options: Options(contentType: _json),
@@ -280,7 +261,7 @@ class SuperAdminsService {
 
   /// DELETE /api/tenants/:tenantId/auth_users/:uid
   Future<void> deleteUserForTenant(String targetTenantId, String uid) async {
-    final r = await _dio.deleteUri(routes.hqDeleteUser(targetTenantId, uid));
+    final r = await dio.deleteUri(routes.hqDeleteUser(targetTenantId, uid));
     final ok = (r.statusCode == 204) || _ok(r);
     if (!ok) _bad(r, 'Delete user');
 

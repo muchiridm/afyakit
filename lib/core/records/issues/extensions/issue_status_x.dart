@@ -9,12 +9,14 @@ enum IssueStatus {
   issued,
   received,
   cancelled,
+  // partial variants should come before the final ones
+  partiallyDisposed,
   disposed,
+  partiallyDispensed,
   dispensed,
 }
 
 extension IssueStatusX on IssueStatus {
-  /// Human-friendly label.
   String get label {
     switch (this) {
       case IssueStatus.pending:
@@ -29,14 +31,17 @@ extension IssueStatusX on IssueStatus {
         return 'Received';
       case IssueStatus.cancelled:
         return 'Cancelled';
+      case IssueStatus.partiallyDisposed:
+        return 'Partially disposed';
       case IssueStatus.disposed:
         return 'Disposed';
+      case IssueStatus.partiallyDispensed:
+        return 'Partially dispensed';
       case IssueStatus.dispensed:
         return 'Dispensed';
     }
   }
 
-  /// UI color for the status.
   Color get color {
     switch (this) {
       case IssueStatus.pending:
@@ -51,24 +56,27 @@ extension IssueStatusX on IssueStatus {
         return Colors.teal;
       case IssueStatus.cancelled:
         return Colors.grey;
+      case IssueStatus.partiallyDisposed:
+        return Colors.deepOrange; // up to you
       case IssueStatus.disposed:
         return Colors.red;
+      case IssueStatus.partiallyDispensed:
+        return Colors.amber;
       case IssueStatus.dispensed:
         return Colors.purple;
     }
   }
 
-  /// Whether this status is terminal in the workflow.
   bool get isFinal =>
       this == IssueStatus.rejected ||
       this == IssueStatus.issued ||
       this == IssueStatus.received ||
       this == IssueStatus.cancelled ||
+      this == IssueStatus.partiallyDisposed || // 👈 final
       this == IssueStatus.disposed ||
+      this == IssueStatus.partiallyDispensed || // 👈 final
       this == IssueStatus.dispensed;
 
-  /// Robust string parser (accepts "approved", "IssueStatus.approved",
-  /// case-insensitive; defaults to `pending`).
   static IssueStatus fromString(String value) {
     final v = value.trim().toLowerCase();
     final key = v.contains('.') ? v.split('.').last : v;
@@ -85,8 +93,14 @@ extension IssueStatusX on IssueStatus {
         return IssueStatus.received;
       case 'cancelled':
         return IssueStatus.cancelled;
+      case 'partiallydisposed':
+      case 'partially_disposed':
+        return IssueStatus.partiallyDisposed;
       case 'disposed':
         return IssueStatus.disposed;
+      case 'partiallydispensed':
+      case 'partially_dispensed':
+        return IssueStatus.partiallyDispensed;
       case 'dispensed':
         return IssueStatus.dispensed;
       default:
