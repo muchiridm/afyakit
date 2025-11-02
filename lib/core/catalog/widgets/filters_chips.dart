@@ -16,9 +16,9 @@ class FiltersChips extends StatefulWidget {
 }
 
 class _FiltersChipsState extends State<FiltersChips> {
-  // 💡 compact defaults
-  static const double _chipHeight = 40;
-  static const double _chipHPad = 16;
+  // ⬇️ slightly smaller than before
+  static const double _chipHeight = 34;
+  static const double _chipHPad = 14;
   static const double _chipRadius = 999;
 
   late String _form = widget.initialForm;
@@ -41,7 +41,7 @@ class _FiltersChipsState extends State<FiltersChips> {
     return SizedBox(
       height: _chipHeight,
       child: Wrap(
-        spacing: 10,
+        spacing: 8,
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [for (final c in chips) _buildChip(context, c)],
@@ -78,12 +78,12 @@ class _FiltersChipsState extends State<FiltersChips> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(c.icon, size: 16, color: fg),
-              const SizedBox(width: 6),
+              Icon(c.icon, size: 14, color: fg),
+              const SizedBox(width: 5),
               Text(
                 c.label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: fg,
                   letterSpacing: -0.05,

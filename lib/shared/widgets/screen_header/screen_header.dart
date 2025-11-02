@@ -1,5 +1,4 @@
 // lib/shared/widgets/screen_header.dart
-import 'package:afyakit/shared/widgets/screen_header/tenant_brand_lockup.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/core/auth_users/widgets/user_badge.dart';
 
@@ -8,10 +7,6 @@ class ScreenHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final Widget? trailing;
   final bool showBack;
-
-  final bool showLogo;
-  final Widget? logo;
-  final double logoHeight;
 
   final bool withBackground;
   final bool backgroundFullWidth;
@@ -31,9 +26,6 @@ class ScreenHeader extends StatelessWidget {
     this.onBack,
     this.trailing,
     this.showBack = true,
-    this.showLogo = false,
-    this.logo,
-    this.logoHeight = 28,
     this.withBackground = true,
     this.backgroundFullWidth = true,
     this.outerPadding = const EdgeInsets.symmetric(
@@ -48,6 +40,7 @@ class ScreenHeader extends StatelessWidget {
   });
 
   static const double _shrinkBreakpoint = 540;
+
   bool get _hasTitle => title.trim().isNotEmpty;
 
   @override
@@ -84,15 +77,7 @@ class ScreenHeader extends StatelessWidget {
 
   // ───────────────── narrow
   Widget _buildNarrow(BuildContext context) {
-    final Widget? brand =
-        logo ??
-        (showLogo
-            ? TenantBrandLockup(
-                height: logoHeight,
-                showName: _hasTitle ? false : true,
-              )
-            : null);
-
+    // no title → just back + trailing + user
     if (!_hasTitle) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,12 +91,6 @@ class ScreenHeader extends StatelessWidget {
                 )
               else
                 const SizedBox(width: 48),
-              if (brand != null) ...[
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Align(alignment: Alignment.centerLeft, child: brand),
-                ),
-              ],
               const Spacer(),
               if (trailing != null) Flexible(child: _buildTrailingCluster()),
             ],
@@ -123,6 +102,7 @@ class ScreenHeader extends StatelessWidget {
       );
     }
 
+    // with title
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -135,7 +115,6 @@ class ScreenHeader extends StatelessWidget {
               )
             else
               const SizedBox(width: 48),
-            if (brand != null) ...[const SizedBox(width: 10), brand],
             const Spacer(),
           ],
         ),
@@ -163,9 +142,7 @@ class ScreenHeader extends StatelessWidget {
 
   // ───────────────── wide
   Widget _buildWide(BuildContext context) {
-    final Widget? brand =
-        logo ?? (showLogo ? TenantBrandLockup(height: logoHeight) : null);
-
+    // no title → left cluster + trailing
     if (!_hasTitle) {
       return Row(
         children: [
@@ -181,10 +158,6 @@ class ScreenHeader extends StatelessWidget {
                   )
                 else
                   const SizedBox(width: 48),
-                if (brand != null) ...[
-                  const SizedBox(width: 10),
-                  Flexible(child: brand),
-                ],
               ],
             ),
           ),
@@ -194,6 +167,7 @@ class ScreenHeader extends StatelessWidget {
       );
     }
 
+    // with title
     return Row(
       children: [
         ConstrainedBox(
@@ -208,10 +182,6 @@ class ScreenHeader extends StatelessWidget {
                 )
               else
                 const SizedBox(width: 48),
-              if (brand != null) ...[
-                const SizedBox(width: 10),
-                Flexible(child: brand),
-              ],
             ],
           ),
         ),

@@ -3,7 +3,6 @@ import 'package:afyakit/api/dawaindex/providers.dart';
 import 'package:afyakit/core/catalog/catalog_controller.dart';
 import 'package:afyakit/core/catalog/catalog_models.dart';
 import 'package:afyakit/core/catalog/catalog_providers.dart';
-import 'package:afyakit/core/catalog/widgets/catalog_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/core/auth_users/guards/require_auth.dart';
 
+import 'catalog_header.dart';
 import 'search_bar.dart';
 import 'catalog_grid.dart';
 import 'skeletons.dart';

@@ -1,9 +1,10 @@
-// lib/core/catalog/widgets/catalog_header.dart
+import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/storage/tenant_logo_providers.dart';
+import 'package:afyakit/core/auth_users/guards/require_auth.dart';
 
-import 'filters_chips.dart';
+import 'catalog_header_info.dart';
 
 class CatalogHeader extends ConsumerWidget {
   final String selectedForm;
@@ -17,27 +18,27 @@ class CatalogHeader extends ConsumerWidget {
 
   static const double _bp = 820;
 
+  static double _responsiveGap(double w) {
+    const minG = 8.0;
+    const maxG = 20.0;
+    const start = 480.0;
+    const end = 1440.0;
+    final t = ((w - start) / (end - start)).clamp(0.0, 1.0);
+    return lerpDouble(minG, maxG, t)!;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final width = MediaQuery.of(context).size.width;
     final isNarrow = width < _bp;
-
-    final filters = FiltersChips(
-      initialForm: selectedForm,
-      onFormChanged: onFormChanged,
-    );
+    final gap = _responsiveGap(width);
 
     final logoUrl = ref.watch(tenantLogoUrlProvider);
 
     final Widget logo = (logoUrl == null)
         ? const SizedBox(height: 120)
-        : Image.network(
-            logoUrl,
-            height: 120,
-            fit: BoxFit.contain,
-            alignment: Alignment.bottomLeft,
-          );
+        : Image.network(logoUrl, height: 120, fit: BoxFit.contain);
 
     return Container(
       width: double.infinity,
@@ -54,29 +55,33 @@ class CatalogHeader extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
         child: isNarrow
             ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    height: 120,
-                    child: Align(alignment: Alignment.bottomLeft, child: logo),
+                  SizedBox(height: 110, child: Center(child: logo)),
+                  const SizedBox(height: 10),
+                  CatalogHeaderInfo(
+                    centered: true, // 👈 center button + info
+                    onLogin: () async {
+                      await requireAuth(context, ref);
+                    },
                   ),
-                  const SizedBox(height: 12),
-                  filters,
+                  SizedBox(height: gap),
                 ],
               )
             : Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 260,
-                    height: 120,
-                    child: Align(alignment: Alignment.bottomLeft, child: logo),
-                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(width: 240, height: 120, child: Center(child: logo)),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Align(
-                      alignment: Alignment.bottomRight,
-                      child: filters,
+                      alignment: Alignment.topRight,
+                      child: CatalogHeaderInfo(
+                        onLogin: () async {
+                          await requireAuth(context, ref);
+                        },
+                      ),
                     ),
                   ),
                 ],
