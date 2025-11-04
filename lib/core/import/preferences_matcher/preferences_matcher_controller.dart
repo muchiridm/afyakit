@@ -1,4 +1,8 @@
+// lib/core/import/preferences_matcher/providers/preferences_matcher_controller_provider.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// afyakitClientProvider
 
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
@@ -7,30 +11,26 @@ import 'package:afyakit/core/import/preferences_matcher/models/prefs_match_model
 import 'package:afyakit/core/item_preferences/providers/item_preferences_providers.dart';
 import 'preferences_matcher_service.dart';
 
-/// Controller provider: builds its own model asynchronously.
-/// Screen passes (type, incoming) and just renders the state.
+/// Controller provider: screen passes (type, incoming), controller does the async wiring.
 final preferencesMatcherControllerProvider = StateNotifierProvider.autoDispose
     .family<
       PreferencesMatcherController,
       PreferencesMatcherState,
       ({ItemType type, Map<ItemPreferenceField, Iterable<String>> incoming})
-    >((ref, args) {
-      final svc = ref.watch(preferencesMatcherServiceProvider);
-      return PreferencesMatcherController(
+    >(
+      (ref, args) => PreferencesMatcherController(
+        ref: ref,
         type: args.type,
         incomingByField: args.incoming,
-        service: svc,
-      );
-    });
+      ),
+    );
 
 class PreferencesMatcherState {
   const PreferencesMatcherState({required this.model, this.isBusy = false});
 
-  /// Async model (loading/error/data)
   final AsyncValue<PrefsMatchModel> model;
   final bool isBusy;
 
-  /// Convenience: complete only when data is ready and all selections are filled.
   bool get isComplete =>
       model.maybeWhen(data: (m) => m.isComplete, orElse: () => false);
 
@@ -46,26 +46,43 @@ class PreferencesMatcherState {
 class PreferencesMatcherController
     extends StateNotifier<PreferencesMatcherState> {
   PreferencesMatcherController({
+    required this.ref,
     required this.type,
     required this.incomingByField,
-    required PreferencesMatcherService service,
-  }) : _svc = service,
-       super(const PreferencesMatcherState(model: AsyncValue.loading())) {
+  }) : super(const PreferencesMatcherState(model: AsyncValue.loading())) {
     _init();
   }
 
+  final Ref ref;
   final ItemType type;
   final Map<ItemPreferenceField, Iterable<String>> incomingByField;
-  final PreferencesMatcherService _svc;
+
+  // Lazily construct PreferencesMatcherService by awaiting ItemPreferenceService (which itself awaits AfyaKit client).
+  late final Future<PreferencesMatcherService> _svc = _makeService();
+
+  Future<PreferencesMatcherService> _makeService() async {
+    // Option A: Reuse your existing service provider (async)
+    final prefsSvc = await ref.read(itemPreferenceServiceProvider.future);
+    return PreferencesMatcherService(prefsSvc);
+
+    // Option B (direct wiring, if you prefer to bypass the provider):
+    // final tenantId = ref.read(tenantIdProvider);
+    // final client   = await ref.read(afyakitClientProvider.future);
+    // final itemPref = ItemPreferenceService(
+    //   routes: AfyaKitRoutes(tenantId),
+    //   dio: client.dio,
+    // );
+    // return PreferencesMatcherService(itemPref);
+  }
 
   // Expose which fields should be displayed (keeps the screen dumb)
   List<ItemPreferenceField> get fields => fieldsFor(type);
 
   // ---- lifecycle -------------------------------------------------------------
-
   Future<void> _init() async {
     try {
-      final model = await _svc.build(type, incomingByField);
+      final svc = await _svc;
+      final model = await svc.build(type, incomingByField);
       state = state.copyWith(model: AsyncValue.data(model));
     } catch (e, st) {
       state = state.copyWith(model: AsyncValue.error(e, st));
@@ -73,13 +90,10 @@ class PreferencesMatcherController
   }
 
   // ---- safe accessors for the view ------------------------------------------
-
-  /// Returns the FieldMatchModel for a given field or null if not ready.
   FieldMatchModel? fieldModel(ItemPreferenceField field) =>
       state.model.maybeWhen(data: (m) => m.byField[field], orElse: () => null);
 
   // ---- interactions ----------------------------------------------------------
-
   void select({
     required ItemPreferenceField field,
     required String incoming,
@@ -87,6 +101,7 @@ class PreferencesMatcherController
   }) {
     final current = state.model;
     if (!current.hasValue) return;
+
     final m = current.value!;
     final fm = m.byField[field]!;
     final nextSel = Map<String, String>.from(fm.selections)
@@ -117,7 +132,8 @@ class PreferencesMatcherController
 
     state = state.copyWith(isBusy: true);
     try {
-      final updatedExisting = await _svc.createPreferenceValue(
+      final svc = await _svc;
+      final updatedExisting = await svc.createPreferenceValue(
         type: type,
         field: field,
         value: newValue,
@@ -144,7 +160,7 @@ class PreferencesMatcherController
     }
   }
 
-  /// Output a compact mapping: fieldKey -> { incoming -> canonical }
+  /// Output: fieldKey -> { incoming -> canonical }
   Map<String, Map<String, String>> buildResult() {
     final current = state.model;
     if (!current.hasValue) return const {};
@@ -156,10 +172,9 @@ class PreferencesMatcherController
   }
 }
 
-/// DI for the service
-final preferencesMatcherServiceProvider = Provider<PreferencesMatcherService>((
-  ref,
-) {
-  final prefsSvc = ref.watch(itemPreferenceServiceProvider);
-  return PreferencesMatcherService(prefsSvc);
-});
+/// DI for the matcher service (async wrapper, if you want to use it elsewhere)
+final preferencesMatcherServiceProvider =
+    FutureProvider<PreferencesMatcherService>((ref) async {
+      final prefsSvc = await ref.watch(itemPreferenceServiceProvider.future);
+      return PreferencesMatcherService(prefsSvc);
+    });

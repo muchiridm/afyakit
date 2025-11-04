@@ -1,5 +1,4 @@
-import 'dart:async'; // for unawaited()
-
+// lib/core/auth_users/widgets/auth_gate.dart
 import 'package:afyakit/core/auth_users/widgets/blocked.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,10 +9,9 @@ import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
 
-import 'package:afyakit/core/auth_users/screens/login_screen.dart';
 import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/shared/screens/home_screen/home_screen.dart';
-import 'package:afyakit/shared/screens/splash_screen.dart';
+import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
+import 'package:afyakit/shared/widgets/splash_screen.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   final Map<String, String>? inviteParams;
@@ -27,8 +25,8 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   void initState() {
     super.initState();
-    // Warm the session (non-blocking)
-    Future.microtask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final tenantId = ref.read(tenantIdProvider);
       if (kDebugMode) {
         final u = fb.FirebaseAuth.instance.currentUser;
@@ -43,8 +41,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final tenantId = ref.watch(tenantIdProvider);
-
-    // ✅ Keep it simple: drive the app off the session controller alone.
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
@@ -60,39 +56,38 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         );
       },
       data: (user) {
-        // No app-user resolved yet
-        if (user == null) {
-          final hasFbUser = fb.FirebaseAuth.instance.currentUser != null;
+        final fbUser = fb.FirebaseAuth.instance.currentUser;
+        final hasFbUser = fbUser != null;
 
-          // If Firebase still has a user, we’re rehydrating → stay on Splash & nudge engine.
-          if (hasFbUser) {
-            if (kDebugMode) {
-              debugPrint(
-                '🧊 Firebase has user but session==null → keep Splash',
-              );
-            }
-            Future.microtask(() {
-              ref
-                  .read(sessionControllerProvider(tenantId).notifier)
-                  .ensureReady();
-            });
-            return const SplashScreen();
+        // 🔴 THIS is the important part:
+        // "Firebase user present, but no backend membership"
+        // → treat as PUBLIC / GUEST for this tenant.
+        if (user == null && hasFbUser) {
+          if (kDebugMode) {
+            debugPrint(
+              '🌐 FB user present but no tenant membership → show PUBLIC home (guest on $tenantId)',
+            );
           }
-
-          if (kDebugMode) debugPrint('👤 No session user → Login');
-          return const LoginScreen();
+          return const HomeScreen(); // your public/catalog screen
         }
 
-        // Invited → complete profile (one simple flow)
+        // True guest (not signed into Firebase at all)
+        if (user == null) {
+          if (kDebugMode) debugPrint('🌐 Guest visit → Public Home');
+          return const HomeScreen();
+        }
+
+        // Invited → profile completion
         if (user.status.isInvited) {
           if (kDebugMode) debugPrint('📝 Invited → ProfileEditor');
+          final params = widget.inviteParams ?? const <String, String>{};
           return UserProfileEditorScreen(
             tenantId: tenantId,
-            inviteParams: widget.inviteParams,
+            inviteParams: params.isEmpty ? null : params,
           );
         }
 
-        // Active → go Home
+        // Active
         if (kDebugMode) debugPrint('✅ AuthGate OK → Home');
         return const HomeScreen();
       },

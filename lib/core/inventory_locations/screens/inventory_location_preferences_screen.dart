@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
 
 class LocationPreferencesScreen extends ConsumerStatefulWidget {
   final InventoryLocationType type;

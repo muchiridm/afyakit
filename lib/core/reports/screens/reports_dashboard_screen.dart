@@ -1,7 +1,7 @@
 import 'package:afyakit/core/reports/screens/stock_report_screen.dart';
 import 'package:afyakit/core/reports/widgets/report_gate.dart';
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

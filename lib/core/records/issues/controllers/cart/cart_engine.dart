@@ -10,7 +10,8 @@ class CartEngine {
   }
 
   /// Set quantity for a (itemId, batchId) in the nested map.
-  /// Removes empty item maps automatically when qty -> 0.
+  /// If maxQty is not provided, we only allow the quantity to go up by +1
+  /// from whatever is currently stored — this protects against double taps.
   Map<String, Map<String, int>> setQuantity({
     required Map<String, Map<String, int>> current,
     required String itemId,
@@ -19,10 +20,26 @@ class CartEngine {
     int? maxQty,
   }) {
     final next = _clone(current);
-    final clamped = qty.clamp(0, maxQty ?? qty);
 
+    final perItem = Map<String, int>.from(next[itemId] ?? const {});
+    final currentQty = perItem[batchId] ?? 0;
+
+    // 1) work out the ceiling
+    final int ceiling;
+    if (maxQty != null) {
+      // caller told us the true stock for this batch
+      ceiling = maxQty;
+    } else {
+      // caller didn't tell us → be conservative: allow at most +1
+      // (so spammy clicks can't jump 0→5 in one frame)
+      ceiling = currentQty + 1;
+    }
+
+    // 2) clamp
+    final clamped = qty.clamp(0, ceiling);
+
+    // 3) delete if zero
     if (clamped == 0) {
-      final perItem = Map<String, int>.from(next[itemId] ?? const {});
       perItem.remove(batchId);
       if (perItem.isEmpty) {
         next.remove(itemId);
@@ -32,7 +49,7 @@ class CartEngine {
       return next;
     }
 
-    final perItem = Map<String, int>.from(next[itemId] ?? const {});
+    // 4) set
     perItem[batchId] = clamped;
     next[itemId] = perItem;
     return next;

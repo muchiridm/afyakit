@@ -1,28 +1,26 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+// lib/core/item_preferences/item_preferences_service.dart
 
-import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
+
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 class ItemPreferenceService {
-  final ApiRoutes apiRoutes;
-  final TokenProvider tokenProvider;
+  final AfyaKitRoutes routes;
+  final Dio dio;
 
-  ItemPreferenceService(this.apiRoutes, this.tokenProvider);
+  ItemPreferenceService({required this.routes, required this.dio});
 
   // 📥 FETCH VALUES
   Future<List<String>> fetchValues(
     ItemType type,
     ItemPreferenceField field,
   ) async {
-    final res = await _request(
-      method: 'GET',
-      url: apiRoutes.preferenceField(type.key, field.key),
-    );
-
-    return List<String>.from(jsonDecode(res.body));
+    final uri = routes.preferenceField(type.key, field.key);
+    final res = await dio.getUri(uri);
+    return _asStringList(res.data);
   }
 
   // ➕ ADD VALUE
@@ -31,11 +29,9 @@ class ItemPreferenceService {
     ItemPreferenceField field,
     String value,
   ) async {
-    await _request(
-      method: 'POST',
-      url: apiRoutes.preferenceField(type.key, field.key),
-      body: {'value': value},
-    );
+    final uri = routes.preferenceField(type.key, field.key);
+    final res = await dio.postUri(uri, data: {'value': value});
+    _ensureOk(res.statusCode);
   }
 
   // ➖ REMOVE VALUE
@@ -44,11 +40,12 @@ class ItemPreferenceService {
     ItemPreferenceField field,
     String value,
   ) async {
-    await _request(
-      method: 'DELETE',
-      url: apiRoutes.preferenceField(type.key, field.key),
-      body: {'value': value},
-    );
+    final uri = routes.preferenceField(type.key, field.key);
+    // If your backend prefers query param instead of body for DELETE, do:
+    // final uri = routes.preferenceField(type.key, field.key)
+    //     .replace(queryParameters: {'value': value});
+    final res = await dio.deleteUri(uri, data: {'value': value});
+    _ensureOk(res.statusCode);
   }
 
   // 🔁 SET FULL LIST
@@ -57,55 +54,37 @@ class ItemPreferenceService {
     ItemPreferenceField field,
     List<String> values,
   ) async {
-    await _request(
-      method: 'PUT',
-      url: apiRoutes.preferenceField(type.key, field.key),
-      body: {'values': values},
-    );
+    final uri = routes.preferenceField(type.key, field.key);
+    final res = await dio.putUri(uri, data: {'values': values});
+    _ensureOk(res.statusCode);
   }
 
   // ─────────────────────────────────────
-  // 🔐 INTERNAL REQUEST WRAPPER
-  Future<http.Response> _request({
-    required String method,
-    required Uri url,
-    Map<String, dynamic>? body,
-  }) async {
-    final token = await tokenProvider.getToken();
+  // Helpers
+  void _ensureOk(int? sc) {
+    final code = sc ?? 0;
+    if (code < 200 || code >= 300) {
+      throw StateError('Preference API failed with status $code');
+    }
+  }
 
-    final headers = {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    };
-
-    final encodedBody = body != null ? jsonEncode(body) : null;
-    late http.Response res;
-
-    try {
-      switch (method) {
-        case 'GET':
-          res = await http.get(url, headers: headers);
-          break;
-        case 'POST':
-          res = await http.post(url, headers: headers, body: encodedBody);
-          break;
-        case 'PUT':
-          res = await http.put(url, headers: headers, body: encodedBody);
-          break;
-        case 'DELETE':
-          res = await http.delete(url, headers: headers, body: encodedBody);
-          break;
-        default:
-          throw Exception('Unsupported method: $method');
+  List<String> _asStringList(dynamic body) {
+    // Accept: raw List, {items:[...]}, JSON string
+    if (body is List) {
+      return body.map((e) => e.toString()).toList();
+    }
+    if (body is Map && body['items'] is List) {
+      return (body['items'] as List).map((e) => e.toString()).toList();
+    }
+    if (body is String && body.isNotEmpty) {
+      final parsed = jsonDecode(body);
+      if (parsed is List) {
+        return parsed.map((e) => e.toString()).toList();
       }
-    } catch (e) {
-      throw Exception('Network error while performing $method: $e');
+      if (parsed is Map && parsed['items'] is List) {
+        return (parsed['items'] as List).map((e) => e.toString()).toList();
+      }
     }
-
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception("❌ [$method] ${url.path} failed:\n${res.body}");
-    }
-
-    return res;
+    return const <String>[];
   }
 }

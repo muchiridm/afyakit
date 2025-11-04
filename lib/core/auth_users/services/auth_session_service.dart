@@ -1,8 +1,9 @@
 // lib/core/auth_users/services/auth_session_service.dart
 import 'dart:async';
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/client.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/api/afyakit/config.dart'; // ⬅️ NEW
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
 import 'package:afyakit/core/auth_users/utils/auth_claims.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
@@ -31,29 +32,40 @@ class AuthSessionService {
 
   // Deps
   final fb.FirebaseAuth _auth;
-  final ApiClient _client;
-  final ApiRoutes _routes;
+  final AfyaKitClient _client;
+  final AfyaKitRoutes _routes;
   final String tenantId;
 
   static const _delayedRefreshDelay = Duration(seconds: 2);
 
+  // ─────────────────────────────────────────────────────────
+  // UPDATED FACTORY (aligned with new AfyaKitClient API)
+  // ─────────────────────────────────────────────────────────
   static Future<AuthSessionService> create({
     required String tenantId,
     required TokenProvider tokens,
     bool withAuth = true,
   }) async {
-    final t = DevTrace('apiClient.create', context: {'tenant': tenantId});
-    final client = await ApiClient.create(
-      tenantId: tenantId,
-      tokenProvider: tokens,
-      withAuth: withAuth,
+    final span = DevTrace(
+      'authSessionService.create',
+      context: {'tenant': tenantId, 'withAuth': withAuth},
     );
-    t.log('baseUrl', add: {'url': client.baseUrl, 'withAuth': withAuth});
-    t.done('auth http client ready');
+
+    final base = apiBaseUrl(tenantId);
+
+    final client = await AfyaKitClient.create(
+      baseUrl: base,
+      // when withAuth=false, we never attach a token (and refresh path no-ops)
+      getToken: () async => withAuth ? await tokens.tryGetToken() : null,
+    );
+
+    span.log('baseUrl', add: {'url': base, 'withAuth': withAuth});
+    span.done('client ready');
+
     return AuthSessionService._(
       fb.FirebaseAuth.instance,
       client,
-      ApiRoutes(tenantId),
+      AfyaKitRoutes(tenantId),
       tenantId: tenantId,
     );
   }

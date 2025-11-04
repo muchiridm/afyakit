@@ -15,6 +15,15 @@ import 'package:afyakit/core/records/issues/services/transfer_service.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
 import 'package:afyakit/core/records/deliveries/utils/delivery_locked_exception.dart';
 
+/// Handles the actual stock-moving part of issue workflows:
+///  - transfer  → source store −qty, create transit, later receive
+///  - dispense  → source store −qty, add dispensation record
+///  - dispose   → source store −qty, add disposal record
+///
+/// NOTE:
+/// We now READ the batch first before decrementing to guard against
+/// the situation where 2+ users picked the same item and the approver
+/// only dispenses later.
 class IssueBatchService {
   final String tenantId;
   final Ref ref;
@@ -42,6 +51,10 @@ class IssueBatchService {
     await _guardDeliveryLock(enforceDeliveryLock);
     if (quantity <= 0) throw StateError('❌ Quantity must be positive.');
 
+    // we may later pass this from the issue entry itself
+    final String locationType =
+        (metadata['locationType'] as String?)?.trim().toLowerCase() ?? 'stores';
+
     switch (type) {
       case IssueType.transfer:
         final dest = (toStore ?? '').trim();
@@ -68,6 +81,7 @@ class IssueBatchService {
 
       case IssueType.dispense:
         await _dispenseNow(
+          locationType: locationType,
           storeId: fromStore,
           itemId: itemId,
           batchId: batchId,
@@ -79,6 +93,7 @@ class IssueBatchService {
 
       case IssueType.dispose:
         await _disposeNow(
+          locationType: locationType,
           storeId: fromStore,
           itemId: itemId,
           batchId: batchId,
@@ -273,10 +288,11 @@ class IssueBatchService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Smaller mutations
+  // Smaller mutations (NOW SAFE)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> _dispenseNow({
+    required String locationType, // 'stores' | 'dispensaries' | 'sources'
     required String storeId,
     required String itemId,
     required String batchId,
@@ -284,17 +300,41 @@ class IssueBatchService {
     required String reason,
     required Map<String, dynamic> extra,
   }) async {
-    final pathHint = 'store=$storeId batch=$batchId';
+    final pathHint = 'locType=$locationType store=$storeId batch=$batchId';
     try {
-      await _repo.decrementOrDelete(
-        storeId: storeId,
+      // 1) read live batch
+      final batch = await _repo.getBatch(
+        locationType: locationType,
+        locationId: storeId,
+        batchId: batchId,
+      );
+
+      if (batch == null) {
+        throw StateError('insufficient-stock: batch not found at $pathHint');
+      }
+
+      final int onHand = (batch['quantity'] as int?) ?? 0;
+      if (onHand < quantity) {
+        throw StateError(
+          'insufficient-stock: requested=$quantity onHand=$onHand at $pathHint',
+        );
+      }
+
+      // 2) now actually deduct
+      await _repo.decrementOrDeleteAt(
+        locationType: locationType,
+        locationId: storeId,
         batchId: batchId,
         amount: quantity,
       );
+
+      // 3) audit trail
       await _repo.dispensationsCol().add({
         'tenantId': tenantId,
         'storeId': storeId,
+        'locationType': locationType,
         'itemId': itemId,
+        'batchId': batchId,
         'quantity': quantity,
         'reason': reason,
         'timestamp': FieldValue.serverTimestamp(),
@@ -302,11 +342,13 @@ class IssueBatchService {
       });
     } catch (e, st) {
       debugPrint('💥 [_dispenseNow] $pathHint → $e\n$st');
+      // bubble a FRIENDLY error for UI
       throw StateError('Failed to dispense [$pathHint]: $e');
     }
   }
 
   Future<void> _disposeNow({
+    required String locationType,
     required String storeId,
     required String itemId,
     required String batchId,
@@ -314,17 +356,38 @@ class IssueBatchService {
     required String reason,
     required Map<String, dynamic> extra,
   }) async {
-    final pathHint = 'store=$storeId batch=$batchId';
+    final pathHint = 'locType=$locationType store=$storeId batch=$batchId';
     try {
-      await _repo.decrementOrDelete(
-        storeId: storeId,
+      final batch = await _repo.getBatch(
+        locationType: locationType,
+        locationId: storeId,
+        batchId: batchId,
+      );
+
+      if (batch == null) {
+        throw StateError('insufficient-stock: batch not found at $pathHint');
+      }
+
+      final int onHand = (batch['quantity'] as int?) ?? 0;
+      if (onHand < quantity) {
+        throw StateError(
+          'insufficient-stock: requested=$quantity onHand=$onHand at $pathHint',
+        );
+      }
+
+      await _repo.decrementOrDeleteAt(
+        locationType: locationType,
+        locationId: storeId,
         batchId: batchId,
         amount: quantity,
       );
+
       await _repo.disposalsCol().add({
         'tenantId': tenantId,
         'storeId': storeId,
+        'locationType': locationType,
         'itemId': itemId,
+        'batchId': batchId,
         'quantity': quantity,
         'reason': reason,
         'timestamp': FieldValue.serverTimestamp(),

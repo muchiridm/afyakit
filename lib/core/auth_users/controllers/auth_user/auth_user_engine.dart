@@ -1,5 +1,5 @@
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/providers.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/shared/types/result.dart';
 import 'package:afyakit/shared/types/app_error.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
@@ -16,10 +16,10 @@ final authUserEngineProvider = FutureProvider.family<AuthUserEngine, String>((
   tenantId,
 ) async {
   // Authenticated ApiClient (already tenant-aware via tenantIdProvider)
-  final client = await ref.read(apiClientProvider.future);
+  final client = await ref.read(afyakitClientProvider.future);
 
   // Tenant-scoped routes & service
-  final routes = ApiRoutes(tenantId);
+  final routes = AfyaKitRoutes(tenantId);
   final tenantSvc = AuthUserService(client: client, routes: routes);
   return AuthUserEngine(tenantSvc);
 });

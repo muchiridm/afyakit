@@ -1,11 +1,13 @@
+// lib/hq/users/super_admins/super_admins_controller.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/providers.dart'; // ✅ afyakitClientProvider
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+
 import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
 
@@ -68,11 +70,13 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
   SuperAdminsController(this.ref) : super(const SuperAdminsState());
 
   SuperAdminsService? _svc;
+
   Future<void> _ensureSvc() async {
     if (_svc != null) return;
-    final client = await ref.read(apiClientProvider.future);
     final tenantId = ref.read(tenantIdProvider);
-    _svc = SuperAdminsService(client: client, routes: ApiRoutes(tenantId));
+    final client = await ref.read(afyakitClientProvider.future);
+    // ✅ New DI: SuperAdminsService(dio, routes)
+    _svc = SuperAdminsService(dio: client.dio, routes: AfyaKitRoutes(tenantId));
   }
 
   // keep provider alive for long ops
@@ -170,9 +174,6 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
       }
 
       await _svc!.setSuperAdmin(uid: uid, value: value);
-
-      // If your UI is still powered by the Firestore stream, keep this:
-      // ref.invalidate(superAdminsStreamSortedProvider);
 
       // Always reconcile from source of truth
       await load();

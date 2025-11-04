@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/shared/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 class InviteAcceptScreen extends ConsumerWidget {

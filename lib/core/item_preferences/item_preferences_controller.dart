@@ -1,6 +1,11 @@
-import 'package:afyakit/api/api_routes.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
+// lib/core/item_preferences/item_preference_controller_provider.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/item_preferences/item_preferences_service.dart';
@@ -24,33 +29,42 @@ class PreferenceKey {
   int get hashCode => type.hashCode ^ field.hashCode;
 }
 
-/// 🌱 Provider for managing item preferences for a specific field
+/// 🌱 Controller provider — controller builds its service lazily
 final itemPreferenceControllerProvider =
     StateNotifierProvider.family<
       ItemPreferenceController,
       AsyncValue<List<String>>,
       PreferenceKey
-    >((ref, key) {
-      final apiRoutes = ref.watch(apiRouteProvider);
-      final token = ref.watch(tokenProvider); // ✅ add this
-      final service = ItemPreferenceService(apiRoutes, token); // ✅ inject both
-      return ItemPreferenceController(key: key, api: service);
-    });
+    >((ref, key) => ItemPreferenceController(ref: ref, key: key));
 
 /// 🎛️ Controller that handles fetching, adding, removing values
 class ItemPreferenceController extends StateNotifier<AsyncValue<List<String>>> {
+  final Ref ref;
   final PreferenceKey key;
-  final ItemPreferenceService api;
 
-  ItemPreferenceController({required this.key, required this.api})
+  ItemPreferenceController({required this.ref, required this.key})
     : super(const AsyncValue.loading()) {
     _load();
+  }
+
+  // Lazily construct service (await AfyaKit client + tenant routes)
+  late final Future<ItemPreferenceService> _svc = _makeService();
+
+  Future<ItemPreferenceService> _makeService() async {
+    final tenantId = ref.read(tenantIdProvider);
+    final client = await ref.read(afyakitClientProvider.future);
+    // Ensure ItemPreferenceService has ctor: {required AfyaKitRoutes routes, required Dio dio}
+    return ItemPreferenceService(
+      routes: AfyaKitRoutes(tenantId),
+      dio: client.dio,
+    );
   }
 
   /// 📥 Fetch current list of preferences
   Future<void> _load() async {
     try {
-      final values = await api.fetchValues(key.type, key.field);
+      final svc = await _svc;
+      final values = await svc.fetchValues(key.type, key.field);
       state = AsyncValue.data(values);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -64,10 +78,12 @@ class ItemPreferenceController extends StateNotifier<AsyncValue<List<String>>> {
 
     if (trimmed.isEmpty || current.contains(trimmed)) return;
 
+    // optimistic update
     state = AsyncValue.data([...current, trimmed]);
 
     try {
-      await api.addValue(key.type, key.field, trimmed);
+      final svc = await _svc;
+      await svc.addValue(key.type, key.field, trimmed);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -77,10 +93,12 @@ class ItemPreferenceController extends StateNotifier<AsyncValue<List<String>>> {
   Future<void> remove(String value) async {
     final current = state.value ?? [];
 
+    // optimistic update
     state = AsyncValue.data([...current]..remove(value));
 
     try {
-      await api.removeValue(key.type, key.field, value);
+      final svc = await _svc;
+      await svc.removeValue(key.type, key.field, value);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }

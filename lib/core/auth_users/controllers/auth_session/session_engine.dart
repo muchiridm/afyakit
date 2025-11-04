@@ -164,6 +164,7 @@ class SessionEngine {
       );
     }
 
+    // ✅ if claim already matches, keep current behaviour
     if (claimTenant == tenantId) {
       if (!ClaimValidator.isValid(claims)) {
         try {
@@ -177,21 +178,10 @@ class SessionEngine {
       return;
     }
 
-    // Not on right tenant → membership gate
-    late final AuthUser authUser;
-    try {
-      authUser = await _probeMembership(email);
-    } on AppError catch (ae) {
-      // Wrong tenant: sign out to avoid carrying stale claims
-      if (ae.code == 'auth/membership-not-found' ||
-          ae.code == 'auth/user-not-active') {
-        try {
-          await loginSvc.signOut();
-        } catch (_) {}
-      }
-      rethrow;
-    }
+    // 👇 NEW: check current tenant membership (public endpoint)
+    final authUser = await _probeMembership(email);
 
+    // (a) invited → STAY LIGHT, DO NOT try to sync, DO NOT try to fetch secure stuff
     if (!authUser.status.isActive) {
       _log(
         'ℹ️ User is ${authUser.status.name} on $tenantId → limited mode; skip claim sync.',
@@ -199,6 +189,19 @@ class SessionEngine {
       return;
     }
 
+    // (b) active but token is for another tenant → STAY LIGHT
+    final isCross = _isCrossTenant(
+      claimTenant: claimTenant,
+      selectedTenant: tenantId,
+    );
+    if (isCross) {
+      _log(
+        'ℹ️ Cross-tenant session (claim=$claimTenant, selected=$tenantId) → limited mode; skip claim sync.',
+      );
+      return;
+    }
+
+    // otherwise → existing logic (ask backend to fix claims)
     try {
       await session.ensureTenantClaimSelected(
         tenantId,
@@ -229,5 +232,13 @@ class SessionEngine {
 
   void _log(String msg) {
     if (kDebugMode) debugPrint(msg);
+  }
+
+  bool _isCrossTenant({
+    required String? claimTenant,
+    required String selectedTenant,
+  }) {
+    if (claimTenant == null || claimTenant.isEmpty) return false;
+    return claimTenant.toLowerCase() != selectedTenant.toLowerCase();
   }
 }

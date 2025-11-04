@@ -20,7 +20,7 @@ dependencies:
   flutter_typeahead: ^5.2.0
 
   # 🔧 Firebase Core + Auth
-  firebase_core: ^3.13.0
+  firebase_core: ^3.15.2
   firebase_auth: ^5.5.3
   cloud_firestore: ^5.6.6
   cloud_functions: ^5.5.1
@@ -59,6 +59,8 @@ dependencies:
   timeago: ^3.7.1
   phone_numbers_parser: ^9.0.3
   tuple: ^2.0.2
+  flutter_svg: ^2.2.1
+  firebase_storage: ^12.4.10
 
 dev_dependencies:
   flutter_test:

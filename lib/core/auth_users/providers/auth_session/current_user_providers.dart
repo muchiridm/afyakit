@@ -157,9 +157,22 @@ final currentAuthUserProvider = FutureProvider<AuthUser?>((ref) async {
   final tenantId = ref.read(tenantIdProvider);
   final t = DevTrace('currentAuthUser', context: {'tenant': tenantId});
 
+  // 1) make sure session ran
   await ref.read(currentUserFutureProvider.future);
   t.log('session-hydrated');
 
+  // 2) read session controller + limited flag
+  final sessionCtrl = ref.read(sessionControllerProvider(tenantId).notifier);
+  final sessionUser = sessionCtrl.currentUser;
+  final isLimited = sessionCtrl.isLimited;
+
+  // 👉 invited / cross-tenant / not-active → DO NOT call /auth_users/:id
+  if (isLimited) {
+    t.done('limited-session → using sessionUser only');
+    return sessionUser;
+  }
+
+  // 3) normal path (active user → try merged doc)
   final relaxed = await _fetchCurrentAuthUser(
     ref: ref,
     tenantId: tenantId,
@@ -182,7 +195,6 @@ final currentAuthUserProvider = FutureProvider<AuthUser?>((ref) async {
     return forced;
   }
 
-  // No "final guard" signout here. We stay tolerant.
   pLog('🛡 [currentAuthUser] unresolved (tolerant null, tenant=$tenantId)');
   t.done('tolerant-null');
   return null;
@@ -197,25 +209,37 @@ final currentUserValueProvider = Provider<AuthUser?>((ref) {
 /// Display helpers
 /// ─────────────────────────────────────────────────────────────
 
-final authUserByIdProvider = FutureProvider.autoDispose
-    .family<AuthUser?, String>((ref, uid) async {
-      ref.watch(tenantIdProvider);
-      if (uid.isEmpty) return null;
+final authUserByIdProvider = FutureProvider.autoDispose.family<AuthUser?, String>((
+  ref,
+  uid,
+) async {
+  final tenantId = ref.watch(tenantIdProvider);
+  if (uid.isEmpty) return null;
 
-      keepAliveFor(ref, const Duration(minutes: 5));
+  keepAliveFor(ref, const Duration(minutes: 5));
 
-      final fbUser = await _waitForFbUser(
-        timeout: const Duration(seconds: 4),
-        where: 'authUserById',
-      );
-      if (fbUser == null) {
-        DevTrace('authUserById').done('no-fbUser → soft-null');
-        return null;
-      }
+  // 🔎 check session state
+  final sessionCtrl = ref.read(sessionControllerProvider(tenantId).notifier);
+  if (sessionCtrl.isLimited) {
+    // In limited mode, just don’t call backend — return *current* user if it matches
+    final me = sessionCtrl.currentUser;
+    if (me != null && me.uid == uid) return me;
+    DevTrace('authUserById').done('limited-session → soft-null');
+    return null;
+  }
 
-      final um = ref.read(authUserControllerProvider.notifier);
-      return um.getUserById(uid);
-    });
+  final fbUser = await _waitForFbUser(
+    timeout: const Duration(seconds: 4),
+    where: 'authUserById',
+  );
+  if (fbUser == null) {
+    DevTrace('authUserById').done('no-fbUser → soft-null');
+    return null;
+  }
+
+  final um = ref.read(authUserControllerProvider.notifier);
+  return um.getUserById(uid);
+});
 
 final userDisplayProvider = FutureProvider.autoDispose.family<String, String>((
   ref,

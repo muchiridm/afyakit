@@ -13,8 +13,8 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 
 class IssueDetailsScreen extends ConsumerWidget {

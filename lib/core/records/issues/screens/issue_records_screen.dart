@@ -1,4 +1,4 @@
-import 'package:afyakit/shared/screens/grouped_records_screen.dart';
+import 'package:afyakit/shared/widgets/records/grouped_records_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,0 +1,50 @@
+// lib/shared/widgets/home_screen/home_screen.dart
+
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/catalog/widgets/catalog_screen.dart';
+import 'package:afyakit/shared/widgets/home_screen/home_action_buttons.dart';
+import 'package:afyakit/shared/widgets/home_screen/home_header.dart';
+import 'package:afyakit/shared/widgets/home_screen/latest_activity_panel.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(currentUserProvider);
+
+    return userAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) =>
+          const Scaffold(body: Center(child: Text('❌ Failed to load user'))),
+      data: (user) {
+        // ── GUEST: show public catalog landing (NO extra BaseScreen/HomeHeader)
+        if (user == null) {
+          return const CatalogScreen(); // <- stand-alone: uses its own BaseScreen + ScreenHeader
+        }
+
+        // ── AUTH: your existing home layout with HomeHeader
+        ref.watch(deliverySessionControllerProvider);
+
+        return BaseScreen(
+          scrollable: true,
+          maxContentWidth: 800,
+          header: const HomeHeader(),
+          body: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              LatestActivityPanel(),
+              SizedBox(height: 32),
+              HomeActionButtons(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

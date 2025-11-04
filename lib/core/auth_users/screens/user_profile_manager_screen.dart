@@ -13,8 +13,8 @@ import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.da
 import 'package:afyakit/core/auth_users/screens/invite_user_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/user_profile_card.dart';
 
-import 'package:afyakit/shared/screens/base_screen.dart';
-import 'package:afyakit/shared/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 

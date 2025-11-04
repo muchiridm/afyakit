@@ -1,6 +1,6 @@
 // lib/shared/providers/batch_service.dart
 import 'dart:convert';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
@@ -54,7 +54,7 @@ class BatchService {
     BatchRecord batch,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).createBatch(storeId);
+    final uri = AfyaKitRoutes(tenantId).createBatch(storeId);
 
     final body = batch.toJson()
       ..putIfAbsent('tenantId', () => tenantId)
@@ -104,7 +104,7 @@ class BatchService {
     BatchRecord batch,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).updateBatch(storeId, batch.id);
+    final uri = AfyaKitRoutes(tenantId).updateBatch(storeId, batch.id);
 
     final body = batch.toJson()
       ..putIfAbsent('tenantId', () => tenantId)
@@ -151,7 +151,7 @@ class BatchService {
     String batchId,
   ) async {
     final token = await tokenProvider.getToken();
-    final uri = ApiRoutes(tenantId).deleteBatch(storeId, batchId);
+    final uri = AfyaKitRoutes(tenantId).deleteBatch(storeId, batchId);
 
     final res = await http.delete(uri, headers: _headers(token, tenantId));
     if (res.statusCode != 200) _throwHttp('deleteBatch', res);

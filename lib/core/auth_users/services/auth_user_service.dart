@@ -1,10 +1,12 @@
+// lib/core/auth_users/services/auth_user_service.dart
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/api/api_client.dart';
-import 'package:afyakit/api/api_routes.dart';
+import 'package:afyakit/api/afyakit/client.dart';
+import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -12,28 +14,17 @@ import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
 
 import '../../../shared/types/dtos.dart';
 
-/// Thin HTTP client for tenant-scoped Auth User operations.
-/// - Keeps request/response parsing local
-/// - Leaves business rules to the Engine/Controller layers
 class AuthUserService {
   AuthUserService({required this.client, required this.routes});
 
-  final ApiClient client;
-  final ApiRoutes routes;
+  final AfyaKitClient client;
+  final AfyaKitRoutes routes;
 
   Dio get _dio => client.dio;
 
-  // ─────────────────────────────────────────────
-  // Consts / Logging
-  // ─────────────────────────────────────────────
   static const _json = Headers.jsonContentType;
   static const _tag = '[UserManagerService]';
 
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
-
-  /// Best-effort map coercion from unknown shapes.
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
@@ -42,7 +33,6 @@ class AuthUserService {
     );
   }
 
-  /// Extracts a list of maps from common response shapes.
   List<Map<String, dynamic>> _asList(Object? raw) {
     if (raw is List) {
       return raw
@@ -65,10 +55,6 @@ class AuthUserService {
     final reason = r.data is Map ? (r.data as Map)['error'] : null;
     throw Exception('❌ $op failed (${r.statusCode}): ${reason ?? 'Unknown'}');
   }
-
-  // ─────────────────────────────────────────────
-  // Public API
-  // ─────────────────────────────────────────────
 
   // CREATE (Invite)
   Future<InviteResult> inviteUser({
@@ -108,9 +94,20 @@ class AuthUserService {
   // READS
   Future<List<AuthUser>> getAllUsers() async {
     final r = await _dio.getUri(routes.getAllUsers());
-    final users = _asList(
-      r.data,
-    ).map(AuthUser.fromJson).where((u) => u.uid.isNotEmpty).toList();
+    final fbUser = fb.FirebaseAuth.instance.currentUser;
+    final fallbackTenant = routes.tenantId;
+
+    final users = _asList(r.data)
+        .map(
+          (m) => AuthUser.fromMap(
+            (m['uid'] ?? '').toString(),
+            m,
+            fbUser: fbUser,
+            fallbackTenantId: fallbackTenant,
+          ),
+        )
+        .where((u) => u.uid.isNotEmpty)
+        .toList();
 
     if (kDebugMode) {
       debugPrint('✅ $_tag Loaded ${users.length} users');
@@ -120,8 +117,14 @@ class AuthUserService {
 
   Future<AuthUser> getUserById(String uid) async {
     final r = await _dio.getUri(routes.getUserById(uid));
-    final user = AuthUser.fromJson(
+    final fbUser = fb.FirebaseAuth.instance.currentUser;
+    final fallbackTenant = routes.tenantId;
+
+    final user = AuthUser.fromMap(
+      uid,
       _asMap(r.data)..putIfAbsent('uid', () => uid),
+      fbUser: fbUser,
+      fallbackTenantId: fallbackTenant,
     );
 
     if (kDebugMode) {
@@ -132,7 +135,6 @@ class AuthUserService {
 
   // UPDATE
   Future<void> updateUserFields(String uid, Map<String, Object?> fields) async {
-    // prune nulls & empty strings
     final body = Map<String, Object?>.from(fields)
       ..removeWhere((_, v) => v == null || (v is String && v.trim().isEmpty));
     if (body.isEmpty) return;

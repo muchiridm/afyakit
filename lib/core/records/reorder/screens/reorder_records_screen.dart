@@ -2,7 +2,7 @@ import 'package:afyakit/core/inventory/providers/all_inventory_map_provider.dart
 import 'package:afyakit/core/records/reorder/models/reorder_record.dart';
 import 'package:afyakit/core/records/reorder/screens/reorder_details_screen.dart';
 import 'package:afyakit/core/records/reorder/providers/reorder_records_provider.dart';
-import 'package:afyakit/shared/screens/grouped_records_screen.dart';
+import 'package:afyakit/shared/widgets/records/grouped_records_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

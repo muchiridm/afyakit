@@ -9,45 +9,34 @@ import 'package:afyakit/hq/tenants/models/tenant_config.dart';
 
 typedef Json = Map<String, dynamic>;
 
-/// Loads a tenant’s public config (with lightweight local cache).
-///
-/// Shape:
-///   /tenants/{slug} {
-///     displayName: string
-///     primaryColor|primaryColorHex: string
-///     logoPath?: string
-///     status: 'active' | 'disabled' | ...
-///     flagsPublic?: { ... }   // prefer this for FE
-///     flags?: { ... }         // fallback only if you haven’t split yet
-///   }
 class TenantConfigLoader {
   TenantConfigLoader(this._db);
   final FirebaseFirestore _db;
 
-  static const _cachePrefix = 'tenant_cfg_v1:'; // bump if shape changes
+  // bump this when you change how we serialize to prefs
+  static const _cachePrefix = 'tenant_cfg_v1:';
 
-  /// Fetch once. Tries live first; falls back to cache if live fails.
+  /// Fetch once. Tries live Firestore first; if it fails and
+  /// `useCache == true` we return last-known good from prefs.
   Future<TenantConfig> load(String slug, {bool useCache = true}) async {
     final sw = Stopwatch()..start();
 
-    // 1) live Firestore (authoritative, also validates tenant status)
+    // 1) Authoritative live fetch
     try {
       final snap = await _db.collection('tenants').doc(slug).get();
-      if (!snap.exists) throw StateError('Tenant "$slug" not found');
+      if (!snap.exists) {
+        throw StateError('Tenant "$slug" not found');
+      }
 
-      final d = snap.data() ?? const <String, dynamic>{};
-      final status = (d['status'] ?? 'active').toString();
+      final raw = snap.data() ?? const <String, dynamic>{};
+      final status = (raw['status'] ?? 'active').toString();
+
       if (status != 'active') {
+        // we treat non-active tenants as "found but unusable"
         throw StateError('Tenant "$slug" is $status');
       }
 
-      final cfg = TenantConfig.fromFirestore(slug, {
-        'displayName': d['displayName'],
-        'primaryColor': d['primaryColor'] ?? d['primaryColorHex'],
-        'logoPath': d['logoPath'],
-        // only expose public flags to the FE
-        'flags': d['flagsPublic'] ?? d['flags'] ?? const <String, dynamic>{},
-      });
+      final cfg = _mapToConfig(slug, raw);
 
       await _saveCache(slug, cfg);
       sw.stop();
@@ -56,11 +45,11 @@ class TenantConfigLoader {
       );
       return cfg;
     } catch (e) {
-      debugPrint('⚠️ TenantLoader live fetch failed: $e');
+      debugPrint('⚠️ TenantLoader live fetch failed for "$slug": $e');
       if (!useCache) rethrow;
     }
 
-    // 2) last-known cache
+    // 2) Fallback to cache
     final cached = await _readCache(slug);
     if (cached != null) {
       debugPrint('🛟 TenantLoader(cache) → ${cached.displayName}');
@@ -70,19 +59,34 @@ class TenantConfigLoader {
     throw StateError('Unable to load tenant "$slug" (no live data, no cache).');
   }
 
-  /// Live stream of config (updates cache on change). Useful for HQ/admin.
+  /// Live stream of config (updates cache on change).
+  /// Useful for HQ/admin panels.
   Stream<TenantConfig> stream(String slug) {
     return _db.collection('tenants').doc(slug).snapshots().map((s) {
-      final d = s.data() ?? const <String, dynamic>{};
-      final cfg = TenantConfig.fromFirestore(slug, {
-        'displayName': d['displayName'],
-        'primaryColor': d['primaryColor'] ?? d['primaryColorHex'],
-        'logoPath': d['logoPath'],
-        'flags': d['flagsPublic'] ?? d['flags'] ?? const <String, dynamic>{},
-      });
-      // fire and forget; don’t await inside map
+      final raw = s.data() ?? const <String, dynamic>{};
+      final cfg = _mapToConfig(slug, raw);
+      // fire-and-forget: don't await inside stream map
       _saveCache(slug, cfg);
       return cfg;
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Internals
+  // ────────────────────────────────────────────────────────────
+
+  TenantConfig _mapToConfig(String slug, Map<String, dynamic> d) {
+    // tolerate both primaryColor + primaryColorHex
+    final primaryColor = d['primaryColor'] ?? d['primaryColorHex'];
+
+    // tolerate both flagsPublic + flags
+    final flags = d['flagsPublic'] ?? d['flags'] ?? const <String, dynamic>{};
+
+    return TenantConfig.fromFirestore(slug, {
+      'displayName': d['displayName'],
+      'primaryColor': primaryColor,
+      'logoPath': d['logoPath'],
+      'flags': flags,
     });
   }
 
@@ -97,7 +101,6 @@ class TenantConfigLoader {
     if (s == null || s.isEmpty) return null;
     try {
       final m = jsonDecode(s) as Json;
-      // `toJson()` writes `primaryColorHex`, which `fromFirestore` accepts
       return TenantConfig.fromFirestore(slug, m);
     } catch (_) {
       return null;
