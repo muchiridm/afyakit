@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
@@ -51,7 +51,7 @@ class ItemPreferenceController extends StateNotifier<AsyncValue<List<String>>> {
   late final Future<ItemPreferenceService> _svc = _makeService();
 
   Future<ItemPreferenceService> _makeService() async {
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
     final client = await ref.read(afyakitClientProvider.future);
     // Ensure ItemPreferenceService has ctor: {required AfyaKitRoutes routes, required Dio dio}
     return ItemPreferenceService(

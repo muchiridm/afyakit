@@ -1,7 +1,7 @@
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/core/inventory/controllers/inventory_editable_base.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/inventory/controllers/inventory_controller.dart';
@@ -23,7 +23,7 @@ class MedicationController extends InventoryEditableBase {
       _ref.read(inventoryControllerProvider.notifier);
 
   List<MedicationItem> get all {
-    final tenantId = _ref.read(tenantIdProvider);
+    final tenantId = _ref.read(tenantSlugProvider);
     final asyncValue = _ref.watch(medicationItemsStreamProvider(tenantId));
     return asyncValue.maybeWhen(data: (items) => items, orElse: () => []);
   }

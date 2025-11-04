@@ -1,6 +1,6 @@
 // lib/shared/screens/home_screen/home_header.dart
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';

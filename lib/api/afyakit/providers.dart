@@ -1,12 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/api/afyakit/config.dart';
 import 'package:afyakit/api/afyakit/client.dart';
 
 final afyakitClientProvider = FutureProvider<AfyaKitClient>((ref) async {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   final base = apiBaseUrl(tenantId);
   return AfyaKitClient.create(
     baseUrl: base,

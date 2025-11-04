@@ -1,6 +1,6 @@
 // lib/features/inventory_view/controllers/inventory_view_controller.dart
 import 'package:afyakit/core/batches/controllers/batch_args.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +21,7 @@ import 'package:afyakit/core/records/deliveries/controllers/delivery_session_con
 import 'package:afyakit/core/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_state.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
@@ -33,7 +33,7 @@ final inventoryViewControllerFamily =
       InventoryViewState,
       ItemType
     >((ref, type) {
-      final tenantId = ref.watch(tenantIdProvider);
+      final tenantId = ref.watch(tenantSlugProvider);
       return InventoryViewController(ref, tenantId, type);
     });
 

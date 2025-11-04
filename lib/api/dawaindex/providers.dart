@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/api/dawaindex/config.dart';
 import 'package:afyakit/api/dawaindex/client.dart';
 
 final diApiConfigProvider = Provider<DiApiConfig>((ref) {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   final cfg = resolveDiApiBaseForTenant(tenantId);
   if (kDebugMode) {
     debugPrint(

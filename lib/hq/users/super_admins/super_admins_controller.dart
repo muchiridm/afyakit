@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // ✅ afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
@@ -73,7 +73,7 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
 
   Future<void> _ensureSvc() async {
     if (_svc != null) return;
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
     final client = await ref.read(afyakitClientProvider.future);
     // ✅ New DI: SuperAdminsService(dio, routes)
     _svc = SuperAdminsService(dio: client.dio, routes: AfyaKitRoutes(tenantId));

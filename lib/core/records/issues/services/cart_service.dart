@@ -10,7 +10,7 @@ import 'package:afyakit/core/batches/models/batch_record.dart';
 
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
 import 'package:flutter/material.dart';
@@ -21,7 +21,7 @@ class CartService {
   CartService(this.ref);
 
   List<CartDisplayItem> getDisplayItems(Map<String, Map<String, int>> cart) {
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
 
     // Use watch so providers that depend on this recompute reactively.
     final batches = ref
@@ -83,7 +83,7 @@ class CartService {
   Widget buildSummaryFromEntries(List<IssueEntry> entries) {
     if (entries.isEmpty) return const SizedBox();
 
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
     final batches = ref
         .watch(batchRecordsStreamProvider(tenantId))
         .maybeWhen(data: (d) => d, orElse: () => <BatchRecord>[]);

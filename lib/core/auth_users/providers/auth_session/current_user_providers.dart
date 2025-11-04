@@ -1,4 +1,6 @@
+// lib/core/auth_users/providers/auth_session/current_user_providers.dart
 import 'dart:async';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:dio/dio.dart' show DioException;
@@ -7,12 +9,9 @@ import 'package:afyakit/shared/utils/provider_utils.dart';
 import 'package:afyakit/shared/utils/dev_trace.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
 import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_controller.dart';
-
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/utils/auth_claims.dart';
 import 'package:afyakit/core/auth_users/utils/auth_errors.dart';
@@ -48,33 +47,6 @@ Future<fb.User?> _waitForFbUser({
   return u;
 }
 
-/// ─────────────────────────────────────────────────────────────
-/// 1) Session-backed current app user (AuthUser)
-/// ─────────────────────────────────────────────────────────────
-
-final currentUserProvider = Provider<AsyncValue<AuthUser?>>((ref) {
-  final tenantId = ref.watch(tenantIdProvider);
-  final async = ref.watch(sessionControllerProvider(tenantId));
-
-  async.when(
-    data: (u) => pLog(
-      u == null
-          ? '👻 [currentUser] none'
-          : '✅ [currentUser] ${u.email} / ${u.uid} (tenant=$tenantId)',
-    ),
-    loading: () => pLog('⏳ [currentUser] loading… tenant=$tenantId'),
-    error: (e, _) => pLog('❌ [currentUser] error: $e (tenant=$tenantId)'),
-  );
-  return async;
-});
-
-final currentUserFutureProvider = FutureProvider<AuthUser?>((ref) async {
-  final tenantId = ref.read(tenantIdProvider);
-  final ctrl = ref.read(sessionControllerProvider(tenantId).notifier);
-  await ctrl.ensureReady();
-  return ctrl.currentUser;
-});
-
 /// One-shot fetch of merged doc + claims. Tolerant and never signs out.
 Future<AuthUser?> _fetchCurrentAuthUser({
   required Ref ref,
@@ -87,6 +59,7 @@ Future<AuthUser?> _fetchCurrentAuthUser({
     context: {'tenant': tenantId, 'force': forceRefreshToken},
   );
 
+  // 1) Firebase user
   final fbUser = await _waitForFbUser(
     timeout: const Duration(seconds: 4),
     where: 'merged',
@@ -97,7 +70,7 @@ Future<AuthUser?> _fetchCurrentAuthUser({
     return null;
   }
 
-  // Doc first (so claims flakiness doesn't blank us)
+  // 2) API user document
   AuthUser? doc;
   try {
     doc = await ref.read(authUserByIdProvider(fbUser.uid).future);
@@ -111,7 +84,6 @@ Future<AuthUser?> _fetchCurrentAuthUser({
       add: {
         'tenant': tenantId,
         'force': forceRefreshToken,
-        'attempt': 1,
         'status': doc.status.name,
       },
     );
@@ -124,7 +96,7 @@ Future<AuthUser?> _fetchCurrentAuthUser({
     rethrow;
   }
 
-  // Claims
+  // 3) Claims
   Map<String, dynamic> tokenClaims;
   try {
     tokenClaims = await ClaimsUtils.read(force: forceRefreshToken);
@@ -153,26 +125,57 @@ Future<AuthUser?> _fetchCurrentAuthUser({
   return doc.withMergedClaims(tokenClaims);
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// currentUser = session-backed (what AuthGate also sees)
+/// ─────────────────────────────────────────────────────────────
+
+final currentUserProvider = Provider<AsyncValue<AuthUser?>>((ref) {
+  final tenantId = ref.watch(tenantSlugProvider);
+  final async = ref.watch(sessionControllerProvider(tenantId));
+
+  async.when(
+    data: (u) => pLog(
+      u == null
+          ? '👻 [currentUser] none'
+          : '✅ [currentUser] ${u.email} / ${u.uid} (tenant=$tenantId)',
+    ),
+    loading: () => pLog('⏳ [currentUser] loading… tenant=$tenantId'),
+    error: (e, _) => pLog('❌ [currentUser] error: $e (tenant=$tenantId)'),
+  );
+
+  return async;
+});
+
+final currentUserFutureProvider = FutureProvider<AuthUser?>((ref) async {
+  final tenantId = ref.read(tenantSlugProvider);
+  final ctrl = ref.read(sessionControllerProvider(tenantId).notifier);
+  await ctrl.ensureReady();
+  return ctrl.currentUser;
+});
+
+/// ─────────────────────────────────────────────────────────────
+/// currentAuthUser = merged (doc + claims) when allowed
+/// ─────────────────────────────────────────────────────────────
+
 final currentAuthUserProvider = FutureProvider<AuthUser?>((ref) async {
-  final tenantId = ref.read(tenantIdProvider);
+  final tenantId = ref.read(tenantSlugProvider);
   final t = DevTrace('currentAuthUser', context: {'tenant': tenantId});
 
-  // 1) make sure session ran
+  // 1) session first
   await ref.read(currentUserFutureProvider.future);
   t.log('session-hydrated');
 
-  // 2) read session controller + limited flag
+  // 2) check session mode
   final sessionCtrl = ref.read(sessionControllerProvider(tenantId).notifier);
   final sessionUser = sessionCtrl.currentUser;
   final isLimited = sessionCtrl.isLimited;
 
-  // 👉 invited / cross-tenant / not-active → DO NOT call /auth_users/:id
   if (isLimited) {
     t.done('limited-session → using sessionUser only');
     return sessionUser;
   }
 
-  // 3) normal path (active user → try merged doc)
+  // 3) relaxed merged fetch
   final relaxed = await _fetchCurrentAuthUser(
     ref: ref,
     tenantId: tenantId,
@@ -184,6 +187,7 @@ final currentAuthUserProvider = FutureProvider<AuthUser?>((ref) async {
     return relaxed;
   }
 
+  // 4) forced merged fetch
   final forced = await _fetchCurrentAuthUser(
     ref: ref,
     tenantId: tenantId,
@@ -209,43 +213,41 @@ final currentUserValueProvider = Provider<AuthUser?>((ref) {
 /// Display helpers
 /// ─────────────────────────────────────────────────────────────
 
-final authUserByIdProvider = FutureProvider.autoDispose.family<AuthUser?, String>((
-  ref,
-  uid,
-) async {
-  final tenantId = ref.watch(tenantIdProvider);
-  if (uid.isEmpty) return null;
+final authUserByIdProvider = FutureProvider.autoDispose
+    .family<AuthUser?, String>((ref, uid) async {
+      final tenantId = ref.watch(tenantSlugProvider);
+      if (uid.isEmpty) return null;
 
-  keepAliveFor(ref, const Duration(minutes: 5));
+      keepAliveFor(ref, const Duration(minutes: 5));
 
-  // 🔎 check session state
-  final sessionCtrl = ref.read(sessionControllerProvider(tenantId).notifier);
-  if (sessionCtrl.isLimited) {
-    // In limited mode, just don’t call backend — return *current* user if it matches
-    final me = sessionCtrl.currentUser;
-    if (me != null && me.uid == uid) return me;
-    DevTrace('authUserById').done('limited-session → soft-null');
-    return null;
-  }
+      final sessionCtrl = ref.read(
+        sessionControllerProvider(tenantId).notifier,
+      );
+      if (sessionCtrl.isLimited) {
+        final me = sessionCtrl.currentUser;
+        if (me != null && me.uid == uid) return me;
+        DevTrace('authUserById').done('limited-session → soft-null');
+        return null;
+      }
 
-  final fbUser = await _waitForFbUser(
-    timeout: const Duration(seconds: 4),
-    where: 'authUserById',
-  );
-  if (fbUser == null) {
-    DevTrace('authUserById').done('no-fbUser → soft-null');
-    return null;
-  }
+      final fbUser = await _waitForFbUser(
+        timeout: const Duration(seconds: 4),
+        where: 'authUserById',
+      );
+      if (fbUser == null) {
+        DevTrace('authUserById').done('no-fbUser → soft-null');
+        return null;
+      }
 
-  final um = ref.read(authUserControllerProvider.notifier);
-  return um.getUserById(uid);
-});
+      final um = ref.read(authUserControllerProvider.notifier);
+      return um.getUserById(uid);
+    });
 
 final userDisplayProvider = FutureProvider.autoDispose.family<String, String>((
   ref,
   uid,
 ) async {
-  ref.watch(tenantIdProvider);
+  ref.watch(tenantSlugProvider);
   if (uid.isEmpty) return '';
 
   AuthUser? user;
@@ -269,7 +271,7 @@ final userDisplayProvider = FutureProvider.autoDispose.family<String, String>((
 });
 
 final currentUserDisplayProvider = Provider.autoDispose<String?>((ref) {
-  ref.watch(tenantIdProvider);
+  ref.watch(tenantSlugProvider);
   final uid = fb.FirebaseAuth.instance.currentUser?.uid;
   if (uid == null || uid.isEmpty) return null;
 

@@ -5,7 +5,7 @@ import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/core/records/deliveries/models/delivery_review_summary.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +19,7 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // STATE comes from the engine
     final session = ref.watch(deliverySessionEngineProvider);
-    final tenantId = ref.watch(tenantIdProvider);
+    final tenantId = ref.watch(tenantSlugProvider);
 
     // Stores & dispensaries (plain lists)
     final stores = ref.watch(allStoresProvider);

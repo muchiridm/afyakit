@@ -11,7 +11,7 @@ import 'package:afyakit/core/records/issues/controllers/action/issue_action_cont
 import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
@@ -23,7 +23,7 @@ class IssueDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider);
+    final tenantId = ref.watch(tenantSlugProvider);
     final key = (tenantId: tenantId, issueId: issueId);
     final issueAsync = ref.watch(
       issueFullProvider(key),

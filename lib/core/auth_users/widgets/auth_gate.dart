@@ -1,14 +1,13 @@
 // lib/core/auth_users/widgets/auth_gate.dart
 import 'package:afyakit/core/auth_users/widgets/blocked.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
-
 import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
 import 'package:afyakit/shared/widgets/splash_screen.dart';
@@ -27,7 +26,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final tenantId = ref.read(tenantIdProvider);
+      final tenantId = ref.read(tenantSlugProvider);
       if (kDebugMode) {
         final u = fb.FirebaseAuth.instance.currentUser;
         debugPrint(
@@ -40,14 +39,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    final tenantId = ref.watch(tenantIdProvider);
+    final tenantId = ref.watch(tenantSlugProvider);
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
-      loading: () {
-        if (kDebugMode) debugPrint('⌛ AuthGate: session loading…');
-        return const SplashScreen();
-      },
+      loading: () => const SplashScreen(),
       error: (e, _) {
         if (kDebugMode) debugPrint('💥 AuthGate: session error: $e');
         return const Blocked(
@@ -59,25 +55,20 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         final fbUser = fb.FirebaseAuth.instance.currentUser;
         final hasFbUser = fbUser != null;
 
-        // 🔴 THIS is the important part:
-        // "Firebase user present, but no backend membership"
-        // → treat as PUBLIC / GUEST for this tenant.
         if (user == null && hasFbUser) {
           if (kDebugMode) {
             debugPrint(
               '🌐 FB user present but no tenant membership → show PUBLIC home (guest on $tenantId)',
             );
           }
-          return const HomeScreen(); // your public/catalog screen
+          return const HomeScreen();
         }
 
-        // True guest (not signed into Firebase at all)
         if (user == null) {
           if (kDebugMode) debugPrint('🌐 Guest visit → Public Home');
           return const HomeScreen();
         }
 
-        // Invited → profile completion
         if (user.status.isInvited) {
           if (kDebugMode) debugPrint('📝 Invited → ProfileEditor');
           final params = widget.inviteParams ?? const <String, String>{};
@@ -87,7 +78,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           );
         }
 
-        // Active
         if (kDebugMode) debugPrint('✅ AuthGate OK → Home');
         return const HomeScreen();
       },
