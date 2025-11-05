@@ -103,10 +103,13 @@ pubget:;   flutter pub get
 # Tenant app: run (one)  ← FORCE CHROME:5000
 # ─────────────────────────────────────────────────────────────────────────────
 .PHONY: run run-android run-web
+# run → Android/emulator
 run:
 	@$(call assert_tenant)
-	@echo "▶️  Running $(TENANT) on Chrome :5000 …"
-	flutter run -d chrome --web-port=5000 -t $(ENTRY_TENANT) $(TENANT_DEF) $(EXTRA) $(DART_DEFINES)
+	@ANDROID=$$(flutter devices 2>/dev/null | awk '/android|emulator|gphone|Pixel/ {print $$1; exit}'); \
+	if [ -z "$$ANDROID" ]; then echo "❌ No Android device/emulator found."; exit 2; fi; \
+	echo "🤖 Running $(TENANT) on '$$ANDROID'…"; \
+	flutter run -d $$ANDROID $(FLAVOR_FLAG) -t $(ENTRY_TENANT) $(TENANT_DEF) $(EXTRA) $(DART_DEFINES)
 
 run-web:
 	@$(call assert_tenant)

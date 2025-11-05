@@ -1,5 +1,3 @@
-// lib/core/catalog/catalog_controller.dart
-
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -43,17 +41,11 @@ class CatalogState {
   }
 }
 
-///
-/// Controller that can work in two modes:
-/// 1. normal → `_service` is non-null → we fetch
-/// 2. idle   → `_service` is null → we ignore refresh/loadMore (for guest / client-not-ready)
-///
 class CatalogController extends StateNotifier<CatalogState> {
   CatalogController(CatalogService? service)
     : _service = service,
       super(const CatalogState.initial());
 
-  /// idle ctor for when service isn't ready yet
   CatalogController.empty()
     : _service = null,
       super(const CatalogState.initial());
@@ -63,14 +55,22 @@ class CatalogController extends StateNotifier<CatalogState> {
   final List<CatalogTile> _acc = <CatalogTile>[];
   Timer? _debounce;
 
+  // 👇 this identifies "the latest search"
+  int _generation = 0;
+
   bool get hasMore => state.hasMore;
   CatalogQuery get query => state.query;
   bool get _ready => _service != null;
 
+  /// Hard refresh (enter / form change)
   Future<void> refresh({CatalogQuery? query}) async {
     _debounce?.cancel();
 
-    // if not ready, just update the query locally and show "empty loading"
+    // every explicit refresh = new generation
+    _generation++;
+    final currentGen = _generation;
+
+    // if not ready, just update local state
     if (!_ready) {
       state = state.copyWith(
         query: query ?? state.query,
@@ -88,30 +88,65 @@ class CatalogController extends StateNotifier<CatalogState> {
       offset: 0,
       items: const AsyncLoading(),
     );
-    await loadMore();
+
+    await _loadPage(
+      gen: currentGen,
+      query: query ?? state.query,
+      offset: 0,
+      append: false,
+    );
   }
 
+  /// Debounced refresh (keystrokes)
   void refreshDebounced({CatalogQuery? query, Duration? delay}) {
     _debounce?.cancel();
-    _debounce = Timer(delay ?? const Duration(milliseconds: 320), () {
-      // if not ready, still let refresh run – it will no-op fetch
+    // we increment generation *when* we actually refresh, not here
+    _debounce = Timer(delay ?? const Duration(milliseconds: 420), () {
       refresh(query: query);
     });
   }
 
+  /// Scroll to load more
   Future<void> loadMore() async {
-    // not ready → nothing to fetch, but also no crash
     if (!_ready) return;
     if (!state.hasMore) return;
 
+    final currentGen = _generation;
+
+    await _loadPage(
+      gen: currentGen,
+      query: state.query,
+      offset: state.offset,
+      append: true,
+    );
+  }
+
+  /// actual fetch, guarded by generation
+  Future<void> _loadPage({
+    required int gen,
+    required CatalogQuery query,
+    required int offset,
+    required bool append,
+  }) async {
     try {
       final (items, hasMore) = await _service!.fetchTiles(
-        offset: state.offset,
+        offset: offset,
         limit: 50,
-        query: state.query,
+        query: query,
       );
 
-      _acc.addAll(items);
+      // 👇 if a newer search started while we were waiting, ignore this result
+      if (gen != _generation) {
+        return;
+      }
+
+      if (append) {
+        _acc.addAll(items);
+      } else {
+        _acc
+          ..clear()
+          ..addAll(items);
+      }
 
       state = state.copyWith(
         items: AsyncData(List.unmodifiable(_acc)),
@@ -119,6 +154,8 @@ class CatalogController extends StateNotifier<CatalogState> {
         offset: _acc.length,
       );
     } catch (e, st) {
+      // also guard errors – don't overwrite a newer search with an error
+      if (gen != _generation) return;
       state = state.copyWith(items: AsyncError(e, st));
     }
   }
