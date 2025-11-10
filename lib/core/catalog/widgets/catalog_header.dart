@@ -1,7 +1,7 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/storage/tenant_logo_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_logo_providers.dart';
 import 'package:afyakit/core/auth_users/guards/require_auth.dart';
 
 import 'catalog_header_info.dart';

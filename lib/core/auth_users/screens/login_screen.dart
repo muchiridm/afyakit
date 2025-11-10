@@ -1,25 +1,46 @@
 // lib/core/auth_users/screens/login_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/utils/user_format.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
+// v2 tenant bits
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_logo_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+
+// auth/session
 import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
+import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tenantSlug = ref.watch(tenantSlugProvider);
+
+    // listen for "login attempt finished" → refresh session
+    ref.listen<LoginFormState>(loginControllerProvider, (prev, next) {
+      final wasLoading = prev?.loading == true;
+      final nowIdle = next.loading == false;
+
+      if (wasLoading && nowIdle) {
+        // attempt completed (success or failure) → ask session to re-check
+        ref.read(sessionControllerProvider(tenantSlug).notifier).ensureReady();
+
+        // if you're showing login as a route and want to pop on success,
+        // you could add extra success info in state and pop here.
+      }
+    });
+
     return _buildScaffold(context, ref);
   }
 
   Widget _buildScaffold(BuildContext context, WidgetRef ref) {
-    final cfg = ref.watch(tenantConfigProvider);
-    final displayName = cfg.displayName;
-    final logoPath = cfg.logoPath;
+    final profile = ref.watch(tenantProfileProvider);
+    final logoUrl = ref.watch(tenantLogoUrlProvider); // 👈 v2 way
+    final displayName = profile.displayName;
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -42,7 +63,7 @@ class LoginScreen extends ConsumerWidget {
                         context: context,
                         ref: ref,
                         displayName: displayName,
-                        logoPath: logoPath,
+                        logoUrl: logoUrl,
                         primary: primary,
                       ),
                     ),
@@ -60,7 +81,7 @@ class LoginScreen extends ConsumerWidget {
     required BuildContext context,
     required WidgetRef ref,
     required String displayName,
-    required String? logoPath,
+    required String? logoUrl,
     required Color primary,
   }) {
     final loginCtrl = ref.watch(loginControllerProvider.notifier);
@@ -77,7 +98,7 @@ class LoginScreen extends ConsumerWidget {
           children: [
             _buildBrandHeader(
               displayName: displayName,
-              logoPath: logoPath,
+              logoUrl: logoUrl,
               primary: primary,
             ),
             const SizedBox(height: 20),
@@ -111,11 +132,11 @@ class LoginScreen extends ConsumerWidget {
 
   Widget _buildBrandHeader({
     required String displayName,
-    required String? logoPath,
+    required String? logoUrl,
     required Color primary,
   }) {
     final radius = BorderRadius.circular(8.0);
-    final hasLogo = logoPath != null && logoPath.trim().isNotEmpty;
+    final hasLogo = logoUrl != null && logoUrl.trim().isNotEmpty;
 
     Widget logo() {
       if (!hasLogo) {
@@ -126,27 +147,16 @@ class LoginScreen extends ConsumerWidget {
         );
       }
 
-      final path = logoPath.trim();
-      final isNetwork =
-          path.startsWith('http://') || path.startsWith('https://');
-
-      final image = isNetwork
-          ? Image.network(
-              path,
-              height: 48,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Icon(Icons.local_hospital, size: 48, color: primary),
-            )
-          : Image.asset(
-              path,
-              height: 48,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Icon(Icons.local_hospital, size: 48, color: primary),
-            );
-
-      return ClipRRect(borderRadius: radius, child: image);
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.network(
+          logoUrl,
+          height: 48,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) =>
+              Icon(Icons.local_hospital, size: 48, color: primary),
+        ),
+      );
     }
 
     return Column(

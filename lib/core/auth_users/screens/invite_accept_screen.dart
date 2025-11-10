@@ -1,7 +1,7 @@
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
 import 'package:afyakit/core/auth_users/screens/login_screen.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,7 +19,7 @@ class InviteAcceptScreen extends ConsumerWidget {
     final inviteUid = inviteParams['uid'];
 
     // theme + tenant
-    final cfg = ref.watch(tenantConfigProvider);
+    final cfg = ref.watch(tenantProfileProvider);
     final displayName = cfg.displayName;
     final primary = Theme.of(context).colorScheme.primary;
 

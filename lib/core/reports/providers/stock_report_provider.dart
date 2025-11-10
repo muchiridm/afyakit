@@ -1,20 +1,20 @@
 // lib/features/reports/providers/stock_report_provider.dart
 import 'dart:async';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/inventory/services/inventory_repo_service.dart';
 import 'package:afyakit/core/reports/services/stock_report_service.dart';
 import 'package:afyakit/core/batches/services/batch_repo.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 
 final batchRepoProvider = Provider.autoDispose<BatchRepo>((_) => BatchRepo());
 
 final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   final inventoryRepo = ref.watch(inventoryRepoProvider);
   final batchRepo = ref.watch(batchRepoProvider);
 

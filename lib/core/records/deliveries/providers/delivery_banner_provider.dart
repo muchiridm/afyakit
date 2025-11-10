@@ -1,10 +1,10 @@
 import 'package:afyakit/core/records/deliveries/providers/active_delivery_session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 
 final deliveryBannerVisibleProvider = StreamProvider.autoDispose<bool>((ref) {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   final active$ = ref.watch(activeDeliverySessionProvider.stream);
 
   return active$.asyncMap((active) async {

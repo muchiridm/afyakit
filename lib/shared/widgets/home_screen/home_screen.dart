@@ -1,14 +1,20 @@
 // lib/shared/widgets/home_screen/home_screen.dart
 
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/catalog/widgets/catalog_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/shared/widgets/home_screen/home_action_buttons.dart';
 import 'package:afyakit/shared/widgets/home_screen/home_header.dart';
 import 'package:afyakit/shared/widgets/home_screen/latest_activity_panel.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
+
+import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/catalog/widgets/catalog_screen.dart';
+import 'package:afyakit/core/auth_users/screens/login_screen.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
+
+// 👇 v2 tenant feature gate
+import 'package:afyakit/hq/tenants/v2/widgets/feature_gate.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -23,12 +29,17 @@ class HomeScreen extends ConsumerWidget {
       error: (e, _) =>
           const Scaffold(body: Center(child: Text('❌ Failed to load user'))),
       data: (user) {
-        // ── GUEST: show public catalog landing (NO extra BaseScreen/HomeHeader)
+        // ── GUEST: show catalog only if tenant has catalog, else show login screen
         if (user == null) {
-          return const CatalogScreen(); // <- stand-alone: uses its own BaseScreen + ScreenHeader
+          return FeatureGate(
+            feature: 'catalog',
+            // if catalog is NOT enabled → show login screen
+            fallback: const LoginScreen(),
+            child: const CatalogScreen(),
+          );
         }
 
-        // ── AUTH: your existing home layout with HomeHeader
+        // ── AUTH: your existing home layout
         ref.watch(deliverySessionControllerProvider);
 
         return BaseScreen(

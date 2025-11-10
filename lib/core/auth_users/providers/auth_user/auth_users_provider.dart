@@ -2,7 +2,7 @@
 import 'package:afyakit/core/auth_users/controllers/auth_user/auth_user_engine.dart';
 import 'package:afyakit/shared/utils/provider_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/shared/types/result.dart';
 
@@ -14,7 +14,7 @@ List<AuthUser> _sortedByEmail(List<AuthUser> users) {
 final authUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   pLog('📥 [authUsers] loading for tenant=$tenantId');
 
   final engine = await ref.watch(authUserEngineProvider(tenantId).future);

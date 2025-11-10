@@ -9,11 +9,11 @@ import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/issue_submission.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_validator.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   return IssueFormEngine(IssueService(tenantId));
 });
 

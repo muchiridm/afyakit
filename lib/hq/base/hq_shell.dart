@@ -1,11 +1,12 @@
+// lib/hq/core/hq_shell.dart (or wherever yours lives)
+import 'package:afyakit/hq/tenants/v2/widgets/hp_tenants_v2_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'hq_controller.dart';
-import '../tenants/hq_tenants_tab.dart';
+import '../tenants/v1/hq_tenants_tab.dart';
 import '../users/all_users/widgets/hq_all_users_tab.dart';
 import '../users/super_admins/hq_superadmins_tab.dart';
-// ⬇️ NEW: Catalog Medications tab
 import 'package:afyakit/hq/catalog/medication/hq_catalog_medications_tab.dart';
 
 class HqShell extends ConsumerWidget {
@@ -15,7 +16,7 @@ class HqShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(hqControllerProvider);
 
-    // Show ephemeral banners
+    // show ephemeral banners
     ref.listen(hqControllerProvider, (prev, next) {
       final banner = next.banner;
       if (banner != null && banner.isNotEmpty) {
@@ -26,15 +27,15 @@ class HqShell extends ConsumerWidget {
       }
     });
 
-    // Email for account menu label (pure data, no logic)
     final email = ref.watch(hqCurrentEmailProvider) ?? 'Account';
 
-    // ⬇️ Add the new Catalog tab screen here (dumb screen; controller-driven)
+    // ⬇️ now 5 pages
     final pages = const [
-      HqTenantsTab(),
+      HqTenantsTab(), // v1 tenants
       HqAllUsersTab(),
       HqSuperadminsTab(),
-      HqCatalogMedicationsTab(), // NEW
+      HqCatalogMedicationsTab(),
+      HqTenantsV2Tab(), // 👈 new v2 tenants
     ];
 
     return Stack(
@@ -62,15 +63,18 @@ class HqShell extends ConsumerWidget {
                 icon: Icon(Icons.verified_user),
                 label: 'HQ Admins',
               ),
-              // ⬇️ NEW destination for Catalog
               NavigationDestination(
                 icon: Icon(Icons.medication_outlined),
                 label: 'Catalog',
               ),
+              // 👇 new one
+              NavigationDestination(
+                icon: Icon(Icons.business_center_outlined),
+                label: 'Tenants v2',
+              ),
             ],
           ),
         ),
-
         if (state.busy)
           AbsorbPointer(
             child: Container(

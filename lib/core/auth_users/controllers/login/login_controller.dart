@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 class LoginFormState {
@@ -59,7 +59,7 @@ class LoginFormState {
 
 final loginControllerProvider =
     StateNotifierProvider<LoginController, LoginFormState>((ref) {
-      final tenantId = ref.read(tenantIdProvider);
+      final tenantId = ref.read(tenantSlugProvider);
       return LoginController(ref, tenantId: tenantId);
     });
 

@@ -6,7 +6,7 @@ import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 import 'package:afyakit/shared/types/result.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/utils/parse_user_role.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -56,7 +56,7 @@ class AuthUserController extends StateNotifier<AuthUserState> {
   AuthUserEngine? _engine;
   Future<void> _ensureEngine() async {
     if (_engine != null) return;
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
     // Reuse your existing provider — it should now build a lean engine.
     _engine = await ref.read(authUserEngineProvider(tenantId).future);
   }

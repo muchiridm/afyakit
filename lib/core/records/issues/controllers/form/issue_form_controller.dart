@@ -13,7 +13,7 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:uuid/uuid.dart'; // 👈 NEW
 
@@ -73,7 +73,7 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     try {
       final snap = readInventorySnapshot(ref);
 
-      final tenantId = ref.read(tenantIdProvider);
+      final tenantId = ref.read(tenantSlugProvider);
       final engine = IssueFormEngine(IssueService(tenantId));
 
       final result = await engine.submitMultiCart(
@@ -104,7 +104,7 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
   Future<void> loadIssuedRecords() async {
     if (!mounted) return;
 
-    final tenantId = ref.read(tenantIdProvider);
+    final tenantId = ref.read(tenantSlugProvider);
     final service = IssueService(tenantId);
 
     try {

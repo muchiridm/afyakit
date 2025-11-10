@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/hq/users/all_users/all_user_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final allUsersServiceProvider = FutureProvider.autoDispose<AllUsersService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantIdProvider);
+  final tenantId = ref.watch(tenantSlugProvider);
   final client = await ref.watch(afyakitClientProvider.future);
   final routes = AfyaKitRoutes(tenantId);
   return AllUsersService(dio: client.dio, routes: routes);

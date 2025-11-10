@@ -1,5 +1,5 @@
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
@@ -17,7 +17,7 @@ class IssueSummaryPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider);
+    final tenantId = ref.watch(tenantSlugProvider);
 
     return Column(
       children: entries.map((entry) {

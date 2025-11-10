@@ -1,5 +1,6 @@
-// lib/main_common.dart
+// lib/main_common.dart (v2-only bootstrap)
 
+import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,16 +11,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 
+// your app root
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_id_provider.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/services/tenant_config_loader.dart';
-import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
 
-/// Expose whether we actually wired the Auth emulator
+// v2 tenant bits
+import 'package:afyakit/hq/tenants/v2/services/tenant_resolver_v2.dart';
+
+// expose whether we actually wired the Auth emulator
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 
-/// Tiny logger
 final class BootLog {
   static void d(String msg) => debugPrint('🚀 $msg');
   static void e(String msg) => debugPrint('💥 $msg');
@@ -33,33 +33,27 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
   BootLog.d('Initializing Firebase…');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Enable/disable auth emulator (only in debug)
   final usingAuthEmulator = await _configureAuthForDev();
   _logFirebaseAppInfo(usingAuthEmulator);
 
-  // Firestore: keep local cache enabled
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
-  // Figure out if we're in invite flow
+  // figure out if we're in invite flow (keep your old logic)
   final invite = _extractInviteFromUri(Uri.base);
 
-  // Resolve tenant from URL / define / default
-  final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
-  BootLog.d('Using tenant: $slug');
+  // resolve tenant (v2 way: ?tenant=…, domain mapping, fallback)
+  final slug = await resolveTenantSlugAsyncV2(defaultSlug: defaultTenantSlug);
+  BootLog.d('Using v2 tenant: $slug');
 
-  // Load tenant config from Firestore
-  final loader = TenantConfigLoader(FirebaseFirestore.instance);
-  final cfg = await loader.load(slug);
-  BootLog.d('Tenant config loaded: ${cfg.displayName}');
+  // we DON'T load the profile here manually — your v2 providers already do that
+  // we just need to tell Riverpod which tenant id to use
 
-  // Boot the app
   runApp(
     ProviderScope(
       overrides: [
-        tenantIdProvider.overrideWithValue(slug),
-        tenantConfigProvider.overrideWithValue(cfg),
+        tenantSlugProvider.overrideWithValue(slug),
         authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
       ],
       child: AfyaKitApp(
@@ -139,14 +133,11 @@ Future<bool> _configureAuthForDev() async {
   const useEmu = bool.fromEnvironment('USE_AUTH_EMULATOR', defaultValue: false);
   if (!useEmu) {
     BootLog.d('Firebase Auth emulator DISABLED (using real project).');
-    // Web sometimes throws here, so wrap in try
     try {
       await fb.FirebaseAuth.instance.setSettings(
         appVerificationDisabledForTesting: false,
       );
-    } catch (_) {
-      // no-op on web
-    }
+    } catch (_) {}
     return false;
   }
 
@@ -163,9 +154,7 @@ Future<bool> _configureAuthForDev() async {
     await fb.FirebaseAuth.instance.setSettings(
       appVerificationDisabledForTesting: true,
     );
-  } catch (_) {
-    // no-op on web
-  }
+  } catch (_) {}
 
   return true;
 }

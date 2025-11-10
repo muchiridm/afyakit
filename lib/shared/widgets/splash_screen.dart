@@ -1,4 +1,5 @@
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/v2/providers/tenant_logo_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,10 +11,10 @@ class SplashScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // per-tenant
-    final cfg = ref.watch(tenantConfigProvider);
-    final displayName = cfg.displayName;
-    final logoPath = cfg.logoPath; // ← nullable
+    // per-tenant (v2)
+    final profile = ref.watch(tenantProfileProvider);
+    final logoUrl = ref.watch(tenantLogoUrlProvider); // 👈 v2 logo
+    final displayName = profile.displayName;
     final primary = theme.colorScheme.primary;
 
     return Scaffold(
@@ -25,7 +26,7 @@ class SplashScreen extends ConsumerWidget {
             _buildBrand(
               theme: theme,
               displayName: displayName,
-              logoPath: logoPath,
+              logoUrl: logoUrl,
               primary: primary,
             ),
             const SizedBox(height: 8),
@@ -43,7 +44,7 @@ class SplashScreen extends ConsumerWidget {
   Widget _buildBrand({
     required ThemeData theme,
     required String displayName,
-    required String? logoPath, // ← allow null
+    required String? logoUrl, // 👈 now URL from v2
     required Color primary,
   }) {
     final titleStyle = theme.textTheme.headlineSmall?.copyWith(
@@ -51,7 +52,7 @@ class SplashScreen extends ConsumerWidget {
       color: primary,
     );
 
-    final hasLogo = logoPath != null && logoPath.trim().isNotEmpty;
+    final hasLogo = logoUrl != null && logoUrl.trim().isNotEmpty;
     final radius = BorderRadius.circular(8);
 
     Widget logoWidget() {
@@ -59,27 +60,16 @@ class SplashScreen extends ConsumerWidget {
         return Icon(Icons.local_hospital, size: 48, color: primary);
       }
 
-      final path = logoPath.trim();
-      final isNetwork =
-          path.startsWith('http://') || path.startsWith('https://');
-
-      final img = isNetwork
-          ? Image.network(
-              path,
-              height: 56,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Icon(Icons.local_hospital, size: 48, color: primary),
-            )
-          : Image.asset(
-              path,
-              height: 56,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Icon(Icons.local_hospital, size: 48, color: primary),
-            );
-
-      return ClipRRect(borderRadius: radius, child: img);
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.network(
+          logoUrl,
+          height: 56,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) =>
+              Icon(Icons.local_hospital, size: 48, color: primary),
+        ),
+      );
     }
 
     return Padding(
@@ -103,7 +93,6 @@ class SplashScreen extends ConsumerWidget {
   }
 
   Widget _buildLoadingText(ThemeData theme) {
-    // hintColor can be low-contrast in dark mode; tweak if needed
     final color = theme.hintColor;
     return Text(
       'Loading...',
