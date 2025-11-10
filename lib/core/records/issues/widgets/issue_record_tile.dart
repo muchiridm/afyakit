@@ -1,7 +1,7 @@
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/records/issues/screens/issue_details_screen.dart';
+import 'package:afyakit/core/records/issues/widgets/screens/issue_details_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';

@@ -5,8 +5,8 @@ import 'package:afyakit/shared/utils/parsers/parse_date.dart';
 
 class IssueRecord {
   final String id;
-  final String fromStore; // store_001
-  final String toStore; // store_002
+  final String fromStore;
+  final String toStore;
   final IssueType type;
   final String status;
   final DateTime dateRequested;
@@ -40,10 +40,9 @@ class IssueRecord {
     required this.entries,
   });
 
-  // 🔁 Firestore serialization
   Map<String, dynamic> toMap() => {
     'fromStore': fromStore,
-    'toStore': toStore, // ✅ keep canonical
+    'toStore': toStore,
     'type': type.name,
     'status': status,
     'dateRequested': dateRequested.toIso8601String(),
@@ -55,18 +54,19 @@ class IssueRecord {
     'actionedByName': actionedByName,
     'actionedByRole': actionedByRole,
     'note': note,
-    // ⚠️ Entries are in subcollection; keep doc lean.
+    // entries still in subcollection normally
   };
 
   factory IssueRecord.fromMap(String id, Map<String, dynamic> map) {
     final parsedType = IssueTypeX.fromString(map['type'] ?? 'transfer');
 
+    // if someone saved entries inline, hydrate them
     final parsedEntries =
         (map['entries'] as List?)
             ?.map(
               (e) => IssueEntry.fromMap(
                 'entry_auto',
-                Map<String, dynamic>.from(e),
+                Map<String, dynamic>.from(e as Map),
               ),
             )
             .toList() ??
@@ -75,7 +75,7 @@ class IssueRecord {
     return IssueRecord(
       id: id,
       fromStore: map['fromStore'] ?? '',
-      toStore: map['toStore'] ?? map['to'] ?? '', // legacy fallback
+      toStore: map['toStore'] ?? map['to'] ?? '',
       type: parsedType,
       status: map['status'] ?? 'pending',
       dateRequested: parseDate(map['dateRequested'])!,
@@ -127,7 +127,6 @@ class IssueRecord {
     );
   }
 
-  // ───── Computed Getters (safe) ─────────────────────
   IssueStatus get statusEnum => IssueStatusX.fromString(status);
   String get statusLabel => statusEnum.label;
   bool get isFinalStatus => statusEnum.isFinal;

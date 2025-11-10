@@ -4,7 +4,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.da
 import 'package:afyakit/core/records/issues/models/view_models/cart_item_models.dart';
 import 'package:afyakit/core/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/core/records/issues/providers/grouped_cart_provider.dart';
-import 'package:afyakit/core/records/issues/screens/issue_request_screen.dart';
+import 'package:afyakit/core/records/issues/widgets/screens/issue_request_screen.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

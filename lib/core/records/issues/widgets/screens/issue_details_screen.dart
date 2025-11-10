@@ -16,6 +16,7 @@ import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
+import 'package:intl/intl.dart';
 
 class IssueDetailsScreen extends ConsumerWidget {
   final String issueId;
@@ -25,9 +26,7 @@ class IssueDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantSlugProvider);
     final key = (tenantId: tenantId, issueId: issueId);
-    final issueAsync = ref.watch(
-      issueFullProvider(key),
-    ); // ← combined doc+entries
+    final issueAsync = ref.watch(issueFullProvider(key));
     final asyncUser = ref.watch(currentUserProvider);
     final asyncStores = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
@@ -37,14 +36,12 @@ class IssueDetailsScreen extends ConsumerWidget {
     );
     final controller = ref.watch(issueActionControllerProvider);
 
-    // Gate on issue stream
     return issueAsync.when(
       loading: _buildLoading,
       error: (e, _) => _buildError('issue', e),
       data: (issue) {
         if (issue == null) return _buildNotFound('Issue');
 
-        // Resolve "Requested By" display (uid → name/email)
         final requestedBy = ref
             .watch(userDisplayProvider(issue.requestedByUid))
             .maybeWhen(data: (v) => v, orElse: () => issue.requestedByUid);
@@ -145,6 +142,10 @@ class IssueDetailsScreen extends ConsumerWidget {
 
   List<Widget> _buildEntries(IssueRecord issue) {
     return issue.entries.map((entry) {
+      final expiryStr = entry.expiry != null
+          ? DateFormat('MMM yyyy').format(entry.expiry!)
+          : '-';
+
       return Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: Card(
@@ -167,12 +168,15 @@ class IssueDetailsScreen extends ConsumerWidget {
                   runSpacing: 4,
                   children: [
                     _info('Type', entry.itemType.label),
+                    // ✅ no fallback to itemName
+                    _info('Brand', entry.brand),
                     _info('Group', entry.itemGroup),
                     _info('Strength', entry.strength),
                     _info('Formulation', entry.formulation),
                     _info('Size', entry.size),
                     _info('Pack Size', entry.packSize),
                     _info('Batch ID', entry.batchId),
+                    _info('Expiry', expiryStr),
                     _info('Quantity', '${entry.quantity}'),
                   ],
                 ),
@@ -222,10 +226,8 @@ class IssueDetailsScreen extends ConsumerWidget {
       return ElevatedButton.icon(
         onPressed: () async {
           try {
-            await btn.onPressed(context); // ← await fixes the “tap twice” issue
+            await btn.onPressed(context);
           } catch (e, st) {
-            // optional: toast/snack
-            // ignore: use_build_context_synchronously
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Action "${btn.label}" failed: $e')),
             );

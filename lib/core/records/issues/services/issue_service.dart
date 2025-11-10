@@ -2,16 +2,17 @@
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
+import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 
 class IssueService {
   final String tenantId;
   IssueService(this.tenantId);
 
-  // Single canonical collection
   static const String _collectionName = 'issue_records';
 
   CollectionReference<Map<String, dynamic>> get _issuesCol =>
@@ -23,41 +24,31 @@ class IssueService {
   CollectionReference<Map<String, dynamic>> _entriesCol(String issueId) =>
       _issueRef(issueId).collection('issue_entries');
 
-  // ─────────────────────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // helpers
+  // ─────────────────────────────────────────────
 
-  /// Firestore doc IDs cannot contain '/', use base64url for safety.
   String _safeDocIdFromRequestKey(String requestKey) {
     final enc = base64Url.encode(utf8.encode(requestKey)).replaceAll('=', '');
     return 'iss_${tenantId}_$enc';
   }
 
-  /// Deterministic sort so entry IDs are stable across retries.
   List<IssueEntry> _stableSortEntries(List<IssueEntry> entries) {
     final list = [...entries];
     list.sort((a, b) {
       var c = a.itemId.compareTo(b.itemId);
       if (c != 0) return c;
-      final ab = (a.batchId ?? '');
-      final bb = (b.batchId ?? '');
-      c = ab.compareTo(bb);
+      c = (a.batchId ?? '').compareTo(b.batchId ?? '');
       if (c != 0) return c;
-      // fallback for consistent tie-break
       return a.id.compareTo(b.id);
     });
     return list;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Idempotent create (issue + entries)
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // create / update
+  // ─────────────────────────────────────────────
 
-  /// Creates (or safely re-creates) an issue + entries in an idempotent way.
-  /// - Issue doc id is derived from `requestKey` (deterministic).
-  /// - Entry doc ids are deterministic: e_0000, e_0001, … (stable sort).
-  /// - If re-run with the same `requestKey`, we **update** the issue and
-  ///   **replace** the entry set (delete stale ones, upsert the current list).
   Future<String> createIssueWithEntriesIdempotent({
     required String requestKey,
     required IssueRecord issueDraft,
@@ -71,7 +62,6 @@ class IssueService {
     final issueRef = _issueRef(issueId);
     final entryCol = _entriesCol(issueId);
 
-    // ---- 1) Upsert the issue document (idempotent) ----
     await db.runTransaction((tx) async {
       final snap = await tx.get(issueRef);
 
@@ -94,20 +84,19 @@ class IssueService {
       tx.set(issueRef, toWrite, SetOptions(merge: true));
     });
 
-    // ---- 2) Deterministic entry IDs (e_0000, e_0001, …) ----
     final sorted = _stableSortEntries(entries);
     final newIds = List.generate(
       sorted.length,
       (i) => 'e_${i.toString().padLeft(4, '0')}',
     );
 
-    // delete stale entries, upsert current ones
     final existingSnap = await entryCol.get();
     final batch = db.batch();
 
     for (final d in existingSnap.docs) {
       if (!newIds.contains(d.id)) batch.delete(d.reference);
     }
+
     for (var i = 0; i < sorted.length; i++) {
       batch.set(
         entryCol.doc(newIds[i]),
@@ -117,8 +106,6 @@ class IssueService {
     }
     await batch.commit();
 
-    // ---- 3) Back-compat: mirror a read-only `entries` array on the issue doc ----
-    // Many of your screens build the list from issue.entries; give them data.
     await issueRef.update({
       'entries': sorted.map((e) => e.toMap()).toList(),
       'entryCount': sorted.length,
@@ -132,95 +119,222 @@ class IssueService {
     return issueId;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Legacy / utility APIs
-  // ─────────────────────────────────────────────────────────────
-
-  /// Non-idempotent helper (kept for admin/backfill tooling).
-  Future<void> addIssueWithEntries(
-    IssueRecord issue,
-    List<IssueEntry> entries,
-  ) async {
-    final id = issue.id.isNotEmpty ? issue.id : _issuesCol.doc().id;
-    final record = issue.copyWith(id: id);
-    final ref = _issueRef(id);
-    final batch = db.batch();
-
-    try {
-      batch.set(ref, record.toMap());
-      for (final entry in entries) {
-        batch.set(_entriesCol(id).doc(entry.id), entry.toMap());
-      }
-      await batch.commit();
-    } catch (e, st) {
-      debugPrint('❌ Failed to add issue with entries: $e\n$st');
-      rethrow;
-    }
-  }
-
-  Future<void> addIssue(IssueRecord issue) async {
-    final id = issue.id.isNotEmpty ? issue.id : _issuesCol.doc().id;
-    await _issueRef(id).set(issue.copyWith(id: id).toMap());
-  }
-
-  Future<void> updateIssue(IssueRecord record) async {
-    await _issueRef(record.id).update(record.toMap());
-  }
-
-  Future<void> deleteIssue(String id) async {
-    await _issueRef(id).delete();
-  }
-
-  Future<void> deleteEntriesForIssue(String issueId) async {
-    final snapshot = await _entriesCol(issueId).get();
-    final batch = db.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
-  }
+  // legacy utility
 
   Future<List<IssueRecord>> getAllIssues() async {
-    try {
-      final snapshot = await _issuesCol
-          .orderBy('dateRequested', descending: true)
-          .get();
-      return snapshot.docs
-          .map((doc) => IssueRecord.fromMap(doc.id, doc.data()))
-          .toList();
-    } catch (e) {
-      debugPrint('❌ Failed to load issues: $e');
-      return [];
-    }
-  }
-
-  Future<IssueRecord?> getIssueById(String id) async {
-    try {
-      final doc = await _issueRef(id).get();
-      if (!doc.exists) return null;
-      return IssueRecord.fromMap(doc.id, doc.data()!);
-    } catch (e) {
-      debugPrint('❌ Failed to fetch issue $id: $e');
-      return null;
-    }
+    final snapshot = await _issuesCol
+        .orderBy('dateRequested', descending: true)
+        .get();
+    return snapshot.docs
+        .map((doc) => IssueRecord.fromMap(doc.id, doc.data()))
+        .toList();
   }
 
   Future<List<IssueEntry>> getEntriesForIssue(String issueId) async {
-    try {
-      final snapshot = await _entriesCol(issueId).get();
-      return snapshot.docs
-          .map((doc) => IssueEntry.fromMap(doc.id, doc.data()))
-          .toList();
-    } catch (e) {
-      debugPrint('❌ Failed to fetch entries for issue $issueId: $e');
-      return [];
-    }
+    final snapshot = await _entriesCol(issueId).get();
+    return snapshot.docs
+        .map((doc) => IssueEntry.fromMap(doc.id, doc.data()))
+        .toList();
   }
 
-  Future<IssueRecord?> getFullIssue(String issueId) async {
-    final issue = await getIssueById(issueId);
-    if (issue == null) return null;
-    final entries = await getEntriesForIssue(issueId);
-    return issue.copyWith(entries: entries);
+  // ─────────────────────────────────────────────
+  // ONE-TIME (BUT FORCEABLE) BACKFILL
+  // ─────────────────────────────────────────────
+
+  /// Run this once per tenant to populate `brand` and `expiry` on old
+  /// issue_entries. Pass `force: true` while testing so you can see logs.
+  Future<void> runBrandExpiryBackfillIfNeeded({bool force = false}) async {
+    final marker = db
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('meta')
+        .doc('backfill_brand_expiry_v1');
+
+    final markerSnap = await marker.get();
+    final alreadyDone =
+        markerSnap.exists && (markerSnap.data()?['completed'] == true);
+
+    if (alreadyDone && !force) {
+      debugPrint('↪︎ backfill skipped for $tenantId (already done)');
+      return;
+    }
+
+    debugPrint('⏳ starting brand/expiry backfill for $tenantId ...');
+
+    final issuesSnap = await _issuesCol.get();
+    var totalUpdates = 0;
+
+    for (final issueDoc in issuesSnap.docs) {
+      final issueId = issueDoc.id;
+      final issue = IssueRecord.fromMap(issueId, issueDoc.data());
+      final entriesSnap = await _entriesCol(issueId).get();
+
+      var batch = db.batch();
+      var ops = 0;
+
+      for (final eDoc in entriesSnap.docs) {
+        final entryId = eDoc.id;
+        final entry = IssueEntry.fromMap(entryId, eDoc.data());
+
+        final needsBrand = entry.brand == null || entry.brand!.trim().isEmpty;
+        final needsExpiry = entry.expiry == null;
+
+        if (!needsBrand && !needsExpiry) continue;
+
+        final update = <String, Object?>{};
+
+        // try to resolve brand first
+        if (needsBrand) {
+          final brand = await _resolveBrandForEntry(
+            entry: entry,
+            issueFromStore: issue.fromStore,
+          );
+          if (brand != null && brand.trim().isNotEmpty) {
+            update['brand'] = brand.trim();
+            debugPrint(
+              '✅ brand backfilled: issue=$issueId entry=$entryId item=${entry.itemId} → "$brand"',
+            );
+          } else {
+            debugPrint(
+              '⚠️ brand NOT found: issue=$issueId entry=$entryId item=${entry.itemId} type=${entry.itemType}',
+            );
+          }
+        }
+
+        // expiry from batch
+        if (needsExpiry) {
+          final iso = await _resolveBatchExpiryIso(
+            fromStore: issue.fromStore,
+            batchId: entry.batchId,
+          );
+          if (iso != null) {
+            update['expiry'] = iso;
+            debugPrint(
+              '✅ expiry backfilled: issue=$issueId entry=$entryId batch=${entry.batchId} → $iso',
+            );
+          } else {
+            debugPrint(
+              '⚠️ expiry NOT found: issue=$issueId entry=$entryId batch=${entry.batchId}',
+            );
+          }
+        }
+
+        if (update.isEmpty) continue;
+
+        batch.update(eDoc.reference, update);
+        ops++;
+        totalUpdates++;
+
+        if (ops >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          ops = 0;
+        }
+      }
+
+      if (ops > 0) {
+        await batch.commit();
+      }
+    }
+
+    await marker.set({
+      'completed': true,
+      'updatedCount': totalUpdates,
+      'completedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    debugPrint(
+      '✅ backfill brand/expiry finished for $tenantId → $totalUpdates entries updated',
+    );
+  }
+
+  /// Try item collections first, then batch.
+  Future<String?> _resolveBrandForEntry({
+    required IssueEntry entry,
+    required String issueFromStore,
+  }) async {
+    // 1) try item collection based on itemType
+    String? col;
+    switch (entry.itemType) {
+      case ItemType.medication:
+        col = 'medications';
+        break;
+      case ItemType.consumable:
+        col = 'consumables';
+        break;
+      case ItemType.equipment:
+        col = 'equipment';
+        break;
+      case ItemType.unknown:
+        col = null;
+        break;
+    }
+
+    if (col != null) {
+      final itemSnap = await db
+          .collection('tenants')
+          .doc(tenantId)
+          .collection(col)
+          .doc(entry.itemId)
+          .get();
+
+      final itemData = itemSnap.data();
+      if (itemData != null) {
+        // these are the most likely keys
+        final bn = (itemData['brandName'] ?? itemData['brand'])?.toString();
+        if (bn != null && bn.trim().isNotEmpty) {
+          return bn.trim();
+        }
+      }
+    }
+
+    // 2) fallback: some people store brand on the batch
+    if (entry.batchId != null && entry.batchId!.trim().isNotEmpty) {
+      final bSnap = await db
+          .collection('tenants')
+          .doc(tenantId)
+          .collection('stores')
+          .doc(issueFromStore)
+          .collection('batches')
+          .doc(entry.batchId!)
+          .get();
+
+      final bData = bSnap.data();
+      if (bData != null) {
+        final bn = (bData['brandName'] ?? bData['brand'])?.toString();
+        if (bn != null && bn.trim().isNotEmpty) {
+          return bn.trim();
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> _resolveBatchExpiryIso({
+    required String fromStore,
+    required String? batchId,
+  }) async {
+    if (batchId == null || batchId.trim().isEmpty) return null;
+    final snap = await db
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('stores')
+        .doc(fromStore)
+        .collection('batches')
+        .doc(batchId)
+        .get();
+
+    if (!snap.exists) return null;
+    final data = snap.data();
+    if (data == null) return null;
+
+    final raw = data['expiryDate'];
+    if (raw is Timestamp) return raw.toDate().toIso8601String();
+    if (raw is String && raw.isNotEmpty) {
+      final dt = DateTime.tryParse(raw);
+      return dt?.toIso8601String();
+    }
+    return null;
   }
 }
