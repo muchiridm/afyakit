@@ -1,3 +1,5 @@
+// lib/api/afyakit/client.dart
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/api/shared/http_client.dart';
@@ -19,17 +21,29 @@ class AfyaKitClient {
     required Future<String?> Function() getToken,
     TokenRefresher? refresher,
   }) async {
+    // 1) Base HTTP client
     final http = createHttpClient(baseUrl);
+
+    // 🔧 Bump timeouts for slow/core routes (users, HQ invite, etc.)
+    http.options = http.options.copyWith(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+    );
+
+    // 2) Basic request-id/timing logging
     http.interceptors.add(requestIdAndTiming());
 
     final tokenRefresher = refresher ?? TokenRefresher();
 
+    // 3) Auth + auto-refresh interceptor
     http.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final isPublic =
               options.extra['skipAuth'] == true ||
               _isPublicAuthRoute(options.uri.path);
+
           if (!isPublic) {
             try {
               final token = await getToken();
@@ -48,6 +62,7 @@ class AfyaKitClient {
           final isPublic =
               e.requestOptions.extra['skipAuth'] == true ||
               _isPublicAuthRoute(e.requestOptions.uri.path);
+
           if (!isPublic &&
               (status == 401 || status == 419 || status == 440) &&
               !wasRetried) {

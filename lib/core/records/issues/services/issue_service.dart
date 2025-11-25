@@ -2,7 +2,6 @@
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';

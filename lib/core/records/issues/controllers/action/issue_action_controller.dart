@@ -14,7 +14,7 @@ import 'package:afyakit/core/records/issues/extensions/issue_action_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/core/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantSlugProvider);

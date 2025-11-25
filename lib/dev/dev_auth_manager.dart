@@ -6,7 +6,7 @@ import 'package:afyakit/core/auth_users/utils/claim_validator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
 
 import 'dev_auth_result.dart';

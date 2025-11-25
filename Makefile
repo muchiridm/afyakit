@@ -129,8 +129,14 @@ run-android:
 # ─────────────────────────────────────────────────────────────────────────────
 .PHONY: web deploy release-web
 web:
-	@echo "🌐 Building ONE shared tenant web bundle → $(WEB_OUT)…"
-	flutter build web --release -t $(ENTRY_TENANT) -o $(WEB_OUT) $(EXTRA) $(DART_DEFINES)
+	@$(call assert_tenant)
+	@echo "🌐 Building web bundle for tenant '$(TENANT)' → $(WEB_OUT)…"
+	flutter build web --release \
+	  -t $(ENTRY_TENANT) \
+	  -o $(WEB_OUT) \
+	  $(TENANT_DEF) \
+	  $(EXTRA) \
+	  $(DART_DEFINES)
 
 deploy:
 	@$(call assert_tenant)

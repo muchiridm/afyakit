@@ -9,7 +9,7 @@ import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
 import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';

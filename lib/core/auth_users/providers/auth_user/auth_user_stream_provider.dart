@@ -3,7 +3,7 @@ import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 List<AuthUser> _sortedByEmail(Iterable<AuthUser> users) {
   final out = users.toList()

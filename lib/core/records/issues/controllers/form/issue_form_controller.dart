@@ -13,7 +13,7 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:uuid/uuid.dart'; // 👈 NEW
 

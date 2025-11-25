@@ -17,6 +17,7 @@ export TENANTS="afyakit danabtmc dawapap"
 make run-web afyakit
 make run-web danabtmc
 make run-web dawapap
+make run-web rpmoc
 
 # or launch all (each on its own port, from WEB_PORT_BASE=5000)
 
@@ -73,6 +74,7 @@ make release-web-all
 make release-web dawapap
 make release-web afyakit
 make release-web danabtmc
+make release-web rpmoc
 
 # ─────────────────────────────────────────────
 

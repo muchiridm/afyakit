@@ -1,3 +1,5 @@
+// lib/hq/users/all_users/all_user_model.dart
+
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 typedef Json = Map<String, Object?>;
@@ -17,6 +19,10 @@ class AllUser {
   final List<String> tenantIds; // derived from memberships
   final int tenantCount; // derived from tenantIds length
 
+  /// True if a Firebase Auth user with this uid exists.
+  /// False → zombie directory row / candidate for reinvite or deletion.
+  final bool authExists;
+
   const AllUser({
     required this.id,
     required this.emailLower,
@@ -29,11 +35,16 @@ class AllUser {
     this.disabled = false,
     this.tenantIds = const [],
     this.tenantCount = 0,
+    this.authExists = true,
   });
 
   factory AllUser.fromJson(String id, Json j) {
     final ids = _readStringList(j['tenantIds']) ?? const <String>[];
     final count = _readInt(j['tenantCount']) ?? ids.length;
+
+    final authExistsRaw = j['authExists'];
+    final authExists = authExistsRaw is bool ? authExistsRaw : true;
+
     return AllUser(
       id: id,
       email: _s(j['email']),
@@ -46,6 +57,7 @@ class AllUser {
       disabled: _b(j['disabled']) ?? false,
       tenantIds: ids,
       tenantCount: count,
+      authExists: authExists,
     );
   }
 
@@ -60,6 +72,7 @@ class AllUser {
     'disabled': disabled,
     'tenantIds': tenantIds,
     'tenantCount': tenantCount,
+    'authExists': authExists,
   };
 }
 

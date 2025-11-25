@@ -1,12 +1,14 @@
-// lib/app/afyakit_app.dart (v2-only version)
+// lib/app/afyakit_app.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/v2/providers/tenant_profile_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/hq/tenants/services/web_branding.dart';
+
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
-import 'package:afyakit/core/auth_users/screens/invite_accept_screen.dart';
+import 'package:afyakit/core/auth_users/widgets/screens/invite_accept_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -18,17 +20,13 @@ class AfyaKitApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // load v2 tenant profile (already logged “✅ …” in your console)
     final asyncProfile = ref.watch(tenantProfileProvider);
 
     return asyncProfile.when(
-      // ── 1) still loading tenant: show a minimal app so we don’t crash
       loading: () => MaterialApp(
         debugShowCheckedModeBanner: false,
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
-
-      // ── 2) error loading tenant: show a basic error screen
       error: (e, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
@@ -36,8 +34,11 @@ class AfyaKitApp extends ConsumerWidget {
         ),
       ),
 
-      // ── 3) tenant loaded: build real app
+      // ── tenant loaded: build real app
       data: (profile) {
+        // 🔥 Update browser DOM (favicon, title, meta description, theme-color)
+        applyTenantBrandingToDom(profile);
+
         // decide first screen
         final Widget root = isInviteFlow
             ? ((inviteParams == null || inviteParams!.isEmpty)
@@ -46,17 +47,14 @@ class AfyaKitApp extends ConsumerWidget {
             : const AuthGate(); // <- your existing auth gate
 
         return MaterialApp(
+          // This is the logical app title for platforms; DOM title is set above
           title: profile.displayName,
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
           scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
-          // ✅ keep it boring: just set `home:`
           home: root,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              // your v2 profile always has a color, but let’s be safe
-              seedColor: profile.primaryColor,
-            ),
+            colorScheme: ColorScheme.fromSeed(seedColor: profile.primaryColor),
             useMaterial3: true,
             visualDensity: VisualDensity.adaptivePlatformDensity,
           ),

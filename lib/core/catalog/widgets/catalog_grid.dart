@@ -22,8 +22,12 @@ class CatalogGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+
+    // responsive columns
     final cross = width < 520 ? 1 : (width < 900 ? 2 : 3);
-    final aspect = width < 520 ? 3.25 : 3.6;
+
+    // slightly lower aspect ratio → more vertical space per tile
+    final aspect = width < 520 ? 3.0 : 3.2;
 
     return Column(
       children: [
@@ -83,26 +87,27 @@ class _CatalogCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          // slightly tighter vertical padding
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          // slightly tighter vertical padding to avoid grid overflow
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // leading icon
               Container(
-                width: 42,
-                height: 42,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: theme.colorScheme.primaryContainer,
                 ),
-                child: const Icon(Icons.medication, size: 24),
+                child: const Icon(Icons.medication, size: 20),
               ),
-              const SizedBox(width: 12),
-              // middle: title + (desc) + pills
+              const SizedBox(width: 10),
+              // middle: title + (desc) + chips
               Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  // fill available height and compress children as needed
+                  mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // title
@@ -110,13 +115,13 @@ class _CatalogCard extends StatelessWidget {
                       '${tile.brand} ${tile.strengthSig}'.trim(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
+                        fontSize: 14,
                       ),
                     ),
 
-                    // description (now 1 line)
+                    // description (1 line)
                     if (_hasDesc) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -133,40 +138,13 @@ class _CatalogCard extends StatelessWidget {
                     ],
 
                     const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 0,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _PillChip(
-                          label: tile.form.isEmpty
-                              ? 'Form'
-                              : 'Form ${tile.form}',
-                          icon: Icons.category_outlined,
-                        ),
-                        if (tile.bestPackCount != null)
-                          _PillChip(
-                            label: 'Pack ${tile.bestPackCount}',
-                            icon: Icons.inventory_2_outlined,
-                          ),
-                        if (tile.volumeSig != null &&
-                            tile.volumeSig!.trim().isNotEmpty)
-                          _PillChip(
-                            label: 'Vol ${tile.volumeSig}',
-                            icon: Icons.water_drop_outlined,
-                          ),
-                        if (tile.concentrationSig != null &&
-                            tile.concentrationSig!.trim().isNotEmpty)
-                          _PillChip(
-                            label: 'Conc ${tile.concentrationSig}',
-                            icon: Icons.science_outlined,
-                          ),
-                      ],
-                    ),
+
+                    // single-line, horizontally scrollable chips
+                    _SingleLineChips(tile: tile),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               // right: price
               if (priceText.isNotEmpty)
                 Column(
@@ -179,7 +157,7 @@ class _CatalogCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 16,
+                        fontSize: 15,
                         color: priceColor,
                       ),
                     ),
@@ -196,6 +174,52 @@ class _CatalogCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SingleLineChips extends StatelessWidget {
+  final CatalogTile tile;
+
+  const _SingleLineChips({required this.tile});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      _PillChip(
+        label: tile.form.isEmpty ? 'Form' : 'Form ${tile.form}',
+        icon: Icons.category_outlined,
+      ),
+      if (tile.bestPackCount != null)
+        _PillChip(
+          label: 'Pack ${tile.bestPackCount}',
+          icon: Icons.inventory_2_outlined,
+        ),
+      if (tile.volumeSig != null && tile.volumeSig!.trim().isNotEmpty)
+        _PillChip(
+          label: 'Vol ${tile.volumeSig}',
+          icon: Icons.water_drop_outlined,
+        ),
+      if (tile.concentrationSig != null &&
+          tile.concentrationSig!.trim().isNotEmpty)
+        _PillChip(
+          label: 'Conc ${tile.concentrationSig}',
+          icon: Icons.science_outlined,
+        ),
+    ];
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < chips.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            chips[i],
+          ],
+        ],
       ),
     );
   }

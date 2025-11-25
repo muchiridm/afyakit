@@ -6,7 +6,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
 import 'package:afyakit/core/records/issues/widgets/issue_record_tile.dart';
 

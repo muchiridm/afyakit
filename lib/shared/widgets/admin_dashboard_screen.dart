@@ -9,7 +9,7 @@ import 'package:afyakit/core/item_preferences/widgets/item_preferences_screen.da
 import 'package:afyakit/core/inventory_locations/screens/inventory_locations_screen.dart';
 
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/core/auth_users/widgets/screens/user_profile_manager_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/permission_guard.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';

@@ -1,3 +1,5 @@
+// lib/hq/base/hq_state.dart
+
 import 'package:flutter/foundation.dart';
 
 @immutable

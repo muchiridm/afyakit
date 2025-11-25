@@ -1,6 +1,6 @@
-// lib/main_common.dart (v2-only bootstrap)
+// lib/main_common.dart
 
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,13 +11,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 
-// your app root
 import 'package:afyakit/app/afyakit_app.dart';
+import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
 
-// v2 tenant bits
-import 'package:afyakit/hq/tenants/v2/services/tenant_resolver_v2.dart';
-
-// expose whether we actually wired the Auth emulator
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 
 final class BootLog {
@@ -40,15 +36,10 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
     persistenceEnabled: true,
   );
 
-  // figure out if we're in invite flow (keep your old logic)
   final invite = _extractInviteFromUri(Uri.base);
 
-  // resolve tenant (v2 way: ?tenant=…, domain mapping, fallback)
-  final slug = await resolveTenantSlugAsyncV2(defaultSlug: defaultTenantSlug);
+  final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
   BootLog.d('Using v2 tenant: $slug');
-
-  // we DON'T load the profile here manually — your v2 providers already do that
-  // we just need to tell Riverpod which tenant id to use
 
   runApp(
     ProviderScope(
@@ -66,7 +57,6 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
   );
 }
 
-/// Install top-level error hooks so web/Flutter doesn't swallow stuff silently.
 void _installGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
