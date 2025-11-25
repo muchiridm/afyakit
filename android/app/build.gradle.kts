@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.afyakit.app" // tidy namespace (can be anything)
+    namespace = "com.afyakit.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +20,7 @@ android {
     }
 
     defaultConfig {
-        // Placeholder; per-flavor applicationId below overrides this
-        applicationId = "com.afyakit.app"
+        applicationId = "com.afyakit.app" // overridden per flavor
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -29,33 +28,50 @@ android {
     }
 
     flavorDimensions += listOf("tenant")
+
     productFlavors {
-    create("afyakit") {
-        dimension = "tenant"
-        applicationId = "com.afyakit.app"
-        resValue("string", "app_name", "AfyaKit")
-        manifestPlaceholders["host1"] = "afyakit.app"
-        manifestPlaceholders["host2"] = "www.afyakit.app"
+        create("afyakit") {
+            dimension = "tenant"
+            applicationId = "com.afyakit.app"
+            resValue("string", "app_name", "AfyaKit")
+            manifestPlaceholders["host1"] = "afyakit.app"
+            manifestPlaceholders["host2"] = "www.afyakit.app"
+        }
+        create("danabtmc") {
+            dimension = "tenant"
+            applicationId = "com.danabtmc.app"
+            resValue("string", "app_name", "Danab TMC")
+            manifestPlaceholders["host1"] = "danabtmc.com"
+            manifestPlaceholders["host2"] = "www.danabtmc.com"
+        }
+        create("dawapap") {
+            dimension = "tenant"
+            applicationId = "com.dawapap.app"
+            resValue("string", "app_name", "DawaPap")
+            manifestPlaceholders["host1"] = "dawapap.com"
+            manifestPlaceholders["host2"] = "www.dawapap.com"
+        }
+        create("rpmoc") {
+            dimension = "tenant"
+            applicationId = "com.rpmoc.app"
+            resValue("string", "app_name", "RPMO Clinic")
+            manifestPlaceholders["host1"] = "rpmoc.afyakit.app"
+            manifestPlaceholders["host2"] = "afyakit.app"
+        }
     }
-    create("danabtmc") {
-        dimension = "tenant"
-        applicationId = "com.danabtmc.app"
-        resValue("string", "app_name", "Danab TMC")
-        manifestPlaceholders["host1"] = "danabtmc.com"
-        manifestPlaceholders["host2"] = "www.danabtmc.com"
-    }
-    create("dawapap") {
-        dimension = "tenant"
-        applicationId = "com.dawapap.app"
-        resValue("string", "app_name", "DawaPap")
-        manifestPlaceholders["host1"] = "dawapap.com"
-        manifestPlaceholders["host2"] = "www.dawapap.com"
-    }
-}
 
     buildTypes {
-        release {
-            // keep debug signing until you wire a real keystore
+        getByName("debug") {
+            // absolutely no shrinking in debug
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+        getByName("release") {
+            // either keep shrinking OFF for now:
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            // keep debug signing until real keystore
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -66,4 +82,3 @@ flutter {
 }
 
 apply(plugin = "com.google.gms.google-services")
-
