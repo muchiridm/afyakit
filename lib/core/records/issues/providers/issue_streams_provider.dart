@@ -1,13 +1,33 @@
-// lib/core/records/issues/providers/issue_streams_provider.dart
-
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
+import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
-/// Live list of issues (ordered newest → oldest).
+/// Bundle used to identify a single issue in a tenant.
+typedef IssueKey = ({String tenantId, String issueId});
+
+/// 🔹 Kick a one-time backfill per tenant (idempotent).
+/// It writes missing `brand` and `expiry` into issue_entries and then
+/// sets a marker so it never runs again for this tenant.
+final _brandExpiryBackfillTriggerProvider = FutureProvider.family<void, String>(
+  (ref, tenantId) async {
+    try {
+      final svc = IssueService(tenantId);
+      await svc.runBrandExpiryBackfillIfNeeded(); // idempotent
+    } catch (e, st) {
+      debugPrint('↯ backfill trigger failed for $tenantId → $e\n$st');
+    }
+  },
+);
+
+/// 1) Live list of issues for a tenant (newest → oldest)
 final issuesStreamProvider = StreamProvider.family
     .autoDispose<List<IssueRecord>, String>((ref, tenantId) {
+      // 🔸 Ensure the backfill runs once in the background (idempotent).
+      ref.watch(_brandExpiryBackfillTriggerProvider(tenantId));
+
       final q = db
           .collection('tenants')
           .doc(tenantId)
@@ -20,10 +40,7 @@ final issuesStreamProvider = StreamProvider.family
       );
     });
 
-/// Param bundle for per-issue providers.
-typedef IssueKey = ({String tenantId, String issueId});
-
-/// Live **document** stream for a single issue.
+/// 2) Live single issue document
 final issueDocStreamProvider = StreamProvider.family
     .autoDispose<IssueRecord?, IssueKey>((ref, key) {
       final docRef = db
@@ -37,7 +54,10 @@ final issueDocStreamProvider = StreamProvider.family
       );
     });
 
-/// Live **entries** stream (subcollection) for a single issue.
+/// 3) Live entries (subcollection) for a single issue
+///
+/// These entry docs should already contain *all* denormalized SKU info:
+/// itemName, itemGroup, strength, packSize, **brand**, and optionally expiry.
 final issueEntriesStreamProvider = StreamProvider.family
     .autoDispose<List<IssueEntry>, IssueKey>((ref, key) {
       final col = db
@@ -52,40 +72,31 @@ final issueEntriesStreamProvider = StreamProvider.family
       );
     });
 
-/// Combined doc + entries as a single AsyncValue<IssueRecord?> (no `.stream` use).
+/// 4) Combined provider: glue doc + entries into one IssueRecord (no extra reads)
 final issueFullProvider = Provider.family
     .autoDispose<AsyncValue<IssueRecord?>, IssueKey>((ref, key) {
-      final doc = ref.watch(
-        issueDocStreamProvider(key),
-      ); // AsyncValue<IssueRecord?>
-      final ents = ref.watch(
-        issueEntriesStreamProvider(key),
-      ); // AsyncValue<List<IssueEntry>>
+      final docAsync = ref.watch(issueDocStreamProvider(key));
+      final entriesAsync = ref.watch(issueEntriesStreamProvider(key));
 
-      // Loading
-      if (doc.isLoading || ents.isLoading) {
-        return const AsyncLoading<IssueRecord?>();
+      if (docAsync.isLoading || entriesAsync.isLoading) {
+        return const AsyncLoading();
       }
-
-      // Errors (coalesce nullable stack traces)
-      if (doc.hasError) {
-        return AsyncError<IssueRecord?>(
-          doc.error!,
-          doc.stackTrace ?? StackTrace.current,
+      if (docAsync.hasError) {
+        return AsyncError(
+          docAsync.error!,
+          docAsync.stackTrace ?? StackTrace.current,
         );
       }
-      if (ents.hasError) {
-        return AsyncError<IssueRecord?>(
-          ents.error!,
-          ents.stackTrace ?? StackTrace.current,
+      if (entriesAsync.hasError) {
+        return AsyncError(
+          entriesAsync.error!,
+          entriesAsync.stackTrace ?? StackTrace.current,
         );
       }
 
-      // Data
-      final d = doc.value;
-      if (d == null) return const AsyncData<IssueRecord?>(null);
+      final issue = docAsync.value;
+      if (issue == null) return const AsyncData<IssueRecord?>(null);
 
-      return AsyncData<IssueRecord?>(
-        d.copyWith(entries: ents.value ?? d.entries),
-      );
+      final entries = entriesAsync.value ?? const <IssueEntry>[];
+      return AsyncData<IssueRecord?>(issue.copyWith(entries: entries));
     });

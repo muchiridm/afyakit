@@ -14,6 +14,10 @@ class IssueEntry {
   final String? batchId;
   final int quantity;
 
+  // new
+  final String? brand;
+  final DateTime? expiry;
+
   IssueEntry({
     required this.id,
     required this.itemId,
@@ -27,9 +31,10 @@ class IssueEntry {
     required this.itemTypeLabel,
     this.batchId,
     required this.quantity,
+    this.brand,
+    this.expiry,
   }) : assert(itemId.trim().isNotEmpty, '❌ itemId cannot be empty');
 
-  // 🔄 Deserialize
   factory IssueEntry.fromMap(String id, Map<String, dynamic> map) {
     final itemId = map['itemId']?.toString().trim();
     if (itemId == null || itemId.isEmpty) {
@@ -49,10 +54,13 @@ class IssueEntry {
       itemTypeLabel: map['itemTypeLabel'] ?? map['itemType'] ?? '',
       batchId: map['batchId'],
       quantity: map['quantity'] ?? 0,
+      brand: map['brand'],
+      expiry: map['expiry'] != null
+          ? DateTime.tryParse(map['expiry'].toString())
+          : null,
     );
   }
 
-  // 🧾 Serialize
   Map<String, dynamic> toMap() => {
     'itemId': itemId,
     'itemType': itemType.key,
@@ -65,9 +73,10 @@ class IssueEntry {
     'itemTypeLabel': itemTypeLabel,
     'batchId': batchId,
     'quantity': quantity,
+    'brand': brand,
+    'expiry': expiry?.toIso8601String(),
   };
 
-  // 🧪 Factory from inventory item and batch
   static IssueEntry fromItemAndBatch({
     required String id,
     required String itemId,
@@ -81,6 +90,8 @@ class IssueEntry {
     required String itemTypeLabel,
     required String batchId,
     required int quantity,
+    String? brand,
+    DateTime? expiry,
   }) {
     return IssueEntry(
       id: id,
@@ -95,10 +106,11 @@ class IssueEntry {
       itemTypeLabel: itemTypeLabel,
       batchId: batchId,
       quantity: quantity,
+      brand: brand,
+      expiry: expiry,
     );
   }
 
-  // 🔁 Clone with changes
   IssueEntry copyWith({
     String? id,
     String? itemId,
@@ -112,6 +124,8 @@ class IssueEntry {
     String? itemTypeLabel,
     String? batchId,
     int? quantity,
+    String? brand,
+    DateTime? expiry,
   }) {
     final newItemId = itemId?.trim();
     if (newItemId != null && newItemId.isEmpty) {
@@ -131,12 +145,14 @@ class IssueEntry {
       itemTypeLabel: itemTypeLabel ?? this.itemTypeLabel,
       batchId: batchId ?? this.batchId,
       quantity: quantity ?? this.quantity,
+      brand: brand ?? this.brand,
+      expiry: expiry ?? this.expiry,
     );
   }
 
-  // ✅ Quick validation helper
   bool get isValid => itemId.trim().isNotEmpty && quantity > 0;
 
   @override
-  String toString() => '📦 $itemName (Qty: $quantity, Batch: $batchId)';
+  String toString() =>
+      '📦 $itemName (Qty: $quantity, Batch: $batchId, Brand: $brand, Exp: $expiry)';
 }

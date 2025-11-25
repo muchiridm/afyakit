@@ -16,7 +16,7 @@ class TenantFeatures {
   factory TenantFeatures.fromMap(Map<String, dynamic>? m) {
     final src = m ?? const <String, dynamic>{};
 
-    bool _toBool(dynamic v) {
+    bool toBool(dynamic v) {
       if (v == null) return false;
       if (v is bool) return v;
       if (v is num) return v != 0;
@@ -25,7 +25,7 @@ class TenantFeatures {
     }
 
     return TenantFeatures({
-      for (final e in src.entries) e.key: _toBool(e.value),
+      for (final e in src.entries) e.key: toBool(e.value),
     });
   }
 

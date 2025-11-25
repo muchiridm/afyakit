@@ -1,5 +1,8 @@
+// lib/core/records/issues/services/issue_batch_service.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // FieldValue, Timestamp, FirebaseException
 
 import 'package:afyakit/shared/utils/firestore_instance.dart'; // db
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -62,11 +65,36 @@ class IssueBatchService {
           throw StateError('❌ Destination store is required for transfers.');
         }
 
+        // we may need batch info to pass expiry/brand to transit
         final meta = {...metadata};
         final issueId = (meta['issueId'] ?? '').toString();
         final entryId = (meta['entryId'] ?? '').toString();
         if (issueId.isNotEmpty && entryId.isNotEmpty) {
           meta['transitId'] = 'transit_${issueId}_$entryId';
+        }
+
+        // Read the live batch to forward expiry/brand (no itemName fallbacks)
+        final batch = await _repo.getBatch(
+          locationType: locationType,
+          locationId: fromStore,
+          batchId: batchId,
+        );
+
+        if (batch != null) {
+          // expiryDate may be a Timestamp or a String
+          final expiryAny = batch['expiryDate'];
+          if (expiryAny is Timestamp) {
+            meta['expiry'] = expiryAny.toDate().toIso8601String();
+          } else if (expiryAny is String && expiryAny.isNotEmpty) {
+            meta['expiry'] = expiryAny;
+          }
+
+          // ✅ Only pass real brand fields; no fallback to itemName
+          final dynamic brandAny = batch['brand'] ?? batch['brandName'];
+          if (brandAny != null) {
+            final b = brandAny.toString().trim();
+            if (b.isNotEmpty) meta['brand'] = b;
+          }
         }
 
         await _transfer.transfer(

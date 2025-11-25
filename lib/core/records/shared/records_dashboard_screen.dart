@@ -1,5 +1,5 @@
 import 'package:afyakit/core/records/deliveries/screens/delivery_records_screen.dart';
-import 'package:afyakit/core/records/issues/screens/issue_records_screen.dart';
+import 'package:afyakit/core/records/issues/widgets/screens/issue_records_screen.dart';
 import 'package:afyakit/core/records/reorder/screens/reorder_records_screen.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';

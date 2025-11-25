@@ -1,5 +1,3 @@
-// lib/core/catalog/widgets/_catalog_grid.dart
-
 import 'package:afyakit/core/catalog/catalog_models.dart';
 import 'package:flutter/material.dart';
 
@@ -24,11 +22,7 @@ class CatalogGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-
-    // responsive columns
     final cross = width < 520 ? 1 : (width < 900 ? 2 : 3);
-
-    // for 1-column, make it a bit taller so we don’t starve the row
     final aspect = width < 520 ? 3.25 : 3.6;
 
     return Column(
@@ -73,6 +67,9 @@ class _CatalogCard extends StatelessWidget {
     required this.priceColor,
   });
 
+  bool get _hasDesc =>
+      tile.tileDesc != null && tile.tileDesc!.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -86,12 +83,12 @@ class _CatalogCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          // ⬇️ was 14,10,14,10 → shave 2px top/bottom
+          // slightly tighter vertical padding
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // leading icon / thumb
+              // leading icon
               Container(
                 width: 42,
                 height: 42,
@@ -102,12 +99,13 @@ class _CatalogCard extends StatelessWidget {
                 child: const Icon(Icons.medication, size: 24),
               ),
               const SizedBox(width: 12),
-              // middle: title + pill
+              // middle: title + (desc) + pills
               Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min, // 👈 keep it tight
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // title
                     Text(
                       '${tile.brand} ${tile.strengthSig}'.trim(),
                       maxLines: 1,
@@ -117,16 +115,52 @@ class _CatalogCard extends StatelessWidget {
                         fontSize: 15,
                       ),
                     ),
-                    const SizedBox(height: 2), // ⬇️ was 3
+
+                    // description (now 1 line)
+                    if (_hasDesc) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        tile.tileDesc!.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          height: 1.1,
+                          color: theme.textTheme.bodySmall?.color?.withOpacity(
+                            0.7,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 4),
                     Wrap(
                       spacing: 6,
                       runSpacing: 0,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _PillChip(
-                          label: tile.form.isEmpty ? 'form' : tile.form,
+                          label: tile.form.isEmpty
+                              ? 'Form'
+                              : 'Form ${tile.form}',
                           icon: Icons.category_outlined,
                         ),
+                        if (tile.bestPackCount != null)
+                          _PillChip(
+                            label: 'Pack ${tile.bestPackCount}',
+                            icon: Icons.inventory_2_outlined,
+                          ),
+                        if (tile.volumeSig != null &&
+                            tile.volumeSig!.trim().isNotEmpty)
+                          _PillChip(
+                            label: 'Vol ${tile.volumeSig}',
+                            icon: Icons.water_drop_outlined,
+                          ),
+                        if (tile.concentrationSig != null &&
+                            tile.concentrationSig!.trim().isNotEmpty)
+                          _PillChip(
+                            label: 'Conc ${tile.concentrationSig}',
+                            icon: Icons.science_outlined,
+                          ),
                       ],
                     ),
                   ],
@@ -149,7 +183,6 @@ class _CatalogCard extends StatelessWidget {
                         color: priceColor,
                       ),
                     ),
-                    // ⬇️ was SizedBox(height: 1)
                     Text(
                       'KES',
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -178,11 +211,7 @@ class _PillChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      // ⬇️ slimmer so it doesn’t push the row
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 2, // was 3
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),

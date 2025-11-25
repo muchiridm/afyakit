@@ -147,7 +147,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
 
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _currency,
+                initialValue: _currency,
                 decoration: const InputDecoration(
                   labelText: 'Currency',
                   border: OutlineInputBorder(),
