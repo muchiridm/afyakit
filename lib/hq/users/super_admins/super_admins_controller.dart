@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // ✅ afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';

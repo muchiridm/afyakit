@@ -51,7 +51,7 @@ dependencies:
 
   # 🌐 Web-specific
   web: ^1.1.1
-  universal_html: ^2.2.4
+  universal_html: ^2.3.0
   js_interop: ^0.0.1
 
   # 💾 Local storage
@@ -61,6 +61,7 @@ dependencies:
   tuple: ^2.0.2
   flutter_svg: ^2.2.1
   firebase_storage: ^12.4.10
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

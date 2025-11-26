@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // FieldValue, Timestamp, FirebaseException
+// FieldValue, Timestamp, FirebaseException
 
 import 'package:afyakit/shared/utils/firestore_instance.dart'; // db
 import 'package:afyakit/shared/services/snack_service.dart';

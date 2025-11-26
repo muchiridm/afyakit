@@ -99,6 +99,10 @@ class AfyaKitRoutes {
   Uri hqInviteUser(String targetTenantId) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/invite');
 
+  /// HQ: upsert membership for a specific tenant/user
+  Uri hqUpsertUserMembership(String targetTenantId, String uid) =>
+      _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
+
   /// HQ: remove from a specific tenant
   Uri hqDeleteUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');

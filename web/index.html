@@ -5,22 +5,31 @@
 
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
-    <meta name="description" content="A new Flutter project." />
+
+    <!-- Neutral default; will be overwritten by tenant branding on web -->
+    <meta name="description" content="AfyaKit platform is loading…" />
+    <meta name="theme-color" content="#2196F3" />
 
     <!-- iOS / PWA bits -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="AfyaKit" />
-    <!-- Fallback icon for Apple (per-tenant icon comes via manifest) -->
-    <link rel="apple-touch-icon" href="/icons/_default/icon-192.png" />
 
-    <!-- Favicon (fallback) -->
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Fallback Apple icon; real per-tenant icon can override via DOM helper -->
+    <link
+      id="apple-touch-icon"
+      rel="apple-touch-icon"
+      href="/icons/_default/icon-192.png"
+    />
 
+    <!-- Fallback favicon; will be replaced using TenantProfile.assets.faviconUrl -->
+    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.png" />
+
+    <!-- Neutral title; will be replaced by profile.webTitle -->
     <title>AfyaKit</title>
 
-    <!-- 🔑 Dynamic, tenant-aware manifest served by your Cloud Function -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Dynamic, tenant-aware manifest (backend can serve per-tenant JSON here) -->
+    <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
   </head>
   <body>
     <script src="flutter_bootstrap.js" async></script>

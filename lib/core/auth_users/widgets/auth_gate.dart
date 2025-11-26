@@ -1,6 +1,6 @@
 // lib/core/auth_users/widgets/auth_gate.dart
 import 'package:afyakit/core/auth_users/widgets/blocked.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
-import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
+import 'package:afyakit/core/auth_users/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
 import 'package:afyakit/shared/widgets/splash_screen.dart';
 

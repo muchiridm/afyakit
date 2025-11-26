@@ -2,7 +2,7 @@ import 'package:afyakit/core/auth_users/providers/auth_session/current_user_prov
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_state.dart';

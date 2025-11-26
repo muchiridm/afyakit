@@ -16,6 +16,9 @@
         ],
         "dawapap": [
           "dawapap-app"
+        ],
+        "rpmoc": [
+          "rpmoc"
         ]
       }
     }

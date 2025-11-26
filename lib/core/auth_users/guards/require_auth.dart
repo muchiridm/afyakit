@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/auth_users/screens/login_screen.dart';
+import 'package:afyakit/core/auth_users/widgets/screens/login_screen.dart';
 
 /// Ensures the user is authenticated before continuing.
 /// Returns true if the user is authenticated (now or after completing login).

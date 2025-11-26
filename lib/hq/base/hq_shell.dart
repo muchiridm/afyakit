@@ -1,13 +1,12 @@
-// lib/hq/core/hq_shell.dart (or wherever yours lives)
-import 'package:afyakit/hq/tenants/v2/widgets/hp_tenants_v2_tab.dart';
+// lib/hq/base/hq_shell.dart
+
+import 'package:afyakit/hq/tenants/widgets/hp_tenants_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'hq_controller.dart';
-import '../tenants/v1/hq_tenants_tab.dart';
 import '../users/all_users/widgets/hq_all_users_tab.dart';
 import '../users/super_admins/hq_superadmins_tab.dart';
-import 'package:afyakit/hq/catalog/medication/hq_catalog_medications_tab.dart';
 
 class HqShell extends ConsumerWidget {
   const HqShell({super.key});
@@ -29,14 +28,15 @@ class HqShell extends ConsumerWidget {
 
     final email = ref.watch(hqCurrentEmailProvider) ?? 'Account';
 
-    // ⬇️ now 5 pages
+    // 3 pages – must stay in sync with destinations below
     final pages = const [
-      HqTenantsTab(), // v1 tenants
-      HqAllUsersTab(),
-      HqSuperadminsTab(),
-      HqCatalogMedicationsTab(),
-      HqTenantsV2Tab(), // 👈 new v2 tenants
+      HqTenantsTab(), // index 0 – Tenants (v2)
+      HqAllUsersTab(), // index 1 – Users
+      HqSuperadminsTab(), // index 2 – HQ Admins
     ];
+
+    // clamp index so we never go out of range
+    final safeIndex = state.tabIndex.clamp(0, pages.length - 1);
 
     return Stack(
       children: [
@@ -45,14 +45,14 @@ class HqShell extends ConsumerWidget {
             title: const Text('AfyaKit • HQ'),
             actions: [_AccountMenu(email: email)],
           ),
-          body: pages[state.tabIndex],
+          body: pages[safeIndex],
           bottomNavigationBar: NavigationBar(
-            selectedIndex: state.tabIndex,
+            selectedIndex: safeIndex,
             onDestinationSelected: (i) =>
                 ref.read(hqControllerProvider.notifier).setTab(i),
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.business),
+                icon: Icon(Icons.business_center_outlined),
                 label: 'Tenants',
               ),
               NavigationDestination(
@@ -62,15 +62,6 @@ class HqShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(Icons.verified_user),
                 label: 'HQ Admins',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.medication_outlined),
-                label: 'Catalog',
-              ),
-              // 👇 new one
-              NavigationDestination(
-                icon: Icon(Icons.business_center_outlined),
-                label: 'Tenants v2',
               ),
             ],
           ),

@@ -1,9 +1,10 @@
 // lib/hq/users/all_users/all_users_service.dart
+
 import 'dart:convert';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/hq/users/all_users/all_user_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -133,5 +134,64 @@ class AllUsersService {
     }
 
     return out;
+  }
+
+  // ── Membership mutations (super-admin, HQ) ───────────────────
+
+  /// Create or update a user's membership for a given tenant.
+  ///
+  /// `role` is a free-form string (e.g. "admin", "staff", "viewer").
+  Future<void> upsertUserMembership({
+    required String uid,
+    required String tenantId,
+    required String role,
+    required bool active,
+  }) async {
+    // HQ core route: /tenants/:tenantId/auth_users/:uid
+    final uri = routes.hqUpsertUserMembership(tenantId, uid);
+    if (kDebugMode) debugPrint('🛰️ [AllUsersService] PUT $uri');
+
+    final r = await dio.putUri(
+      uri,
+      data: <String, dynamic>{'role': role, 'active': active},
+      options: Options(contentType: Headers.jsonContentType),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Upsert membership');
+  }
+
+  Future<void> deleteUserMembership({
+    required String uid,
+    required String tenantId,
+  }) async {
+    // HQ core route: /tenants/:tenantId/auth_users/:uid
+    final uri = routes.hqDeleteUser(tenantId, uid);
+    if (kDebugMode) debugPrint('🛰️ [AllUsersService] DELETE $uri');
+
+    final r = await dio.deleteUri(uri);
+    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    if (!ok) _bad(r, 'Delete membership');
+  }
+
+  // ── HQ invite (create/ensure Auth user + membership) ─────────
+
+  Future<void> inviteUser({required String email, required String role}) async {
+    final payload = <String, dynamic>{'email': email.trim(), 'role': role};
+
+    // POST /api/tenants/:tenantId/auth_users/invite on CORE base
+    // tenantId here comes from tenantSlugProvider via AfyaKitRoutes.
+    final uri = routes.hqInviteUser(routes.tenantId);
+
+    if (kDebugMode) {
+      debugPrint('🛰️ [AllUsersService] POST $uri body=$payload');
+    }
+
+    final r = await dio.postUri(
+      uri,
+      data: payload,
+      options: Options(contentType: Headers.jsonContentType),
+    );
+    if ((r.statusCode ?? 0) ~/ 100 != 2) {
+      _bad(r, 'Invite user');
+    }
   }
 }

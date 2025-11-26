@@ -2,7 +2,7 @@ import 'package:afyakit/core/auth_users/providers/auth_session/current_user_prov
 import 'package:afyakit/core/records/deliveries/models/active_temp_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 /// Emits the **latest open** temp session for the signed-in user, or null.
 /// Reactive to both tenantId and current user changes.

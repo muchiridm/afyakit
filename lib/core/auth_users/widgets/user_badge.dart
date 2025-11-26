@@ -3,8 +3,8 @@ import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/v2/providers/tenant_slug_provider.dart';
-import 'package:afyakit/core/auth_users/screens/user_profile_editor_screen.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/core/auth_users/widgets/screens/user_profile_editor_screen.dart';
 
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 

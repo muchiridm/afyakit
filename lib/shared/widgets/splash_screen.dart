@@ -1,5 +1,5 @@
-import 'package:afyakit/hq/tenants/v2/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/v2/providers/tenant_logo_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_logo_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,9 +11,8 @@ class SplashScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // per-tenant (v2)
     final profile = ref.watch(tenantProfileProvider);
-    final logoUrl = ref.watch(tenantLogoUrlProvider); // 👈 v2 logo
+    final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
     final displayName = profile.displayName;
     final primary = theme.colorScheme.primary;
 
@@ -29,9 +28,9 @@ class SplashScreen extends ConsumerWidget {
               logoUrl: logoUrl,
               primary: primary,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 24),
             _buildSpinner(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _buildLoadingText(theme),
           ],
         ),
@@ -44,43 +43,42 @@ class SplashScreen extends ConsumerWidget {
   Widget _buildBrand({
     required ThemeData theme,
     required String displayName,
-    required String? logoUrl, // 👈 now URL from v2
+    required String? logoUrl,
     required Color primary,
   }) {
-    final titleStyle = theme.textTheme.headlineSmall?.copyWith(
-      fontWeight: FontWeight.bold,
+    const double logoSize = 140.0;
+    final titleStyle = theme.textTheme.titleLarge?.copyWith(
+      fontWeight: FontWeight.w700,
       color: primary,
     );
 
     final hasLogo = logoUrl != null && logoUrl.trim().isNotEmpty;
-    final radius = BorderRadius.circular(8);
+    final radius = BorderRadius.circular(16);
 
     Widget logoWidget() {
       if (!hasLogo) {
-        return Icon(Icons.local_hospital, size: 48, color: primary);
+        return Icon(Icons.local_hospital, size: logoSize, color: primary);
       }
 
       return ClipRRect(
         borderRadius: radius,
         child: Image.network(
           logoUrl,
-          height: 56,
+          height: logoSize,
           fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
           errorBuilder: (_, __, ___) =>
-              Icon(Icons.local_hospital, size: 48, color: primary),
+              Icon(Icons.local_hospital, size: logoSize, color: primary),
         ),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Column(
-        children: [
-          logoWidget(),
-          const SizedBox(height: 8),
-          Text(displayName, style: titleStyle),
-        ],
-      ),
+    return Column(
+      children: [
+        logoWidget(),
+        const SizedBox(height: 12),
+        Text(displayName, style: titleStyle, textAlign: TextAlign.center),
+      ],
     );
   }
 
@@ -88,15 +86,19 @@ class SplashScreen extends ConsumerWidget {
     return const SizedBox(
       width: 32,
       height: 32,
-      child: CircularProgressIndicator.adaptive(),
+      child: CircularProgressIndicator.adaptive(strokeWidth: 2.4),
     );
   }
 
   Widget _buildLoadingText(ThemeData theme) {
-    final color = theme.hintColor;
+    final color = theme.hintColor.withOpacity(0.9);
     return Text(
       'Loading...',
-      style: theme.textTheme.bodyMedium?.copyWith(color: color),
+      style: theme.textTheme.labelMedium?.copyWith(
+        fontSize: 12,
+        color: color,
+        letterSpacing: 0.2,
+      ),
     );
   }
 }

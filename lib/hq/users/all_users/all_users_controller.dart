@@ -1,3 +1,5 @@
+// lib/hq/users/all_users/all_users_controller.dart
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,7 +87,12 @@ class AllUsersController extends StateNotifier<AllUsersState> {
         limit: state.limit,
       );
       if (!mounted) return;
+
       state = state.copyWith(loading: false, items: list, error: '');
+
+      // Fire-and-forget background hydration for legacy users whose
+      // directory aggregates are empty.
+      _hydrateMissingMemberships(list);
     } catch (e, st) {
       if (kDebugMode) debugPrint('🧨 AllUsers.load failed: $e\n$st');
       if (!mounted) return;
@@ -137,6 +144,122 @@ class AllUsersController extends StateNotifier<AllUsersState> {
       SnackService.showError('❌ Failed to load memberships: $e');
       return const {};
     }
+  }
+
+  Future<void> updateMembership(
+    String uid,
+    String tenantId, {
+    required String role,
+    required bool active,
+  }) async {
+    try {
+      final svc = await _ensureSvc();
+      await svc.upsertUserMembership(
+        uid: uid,
+        tenantId: tenantId,
+        role: role,
+        active: active,
+      );
+
+      // Update local cache
+      final current = Map<String, Map<String, Map<String, Object?>>>.from(
+        state.membershipsByUid,
+      );
+      final userMems = Map<String, Map<String, Object?>>.from(
+        current[uid] ?? {},
+      );
+      userMems[tenantId] = {'role': role, 'active': active};
+      current[uid] = userMems;
+
+      if (mounted) {
+        state = state.copyWith(membershipsByUid: current);
+      }
+
+      SnackService.showInfo('✅ Membership updated');
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('🧨 AllUsers.updateMembership failed: $e\n$st');
+      }
+      SnackService.showError('❌ Failed to update membership: $e');
+    }
+  }
+
+  /// Remove a membership completely for a user on a tenant.
+  Future<void> removeMembership(String uid, String tenantId) async {
+    try {
+      final svc = await _ensureSvc();
+      await svc.deleteUserMembership(uid: uid, tenantId: tenantId);
+
+      // Update local cache
+      final current = Map<String, Map<String, Map<String, Object?>>>.from(
+        state.membershipsByUid,
+      );
+      final userMems = Map<String, Map<String, Object?>>.from(
+        current[uid] ?? {},
+      );
+      userMems.remove(tenantId);
+      current[uid] = userMems;
+
+      if (mounted) {
+        state = state.copyWith(membershipsByUid: current);
+      }
+
+      SnackService.showInfo('✅ Membership removed');
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('🧨 AllUsers.removeMembership failed: $e\n$st');
+      }
+      SnackService.showError('❌ Failed to remove membership: $e');
+    }
+  }
+
+  /// HQ-level invite: creates/ensures Firebase Auth user and membership.
+  Future<void> inviteUser({required String email, required String role}) async {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty) {
+      SnackService.showError('❌ Email is required');
+      return;
+    }
+
+    try {
+      final svc = await _ensureSvc();
+      await svc.inviteUser(email: trimmed, role: role);
+
+      SnackService.showInfo('✅ Invite sent to $trimmed');
+      // Optionally refresh the list so the new user shows up
+      await refresh();
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('🧨 AllUsers.inviteUser failed: $e\n$st');
+      }
+      SnackService.showError('❌ Failed to invite user: $e');
+    }
+  }
+
+  // ── background hydrator for legacy users ─────────────────────
+  void _hydrateMissingMemberships(List<AllUser> items) {
+    // fire-and-forget; errors are already surfaced inside fetchMemberships
+    // ignore: discarded_futures
+    () async {
+      for (final u in items) {
+        if (!mounted) return;
+
+        final hasAggregates = u.tenantIds.isNotEmpty || (u.tenantCount > 0);
+
+        final cached = state.membershipsByUid[u.id];
+
+        // Skip users that already have some membership signal
+        if (hasAggregates || (cached != null && cached.isNotEmpty)) {
+          continue;
+        }
+
+        try {
+          await fetchMemberships(u.id);
+        } catch (_) {
+          // swallow; SnackService already handled it
+        }
+      }
+    }();
   }
 
   @override
