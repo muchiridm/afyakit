@@ -25,7 +25,6 @@ class LoginScreen extends ConsumerWidget {
       final nowIdle = next.loading == false;
 
       if (wasLoading && nowIdle) {
-        // attempt completed (success or failure) → ask session to re-check
         ref.read(sessionControllerProvider(tenantSlug).notifier).ensureReady();
       }
     });
@@ -34,9 +33,9 @@ class LoginScreen extends ConsumerWidget {
   }
 
   Widget _buildScaffold(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(tenantProfileProvider);
+    // Use display-name provider so we never show "Loading…"
+    final displayName = ref.watch(tenantDisplayNameProvider);
     final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
-    final displayName = profile.displayName;
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -48,6 +47,7 @@ class LoginScreen extends ConsumerWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
               return SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(16, 24, 16, 16 + bottomInset),
                 child: ConstrainedBox(
@@ -138,33 +138,54 @@ class LoginScreen extends ConsumerWidget {
     required double logoSize,
   }) {
     final radius = BorderRadius.circular(12.0);
-    final hasLogo = logoUrl != null && logoUrl.trim().isNotEmpty;
+    final hasUrl = logoUrl != null && logoUrl.trim().isNotEmpty;
 
-    Widget logo() {
-      if (!hasLogo) {
-        // fallback: big initials block
-        return _initialsBlock(
-          displayName: displayName,
-          primary: primary,
-          radius: radius,
-          size: logoSize,
-        );
-      }
-
-      return ClipRRect(
-        borderRadius: radius,
-        child: Image.network(
-          logoUrl,
-          height: logoSize,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) =>
-              Icon(Icons.local_hospital, size: logoSize, color: primary),
-        ),
+    // Placeholder: initials block + app name
+    Widget placeholder() {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _initialsBlock(
+            displayName: displayName,
+            primary: primary,
+            radius: radius,
+            size: logoSize,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            displayName,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: primary,
+            ),
+          ),
+        ],
       );
     }
 
-    return Padding(padding: const EdgeInsets.only(bottom: 8.0), child: logo());
+    // No URL at all → placeholder + name
+    if (!hasUrl) {
+      return placeholder();
+    }
+
+    // We have a URL → load it; on error fall back to placeholder + name
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: radius,
+          child: Image.network(
+            logoUrl,
+            height: logoSize,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => placeholder(),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _initialsBlock({

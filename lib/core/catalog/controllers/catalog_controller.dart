@@ -1,12 +1,12 @@
-// lib/core/catalog/catalog_controller.dart
+// lib/core/catalog/controllers/catalog_controller.dart
 
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'catalog_models.dart';
-import 'catalog_service.dart';
+import '../catalog_models.dart';
+import '../catalog_service.dart';
 
 @immutable
 class CatalogState {

@@ -1,7 +1,7 @@
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/core/records/deliveries/models/delivery_review_summary.dart';

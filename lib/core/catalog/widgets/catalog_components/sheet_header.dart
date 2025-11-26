@@ -1,4 +1,5 @@
-// lib/core/catalog/public/widgets/_sheet_header.dart
+// lib/core/catalog/widgets/catalog_components/sheet_header.dart
+
 import 'package:afyakit/core/catalog/catalog_models.dart';
 import 'package:flutter/material.dart';
 

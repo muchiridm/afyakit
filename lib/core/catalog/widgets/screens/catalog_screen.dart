@@ -1,21 +1,23 @@
-// lib/core/catalog/widgets/catalog_screen.dart
+// lib/core/catalog/widgets/screens/catalog_screen.dart
+
 import 'package:afyakit/api/dawaindex/providers.dart';
-import 'package:afyakit/core/catalog/catalog_controller.dart';
+import 'package:afyakit/core/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/core/catalog/catalog_models.dart';
 import 'package:afyakit/core/catalog/catalog_providers.dart';
+import 'package:afyakit/core/catalog/controllers/order_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/core/auth_users/guards/require_auth.dart';
 
-import 'catalog_header.dart';
-import 'search_bar.dart';
-import 'catalog_grid.dart';
-import 'skeletons.dart';
-import 'error_pane.dart';
-import 'sheet_header.dart';
+import '../catalog_components/catalog_header.dart';
+import '../catalog_components/search_bar.dart';
+import '../catalog_components/catalog_grid.dart';
+import '../catalog_components/skeletons.dart';
+import '../catalog_components/error_pane.dart';
+import '../catalog_components/sheet_header.dart';
+import 'order_screen.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
@@ -64,19 +66,22 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final diClientAsync = ref.watch(diApiClientProvider);
 
     return diClientAsync.when(
-      // ─── LOADING ───
-      loading: () => BaseScreen(
+      loading: () => const BaseScreen(
         scrollable: true,
         maxContentWidth: 1100,
-        header: CatalogHeader(selectedForm: '', onFormChanged: (_) {}),
-        body: const Center(child: CircularProgressIndicator()),
+        header: CatalogHeader(
+          selectedForm: '',
+          onFormChanged: _noopFormChanged,
+        ),
+        body: Center(child: CircularProgressIndicator()),
       ),
-
-      // ─── ERROR ───
       error: (e, _) => BaseScreen(
         scrollable: true,
         maxContentWidth: 1100,
-        header: CatalogHeader(selectedForm: '', onFormChanged: (_) {}),
+        header: const CatalogHeader(
+          selectedForm: '',
+          onFormChanged: _noopFormChanged,
+        ),
         body: Center(
           child: Text(
             'Failed to load catalog source:\n$e',
@@ -84,12 +89,18 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           ),
         ),
       ),
-
-      // ─── DATA ───
       data: (_) {
         final itemsAsync = ref.watch(catalogItemsProvider);
         final state = ref.watch(catalogControllerProvider);
         final ctrl = ref.read(catalogControllerProvider.notifier);
+
+        // cart (quote) state
+        final quoteState = ref.watch(orderControllerProvider);
+        final quoteItemCount = quoteState.lines.length;
+
+        final String? quoteTotalLabel = quoteItemCount == 0
+            ? null
+            : 'KES ${_formatPriceCeil(quoteState.estimatedTotal)}';
 
         return BaseScreen(
           scrollable: true,
@@ -98,6 +109,17 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             selectedForm: state.query.form,
             onFormChanged: (form) =>
                 ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
+            quoteItemCount: quoteItemCount,
+            quoteTotalLabel: quoteTotalLabel,
+            onViewQuote: quoteItemCount == 0
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const OrderScreen(),
+                      ),
+                    );
+                  },
           ),
           body: _buildBody(itemsAsync, state),
         );
@@ -111,12 +133,18 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   ) {
     final ctrl = ref.read(catalogControllerProvider.notifier);
 
+    final int? resultCount = itemsAsync.maybeWhen(
+      data: (items) => items.length,
+      orElse: () => null,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 12),
         SearchBarField(
           controller: _searchC,
+          resultCount: resultCount,
           onSubmit: (q) => ctrl.refresh(query: state.query.copyWith(q: q)),
           onChanged: (q) =>
               ctrl.refreshDebounced(query: state.query.copyWith(q: q)),
@@ -164,7 +192,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.info_outline),
                         label: const Text('Details'),
-                        onPressed: () {},
+                        onPressed: () {
+                          // TODO: implement details sheet / screen
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -172,9 +202,18 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                       child: FilledButton.icon(
                         icon: const Icon(Icons.add_shopping_cart),
                         label: const Text('Add to cart'),
-                        onPressed: () async {
-                          final ok = await requireAuth(ctx, ref);
-                          if (!ok) return;
+                        onPressed: () {
+                          ref
+                              .read(orderControllerProvider.notifier)
+                              .addOrIncrement(t);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Added to cart'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+
                           Navigator.of(ctx, rootNavigator: false).maybePop();
                         },
                       ),
@@ -189,3 +228,5 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     );
   }
 }
+
+void _noopFormChanged(String _) {}

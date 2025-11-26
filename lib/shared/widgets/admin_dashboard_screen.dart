@@ -13,7 +13,7 @@ import 'package:afyakit/core/auth_users/widgets/screens/user_profile_manager_scr
 import 'package:afyakit/core/auth_users/widgets/permission_guard.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

@@ -14,7 +14,7 @@ import 'package:afyakit/core/auth_users/widgets/screens/invite_user_screen.dart'
 import 'package:afyakit/core/auth_users/widgets/user_profile_card.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 

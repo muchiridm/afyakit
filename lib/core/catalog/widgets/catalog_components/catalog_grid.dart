@@ -1,3 +1,5 @@
+// lib/core/catalog/widgets/catalog_components/catalog_grid.dart
+
 import 'package:afyakit/core/catalog/catalog_models.dart';
 import 'package:flutter/material.dart';
 

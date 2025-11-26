@@ -9,7 +9,7 @@ import 'package:afyakit/shared/widgets/home_screen/home_header.dart';
 import 'package:afyakit/shared/widgets/home_screen/latest_activity_panel.dart';
 
 import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
-import 'package:afyakit/core/catalog/widgets/catalog_screen.dart';
+import 'package:afyakit/core/catalog/widgets/screens/catalog_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/screens/login_screen.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
 

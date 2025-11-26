@@ -1,4 +1,5 @@
-// lib/core/catalog/public/widgets/_error_pane.dart
+// lib/core/catalog/widgets/catalog_components/error_pane.dart
+
 import 'package:flutter/material.dart';
 
 class ErrorPane extends StatelessWidget {

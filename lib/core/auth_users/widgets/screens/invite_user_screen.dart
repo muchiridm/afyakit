@@ -11,7 +11,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.da
 import 'package:afyakit/core/auth_users/widgets/invited_users_list.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

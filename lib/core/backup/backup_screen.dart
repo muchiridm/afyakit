@@ -2,7 +2,7 @@ import 'package:afyakit/core/backup/backup_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 
 class BackupScreen extends ConsumerStatefulWidget {
