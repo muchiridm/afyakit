@@ -1,7 +1,7 @@
-import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
+import 'package:afyakit/core/auth_users/extensions/staff_role_x.dart';
 
-UserRole parseUserRole(String input) => switch (input.trim().toLowerCase()) {
-  'admin' => UserRole.admin,
-  'manager' => UserRole.manager,
-  _ => UserRole.staff,
+StaffRole parseUserRole(String input) => switch (input.trim().toLowerCase()) {
+  'admin' => StaffRole.admin,
+  'manager' => StaffRole.manager,
+  _ => StaffRole.staff,
 };

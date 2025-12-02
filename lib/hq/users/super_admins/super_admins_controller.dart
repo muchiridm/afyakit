@@ -12,10 +12,8 @@ import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/shared/types/dtos.dart';
 import 'package:afyakit/hq/base/hq_controller.dart';
 
 final superAdminsControllerProvider =
@@ -189,7 +187,7 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
   });
 
   // ─────────────────────────────────────────────────────────────
-  // HQ cross-tenant actions (left intact; controller already owns snacks)
+  // HQ cross-tenant actions (without invite)
   // ─────────────────────────────────────────────────────────────
 
   Future<List<AuthUser>> listUsersForTenant(
@@ -221,44 +219,6 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
     }
   });
 
-  Future<InviteResult?> inviteUserForTenant({
-    required String targetTenantId,
-    String? email,
-    String? phoneNumber,
-    String role = 'staff',
-    String? brandBaseUrl,
-    bool forceResend = false,
-  }) => _runWithKeepAlive(() async {
-    final cleanedEmail = (email ?? '').trim();
-    final cleanedPhone = (phoneNumber ?? '').trim();
-
-    if (cleanedEmail.isEmpty && cleanedPhone.isEmpty) {
-      SnackService.showError('Please enter an email or phone number.');
-      return null;
-    }
-    if (cleanedEmail.isNotEmpty && !cleanedEmail.contains('@')) {
-      SnackService.showError('Please enter a valid email.');
-      return null;
-    }
-
-    try {
-      await _ensureSvc();
-      final res = await _svc!.inviteUserForTenant(
-        targetTenantId: targetTenantId,
-        email: cleanedEmail.isEmpty ? null : cleanedEmail,
-        phoneNumber: cleanedPhone.isEmpty ? null : cleanedPhone,
-        role: _parseRole(role),
-        brandBaseUrl: brandBaseUrl,
-        forceResend: forceResend,
-      );
-      SnackService.showSuccess('✅ Invite sent for tenant $targetTenantId');
-      return res;
-    } catch (e) {
-      SnackService.showError('❌ HQ invite failed: $e');
-      return null;
-    }
-  });
-
   Future<void> deleteUserFromTenant({
     required String targetTenantId,
     required String uid,
@@ -275,22 +235,4 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
       SnackService.showError('❌ HQ delete failed: $e');
     }
   });
-
-  // ── helpers ─────────────────────────────────────────────────
-  UserRole _parseRole(String? r) {
-    if (r == null || r.trim().isEmpty) return UserRole.staff;
-    switch (r.trim().toLowerCase()) {
-      case 'owner':
-        return UserRole.owner;
-      case 'admin':
-        return UserRole.admin;
-      case 'manager':
-        return UserRole.manager;
-      case 'client':
-        return UserRole.client;
-      case 'staff':
-      default:
-        return UserRole.staff;
-    }
-  }
 }

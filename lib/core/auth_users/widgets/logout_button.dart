@@ -1,6 +1,11 @@
-import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
+// lib/core/auth_users/widgets/logout_button.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/auth_users/controllers/session_controller.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 class LogoutButton extends ConsumerWidget {
   const LogoutButton({super.key});
@@ -30,7 +35,20 @@ class LogoutButton extends ConsumerWidget {
         );
 
         if (confirmed == true) {
-          await ref.read(loginControllerProvider.notifier).logout();
+          final tenantId = ref.read(tenantSlugProvider);
+
+          // Sign out via the session controller (WA/customToken flow)
+          await ref.read(sessionControllerProvider(tenantId).notifier).logOut();
+
+          if (context.mounted) {
+            // 🔁 Go back through AuthGate so HomeScreen + FeatureGate decide:
+            //  - guest + catalog enabled  → CatalogScreen
+            //  - guest + catalog disabled → LoginScreen
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const AuthGate()),
+              (_) => false,
+            );
+          }
         }
       },
     );

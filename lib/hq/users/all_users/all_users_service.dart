@@ -10,7 +10,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// DI: builds service with tenant-scoped routes + Dio from AfyaKitClient
+/// DI: builds service with tenant-scoped routes + Dio from AfyaKitClient.
 final allUsersServiceProvider = FutureProvider.autoDispose<AllUsersService>((
   ref,
 ) async {
@@ -26,46 +26,58 @@ class AllUsersService {
   final Dio dio;
   final AfyaKitRoutes routes;
 
-  // ── helpers ──────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Helpers: normalize arbitrary JSON payloads
+  // ─────────────────────────────────────────────────────────────
+
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
-    // last-resort normalization
+    // last-resort normalization (handles Dio’s dynamic payloads)
     final enc = jsonEncode(raw);
     final dec = jsonDecode(enc);
     return Map<String, dynamic>.from(dec as Map);
   }
 
   List<Map<String, dynamic>> _asList(Object? raw) {
+    // Direct list of maps
     if (raw is List) {
       return raw
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
     }
+
+    // Try to unwrap common envelope shapes: { users: [...] } or { results: [...] }
     final m = _asMap(raw);
     final listish = m['users'] ?? m['results'] ?? raw;
+
     if (listish is List) {
       return listish
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
     }
+
     return const [];
   }
 
   Never _bad(Response r, String op) {
-    final reason = r.data is Map ? (r.data as Map)['error'] : null;
+    final reason = r.data is Map ? (r.data as Map)['error'] : r.statusMessage;
     throw Exception('❌ $op failed (${r.statusCode}): ${reason ?? 'Unknown'}');
   }
 
-  // ── Directory (HQ/global users on CORE base) ─────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Directory (HQ/global users on CORE base)
+  // ─────────────────────────────────────────────────────────────
+
   Future<List<AllUser>> fetchAllUsers({
     String? tenantId,
     String search = '',
     int limit = 50,
   }) async {
     final q = search.trim();
+
     final uri = routes.listGlobalUsers(
       tenant: (tenantId != null && tenantId.isNotEmpty) ? tenantId : null,
       search: q.isEmpty ? null : q,
@@ -74,15 +86,17 @@ class AllUsersService {
 
     if (kDebugMode) debugPrint('🛰️ [AllUsersService] GET $uri');
     final r = await dio.getUri(uri);
+
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List users');
 
     if (kDebugMode) {
       debugPrint(
-        '🛰️ [AllUsersService] ← ${r.statusCode}  type=${r.data.runtimeType}',
+        '🛰️ [AllUsersService] ← ${r.statusCode} type=${r.data.runtimeType}',
       );
     }
 
     final items = _asList(r.data);
+
     if (kDebugMode) {
       debugPrint('✅ [AllUsersService] parsed ${items.length} users');
     }
@@ -105,7 +119,7 @@ class AllUsersService {
     // Accept either:
     //  A) { memberships: { "<tid>": { role, active }, ... } }
     //  B) { "<tid>": { role, active }, ... } (top-level)
-    //  C) legacy list: [ { tenantId, role, active }, ... ]  ← (not returned by current BE, but harmless)
+    //  C) legacy list: [ { tenantId, role, active }, ... ]
     final data = _asMap(r.data);
     final raw = data.containsKey('memberships') ? data['memberships'] : r.data;
 
@@ -123,7 +137,6 @@ class AllUsersService {
       return out;
     }
 
-    // (Optional) handle legacy list shape if ever returned
     if (raw is List) {
       for (final e in raw.whereType<Map>()) {
         final v = Map<String, dynamic>.from(e);
@@ -136,7 +149,9 @@ class AllUsersService {
     return out;
   }
 
-  // ── Membership mutations (super-admin, HQ) ───────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Membership mutations (super-admin, HQ)
+  // ─────────────────────────────────────────────────────────────
 
   /// Create or update a user's membership for a given tenant.
   ///
@@ -156,6 +171,7 @@ class AllUsersService {
       data: <String, dynamic>{'role': role, 'active': active},
       options: Options(contentType: Headers.jsonContentType),
     );
+
     if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Upsert membership');
   }
 
@@ -170,28 +186,5 @@ class AllUsersService {
     final r = await dio.deleteUri(uri);
     final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
     if (!ok) _bad(r, 'Delete membership');
-  }
-
-  // ── HQ invite (create/ensure Auth user + membership) ─────────
-
-  Future<void> inviteUser({required String email, required String role}) async {
-    final payload = <String, dynamic>{'email': email.trim(), 'role': role};
-
-    // POST /api/tenants/:tenantId/auth_users/invite on CORE base
-    // tenantId here comes from tenantSlugProvider via AfyaKitRoutes.
-    final uri = routes.hqInviteUser(routes.tenantId);
-
-    if (kDebugMode) {
-      debugPrint('🛰️ [AllUsersService] POST $uri body=$payload');
-    }
-
-    final r = await dio.postUri(
-      uri,
-      data: payload,
-      options: Options(contentType: Headers.jsonContentType),
-    );
-    if ((r.statusCode ?? 0) ~/ 100 != 2) {
-      _bad(r, 'Invite user');
-    }
   }
 }

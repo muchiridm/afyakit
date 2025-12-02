@@ -1,425 +1,237 @@
 // lib/core/auth_users/widgets/screens/login_screen.dart
 
+import 'package:afyakit/core/auth_users/controllers/login_controller.dart';
+import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth_users/utils/user_format.dart';
-
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_logo_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
-
-import 'package:afyakit/core/auth_users/controllers/login/login_controller.dart';
-import 'package:afyakit/core/auth_users/controllers/auth_session/session_controller.dart';
-
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tenantSlug = ref.watch(tenantSlugProvider);
-
-    // listen for "login attempt finished" → refresh session
-    ref.listen<LoginFormState>(loginControllerProvider, (prev, next) {
-      final wasLoading = prev?.loading == true;
-      final nowIdle = next.loading == false;
-
-      if (wasLoading && nowIdle) {
-        ref.read(sessionControllerProvider(tenantSlug).notifier).ensureReady();
-      }
-    });
-
-    return _buildScaffold(context, ref);
-  }
-
-  Widget _buildScaffold(BuildContext context, WidgetRef ref) {
-    // Use display-name provider so we never show "Loading…"
-    final displayName = ref.watch(tenantDisplayNameProvider);
-    final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
-    final primary = Theme.of(context).colorScheme.primary;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFFDF8FF),
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: DefaultTabController(
-          length: 2,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-              return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(16, 24, 16, 16 + bottomInset),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: _buildContentCard(
-                        context: context,
-                        ref: ref,
-                        displayName: displayName,
-                        logoUrl: logoUrl,
-                        primary: primary,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContentCard({
-    required BuildContext context,
-    required WidgetRef ref,
-    required String displayName,
-    required String? logoUrl,
-    required Color primary,
-  }) {
-    final loginCtrl = ref.watch(loginControllerProvider.notifier);
-    final loginState = ref.watch(loginControllerProvider);
-
-    // Responsive logo size – bigger on wider screens
-    final screenWidth = MediaQuery.of(context).size.width;
-    final double logoSize = screenWidth < 480 ? 120.0 : 160.0;
-
-    return Card(
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildBrandHeader(
-              displayName: displayName,
-              logoUrl: logoUrl,
-              primary: primary,
-              logoSize: logoSize,
-            ),
-            const SizedBox(height: 20),
-            const TabBar(
-              tabs: [
-                Tab(text: 'Email'),
-                Tab(text: 'WhatsApp'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 300,
-              child: TabBarView(
-                children: [
-                  _buildEmailTab(context, loginCtrl, loginState, primary),
-                  _buildWhatsAppTab(
-                    sending: loginState.waSending,
-                    verifying: loginState.waVerifying,
-                    codeSent: loginState.waCodeSent,
-                    onSendCode: (phone) => loginCtrl.sendWaCode(phone),
-                    onVerify: (code) => loginCtrl.verifyWaCode(code),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrandHeader({
-    required String displayName,
-    required String? logoUrl,
-    required Color primary,
-    required double logoSize,
-  }) {
-    final radius = BorderRadius.circular(12.0);
-    final hasUrl = logoUrl != null && logoUrl.trim().isNotEmpty;
-
-    // Placeholder: initials block + app name
-    Widget placeholder() {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _initialsBlock(
-            displayName: displayName,
-            primary: primary,
-            radius: radius,
-            size: logoSize,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            displayName,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: primary,
-            ),
-          ),
-        ],
-      );
-    }
-
-    // No URL at all → placeholder + name
-    if (!hasUrl) {
-      return placeholder();
-    }
-
-    // We have a URL → load it; on error fall back to placeholder + name
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: radius,
-          child: Image.network(
-            logoUrl,
-            height: logoSize,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => placeholder(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _initialsBlock({
-    required String displayName,
-    required Color primary,
-    required BorderRadius radius,
-    double size = 150.0,
-  }) {
-    final initials = initialsFromName(displayName);
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: primary.withOpacity(0.12),
-        borderRadius: radius,
-      ),
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: primary,
-          fontWeight: FontWeight.w700,
-          fontSize: size * 0.4,
-        ),
-      ),
-    );
-  }
-
-  // Email Tab
-  Widget _buildEmailTab(
-    BuildContext context,
-    LoginController controller,
-    LoginFormState state,
-    Color primary,
-  ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Sign in with Email',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: state.loginController,
-          keyboardType: TextInputType.emailAddress,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Email Address',
-            border: OutlineInputBorder(),
-            hintText: 'e.g. user@example.com',
-            isDense: true,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          obscureText: true,
-          onSubmitted: (_) => controller.login(),
-          decoration: const InputDecoration(
-            labelText: 'Password',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
-          onChanged: controller.setPassword,
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () async {
-              FocusScope.of(context).unfocus();
-              await controller.sendPasswordReset();
-            },
-            child: const Text('Reset password?'),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: state.loading
-                ? null
-                : () async {
-                    FocusScope.of(context).unfocus();
-                    await controller.login();
-                  },
-            icon: state.loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.lock_open),
-            label: const Text('Login'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primary,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // WhatsApp Tab
-  Widget _buildWhatsAppTab({
-    required bool sending,
-    required bool verifying,
-    required bool codeSent,
-    required ValueChanged<String> onSendCode,
-    required ValueChanged<String> onVerify,
-  }) {
-    return _WhatsAppLoginTab(
-      sending: sending,
-      verifying: verifying,
-      codeSent: codeSent,
-      onSendCode: onSendCode,
-      onVerify: onVerify,
-    );
-  }
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _WhatsAppLoginTab extends StatefulWidget {
-  final bool sending;
-  final bool verifying;
-  final bool codeSent;
-  final ValueChanged<String> onSendCode;
-  final ValueChanged<String> onVerify;
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
 
-  const _WhatsAppLoginTab({
-    required this.sending,
-    required this.verifying,
-    required this.codeSent,
-    required this.onSendCode,
-    required this.onVerify,
-  });
-
-  @override
-  State<_WhatsAppLoginTab> createState() => _WhatsAppLoginTabState();
-}
-
-class _WhatsAppLoginTabState extends State<_WhatsAppLoginTab> {
-  final _phone = TextEditingController();
-  final _code = TextEditingController();
+  OtpChannel _channel = OtpChannel.wa;
 
   @override
   void dispose() {
-    _phone.dispose();
-    _code.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _codeCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendCode() async {
+    final controller = ref.read(loginControllerProvider.notifier);
+
+    await controller.sendCode(
+      phoneE164: _phoneCtrl.text,
+      email: _channel == OtpChannel.email ? _emailCtrl.text : null,
+      channel: _channel,
+    );
+  }
+
+  Future<void> _verifyCode() async {
+    final controller = ref.read(loginControllerProvider.notifier);
+
+    final success = await controller.verifyCode(
+      phoneE164: _phoneCtrl.text,
+      code: _codeCtrl.text,
+      email: _channel == OtpChannel.email ? _emailCtrl.text : null,
+      channel: _channel,
+    );
+
+    if (success && mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (_) => false,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.codeSent) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Sign in with WhatsApp',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'WhatsApp number (E.164)',
-              hintText: '+2547...',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: widget.sending
-                  ? null
-                  : () => widget.onSendCode(_phone.text),
-              child: widget.sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Send WhatsApp code'),
-            ),
-          ),
-        ],
-      );
-    }
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final loginState = ref.watch(loginControllerProvider);
 
-    // Code entry
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDF8FF),
+      appBar: AppBar(title: const Text('Sign in'), centerTitle: true),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHeader(primary),
+                  const SizedBox(height: 24),
+                  _buildChannelSelector(),
+                  const SizedBox(height: 24),
+                  _buildPhoneField(codeSent: loginState.codeSent),
+                  const SizedBox(height: 12),
+                  if (_channel == OtpChannel.email)
+                    _buildEmailField(codeSent: loginState.codeSent),
+                  const SizedBox(height: 12),
+                  _buildSendButton(
+                    sending: loginState.sending,
+                    codeSent: loginState.codeSent,
+                  ),
+                  _buildCodeSection(
+                    codeSent: loginState.codeSent,
+                    verifying: loginState.verifying,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Private UI builders
+  // ─────────────────────────────────────────────
+
+  Widget _buildHeader(Color primary) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Enter the 6-digit code from WhatsApp',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        Text(
+          'Sign in with OTP',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: primary,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        const Text(
+          'Choose how to receive your login code.',
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChannelSelector() {
+    return SegmentedButton<OtpChannel>(
+      segments: const [
+        ButtonSegment<OtpChannel>(
+          value: OtpChannel.wa,
+          label: Text('WhatsApp'),
+          icon: Icon(Icons.chat_bubble_outline),
+        ),
+        ButtonSegment<OtpChannel>(
+          value: OtpChannel.sms,
+          label: Text('SMS'),
+          icon: Icon(Icons.sms),
+        ),
+        ButtonSegment<OtpChannel>(
+          value: OtpChannel.email,
+          label: Text('Email'),
+          icon: Icon(Icons.email_outlined),
+        ),
+      ],
+      selected: {_channel},
+      onSelectionChanged: (selection) {
+        setState(() {
+          _channel = selection.first;
+          _codeCtrl.clear();
+        });
+        // Reset attempt state in controller when channel changes
+        ref.read(loginControllerProvider.notifier).resetAttempt();
+      },
+    );
+  }
+
+  Widget _buildPhoneField({required bool codeSent}) {
+    return TextField(
+      controller: _phoneCtrl,
+      keyboardType: TextInputType.phone,
+      decoration: const InputDecoration(
+        labelText: 'Phone number (E.164)',
+        hintText: '+2547...',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      enabled: !codeSent,
+    );
+  }
+
+  Widget _buildEmailField({required bool codeSent}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         TextField(
-          controller: _code,
-          keyboardType: TextInputType.number,
+          controller: _emailCtrl,
+          keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
-            labelText: '6-digit code',
+            labelText: 'Email address',
             border: OutlineInputBorder(),
             isDense: true,
           ),
-          onSubmitted: (_) => widget.onVerify(_code.text),
+          enabled: !codeSent,
         ),
         const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _buildSendButton({required bool sending, required bool codeSent}) {
+    if (codeSent) return const SizedBox.shrink();
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: sending ? null : _sendCode,
+        child: sending
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Text('Send code'),
+      ),
+    );
+  }
+
+  Widget _buildCodeSection({required bool codeSent, required bool verifying}) {
+    if (!codeSent) return const SizedBox.shrink();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 16),
+        TextField(
+          controller: _codeCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Enter 6-digit code',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          onSubmitted: (_) => _verifyCode(),
+        ),
+        const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: widget.verifying
-                ? null
-                : () => widget.onVerify(_code.text),
-            child: widget.verifying
+            onPressed: verifying ? null : _verifyCode,
+            child: verifying
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -428,7 +240,7 @@ class _WhatsAppLoginTabState extends State<_WhatsAppLoginTab> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Verify & Sign in'),
+                : const Text('Verify & sign in'),
           ),
         ),
       ],

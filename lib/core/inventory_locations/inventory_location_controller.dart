@@ -7,7 +7,7 @@ import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';

@@ -1,4 +1,7 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+// lib/core/records/deliveries/controllers/delivery_session_engine.dart
+
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,13 +35,11 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
     : super(const DeliverySessionState()) {
     _restore();
 
-    // Re-run restore when user future resolves/changes.
-    ref.listen<AsyncValue<dynamic>>(currentUserFutureProvider, (
-      prev,
-      next,
-    ) async {
-      final user = next.asData?.value;
+    // Re-run restore when the session user resolves/changes.
+    ref.listen<AsyncValue<AuthUser?>>(currentUserProvider, (prev, next) async {
+      final user = next.valueOrNull;
       if (!mounted || user == null) return;
+
       if (!state.isActive) {
         debugPrint('🔁 [DSE] user resolved → re-restoring session…');
         await _restore();
@@ -75,11 +76,12 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
 
   // ─────────────────────────────────────────────────────────────
   // Public API
+  // NOTE: `enteredByEmail` now carries the WhatsApp number (E.164)
   // ─────────────────────────────────────────────────────────────
 
   Future<void> ensureActive({
     required String enteredByName,
-    required String enteredByEmail,
+    required String enteredByEmail, // ← WA number
     required String source,
     String? storeId,
   }) => _withKeepAlive(() async {
@@ -207,7 +209,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
       debugPrint(
         '⚠️ Incomplete delivery; aborting save. '
         'deliveryId=${state.deliveryId} linked=${linked.length} '
-        'sources=${mergedSources.length} email=${state.enteredByEmail?.isNotEmpty == true}',
+        'sources=${mergedSources.length} contact=${state.enteredByEmail?.isNotEmpty == true}',
       );
       return false;
     }
@@ -222,7 +224,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
       linked,
       state.deliveryId!,
       enteredByName: resolvedName,
-      enteredByEmail: state.enteredByEmail!,
+      enteredByEmail: state.enteredByEmail!, // WA number
       sources: mergedSources,
     );
 
@@ -239,13 +241,13 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
     await svc.clearLocal();
 
     final name = state.enteredByName;
-    final email = state.enteredByEmail;
+    final contact = state.enteredByEmail;
     _safeSet(const DeliverySessionState());
 
-    if (autoRestart && email != null) {
+    if (autoRestart && contact != null) {
       await ensureActive(
-        enteredByName: _resolveName(name, null, email),
-        enteredByEmail: email,
+        enteredByName: _resolveName(name, null, contact),
+        enteredByEmail: contact,
         source: '',
       );
     }
@@ -284,25 +286,35 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   Future<void> _restore() => _withKeepAlive(() async {
     final tenantId = ref.read(tenantSlugProvider);
 
+    // 1) Try local cache first
     final local = await svc.restoreLocal();
     if (!mounted) return;
+
     if (local != null && local.isActive) {
       _safeSet(local);
       debugPrint('♻️ Session restored (local) → ${local.deliveryId}');
       return;
     }
 
+    // 2) Fallback to server-side open session, keyed by WA number
     try {
-      final user = await ref.read(currentUserFutureProvider.future);
+      // Use the session-backed snapshot instead of refetching
+      final user = ref.read(currentUserValueProvider);
       if (!mounted) return;
 
-      final email = (user?.email ?? '').trim().toLowerCase();
+      final waNumber = (user?.phoneNumber ?? '').trim();
       final displayName = (user?.displayName ?? '').trim();
-      if (email.isEmpty) return;
+
+      if (waNumber.isEmpty) {
+        debugPrint(
+          '📭 _restore: no WA number available, skipping server restore',
+        );
+        return;
+      }
 
       final open = await svc.findOpen(
         tenantId: tenantId,
-        enteredByEmail: email,
+        enteredByEmail: waNumber, // WA number used as key
       );
       if (!mounted) return;
 
@@ -310,13 +322,18 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
         _safeUpdate(
           (s) => s.copyWith(
             deliveryId: open.deliveryId,
-            enteredByName: _resolveName(open.enteredByName, displayName, email),
+            enteredByName: _resolveName(
+              open.enteredByName,
+              displayName,
+              waNumber,
+            ),
             enteredByEmail: open.enteredByEmail,
             sources: _dedup(open.sources),
             lastStoreId: open.lastStoreId,
             lastSource: open.lastSource,
           ),
         );
+
         if (mounted) {
           await svc.persistLocal(state);
           debugPrint('🔄 Session restored (firestore) → ${open.deliveryId}');
@@ -332,11 +349,15 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   List<String> _dedup(List<String> src) =>
       src.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
 
-  String _resolveName(String? candidate, String? fallbackName, String email) {
+  String _resolveName(
+    String? candidate,
+    String? fallbackName,
+    String contactId,
+  ) {
     final c = (candidate ?? '').trim();
     if (c.isNotEmpty) return c;
     final f = (fallbackName ?? '').trim();
     if (f.isNotEmpty) return f;
-    return email.trim();
+    return contactId.trim();
   }
 }

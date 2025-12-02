@@ -1,4 +1,4 @@
-// lib/hq/tenants/v2/widgets/feature_gate.dart
+// lib/hq/tenants/widgets/feature_gate.dart
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
@@ -22,7 +22,7 @@ class FeatureGate extends ConsumerWidget {
       loading: () => const SizedBox.shrink(),
       error: (_, __) => fallback ?? const SizedBox.shrink(),
       data: (p) {
-        final enabled = p.features.features[feature] == true;
+        final enabled = p.has(feature); // 👈 cleaner
         if (!enabled) return fallback ?? const SizedBox.shrink();
         return child;
       },

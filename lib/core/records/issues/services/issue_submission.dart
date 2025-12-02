@@ -12,6 +12,7 @@ import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 
 class IssueSubmission {
   final IssueRecord record;
@@ -28,7 +29,10 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
   required String toStore,
   required DateTime date,
   required IssueType type,
-  required String requestedBy,
+
+  /// Full requester, so we can snapshot uid + name + email.
+  required AuthUser requester,
+
   required List<BatchRecord> batches,
   required List<MedicationItem> medications,
   required List<ConsumableItem> consumables,
@@ -68,7 +72,7 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
       String? brandName;
       DateTime? expiry;
 
-      // 2) SKU (this is our main source for brand)
+      // 2) SKU (main source for brand)
       switch (itemType) {
         case ItemType.medication:
           final m = medications.firstWhereOrNull((x) => x.id == itemId);
@@ -103,7 +107,7 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
           if (e != null) {
             name = e.name;
             group = e.group;
-            // equipment → no brandName in your models → we leave it null
+            // equipment → no brandName in your models → leave null
           }
           break;
 
@@ -111,13 +115,11 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
           break;
       }
 
-      // 3) expiry from batch (your expiry was already working)
+      // 3) expiry from batch
       expiry = batch.expiryDate ?? batch.expiryDate;
 
-      // 4) EXTRA fallback for brand: sometimes people store brand on the batch
-      //    we only use this if we didn’t already get a brand from the SKU
+      // 4) EXTRA fallback for brand: batch brand
       if (brandName == null || brandName.trim().isEmpty) {
-        // these field names depend on your BatchRecord, so we try the usual suspects
         final dynamic raw = (batch as dynamic);
         final candidate = () {
           try {
@@ -134,7 +136,7 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
         }
       }
 
-      // 5) finally build the entry
+      // 5) build entry
       entries.add(
         IssueEntry(
           id: uuid.v4(),
@@ -149,7 +151,7 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
           itemTypeLabel: itemType.name,
           batchId: batchId,
           quantity: quantity,
-          brand: brandName, // ← will be null if we really didn’t find one
+          brand: brandName,
           expiry: expiry,
         ),
       );
@@ -165,11 +167,21 @@ List<IssueSubmission> buildIssueSubmissionFromCart({
     dateRequested: date,
     dateApproved: approvedAt,
     dateIssuedOrReceived: null,
-    requestedByUid: requestedBy,
+
+    // requester snapshot
+    requestedByUid: requester.uid,
+    requestedByName: requester.displayName,
+    requestedByEmail: requester.email,
+
+    // approver + actioner start empty here
     approvedByUid: approvedBy,
+    approvedByName: null,
+    approvedByEmail: null,
     actionedByUid: issuedBy,
     actionedByName: issuedByName,
     actionedByRole: issuedByRole,
+    actionedByEmail: null,
+
     note: note,
     entries: entries,
   );
