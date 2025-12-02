@@ -1,3 +1,4 @@
+// lib/core/auth_users/widgets/screens/splash_screen.dart
 import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_logo_providers.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,9 @@ class SplashScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final profile = ref.watch(tenantProfileProvider);
+    // Use display-name provider so we never show "Loading…"
+    final displayName = ref.watch(tenantDisplayNameProvider);
     final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
-    final displayName = profile.displayName;
     final primary = theme.colorScheme.primary;
 
     return Scaffold(
@@ -47,39 +48,84 @@ class SplashScreen extends ConsumerWidget {
     required Color primary,
   }) {
     const double logoSize = 140.0;
-    final titleStyle = theme.textTheme.titleLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      color: primary,
-    );
-
-    final hasLogo = logoUrl != null && logoUrl.trim().isNotEmpty;
+    final hasUrl = logoUrl != null && logoUrl.trim().isNotEmpty;
     final radius = BorderRadius.circular(16);
 
-    Widget logoWidget() {
-      if (!hasLogo) {
-        return Icon(Icons.local_hospital, size: logoSize, color: primary);
-      }
-
-      return ClipRRect(
-        borderRadius: radius,
-        child: Image.network(
-          logoUrl,
-          height: logoSize,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) =>
-              Icon(Icons.local_hospital, size: logoSize, color: primary),
-        ),
+    // Placeholder: initials block + app name
+    Widget placeholder() {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _initialsBlock(
+            displayName: displayName,
+            primary: primary,
+            radius: radius,
+            size: logoSize,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            displayName,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: primary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       );
     }
 
-    return Column(
-      children: [
-        logoWidget(),
-        const SizedBox(height: 12),
-        Text(displayName, style: titleStyle, textAlign: TextAlign.center),
-      ],
+    // No URL at all → placeholder + name
+    if (!hasUrl) {
+      return placeholder();
+    }
+
+    // URL present → try to load; on error fallback to placeholder
+    return ClipRRect(
+      borderRadius: radius,
+      child: Image.network(
+        logoUrl,
+        height: logoSize,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => placeholder(),
+      ),
     );
+  }
+
+  Widget _initialsBlock({
+    required String displayName,
+    required Color primary,
+    required BorderRadius radius,
+    double size = 140.0,
+  }) {
+    final initials = _initialsFromName(displayName);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: primary.withOpacity(0.12),
+        borderRadius: radius,
+      ),
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: primary,
+          fontWeight: FontWeight.w700,
+          fontSize: size * 0.4,
+        ),
+      ),
+    );
+  }
+
+  String _initialsFromName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
   }
 
   Widget _buildSpinner() {

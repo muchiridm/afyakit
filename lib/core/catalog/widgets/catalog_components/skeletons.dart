@@ -1,4 +1,5 @@
-// lib/core/catalog/public/widgets/_skeletons.dart
+// lib/core/catalog/widgets/catalog_components/skeletons.dart
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 

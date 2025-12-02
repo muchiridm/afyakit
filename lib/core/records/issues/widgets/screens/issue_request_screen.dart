@@ -14,7 +14,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location_controller.d
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 class IssueRequestScreen extends ConsumerWidget {
   const IssueRequestScreen({super.key});

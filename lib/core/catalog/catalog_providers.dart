@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/api/dawaindex/providers.dart';
 
-import 'catalog_controller.dart';
+import 'controllers/catalog_controller.dart';
 import 'catalog_models.dart';
 import 'catalog_service.dart';
 

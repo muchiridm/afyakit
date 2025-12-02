@@ -33,7 +33,7 @@ final tenantProfileProvider = Provider<TenantProfile>((ref) {
 
   return TenantProfile(
     id: slug,
-    displayName: 'Loading…',
+    displayName: slug,
     primaryColorHex: '#1565C0',
     features: const TenantFeatures({}),
     assets: const TenantAssets(bucket: '', version: 0, logos: {}),

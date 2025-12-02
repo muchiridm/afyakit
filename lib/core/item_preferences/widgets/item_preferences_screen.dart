@@ -6,7 +6,7 @@ import 'package:afyakit/core/item_preferences/item_preferences_controller.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_item_tile_components/editable_chip_list.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 class ItemPreferencesScreen extends ConsumerStatefulWidget {
   const ItemPreferencesScreen({super.key});

@@ -10,7 +10,7 @@ import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 
 import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 import 'package:afyakit/dev/dev_role_switcher.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
