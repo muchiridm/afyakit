@@ -1,5 +1,8 @@
+// lib/core/records/issues/widgets/issue_details_screen.dart
+
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +14,9 @@ import 'package:afyakit/core/records/issues/controllers/action/issue_action_cont
 import 'package:afyakit/core/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/providers/issue_streams_provider.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/record_screens/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:intl/intl.dart';
 
@@ -41,9 +43,6 @@ class IssueDetailsScreen extends ConsumerWidget {
       error: (e, _) => _buildError('issue', e),
       data: (issue) {
         if (issue == null) return _buildNotFound('Issue');
-
-        // 👉 We only have requestedByUid; use that directly
-        final requestedByDisplay = issue.requestedByUid;
 
         return asyncUser.when(
           loading: _buildLoading,
@@ -73,7 +72,6 @@ class IssueDetailsScreen extends ConsumerWidget {
               context,
               issue,
               user,
-              requestedByDisplay,
               controller,
               asyncStores,
               fromStoreName: fromStoreName,
@@ -100,7 +98,6 @@ class IssueDetailsScreen extends ConsumerWidget {
     BuildContext context,
     IssueRecord issue,
     AuthUser user,
-    String requestedByDisplay,
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores, {
     required String fromStoreName,
@@ -114,7 +111,7 @@ class IssueDetailsScreen extends ConsumerWidget {
         const Divider(height: 32),
         ..._buildEntries(issue),
         const Divider(height: 32),
-        _buildMeta(issue, requestedByDisplay),
+        _buildMeta(issue),
       ],
       actionButtons: _buildActionButtons(
         context,
@@ -186,17 +183,19 @@ class IssueDetailsScreen extends ConsumerWidget {
     }).toList();
   }
 
-  Widget _buildMeta(IssueRecord issue, String requestedByDisplay) {
+  Widget _buildMeta(IssueRecord issue) {
     return Wrap(
       spacing: 32,
       runSpacing: 12,
       children: [
-        _info('Requested By', requestedByDisplay),
+        _info('Requested By', issue.requestedByLabel),
         _info('Requested At', formatDate(issue.dateRequested)),
+        if (issue.approvedByLabel != null)
+          _info('Approved By', issue.approvedByLabel!),
         if (issue.dateApproved != null)
           _info('Approved At', formatDate(issue.dateApproved!)),
-        if (issue.actionedByName != null)
-          _info('Actioned By', issue.actionedByName!),
+        if (issue.actionedByLabel != null)
+          _info('Actioned By', issue.actionedByLabel!),
         if (issue.actionedByRole != null) _info('Role', issue.actionedByRole!),
         if (issue.dateIssuedOrReceived != null)
           _info('Issued At', formatDate(issue.dateIssuedOrReceived!)),

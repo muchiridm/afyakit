@@ -7,7 +7,8 @@ import 'package:afyakit/api/afyakit/providers.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/hq/tenants/extensions/tenant_status_x.dart';
 import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+
 import 'package:collection/collection.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';

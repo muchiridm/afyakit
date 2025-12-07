@@ -1,12 +1,12 @@
 // lib/core/auth_users/widgets/auth_gate.dart
 
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/controllers/session_controller.dart';
-import 'package:afyakit/shared/widgets/splash_screen.dart';
-import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
+import 'package:afyakit/shared/widgets/screens/splash_screen.dart';
+import 'package:afyakit/shared/widgets/home_screens/home_screen.dart';
 import 'package:afyakit/core/auth_users/widgets/screens/login_screen.dart';
 
 class AuthGate extends ConsumerStatefulWidget {

@@ -1,11 +1,11 @@
 // lib/core/auth_users/providers/current_user_providers.dart
 
 import 'package:afyakit/core/auth_users/services/auth_service.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/controllers/session_controller.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 /// Canonical reactive current user for the selected tenant.
 /// This is just a view over SessionController, so logout works instantly.

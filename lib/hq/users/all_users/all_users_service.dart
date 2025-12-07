@@ -1,10 +1,8 @@
-// lib/hq/users/all_users/all_users_service.dart
-
 import 'dart:convert';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/hq/users/all_users/all_user_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -26,6 +24,8 @@ class AllUsersService {
   final Dio dio;
   final AfyaKitRoutes routes;
 
+  static const _tag = '[AllUsersService]';
+
   // ─────────────────────────────────────────────────────────────
   // Helpers: normalize arbitrary JSON payloads
   // ─────────────────────────────────────────────────────────────
@@ -33,14 +33,12 @@ class AllUsersService {
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
-    // last-resort normalization (handles Dio’s dynamic payloads)
     final enc = jsonEncode(raw);
     final dec = jsonDecode(enc);
     return Map<String, dynamic>.from(dec as Map);
   }
 
   List<Map<String, dynamic>> _asList(Object? raw) {
-    // Direct list of maps
     if (raw is List) {
       return raw
           .whereType<Map>()
@@ -48,7 +46,7 @@ class AllUsersService {
           .toList();
     }
 
-    // Try to unwrap common envelope shapes: { users: [...] } or { results: [...] }
+    // Accept envelopes like: { users: [...] } or { results: [...] }
     final m = _asMap(raw);
     final listish = m['users'] ?? m['results'] ?? raw;
 
@@ -62,9 +60,17 @@ class AllUsersService {
     return const [];
   }
 
+  bool _ok(Response r) => ((r.statusCode ?? 0) ~/ 100) == 2;
+
   Never _bad(Response r, String op) {
     final reason = r.data is Map ? (r.data as Map)['error'] : r.statusMessage;
     throw Exception('❌ $op failed (${r.statusCode}): ${reason ?? 'Unknown'}');
+  }
+
+  AllUser _userFromResponse(Response r) {
+    final map = _asMap(r.data);
+    final id = (map['id'] ?? map['uid'] ?? '').toString();
+    return AllUser.fromJson(id, Map<String, Object?>.from(map));
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -84,21 +90,19 @@ class AllUsersService {
       limit: limit,
     );
 
-    if (kDebugMode) debugPrint('🛰️ [AllUsersService] GET $uri');
+    if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
     final r = await dio.getUri(uri);
 
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'List users');
+    if (!_ok(r)) _bad(r, 'List users');
 
     if (kDebugMode) {
-      debugPrint(
-        '🛰️ [AllUsersService] ← ${r.statusCode} type=${r.data.runtimeType}',
-      );
+      debugPrint('🛰️ $_tag ← ${r.statusCode} type=${r.data.runtimeType}');
     }
 
     final items = _asList(r.data);
 
     if (kDebugMode) {
-      debugPrint('✅ [AllUsersService] parsed ${items.length} users');
+      debugPrint('✅ $_tag parsed ${items.length} users');
     }
 
     return items.map((m) {
@@ -111,15 +115,16 @@ class AllUsersService {
     String uid,
   ) async {
     final uri = routes.fetchUserMemberships(uid);
-    if (kDebugMode) debugPrint('🛰️ [AllUsersService] GET $uri');
+    if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
 
     final r = await dio.getUri(uri);
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Fetch memberships');
+    if (!_ok(r)) _bad(r, 'Fetch memberships');
 
-    // Accept either:
-    //  A) { memberships: { "<tid>": { role, active }, ... } }
-    //  B) { "<tid>": { role, active }, ... } (top-level)
-    //  C) legacy list: [ { tenantId, role, active }, ... ]
+    // Accept:
+    //  A) { memberships: [ { tenantId, role, active, email? }, ... ] }
+    //  B) { memberships: { "<tid>": { role, active, email? }, ... } }
+    //  C) { "<tid>": { role, active, email? }, ... } (top-level)
+    //  D) legacy list: [ { tenantId, role, active, email? }, ... ]
     final data = _asMap(r.data);
     final raw = data.containsKey('memberships') ? data['memberships'] : r.data;
 
@@ -132,6 +137,7 @@ class AllUsersService {
         out[tid.toString()] = {
           'role': v['role'],
           'active': v['active'] == true,
+          if (v['email'] != null) 'email': v['email'],
         };
       });
       return out;
@@ -142,7 +148,11 @@ class AllUsersService {
         final v = Map<String, dynamic>.from(e);
         final tid = (v['tenantId'] ?? v['tenant'] ?? '').toString();
         if (tid.isEmpty) continue;
-        out[tid] = {'role': v['role'], 'active': v['active'] == true};
+        out[tid] = {
+          'role': v['role'],
+          'active': v['active'] == true,
+          if (v['email'] != null) 'email': v['email'],
+        };
       }
     }
 
@@ -150,41 +160,129 @@ class AllUsersService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Global user CRUD (HQ / directory + Firebase Auth)
+  // ─────────────────────────────────────────────────────────────
+
+  Future<AllUser> createGlobalUser({
+    required String phoneNumber,
+    String? displayName,
+  }) async {
+    final uri = routes.createGlobalUser();
+    if (kDebugMode) debugPrint('🛰️ $_tag POST $uri');
+
+    final body = <String, dynamic>{
+      'phoneNumber': phoneNumber,
+      if (displayName != null && displayName.trim().isNotEmpty)
+        'displayName': displayName.trim(),
+    };
+
+    final r = await dio.postUri(
+      uri,
+      data: body,
+      options: Options(contentType: Headers.jsonContentType),
+    );
+
+    if (!_ok(r)) _bad(r, 'Create global user');
+    final user = _userFromResponse(r);
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ $_tag Created user ${user.id} (${user.phoneNumber ?? '-'})',
+      );
+    }
+
+    return user;
+  }
+
+  Future<AllUser> updateGlobalUser({
+    required String uid,
+    String? phoneNumber,
+    String? displayName,
+    bool? disabled,
+  }) async {
+    final uri = routes.updateGlobalUser(uid);
+    if (kDebugMode) debugPrint('🛰️ $_tag PATCH $uri');
+
+    final body = <String, dynamic>{};
+    if (phoneNumber != null) body['phoneNumber'] = phoneNumber;
+    if (displayName != null) body['displayName'] = displayName;
+    if (disabled != null) body['disabled'] = disabled;
+
+    if (body.isEmpty) {
+      throw Exception('❌ Update global user: no fields to update');
+    }
+
+    final r = await dio.patchUri(
+      uri,
+      data: body,
+      options: Options(contentType: Headers.jsonContentType),
+    );
+
+    if (!_ok(r)) _bad(r, 'Update global user');
+    final user = _userFromResponse(r);
+
+    if (kDebugMode) {
+      debugPrint('✅ $_tag Updated user ${user.id} (disabled=${user.disabled})');
+    }
+
+    return user;
+  }
+
+  Future<void> deleteGlobalUser(String uid) async {
+    final uri = routes.deleteGlobalUser(uid);
+    if (kDebugMode) debugPrint('🛰️ $_tag DELETE $uri');
+
+    final r = await dio.deleteUri(uri);
+    final ok = (r.statusCode == 204) || _ok(r);
+    if (!ok) _bad(r, 'Delete global user');
+
+    if (kDebugMode) {
+      debugPrint('🗑️ $_tag Deleted global user $uid');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Membership mutations (super-admin, HQ)
   // ─────────────────────────────────────────────────────────────
 
-  /// Create or update a user's membership for a given tenant.
-  ///
-  /// `role` is a free-form string (e.g. "admin", "staff", "viewer").
   Future<void> upsertUserMembership({
     required String uid,
     required String tenantId,
     required String role,
     required bool active,
+    String? email,
   }) async {
-    // HQ core route: /tenants/:tenantId/auth_users/:uid
     final uri = routes.hqUpsertUserMembership(tenantId, uid);
-    if (kDebugMode) debugPrint('🛰️ [AllUsersService] PUT $uri');
+    if (kDebugMode) debugPrint('🛰️ $_tag PUT $uri');
+
+    final body = <String, dynamic>{
+      'role': role,
+      'active': active,
+      if (email != null) 'email': email,
+    };
 
     final r = await dio.putUri(
       uri,
-      data: <String, dynamic>{'role': role, 'active': active},
+      data: body,
       options: Options(contentType: Headers.jsonContentType),
     );
 
-    if ((r.statusCode ?? 0) ~/ 100 != 2) _bad(r, 'Upsert membership');
+    if (!_ok(r)) _bad(r, 'Upsert membership');
   }
 
   Future<void> deleteUserMembership({
     required String uid,
     required String tenantId,
   }) async {
-    // HQ core route: /tenants/:tenantId/auth_users/:uid
     final uri = routes.hqDeleteUser(tenantId, uid);
-    if (kDebugMode) debugPrint('🛰️ [AllUsersService] DELETE $uri');
+    if (kDebugMode) debugPrint('🛰️ $_tag DELETE $uri');
 
     final r = await dio.deleteUri(uri);
-    final ok = (r.statusCode == 204) || ((r.statusCode ?? 0) ~/ 100 == 2);
+    final ok = (r.statusCode == 204) || _ok(r);
     if (!ok) _bad(r, 'Delete membership');
+
+    if (kDebugMode) {
+      debugPrint('🗑️ $_tag Removed $uid from tenant=$tenantId');
+    }
   }
 }

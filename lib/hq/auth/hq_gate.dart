@@ -1,8 +1,8 @@
+import 'package:afyakit/core/auth_users/widgets/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import '../base/hq_shell.dart';
-import 'hq_login_screen.dart';
 
 class HqGate extends StatelessWidget {
   const HqGate({super.key});
@@ -18,8 +18,8 @@ class HqGate extends StatelessWidget {
 
         final user = snap.data;
         if (user == null) {
-          // Not signed in → HQ login (Firebase-only)
-          return const HqLoginScreen();
+          // Not signed in → use the shared OTP login (phone + email OTP).
+          return const LoginScreen();
         }
 
         // Signed in → verify superadmin with a fresh token
@@ -57,13 +57,17 @@ class HqGate extends StatelessWidget {
   static Future<bool> _hasSuperadmin(fb.User user) async {
     final t = await user.getIdTokenResult(true); // fresh claims
     final claims = t.claims ?? const <String, dynamic>{};
-    final isSuper = claims['superadmin'] == true;
 
-    final key = '${user.uid}|$isSuper';
+    // New canonical claim name from your backend / script
+    final isSuper =
+        claims['isSuperAdmin'] == true || claims['superadmin'] == true;
+
+    final key = '${user.uid}|$isSuper|${user.phoneNumber ?? ''}';
     if (_lastLogKey != key) {
       _lastLogKey = key;
       debugPrint(
-        '🔐 [HqGate] uid=${user.uid} email=${user.email} superadmin=$isSuper',
+        '🔐 [HqGate] uid=${user.uid} phone=${user.phoneNumber} '
+        'email=${user.email} isSuperAdmin=$isSuper',
       );
     }
     return isSuper;

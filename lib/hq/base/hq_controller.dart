@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'hq_state.dart';
 
 // auth controllers/services (delegation only)
-import 'package:afyakit/hq/auth/hq_login_controller.dart';
+import 'package:afyakit/hq/auth/hq_auth_controller.dart';
 import 'package:afyakit/hq/auth/hq_auth_service.dart';
 
 final hqControllerProvider = StateNotifierProvider<HqController, HqState>(
@@ -28,21 +28,23 @@ class HqController extends StateNotifier<HqState> {
   void setTab(int index) => state = state.copyWith(tabIndex: index);
   void setUserSearch(String q) => state = state.copyWith(userSearch: q.trim());
 
-  // ── Account menu (delegates to auth controller)
+  // ── Account menu (delegates to HQ auth controller)
   Future<void> handleAccountAction(
     HqAccountAction action, {
     required BuildContext context,
   }) async {
     switch (action) {
       case HqAccountAction.refreshClaims:
-        await ref.read(hqLoginControllerProvider.notifier).refreshClaims();
+        await ref
+            .read(hqAuthControllerProvider.notifier)
+            .refreshGate(signOutIfDenied: false);
         _banner('Claims refreshed');
         break;
 
       case HqAccountAction.signOut:
         final ok = await _confirmSignOut(context);
         if (ok == true) {
-          await ref.read(hqLoginControllerProvider.notifier).signOut();
+          await ref.read(hqAuthControllerProvider.notifier).signOut();
         }
         break;
     }

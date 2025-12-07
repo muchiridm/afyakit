@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory_view/screens/stock_screen.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';
 import 'package:afyakit/core/reports/screens/reports_dashboard_screen.dart';
-import 'package:afyakit/shared/widgets/admin_dashboard_screen.dart';
+import 'package:afyakit/shared/widgets/screens/admin_dashboard_screen.dart';
 
 class HomeActionButtons extends ConsumerWidget {
   const HomeActionButtons({super.key});

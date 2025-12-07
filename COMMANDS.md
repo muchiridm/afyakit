@@ -34,6 +34,7 @@ make run-web-all
 make run afyakit
 make run danabtmc
 make run dawapap
+make run rpmoc
 
 # or all (will iterate TENANTS and try to run on device/emulator)
 

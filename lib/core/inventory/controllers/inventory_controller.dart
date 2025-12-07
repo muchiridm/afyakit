@@ -3,7 +3,8 @@
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';

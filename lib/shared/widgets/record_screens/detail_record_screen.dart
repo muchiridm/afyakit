@@ -1,4 +1,4 @@
-import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:flutter/material.dart';
 
 class DetailRecordScreen extends StatelessWidget {

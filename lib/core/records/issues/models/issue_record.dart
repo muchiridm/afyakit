@@ -214,10 +214,15 @@ class IssueRecord {
     uid: requestedByUid,
   );
 
+  // lib/core/records/issues/models/issue_record.dart
+
   String? get approvedByLabel {
-    if (approvedByUid == null &&
-        (approvedByName == null || approvedByName!.trim().isEmpty) &&
-        (approvedByEmail == null || approvedByEmail!.trim().isEmpty)) {
+    final hasName = approvedByName != null && approvedByName!.trim().isNotEmpty;
+    final hasEmail =
+        approvedByEmail != null && approvedByEmail!.trim().isNotEmpty;
+
+    // If we don't have a human-readable snapshot, don't show the field at all.
+    if (!hasName && !hasEmail) {
       return null;
     }
 
@@ -229,9 +234,13 @@ class IssueRecord {
   }
 
   String? get actionedByLabel {
-    if (actionedByUid == null &&
-        (actionedByName == null || actionedByName!.trim().isEmpty) &&
-        (actionedByEmail == null || actionedByEmail!.trim().isEmpty)) {
+    // Only show a label if we have a human-readable snapshot.
+    final hasName = actionedByName != null && actionedByName!.trim().isNotEmpty;
+    final hasEmail =
+        actionedByEmail != null && actionedByEmail!.trim().isNotEmpty;
+
+    if (!hasName && !hasEmail) {
+      // Old behaviour: no name/email → no "Actioned By" row.
       return null;
     }
 

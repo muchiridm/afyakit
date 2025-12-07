@@ -10,7 +10,8 @@ import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/issue_submission.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/core/records/issues/services/issue_validator.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {

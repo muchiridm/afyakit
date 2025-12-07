@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 
 import '../catalog_components/catalog_header.dart';
 import '../catalog_components/search_bar.dart';

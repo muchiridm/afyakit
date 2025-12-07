@@ -1,4 +1,5 @@
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/core/records/issues/models/issue_entry.dart';
 import 'package:afyakit/core/records/issues/models/view_models/cart_item_models.dart';
@@ -10,7 +11,6 @@ import 'package:afyakit/core/batches/models/batch_record.dart';
 
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 
 import 'package:flutter/material.dart';

@@ -1,9 +1,9 @@
 // lib/core/item_preferences/providers/item_preferences_providers.dart
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/core/item_preferences/item_preferences_service.dart';
 import 'package:afyakit/core/item_preferences/utils/item_preference_field.dart';

@@ -4,6 +4,7 @@ import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/lifecycle/issue_lifecycle_controller.dart';
 import 'package:afyakit/core/records/issues/controllers/action/issue_policy_engine.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
@@ -14,7 +15,7 @@ import 'package:afyakit/core/records/issues/extensions/issue_action_x.dart';
 import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/core/records/issues/services/issue_batch_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+
 import 'package:afyakit/core/auth_users/utils/user_format.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {

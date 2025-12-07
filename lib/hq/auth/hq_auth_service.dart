@@ -16,27 +16,13 @@ class HqAuthService {
   bool get isSignedIn => currentUser != null;
 
   // ── Actions ────────────────────────────────────────────────────────────────
-  Future<fb.UserCredential> signIn({
-    required String email,
-    required String password,
-  }) async {
-    final e = email.trim();
-    final cred = await _auth.signInWithEmailAndPassword(
-      email: e,
-      password: password,
-    );
-    if (kDebugMode) debugPrint('🔐 [HQ] signed in as: ${cred.user?.email}');
-    // Force fresh claims immediately after sign-in
-    await cred.user?.getIdTokenResult(true);
-    return cred;
-  }
 
+  /// HQ now uses the shared OTP login flow (phone + email OTP).
+  /// This service only handles claims and sign-out.
   Future<void> signOut() => _auth.signOut();
 
-  Future<void> sendPasswordReset(String email) =>
-      _auth.sendPasswordResetEmail(email: email.trim());
-
   // ── Claims helpers ────────────────────────────────────────────────────────
+
   Future<Map<String, dynamic>> getClaims({bool force = true}) async {
     final u = _auth.currentUser;
     if (u == null) return const {};
@@ -46,7 +32,13 @@ class HqAuthService {
 
   Future<bool> hasSuperadmin({bool force = true}) async {
     final claims = await getClaims(force: force);
-    return claims['superadmin'] == true;
+    final isSuper =
+        claims['isSuperAdmin'] == true || claims['superadmin'] == true;
+
+    if (kDebugMode) {
+      debugPrint('🔐 [HQ] superadmin=$isSuper claims=$claims');
+    }
+    return isSuper;
   }
 
   /// Simple hydration used on cold start.
@@ -62,12 +54,17 @@ class HqAuthService {
   }
 
   // ── Errors ────────────────────────────────────────────────────────────────
+  //
+  // Still useful for any FirebaseAuthExceptions that bubble up
+  // (network, disabled account, etc.), even though HQ itself
+  // doesn’t do email/password anymore.
+
   static String friendlyError(fb.FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
       case 'wrong-password':
-      case 'invalid-credential': // web often uses this for bad creds
-        return 'Incorrect email or password.';
+      case 'invalid-credential': // often used as "bad creds"
+        return 'Incorrect credentials.';
       case 'invalid-email':
         return 'That email address looks invalid.';
       case 'too-many-requests':
@@ -77,7 +74,7 @@ class HqAuthService {
       case 'network-request-failed':
         return 'Network error. Check your connection.';
       case 'operation-not-allowed':
-        return 'Email/password sign-in is disabled for this project.';
+        return 'This sign-in method is disabled for this project.';
       default:
         return 'Auth error (${e.code}).';
     }
@@ -88,7 +85,7 @@ class HqAuthService {
       case 'user-not-found':
       case 'wrong-password':
       case 'invalid-credential':
-        return 'Incorrect email or password.';
+        return 'Incorrect credentials.';
       case 'invalid-email':
         return 'That email address looks invalid.';
       case 'too-many-requests':
@@ -98,7 +95,7 @@ class HqAuthService {
       case 'network-request-failed':
         return 'Network error. Check your connection.';
       case 'operation-not-allowed':
-        return 'Email/password sign-in is disabled for this project.';
+        return 'This sign-in method is disabled for this project.';
       default:
         return 'Auth error ($code).';
     }

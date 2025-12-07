@@ -1,8 +1,8 @@
 import 'package:afyakit/core/records/deliveries/screens/delivery_records_screen.dart';
 import 'package:afyakit/core/records/issues/widgets/screens/issue_records_screen.dart';
 import 'package:afyakit/core/records/reorder/screens/reorder_records_screen.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 import 'package:flutter/material.dart';
 
 class RecordsDashboardScreen extends StatelessWidget {

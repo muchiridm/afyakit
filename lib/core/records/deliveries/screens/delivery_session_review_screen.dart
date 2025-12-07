@@ -1,11 +1,11 @@
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_engine.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 import 'package:afyakit/core/records/deliveries/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/core/records/deliveries/models/delivery_review_summary.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:afyakit/core/batches/providers/batch_records_stream_provider.dart';
 import 'package:flutter/material.dart';

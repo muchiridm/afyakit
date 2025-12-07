@@ -1,3 +1,4 @@
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,9 +10,9 @@ import 'package:afyakit/core/inventory/models/items/medication_item.dart';
 import 'package:afyakit/core/inventory/providers/item_stream_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
-import 'package:afyakit/shared/widgets/records/detail_record_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+
+import 'package:afyakit/shared/widgets/record_screens/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';

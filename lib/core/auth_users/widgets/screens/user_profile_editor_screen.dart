@@ -8,8 +8,8 @@ import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_users/extensions/staff_role_x.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';

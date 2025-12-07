@@ -4,6 +4,7 @@ import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/form/issue_form_engine.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/inventory_snapshot.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +14,6 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/services/issue_service.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:uuid/uuid.dart';
 

@@ -47,15 +47,22 @@ class IssueLifecycleEngine {
       actor.name.trim().isNotEmpty ? actor.name : actor.uid;
 
   // ── transitions ──────────────────────────────────────────────
+
   Future<Result<IssueOutcome>> approve(IssueRecord r) async {
     final guard = _requireStatus(r, IssueStatus.pending, 'approve');
     if (guard.isErr) return Err(guard.errorOrNull()!);
 
+    final now = DateTime.now();
+
     final updated = r.copyWith(
       status: IssueStatus.approved.name,
-      dateApproved: DateTime.now(),
+      dateApproved: now,
+      // snapshot approver
       approvedByUid: actor.uid,
+      approvedByName: _actorName,
+      approvedByEmail: null, // email intentionally not in display chain
     );
+
     return Ok(IssueOutcome(updated, '✅ Request approved.'));
   }
 
@@ -63,11 +70,17 @@ class IssueLifecycleEngine {
     final guard = _requireStatus(r, IssueStatus.pending, 'reject');
     if (guard.isErr) return Err(guard.errorOrNull()!);
 
+    final now = DateTime.now();
+
     final updated = r.copyWith(
       status: IssueStatus.rejected.name,
-      dateApproved: DateTime.now(),
+      dateApproved: now,
+      // snapshot “rejected by” using same approver fields
       approvedByUid: actor.uid,
+      approvedByName: _actorName,
+      approvedByEmail: null,
     );
+
     return Ok(IssueOutcome(updated, '🚫 Request rejected.'));
   }
 

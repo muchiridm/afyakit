@@ -2,17 +2,27 @@
 
 import 'dart:async';
 
+import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/hq/tenants/services/tenant_profile_loader.dart';
 
 import 'package:afyakit/hq/tenants/dtos/team_member_dto.dart';
 import 'package:afyakit/hq/users/all_users/all_user_model.dart';
+
+const _defaultTenant = 'afyakit';
+
+/// Base API origin used for tenant session repair.
+/// Example: https://api.afyakit.app/api
+const _apiBase = String.fromEnvironment(
+  'API_BASE',
+  defaultValue: 'https://api.afyakit.app/api',
+);
 
 /// ─────────────────────────────────────────────────────────────
 /// Loader singleton
@@ -20,6 +30,16 @@ import 'package:afyakit/hq/users/all_users/all_user_model.dart';
 final _profileLoaderProvider = Provider.autoDispose<TenantProfileLoader>((ref) {
   final db = FirebaseFirestore.instance;
   return TenantProfileLoader(db);
+});
+
+final tenantSlugProvider = Provider<String>((ref) {
+  // 1) CLI / build-time override
+  const fromDefine = String.fromEnvironment('TENANT', defaultValue: '');
+  if (fromDefine.trim().isNotEmpty) {
+    return fromDefine.trim().toLowerCase();
+  }
+
+  return resolveTenantSlug(defaultSlug: _defaultTenant);
 });
 
 /// ─────────────────────────────────────────────────────────────
@@ -53,7 +73,6 @@ final tenantProfileProvider = Provider<TenantProfile>((ref) {
   );
 });
 
-/// Live stream version (v2)
 final tenantProfileStreamProvider = StreamProvider.autoDispose<TenantProfile>((
   ref,
 ) {
@@ -62,7 +81,6 @@ final tenantProfileStreamProvider = StreamProvider.autoDispose<TenantProfile>((
   return loader.stream(slug);
 });
 
-/// Smaller rebuild surface — display name
 final tenantDisplayNameProvider = Provider.autoDispose<String>((ref) {
   final slug = ref.watch(tenantSlugProvider);
   final asyncProfile = ref.watch(tenantProfileStreamProvider);
@@ -77,7 +95,7 @@ final tenantDisplayNameProvider = Provider.autoDispose<String>((ref) {
 });
 
 /// ─────────────────────────────────────────────────────────────
-/// /tenants collection → v2 TenantProfile list
+/// /tenants collection streams
 /// ─────────────────────────────────────────────────────────────
 final tenantsStreamProvider = StreamProvider.autoDispose<List<TenantProfile>>((
   ref,
@@ -175,9 +193,73 @@ final tenantAdminsStreamProvider = StreamProvider.autoDispose
     });
 
 /// ─────────────────────────────────────────────────────────────
-/// Firestore tenant-guard → lightweight, no auth_session_service
-/// Ensures there is a signed-in Firebase user and a fresh token
-/// for the current tenant slug.
+/// Internal: sync backend claims for the current tenant if needed.
+/// This calls: POST $_apiBase/<tenant>/auth/session/sync-claims
+/// which is whitelisted by SESSION_PATH_RE in the API.
+/// ─────────────────────────────────────────────────────────────
+Future<void> _ensureTenantClaims({
+  required String tenantSlug,
+  required fb.User fbUser,
+}) async {
+  try {
+    // 1) Read current claims.
+    final tokenResult = await fbUser.getIdTokenResult();
+    final claims = tokenResult.claims ?? const <String, dynamic>{};
+
+    final claimTenant = (claims['tenant'] ?? claims['tenantId'])?.toString();
+
+    if (claimTenant == tenantSlug) {
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [guard] claims already match tenant=$tenantSlug (claimTenant=$claimTenant)',
+        );
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '⚠️ [guard] tenant claim mismatch, pathTenant=$tenantSlug, '
+        'claimTenant=$claimTenant → attempting sync-claims…',
+      );
+    }
+
+    // 2) Call backend to repair claims.
+    final dio = Dio(BaseOptions(baseUrl: _apiBase));
+
+    final idToken = await fbUser.getIdToken(); // fresh enough for auth header
+    final url = '/$tenantSlug/auth/session/sync-claims';
+
+    await dio.post(
+      url,
+      options: Options(headers: {'Authorization': 'Bearer $idToken'}),
+    );
+
+    // 3) Force-refresh token so new claims are visible locally.
+    await fbUser.getIdToken(true);
+
+    if (kDebugMode) {
+      final after = await fbUser.getIdTokenResult();
+      final newTenant = (after.claims?['tenant'] ?? after.claims?['tenantId'])
+          ?.toString();
+      debugPrint(
+        '✅ [guard] sync-claims OK for tenant=$tenantSlug (new claimTenant=$newTenant)',
+      );
+    }
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint(
+        '❌ [guard] sync-claims failed for tenant=$tenantSlug: $e\n$st',
+      );
+    }
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// Firestore + API tenant-guard
+/// Ensures there is a signed-in Firebase user, a fresh token,
+/// and (as best as we can) repaired tenant claims to match the
+/// current tenant slug.
 /// ─────────────────────────────────────────────────────────────
 final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   ref,
@@ -201,13 +283,11 @@ final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   }
 
   try {
-    // Force a fresh token; backend / security rules will see latest claims.
+    // Force a fresh token first.
     await fbUser.getIdToken(true);
-    if (kDebugMode) {
-      debugPrint(
-        '✅ [guard] token refreshed for tenant=$tenantSlug (uid=${fbUser.uid})',
-      );
-    }
+
+    // Then ensure the backend session claims match this tenant.
+    await _ensureTenantClaims(tenantSlug: tenantSlug, fbUser: fbUser);
   } catch (e, st) {
     if (kDebugMode) {
       debugPrint('❌ [guard] failed to refresh token for $tenantSlug: $e\n$st');

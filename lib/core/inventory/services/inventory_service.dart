@@ -2,13 +2,13 @@
 
 import 'dart:convert';
 
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/api/afyakit/providers.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
 import 'package:afyakit/core/inventory/models/items/base_inventory_item.dart';

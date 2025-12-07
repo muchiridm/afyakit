@@ -1,11 +1,11 @@
 // lib/core/inventory_locations/providers/inventory_location_provider.dart
 
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/api/afyakit/providers.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
@@ -41,12 +41,20 @@ class InventoryLocationController
   Future<InventoryLocationService> _makeService() async {
     final tenantId = ref.read(tenantSlugProvider);
     final client = await ref.read(afyakitClientProvider.future);
-    // 👇 POSitional ctor: InventoryLocationService(AfyaKitRoutes, Dio)
+    // 👇 Positional ctor: InventoryLocationService(AfyaKitRoutes, Dio)
     return InventoryLocationService(AfyaKitRoutes(tenantId), client.dio);
+  }
+
+  /// Ensure token + backend claims are aligned with the current tenant
+  Future<void> _ensureTenantReady() async {
+    await ref.read(firestoreTenantGuardProvider.future);
   }
 
   Future<void> _load() async {
     try {
+      // 🔐 Make sure claimTenant == tenantSlug before calling API
+      await _ensureTenantReady();
+
       final svc = await _service;
       final locations = await svc.getLocations(type: type);
       if (!_isAlive) return;
@@ -72,6 +80,8 @@ class InventoryLocationController
     }
 
     try {
+      await _ensureTenantReady();
+
       final svc = await _service;
       await svc.addLocation(name: trimmedName, type: type);
       await _load();
@@ -82,6 +92,8 @@ class InventoryLocationController
 
   Future<void> delete(String id) async {
     try {
+      await _ensureTenantReady();
+
       final svc = await _service;
       await svc.deleteLocation(type: type, id: id);
       await _load();

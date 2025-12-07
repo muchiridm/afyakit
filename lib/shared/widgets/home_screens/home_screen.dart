@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/home_screen/home_action_buttons.dart';
-import 'package:afyakit/shared/widgets/home_screen/home_header.dart';
-import 'package:afyakit/shared/widgets/home_screen/latest_activity_panel.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/home_screens/home_action_buttons.dart';
+import 'package:afyakit/shared/widgets/home_screens/home_header.dart';
+import 'package:afyakit/shared/widgets/home_screens/latest_activity_panel.dart';
 
 import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/catalog/widgets/screens/catalog_screen.dart';

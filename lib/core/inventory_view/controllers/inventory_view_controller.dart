@@ -21,7 +21,6 @@ import 'package:afyakit/core/records/deliveries/controllers/delivery_session_con
 import 'package:afyakit/core/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/core/inventory_view/controllers/inventory_view_state.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 

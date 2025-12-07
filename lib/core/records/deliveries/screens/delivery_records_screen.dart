@@ -1,4 +1,5 @@
-import 'package:afyakit/shared/widgets/records/grouped_records_screen.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/shared/widgets/record_screens/grouped_records_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,7 +8,7 @@ import 'package:afyakit/core/inventory_locations/inventory_location_controller.d
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/records/deliveries/models/delivery_record.dart';
 import 'package:afyakit/core/records/deliveries/widgets/delivery_record_tile.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+
 import 'package:afyakit/core/records/deliveries/providers/delivery_records_stream_provider.dart';
 
 class DeliveryRecordsScreen extends ConsumerWidget {

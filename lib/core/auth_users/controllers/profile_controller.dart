@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/widgets/home_screen/home_screen.dart';
+import 'package:afyakit/shared/widgets/home_screens/home_screen.dart';
 
 class ProfileFormState {
   final bool loading;

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/inventory/services/inventory_repo_service.dart';
 import 'package:afyakit/core/reports/services/stock_report_service.dart';
 import 'package:afyakit/core/batches/services/batch_repo.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 final batchRepoProvider = Provider.autoDispose<BatchRepo>((_) => BatchRepo());
 

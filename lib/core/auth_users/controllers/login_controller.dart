@@ -2,7 +2,7 @@
 
 import 'package:afyakit/core/auth_users/controllers/session_controller.dart';
 import 'package:afyakit/core/auth_users/services/auth_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -48,7 +48,7 @@ class LoginState {
 }
 
 final loginControllerProvider =
-    StateNotifierProvider.autoDispose<LoginController, LoginState>((ref) {
+    StateNotifierProvider<LoginController, LoginState>((ref) {
       final tenantId = ref.watch(tenantSlugProvider);
       return LoginController(ref, tenantId);
     });
@@ -61,6 +61,7 @@ class LoginController extends StateNotifier<LoginState> {
 
   /// Reset attempt state when user switches channel.
   void resetAttempt() {
+    if (!mounted) return;
     state = state.copyWith(codeSent: false, attemptId: null);
   }
 
@@ -84,10 +85,13 @@ class LoginController extends StateNotifier<LoginState> {
       return;
     }
 
+    if (!mounted) return;
     state = state.copyWith(sending: true, codeSent: false, attemptId: null);
 
     try {
       final auth = await _ref.read(authServiceProvider(_tenantId).future);
+
+      if (!mounted) return;
 
       final res = switch (channel) {
         OtpChannel.wa => await auth.startWaOtp(phone),
@@ -97,6 +101,8 @@ class LoginController extends StateNotifier<LoginState> {
           email: trimmedEmail!,
         ),
       };
+
+      if (!mounted) return;
 
       if (res.throttled) {
         SnackService.showError('Too many attempts. Try again later.');
@@ -129,8 +135,6 @@ class LoginController extends StateNotifier<LoginState> {
           : data?.toString();
 
       if (status == 409) {
-        // Email conflict from /auth_login/email/start.
-        // Do NOT reveal the existing email to the user.
         if (kDebugMode) {
           final existingEmail = _extractExistingEmail(rawError);
           // ignore: avoid_print
@@ -154,12 +158,13 @@ class LoginController extends StateNotifier<LoginState> {
       print('Email/WA/SMS OTP start failed: $e\n$st');
       SnackService.showError('Network error while sending code');
     } finally {
+      if (!mounted) return;
       state = state.copyWith(sending: false);
     }
   }
 
   /// Verify OTP and sign in via SessionController.
-  /// Returns true on success so the UI can navigate.
+  /// Returns true on success so the UI can react (if it wants).
   Future<bool> verifyCode({
     required String phoneE164,
     required String code,
@@ -179,11 +184,13 @@ class LoginController extends StateNotifier<LoginState> {
       // ignore: avoid_print
       print(
         '[OTP][FE] LoginController.verifyCode → channel=$channel '
-        'phone=$phone code=$trimmedCode email=$trimmedEmail '
+        'phone=$phone code=$trimmedCode '
+        'email=${channel == OtpChannel.email ? trimmedEmail : null} '
         'attemptId=${state.attemptId}',
       );
     }
 
+    if (!mounted) return false;
     state = state.copyWith(verifying: true);
 
     try {
@@ -214,8 +221,6 @@ class LoginController extends StateNotifier<LoginState> {
       } else if (status == 429) {
         SnackService.showError('Too many attempts. Try again later.');
       } else if (status == 409) {
-        // EMAIL_CONFLICT from /auth_login/otp/verify.
-        // Again, do NOT reveal the existing email.
         if (kDebugMode) {
           final existingEmail = _extractExistingEmail(rawError);
           // ignore: avoid_print
@@ -239,7 +244,10 @@ class LoginController extends StateNotifier<LoginState> {
       SnackService.showError('Something went wrong signing you in');
       return false;
     } finally {
-      state = state.copyWith(verifying: false);
+      // No `return` in finally – just guard the state update.
+      if (mounted) {
+        state = state.copyWith(verifying: false);
+      }
     }
   }
 

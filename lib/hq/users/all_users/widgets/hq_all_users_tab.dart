@@ -1,8 +1,11 @@
+// lib/hq/users/all_users/hq_all_users_tab.dart
+
+import 'package:afyakit/hq/users/all_users/all_user_model.dart';
+import 'package:afyakit/hq/users/all_users/all_users_controller.dart';
+import 'package:afyakit/hq/users/all_users/widgets/user_editor_screen.dart';
+import 'package:afyakit/hq/users/all_users/widgets/user_row_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/hq/users/all_users/all_users_controller.dart';
-import 'package:afyakit/hq/users/all_users/widgets/user_row_tile.dart';
 
 class HqAllUsersTab extends ConsumerStatefulWidget {
   const HqAllUsersTab({super.key});
@@ -12,7 +15,7 @@ class HqAllUsersTab extends ConsumerStatefulWidget {
 }
 
 class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
-  final _searchCtl = TextEditingController();
+  final TextEditingController _searchCtl = TextEditingController();
 
   @override
   void initState() {
@@ -27,6 +30,14 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
   void dispose() {
     _searchCtl.dispose();
     super.dispose();
+  }
+
+  void _openEditor({AllUser? user}) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UserEditorScreen(initialUser: user),
+      ),
+    );
   }
 
   @override
@@ -47,8 +58,9 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
             child: TextField(
               controller: _searchCtl,
               onChanged: ctrl.setSearch, // controller owns debounce + load
+              keyboardType: TextInputType.text,
               decoration: InputDecoration(
-                hintText: 'Search by email…',
+                hintText: 'Search by phone or email…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: state.search.isEmpty
                     ? null
@@ -89,16 +101,7 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
                       return UserRowTile(
                         user: u,
                         membershipsMap: state.membershipsByUid[u.id],
-                        fetchMemberships: () => ctrl.fetchMemberships(u.id),
-                        onUpdateMembership: (tenantId, role, active) =>
-                            ctrl.updateMembership(
-                              u.id,
-                              tenantId,
-                              role: role,
-                              active: active,
-                            ),
-                        onRemoveMembership: (tenantId) =>
-                            ctrl.removeMembership(u.id, tenantId),
+                        onTap: () => _openEditor(user: u),
                       );
                     },
                   );
@@ -108,7 +111,11 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
           ),
         ],
       ),
-      // ❌ No more invite FAB (invite flow removed from controller/service)
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openEditor(user: null),
+        icon: const Icon(Icons.person_add),
+        label: const Text('New user'),
+      ),
     );
   }
 }

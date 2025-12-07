@@ -81,6 +81,7 @@ class AfyaKitRoutes {
   // 🧑‍💼 HQ / Global (core; superadmin-gated on server)
   // ─────────────────────────────────────────────
 
+  /// Global directory: GET /api/users
   Uri listGlobalUsers({String? tenant, String? search, int limit = 50}) =>
       _uriCore(
         'users',
@@ -91,6 +92,16 @@ class AfyaKitRoutes {
         },
       );
 
+  /// Create a global directory user: POST /api/users
+  Uri createGlobalUser() => _uriCore('users');
+
+  /// Update a global directory user: PATCH /api/users/:uid
+  Uri updateGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
+
+  /// Delete a global directory user: DELETE /api/users/:uid
+  Uri deleteGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
+
+  /// Read-only memberships for a given uid: GET /api/users/:uid/memberships
   Uri fetchUserMemberships(String uid) =>
       _uriCore('users/${_seg(uid)}/memberships');
 

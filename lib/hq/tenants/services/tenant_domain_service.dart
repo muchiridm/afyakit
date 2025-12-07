@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'package:afyakit/api/afyakit/providers.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/hq/tenants/models/domain_binding.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

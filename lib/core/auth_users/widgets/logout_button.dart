@@ -1,10 +1,10 @@
 // lib/core/auth_users/widgets/logout_button.dart
 
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_users/controllers/session_controller.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
 
 class LogoutButton extends ConsumerWidget {

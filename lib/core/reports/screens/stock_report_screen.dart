@@ -15,7 +15,7 @@ import 'package:afyakit/core/reports/widgets/stock_table/stock_table.dart';
 import 'package:afyakit/core/reports/widgets/stock_table/stock_table_footer_bar.dart';
 import 'package:afyakit/core/reports/widgets/stock_table/stock_report_tabs.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 
 class StockReportScreen extends ConsumerStatefulWidget {
   const StockReportScreen({super.key, this.showToggleViewButton = false});

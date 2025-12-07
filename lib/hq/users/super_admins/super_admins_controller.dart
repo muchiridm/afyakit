@@ -1,12 +1,12 @@
 // lib/hq/users/super_admins/super_admins_controller.dart
 import 'dart:async';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/afyakit/providers.dart'; // ✅ afyakitClientProvider
+import 'package:afyakit/api/afyakit/providers.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
