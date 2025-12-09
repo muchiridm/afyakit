@@ -1,12 +1,16 @@
 // lib/shared/widgets/screen_header.dart
 import 'package:flutter/material.dart';
-import 'package:afyakit/core/auth_users/widgets/user_badge.dart';
+import 'package:afyakit/modules/core/auth_users/widgets/user_badge.dart';
 
 class ScreenHeader extends StatelessWidget {
   final String title;
   final VoidCallback? onBack;
   final Widget? trailing;
   final bool showBack;
+
+  /// Optional leading widget (e.g. CatalogButton).
+  /// If provided, it replaces the default back-button/placeholder.
+  final Widget? leading;
 
   final bool withBackground;
   final bool backgroundFullWidth;
@@ -26,6 +30,7 @@ class ScreenHeader extends StatelessWidget {
     this.onBack,
     this.trailing,
     this.showBack = true,
+    this.leading,
     this.withBackground = true,
     this.backgroundFullWidth = true,
     this.outerPadding = const EdgeInsets.symmetric(
@@ -75,22 +80,32 @@ class ScreenHeader extends StatelessWidget {
     return backgroundFullWidth ? decorated : ClipRRect(child: decorated);
   }
 
+  // Small helper to reuse leading/back logic
+  Widget _buildLeadingSlot(BuildContext context) {
+    if (leading != null) {
+      return leading!;
+    }
+
+    if (showBack) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+      );
+    }
+
+    return const SizedBox(width: 48);
+  }
+
   // ───────────────── narrow
   Widget _buildNarrow(BuildContext context) {
-    // no title → just back + trailing + user
+    // no title → just leading/back + trailing + user
     if (!_hasTitle) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              if (showBack)
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-                )
-              else
-                const SizedBox(width: 48),
+              _buildLeadingSlot(context),
               const Spacer(),
               if (trailing != null) Flexible(child: _buildTrailingCluster()),
             ],
@@ -106,18 +121,7 @@ class ScreenHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            if (showBack)
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-              )
-            else
-              const SizedBox(width: 48),
-            const Spacer(),
-          ],
-        ),
+        Row(children: [_buildLeadingSlot(context), const Spacer()]),
         Text(
           title,
           textAlign: TextAlign.center,
@@ -150,15 +154,7 @@ class ScreenHeader extends StatelessWidget {
             constraints: BoxConstraints(minWidth: leftMinWidth),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showBack)
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-                  )
-                else
-                  const SizedBox(width: 48),
-              ],
+              children: [_buildLeadingSlot(context)],
             ),
           ),
           const Spacer(),
@@ -174,15 +170,7 @@ class ScreenHeader extends StatelessWidget {
           constraints: BoxConstraints(minWidth: leftMinWidth),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showBack)
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-                )
-              else
-                const SizedBox(width: 48),
-            ],
+            children: [_buildLeadingSlot(context)],
           ),
         ),
         const SizedBox(width: 10),

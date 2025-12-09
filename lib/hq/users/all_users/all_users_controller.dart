@@ -62,6 +62,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
 
   Future<AllUsersService> _ensureSvc() async {
     if (_svc != null) return _svc!;
+    // _ensureSvc is only called from methods that already check `mounted`
     final created = await ref.read(allUsersServiceProvider.future);
     _svc = created;
     return created;
@@ -73,6 +74,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
 
   Future<void> load({String? search, String? tenantId, int? limit}) async {
     if (!mounted) return;
+
     state = state.copyWith(
       loading: true,
       search: search ?? state.search,
@@ -83,6 +85,8 @@ class AllUsersController extends StateNotifier<AllUsersState> {
 
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return;
+
       final list = await svc.fetchAllUsers(
         tenantId: state.tenantFilter,
         search: state.search,
@@ -109,6 +113,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   // ─────────────────────────────────────────────
 
   void setSearch(String q) {
+    if (!mounted) return;
     final v = q.trim();
     state = state.copyWith(search: v);
     _debounce?.cancel();
@@ -116,14 +121,19 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   }
 
   void setTenantFilter(String? tenantId) {
+    if (!mounted) return;
     final v = (tenantId?.trim().isEmpty ?? true) ? null : tenantId!.trim();
     state = state.copyWith(tenantFilter: v);
+    // fire-and-forget; load() itself checks mounted
+    // ignore: discarded_futures
     load();
   }
 
   void setLimit(int limit) {
+    if (!mounted) return;
     final safe = limit.clamp(1, 500);
     state = state.copyWith(limit: safe);
+    // ignore: discarded_futures
     load();
   }
 
@@ -137,17 +147,20 @@ class AllUsersController extends StateNotifier<AllUsersState> {
     required String phoneNumber,
     String? displayName,
   }) async {
+    if (!mounted) return null;
+
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return null;
+
       final created = await svc.createGlobalUser(
         phoneNumber: phoneNumber,
         displayName: displayName,
       );
+      if (!mounted) return created;
 
       final items = <AllUser>[created, ...state.items];
-      if (mounted) {
-        state = state.copyWith(items: items);
-      }
+      state = state.copyWith(items: items);
 
       SnackService.showInfo('✅ User created');
       return created;
@@ -166,22 +179,25 @@ class AllUsersController extends StateNotifier<AllUsersState> {
     String? displayName,
     bool? disabled,
   }) async {
+    if (!mounted) return null;
+
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return null;
+
       final updated = await svc.updateGlobalUser(
         uid: uid,
         phoneNumber: phoneNumber,
         displayName: displayName,
         disabled: disabled,
       );
+      if (!mounted) return updated;
 
       final items = state.items
           .map((u) => u.id == updated.id ? updated : u)
           .toList(growable: false);
 
-      if (mounted) {
-        state = state.copyWith(items: items);
-      }
+      state = state.copyWith(items: items);
 
       SnackService.showInfo('✅ User updated');
       return updated;
@@ -195,9 +211,14 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   }
 
   Future<void> deleteUser(String uid) async {
+    if (!mounted) return;
+
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return;
+
       await svc.deleteGlobalUser(uid);
+      if (!mounted) return;
 
       final items = state.items
           .where((u) => u.id != uid)
@@ -207,9 +228,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
         state.membershipsByUid,
       )..remove(uid);
 
-      if (mounted) {
-        state = state.copyWith(items: items, membershipsByUid: mems);
-      }
+      state = state.copyWith(items: items, membershipsByUid: mems);
 
       SnackService.showInfo('✅ User deleted');
     } catch (e, st) {
@@ -225,22 +244,29 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   // ─────────────────────────────────────────────
 
   Future<Map<String, Map<String, Object?>>> fetchMemberships(String uid) async {
+    if (!mounted) return const {};
+
+    // Safe to read state now; if we get disposed later, we bail before any writes.
     final cached = state.membershipsByUid[uid];
     if (cached != null) return cached;
 
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return const {};
+
       final map = await svc.fetchUserMemberships(uid);
+      if (!mounted) return const {};
 
       final next = Map<String, Map<String, Map<String, Object?>>>.from(
         state.membershipsByUid,
       );
       next[uid] = map;
-      if (mounted) {
-        state = state.copyWith(membershipsByUid: next);
-      }
+
+      state = state.copyWith(membershipsByUid: next);
       return map;
     } catch (e) {
+      // If we got here because the controller was disposed mid-flight,
+      // the next `fetchMemberships` will just no-op and return {}.
       SnackService.showError('❌ Failed to load memberships: $e');
       return const {};
     }
@@ -253,8 +279,12 @@ class AllUsersController extends StateNotifier<AllUsersState> {
     required bool active,
     String? email,
   }) async {
+    if (!mounted) return;
+
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return;
+
       await svc.upsertUserMembership(
         uid: uid,
         tenantId: tenantId,
@@ -262,6 +292,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
         active: active,
         email: email,
       );
+      if (!mounted) return;
 
       final current = Map<String, Map<String, Map<String, Object?>>>.from(
         state.membershipsByUid,
@@ -278,9 +309,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
       userMems[tenantId] = patch;
       current[uid] = userMems;
 
-      if (mounted) {
-        state = state.copyWith(membershipsByUid: current);
-      }
+      state = state.copyWith(membershipsByUid: current);
 
       SnackService.showInfo('✅ Membership updated');
     } catch (e, st) {
@@ -292,9 +321,14 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   }
 
   Future<void> removeMembership(String uid, String tenantId) async {
+    if (!mounted) return;
+
     try {
       final svc = await _ensureSvc();
+      if (!mounted) return;
+
       await svc.deleteUserMembership(uid: uid, tenantId: tenantId);
+      if (!mounted) return;
 
       final current = Map<String, Map<String, Map<String, Object?>>>.from(
         state.membershipsByUid,
@@ -305,9 +339,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
       userMems.remove(tenantId);
       current[uid] = userMems;
 
-      if (mounted) {
-        state = state.copyWith(membershipsByUid: current);
-      }
+      state = state.copyWith(membershipsByUid: current);
 
       SnackService.showInfo('✅ Membership removed');
     } catch (e, st) {

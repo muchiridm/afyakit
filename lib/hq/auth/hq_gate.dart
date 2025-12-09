@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth_users/widgets/screens/login_screen.dart';
+import 'package:afyakit/modules/core/auth_users/widgets/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 

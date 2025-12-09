@@ -1,16 +1,16 @@
 // lib/core/admin/screens/admin_dashboard_screen.dart
 
 import 'package:afyakit/api/afyakit/tests/api_test_screen.dart';
-import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
 
-import 'package:afyakit/core/backup/backup_screen.dart';
-import 'package:afyakit/core/import/importer/import_inventory_screen.dart';
-import 'package:afyakit/core/item_preferences/widgets/item_preferences_screen.dart';
-import 'package:afyakit/core/inventory_locations/screens/inventory_locations_screen.dart';
+import 'package:afyakit/modules/core/backup/backup_screen.dart';
+import 'package:afyakit/modules/inventory/import/importer/import_inventory_screen.dart';
+import 'package:afyakit/modules/inventory/preferences/widgets/item_preferences_screen.dart';
+import 'package:afyakit/modules/inventory/locations/screens/inventory_locations_screen.dart';
 
-import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_users/widgets/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/core/auth_users/widgets/permission_guard.dart';
+import 'package:afyakit/modules/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/modules/core/auth_users/widgets/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/modules/core/auth_users/widgets/permission_guard.dart';
 
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';

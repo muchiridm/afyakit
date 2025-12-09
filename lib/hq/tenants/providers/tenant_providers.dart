@@ -2,7 +2,10 @@
 
 import 'dart:async';
 
-import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
+import 'package:afyakit/hq/domains/services/domain_tenant_resolver.dart';
+import 'package:afyakit/hq/tenants/models/tenant_assets.dart';
+import 'package:afyakit/hq/tenants/models/tenant_details.dart';
+import 'package:afyakit/hq/tenants/models/tenant_features.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;

@@ -7,7 +7,7 @@ import 'package:afyakit/hq/tenants/extensions/tenant_status_x.dart';
 import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_profile_stream_provider.dart';
 import 'package:afyakit/hq/tenants/widgets/tenant_profile_editor.dart';
-import 'package:afyakit/hq/tenants/widgets/tenant_branding_screen.dart';
+import 'package:afyakit/hq/branding/widgets/tenant_branding_screen.dart';
 
 class HqTenantsTab extends ConsumerWidget {
   const HqTenantsTab({super.key});

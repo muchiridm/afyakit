@@ -12,7 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/tenants/services/tenant_resolver.dart';
+import 'package:afyakit/hq/domains/services/domain_tenant_resolver.dart';
 
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 

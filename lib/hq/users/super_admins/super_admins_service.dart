@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:afyakit/api/afyakit/routes.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
-import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
 
 /// Network layer for HQ superadmin features + cross-tenant user ops.
 ///
@@ -133,7 +133,7 @@ class SuperAdminsService {
     }).toList();
 
     if (kDebugMode) {
-      final who = out.map((s) => s.email ?? s.uid).join(', ');
+      final who = out.map((s) => s.phoneNumber ?? s.email ?? s.uid).join(', ');
       debugPrint('👥 $_tag returning ${out.length}: [$who]');
     }
     return out;

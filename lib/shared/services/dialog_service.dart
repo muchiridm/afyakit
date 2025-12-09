@@ -1,7 +1,7 @@
 // lib/shared/services/dialog_service.dart
 
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/core/inventory_locations/inventory_location.dart';
+import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
 import 'package:flutter/material.dart';
 
 /// Centralized dialogs with a safe context fallback.

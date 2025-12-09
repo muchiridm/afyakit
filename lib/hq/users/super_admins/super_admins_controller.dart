@@ -11,7 +11,7 @@ import 'package:afyakit/api/afyakit/routes.dart';
 import 'package:afyakit/hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
 
-import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/hq/base/hq_controller.dart';
@@ -73,7 +73,6 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
     if (_svc != null) return;
     final tenantId = ref.read(tenantSlugProvider);
     final client = await ref.read(afyakitClientProvider.future);
-    // ✅ New DI: SuperAdminsService(dio, routes)
     _svc = SuperAdminsService(dio: client.dio, routes: AfyaKitRoutes(tenantId));
   }
 
@@ -142,11 +141,13 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
     required String uid,
     String? label,
   }) async {
+    final who = label ?? uid;
+
     final ok = await DialogService.confirm(
       context: context,
       title: 'Demote superadmin?',
       content:
-          'Remove superadmin privileges for ${label ?? uid}? This can be re-enabled later.',
+          'Remove superadmin privileges for $who? This can be re-enabled later.',
       confirmText: 'Demote',
       confirmColor: Colors.redAccent,
     );

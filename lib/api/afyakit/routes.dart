@@ -2,7 +2,7 @@
 
 import 'package:afyakit/api/afyakit/config.dart';
 import 'package:afyakit/api/shared/uri.dart';
-import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
+import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
 
 class AfyaKitRoutes {
   final String tenantId;

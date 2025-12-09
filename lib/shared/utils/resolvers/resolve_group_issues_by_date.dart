@@ -1,4 +1,4 @@
-import 'package:afyakit/core/records/issues/models/issue_record.dart';
+import 'package:afyakit/modules/inventory/records/issues/models/issue_record.dart';
 
 Map<int, Map<int, Map<int, List<IssueRecord>>>> resolveGroupIssuesByDate(
   List<IssueRecord> issues,

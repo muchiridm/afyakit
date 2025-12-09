@@ -1,11 +1,11 @@
 // lib/features/src/delivery_sessions/utils/resolve_item_name.dart
 
 import 'package:collection/collection.dart';
-import 'package:afyakit/core/batches/models/batch_record.dart';
-import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
-import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
-import 'package:afyakit/core/inventory/models/items/medication_item.dart';
-import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
+import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
+import 'package:afyakit/modules/inventory/items/models/items/consumable_item.dart';
+import 'package:afyakit/modules/inventory/items/models/items/equipment_item.dart';
+import 'package:afyakit/modules/inventory/items/models/items/medication_item.dart';
+import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
 
 String resolveItemName(
   BatchRecord b,

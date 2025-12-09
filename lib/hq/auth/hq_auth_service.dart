@@ -1,27 +1,36 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final hqAuthServiceProvider = Provider<HqAuthService>((_) => HqAuthService());
 
 class HqAuthService {
   final fb.FirebaseAuth _auth;
+
   HqAuthService({fb.FirebaseAuth? auth})
     : _auth = auth ?? fb.FirebaseAuth.instance;
 
+  // ────────────────────────────────────────────────────────────
   // Streams & basics
+  // ────────────────────────────────────────────────────────────
+
   Stream<fb.User?> get authChanges => _auth.idTokenChanges();
   fb.User? get currentUser => _auth.currentUser;
   bool get isSignedIn => currentUser != null;
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  // Actions
+  // ────────────────────────────────────────────────────────────
 
   /// HQ now uses the shared OTP login flow (phone + email OTP).
   /// This service only handles claims and sign-out.
   Future<void> signOut() => _auth.signOut();
 
-  // ── Claims helpers ────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  // Claims helpers
+  // ────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getClaims({bool force = true}) async {
     final u = _auth.currentUser;
@@ -30,6 +39,13 @@ class HqAuthService {
     return Map<String, dynamic>.from(t.claims ?? const {});
   }
 
+  /// Returns true if the current user has superadmin claims.
+  ///
+  /// This only checks Firebase custom claims:
+  ///   - `superadmin: true` or
+  ///   - `isSuperAdmin: true`
+  ///
+  /// No dev-email shortcuts, no local overrides.
   Future<bool> hasSuperadmin({bool force = true}) async {
     final claims = await getClaims(force: force);
     final isSuper =
@@ -53,11 +69,9 @@ class HqAuthService {
     }
   }
 
-  // ── Errors ────────────────────────────────────────────────────────────────
-  //
-  // Still useful for any FirebaseAuthExceptions that bubble up
-  // (network, disabled account, etc.), even though HQ itself
-  // doesn’t do email/password anymore.
+  // ────────────────────────────────────────────────────────────
+  // Error helpers
+  // ────────────────────────────────────────────────────────────
 
   static String friendlyError(fb.FirebaseAuthException e) {
     switch (e.code) {

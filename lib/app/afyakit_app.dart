@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/hq/tenants/services/web_branding.dart';
+import 'package:afyakit/hq/branding/services/web_branding.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/core/auth_users/widgets/auth_gate.dart';
+import 'package:afyakit/modules/core/auth_users/widgets/auth_gate.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

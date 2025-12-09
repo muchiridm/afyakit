@@ -1,6 +1,6 @@
 // lib/core/auth_users/widgets/screens/splash_screen.dart
 import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_logo_providers.dart';
+import 'package:afyakit/hq/branding/providers/tenant_logo_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

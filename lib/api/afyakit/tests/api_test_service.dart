@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
+import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
 import 'package:dio/dio.dart';
 import 'package:afyakit/api/afyakit/client.dart';
 
