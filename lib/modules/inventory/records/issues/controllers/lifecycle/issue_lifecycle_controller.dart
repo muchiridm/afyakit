@@ -4,7 +4,7 @@ import 'package:afyakit/modules/inventory/records/deliveries/utils/delivery_lock
 import 'package:afyakit/modules/inventory/records/issues/controllers/lifecycle/issue_lifecycle_engine.dart';
 import 'package:afyakit/modules/inventory/records/issues/models/audit_actor.dart';
 import 'package:afyakit/modules/inventory/records/issues/models/issue_outcome.dart';
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/modules/inventory/records/issues/models/issue_record.dart';
 import 'package:afyakit/modules/inventory/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/modules/inventory/records/issues/services/issue_service.dart';
@@ -15,8 +15,8 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
-import 'package:afyakit/modules/core/auth_users/utils/user_format.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 class IssueLifecycleController {

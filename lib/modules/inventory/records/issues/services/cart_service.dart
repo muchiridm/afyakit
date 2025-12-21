@@ -1,5 +1,5 @@
 import 'package:afyakit/modules/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/modules/inventory/records/issues/models/issue_entry.dart';
 import 'package:afyakit/modules/inventory/records/issues/models/view_models/cart_item_models.dart';

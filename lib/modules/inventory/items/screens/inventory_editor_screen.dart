@@ -1,4 +1,4 @@
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/modules/inventory/items/controllers/forms/consumable_controller.dart';
 import 'package:afyakit/modules/inventory/items/controllers/forms/equipment_controller.dart';
 import 'package:afyakit/modules/inventory/items/controllers/forms/medication_controller.dart';
@@ -11,7 +11,7 @@ import 'package:afyakit/modules/inventory/items/models/items/consumable_item.dar
 import 'package:afyakit/modules/inventory/items/models/items/equipment_item.dart';
 import 'package:afyakit/modules/inventory/items/models/items/medication_item.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 import 'package:flutter/material.dart';

@@ -1,14 +1,14 @@
 // lib/features/inventory_view/widgets/batch_row.dart (or wherever it lives)
 
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
 import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/modules/inventory/views/controllers/inventory_view_controller.dart';
 import 'package:afyakit/modules/inventory/views/utils/inventory_mode_enum.dart';
 import 'package:afyakit/modules/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
-import 'package:afyakit/modules/core/auth_users/extensions/auth_user_x.dart';
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

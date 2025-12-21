@@ -1,6 +1,6 @@
 // lib/shared/widgets/home_screens/staff/staff_latest_activity_panel.dart
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/shared/models/activity_entry.dart';
 import 'package:flutter/material.dart';

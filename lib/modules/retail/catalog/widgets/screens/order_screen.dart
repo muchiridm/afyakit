@@ -1,6 +1,6 @@
 // lib/core/catalog/widgets/screens/quote_screen.dart
 
-import 'package:afyakit/modules/core/auth_users/guards/require_auth.dart';
+import 'package:afyakit/core/auth_user/guards/require_auth.dart';
 import 'package:afyakit/modules/retail/catalog/controllers/order_controller.dart';
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';

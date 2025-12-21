@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/modules/inventory/preferences/utils/item_preference_field.dart';
 import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
 

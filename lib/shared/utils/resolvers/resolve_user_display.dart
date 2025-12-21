@@ -1,6 +1,6 @@
 // lib/shared/utils/resolvers/resolve_user_display.dart
 
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 
 /// Returns the best user-facing identifier:
 /// displayName → email → phone → uid

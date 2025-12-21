@@ -1,6 +1,6 @@
 // lib/core/records/issues/models/audit_actor.dart
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/modules/core/auth_users/utils/user_format.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 /// Lightweight snapshot of "who did what" at the time of an action.

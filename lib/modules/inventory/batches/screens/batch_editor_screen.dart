@@ -1,5 +1,5 @@
 // lib/features/batches/screens/batch_editor_screen.dart
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/modules/inventory/batches/controllers/batch_args.dart';
 import 'package:afyakit/modules/inventory/batches/controllers/batch_controller.dart';
 import 'package:afyakit/modules/inventory/batches/controllers/batch_state.dart';

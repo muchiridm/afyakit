@@ -1,10 +1,10 @@
 // lib/core/item_preferences/item_preference_controller_provider.dart
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/core/api/afyakit/routes.dart';
 
 import 'package:afyakit/modules/inventory/preferences/utils/item_preference_field.dart';
 import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';

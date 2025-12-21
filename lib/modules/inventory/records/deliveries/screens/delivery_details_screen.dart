@@ -1,4 +1,4 @@
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

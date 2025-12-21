@@ -1,9 +1,9 @@
 // lib/core/inventory/controllers/inventory_controller.dart
 
-import 'package:afyakit/api/afyakit/providers.dart'; // afyakitClientProvider
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
+import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/shared/services/snack_service.dart';

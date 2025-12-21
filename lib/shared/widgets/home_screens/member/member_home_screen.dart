@@ -1,6 +1,6 @@
 // lib/shared/widgets/home_screens/member/member_home_screen.dart
 
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/shared/widgets/home_screens/member/member_home_header.dart';
 import 'package:afyakit/shared/widgets/home_screens/member/member_latest_activity_panel.dart';
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';

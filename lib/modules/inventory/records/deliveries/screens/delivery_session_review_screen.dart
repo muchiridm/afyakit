@@ -1,6 +1,6 @@
 import 'package:afyakit/modules/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/modules/inventory/records/deliveries/controllers/delivery_session_engine.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 import 'package:afyakit/modules/inventory/records/deliveries/controllers/delivery_session_controller.dart';

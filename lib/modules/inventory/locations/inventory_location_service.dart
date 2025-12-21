@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
 import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
 

@@ -1,7 +1,7 @@
 // lib/shared/widgets/home_screens/staff/staff_home_screen.dart
 
-import 'package:afyakit/modules/core/auth_users/extensions/staff_role_x.dart';
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/shared/widgets/home_screens/staff/staff_home_header.dart';
 import 'package:afyakit/shared/widgets/home_screens/staff/staff_latest_activity_panel.dart';
 import 'package:afyakit/shared/widgets/home_screens/staff/staff_home_actions.dart';

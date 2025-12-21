@@ -1,9 +1,9 @@
 // lib/shared/providers/batch_service.dart
 import 'dart:convert';
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/modules/core/auth_users/providers/token_provider.dart';
+import 'package:afyakit/core/auth/providers/token_provider.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

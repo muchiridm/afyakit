@@ -1,11 +1,11 @@
 // lib/shared/widgets/home_screens/member/member_home_header.dart
 
+import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/shared/widgets/home_screens/common/catalog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/modules/core/auth_users/widgets/logout_button.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/widgets/logout_button.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 
 class MemberHomeHeader extends ConsumerWidget {

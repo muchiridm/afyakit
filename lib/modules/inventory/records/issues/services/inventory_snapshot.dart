@@ -1,6 +1,6 @@
 // lib/features/records/issues/services/inventory_snapshot.dart
 import 'package:afyakit/modules/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/modules/inventory/batches/providers/batch_records_stream_provider.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/api/dawaindex/providers.dart';
+import 'package:afyakit/core/api/dawaindex/providers.dart';
 
 import 'controllers/catalog_controller.dart';
 import 'catalog_models.dart';

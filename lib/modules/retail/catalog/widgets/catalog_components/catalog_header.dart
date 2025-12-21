@@ -2,11 +2,11 @@
 
 import 'dart:ui' show lerpDouble;
 
-import 'package:afyakit/modules/core/auth_users/guards/require_auth.dart';
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
-import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
-import 'package:afyakit/hq/branding/providers/tenant_logo_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
+import 'package:afyakit/core/branding/providers/tenant_logo_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/shared/widgets/home_screens/tenant_home_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,9 +49,7 @@ class CatalogHeader extends ConsumerWidget {
 
     final logoUrl = ref.watch(tenantPrimaryLogoUrlProvider);
 
-    final Widget logo = (logoUrl == null)
-        ? const SizedBox(height: 90)
-        : Image.network(logoUrl, height: 90, fit: BoxFit.contain);
+    final Widget logo = Image.network(logoUrl, height: 90, fit: BoxFit.contain);
 
     return Container(
       width: double.infinity,

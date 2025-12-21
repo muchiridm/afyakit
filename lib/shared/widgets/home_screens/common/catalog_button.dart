@@ -1,7 +1,8 @@
 // lib/shared/widgets/home_screens/common/catalog_button.dart
 
+import 'package:afyakit/core/tenancy/models/feature_keys.dart';
+import 'package:afyakit/core/tenancy/widgets/feature_gate.dart';
 import 'package:afyakit/modules/retail/catalog/widgets/screens/catalog_screen.dart';
-import 'package:afyakit/hq/tenants/widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 
 class CatalogButton extends StatelessWidget {
@@ -10,7 +11,7 @@ class CatalogButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FeatureGate(
-      feature: 'catalog',
+      featureKey: FeatureKeys.retailCatalog,
       fallback: const SizedBox.shrink(),
       child: IconButton(
         tooltip: 'Catalog',

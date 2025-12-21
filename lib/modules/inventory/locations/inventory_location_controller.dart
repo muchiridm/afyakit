@@ -1,14 +1,14 @@
 // lib/core/inventory_locations/providers/inventory_location_provider.dart
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/api/afyakit/providers.dart';
-import 'package:afyakit/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/providers.dart';
+import 'package:afyakit/core/api/afyakit/routes.dart';
 
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
-import 'package:afyakit/modules/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
 
 import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
 import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';

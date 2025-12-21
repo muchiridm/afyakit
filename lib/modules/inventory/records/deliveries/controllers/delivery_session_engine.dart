@@ -1,8 +1,8 @@
 // lib/core/records/deliveries/controllers/delivery_session_engine.dart
 
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/modules/core/auth_users/providers/current_user_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

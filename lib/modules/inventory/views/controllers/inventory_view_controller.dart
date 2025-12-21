@@ -1,12 +1,12 @@
 // lib/features/inventory_view/controllers/inventory_view_controller.dart
 import 'package:afyakit/modules/inventory/batches/controllers/batch_args.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/modules/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/modules/core/auth_users/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
 
 import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/modules/inventory/batches/providers/batch_records_stream_provider.dart';

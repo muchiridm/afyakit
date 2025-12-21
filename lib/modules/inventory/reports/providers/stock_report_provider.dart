@@ -1,6 +1,6 @@
 // lib/features/reports/providers/stock_report_provider.dart
 import 'dart:async';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

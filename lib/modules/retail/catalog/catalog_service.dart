@@ -3,7 +3,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:afyakit/api/dawaindex/client.dart';
+import 'package:afyakit/core/api/dawaindex/client.dart';
 
 import 'catalog_models.dart';
 

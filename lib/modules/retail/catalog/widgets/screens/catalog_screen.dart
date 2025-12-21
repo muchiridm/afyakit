@@ -1,6 +1,6 @@
 // lib/core/catalog/widgets/screens/catalog_screen.dart
 
-import 'package:afyakit/api/dawaindex/providers.dart';
+import 'package:afyakit/core/api/dawaindex/providers.dart';
 import 'package:afyakit/modules/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/modules/retail/catalog/catalog_models.dart';
 import 'package:afyakit/modules/retail/catalog/catalog_providers.dart';

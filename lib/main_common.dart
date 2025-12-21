@@ -1,6 +1,6 @@
 // lib/main_common.dart
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/hq/domains/services/domain_tenant_resolver.dart';
+import 'package:afyakit/core/domains/services/domain_tenant_resolver.dart';
 
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 
