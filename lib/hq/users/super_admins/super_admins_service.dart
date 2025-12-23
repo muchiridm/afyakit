@@ -7,9 +7,6 @@ import 'package:afyakit/api/afyakit/routes.dart';
 
 import 'package:afyakit/hq/users/super_admins/super_admin_model.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
-import 'package:afyakit/shared/utils/normalize/normalize_email.dart';
-import 'package:afyakit/shared/types/dtos.dart';
 
 /// Network layer for HQ superadmin features + cross-tenant user ops.
 ///
@@ -28,17 +25,6 @@ class SuperAdminsService {
   // ────────────────────────────────────────────────────────────
   // Helpers
   // ────────────────────────────────────────────────────────────
-
-  Map<String, dynamic> _asMap(Object? raw) {
-    if (raw is Map<String, dynamic>) return raw;
-    if (raw is Map) return Map<String, dynamic>.from(raw);
-    try {
-      final enc = jsonEncode(raw);
-      final dec = jsonDecode(enc);
-      if (dec is Map) return Map<String, dynamic>.from(dec);
-    } catch (_) {}
-    return const <String, dynamic>{};
-  }
 
   /// Accepts:
   ///  - top-level array: `[ {...}, {...} ]`
@@ -216,47 +202,6 @@ class SuperAdminsService {
       debugPrint('✅ $_tag Loaded ${users.length} users for tenant=$tenantId');
     }
     return users;
-  }
-
-  /// POST /api/tenants/:tenantId/auth_users/invite
-  Future<InviteResult> inviteUserForTenant({
-    required String targetTenantId,
-    String? email,
-    String? phoneNumber,
-    UserRole role = UserRole.staff,
-    String? brandBaseUrl,
-    bool forceResend = false,
-  }) async {
-    final cleanedEmail = (email ?? '').trim();
-    final cleanedPhone = (phoneNumber ?? '').trim();
-    if (cleanedEmail.isEmpty && cleanedPhone.isEmpty) {
-      throw ArgumentError('Either email or phoneNumber must be provided.');
-    }
-
-    final payload = <String, Object?>{
-      if (cleanedEmail.isNotEmpty) 'email': EmailHelper.normalize(cleanedEmail),
-      if (cleanedPhone.isNotEmpty) 'phoneNumber': cleanedPhone,
-      'role': role.wire,
-      if ((brandBaseUrl ?? '').trim().isNotEmpty)
-        'brandBaseUrl': brandBaseUrl!.trim(),
-      if (forceResend) 'forceResend': true,
-    };
-
-    final r = await dio.postUri(
-      routes.hqInviteUser(targetTenantId),
-      data: payload,
-      options: Options(contentType: _json),
-    );
-    if (!_ok(r)) _bad(r, 'Invite user');
-
-    if (kDebugMode) {
-      debugPrint(
-        '⭐ $_tag Invited into $targetTenantId as ${role.wire}'
-        '${forceResend ? ' (resend)' : ''}',
-      );
-    }
-
-    return InviteResult.fromJson(_asMap(r.data));
   }
 
   /// DELETE /api/tenants/:tenantId/auth_users/:uid

@@ -1,4 +1,6 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+// lib/core/records/deliveries/providers/active_delivery_session_provider.dart
+
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/deliveries/models/active_temp_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
@@ -6,6 +8,8 @@ import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 
 /// Emits the **latest open** temp session for the signed-in user, or null.
 /// Reactive to both tenantId and current user changes.
+///
+/// NOTE: `enteredByEmail` in Firestore now stores the user's WhatsApp number.
 final activeDeliverySessionProvider =
     StreamProvider.autoDispose<ActiveTempSession?>((ref) {
       final tenantId = ref.watch(tenantSlugProvider);
@@ -13,8 +17,9 @@ final activeDeliverySessionProvider =
 
       return userAsync.when(
         data: (user) {
-          final email = (user?.email ?? '').trim().toLowerCase();
-          if (tenantId.isEmpty || email.isEmpty) {
+          // Use WhatsApp number (E.164) as identity key
+          final waNumber = (user?.phoneNumber ?? '').trim();
+          if (tenantId.isEmpty || waNumber.isEmpty) {
             // Emit a single null so downstream UI won’t get “stuck”.
             return Stream<ActiveTempSession?>.value(null);
           }
@@ -23,7 +28,7 @@ final activeDeliverySessionProvider =
               .collection('tenants')
               .doc(tenantId)
               .collection('delivery_records_temp')
-              .where('enteredByEmail', isEqualTo: email)
+              .where('enteredByEmail', isEqualTo: waNumber)
               .where('isFinalized', isEqualTo: false)
               .limit(10); // scan a few; no composite index required
 
@@ -50,7 +55,7 @@ final activeDeliverySessionProvider =
             return ActiveTempSession(
               deliveryId: id,
               enteredByEmail:
-                  (best['enteredByEmail'] as String?)?.trim() ?? email,
+                  (best['enteredByEmail'] as String?)?.trim() ?? waNumber,
               enteredByName: (best['enteredByName'] as String?)?.trim(),
               lastStoreId: (best['lastStoreId'] as String?)?.trim(),
               lastSource: (best['lastSource'] as String?)?.trim(),

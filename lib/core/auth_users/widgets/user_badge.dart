@@ -1,11 +1,11 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+// lib/core/auth_users/widgets/user_badge.dart
+
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/core/auth_users/widgets/screens/user_profile_editor_screen.dart';
-
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 class UserBadge extends ConsumerWidget {
@@ -13,10 +13,7 @@ class UserBadge extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
-    final meAsync = ref.watch(
-      currentAuthUserProvider,
-    ); // <— canonical current user
+    final meAsync = ref.watch(currentUserProvider); // canonical current user
 
     return meAsync.when(
       loading: () => const SizedBox(
@@ -30,15 +27,19 @@ class UserBadge extends ConsumerWidget {
       ),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
+
+        final displayName = user.displayLabel(); // unified resolver
+        final roleLabel = staffRoleLabel(user); // NEW: derive from staffRoles
+
         return _buildBadge(
           context,
-          displayName: user.displayLabel(), // <— unified resolver
-          roleLabel: roleLabel(user.role.toString()),
+          displayName: displayName,
+          roleLabel: roleLabel,
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => UserProfileEditorScreen(tenantId: tenantId),
+                builder: (_) => const UserProfileEditorScreen(),
               ),
             );
           },
@@ -101,6 +102,4 @@ class UserBadge extends ConsumerWidget {
       ),
     );
   }
-
-  /// Turns enums like `UserRole.admin` or raw strings like `admin` into `Admin`.
 }

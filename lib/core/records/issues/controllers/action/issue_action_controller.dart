@@ -1,6 +1,6 @@
 // lib/features/records/issues/controllers/issue_action_controller.dart
 
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/lifecycle/issue_lifecycle_controller.dart';
 import 'package:afyakit/core/records/issues/controllers/action/issue_policy_engine.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -15,6 +15,7 @@ import 'package:afyakit/core/records/issues/models/issue_record.dart';
 import 'package:afyakit/core/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/core/records/issues/services/issue_batch_service.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantSlugProvider);
@@ -29,9 +30,13 @@ final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   }
 
   if (kDebugMode) {
+    final primaryRole = staffRoleLabel(user); // "Member" or highest staff role
+    final staffRolesStr = user.staffRoles.isEmpty
+        ? '-'
+        : user.staffRoles.map((r) => r.name).join(', ');
     debugPrint(
       '[IssueActionController] init tenant=$tenantId '
-      'user=${user.uid} role=${user.role.name}',
+      'user=${user.uid} role=$primaryRole staffRoles=[$staffRolesStr]',
     );
   }
 
@@ -136,8 +141,12 @@ class IssueActionController {
     final actions = policy.actionsFor(user: user, record: record);
 
     if (kDebugMode) {
+      final primaryRole = staffRoleLabel(user);
+      final staffRolesStr = user.staffRoles.isEmpty
+          ? '-'
+          : user.staffRoles.map((r) => r.name).join(', ');
       debugPrint(
-        '[Actions] resolve user=${user.uid} role=${user.role.name} '
+        '[Actions] resolve user=${user.uid} role=$primaryRole staffRoles=[$staffRolesStr] '
         'issue=${record.id} status=${record.status} '
         'from=${record.fromStore} to=${record.toStore} '
         'stores=${allStores.length} '

@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
 import 'package:afyakit/core/inventory_view/utils/inventory_mode_enum.dart';

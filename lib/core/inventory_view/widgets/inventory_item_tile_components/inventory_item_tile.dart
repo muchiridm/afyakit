@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_view/widgets/inventory_item_tile_components/inventory_tile_header.dart';
@@ -136,7 +136,7 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
     final isStockOut = widget.mode.isStockOut;
 
     for (final b in widget.batches) {
-      final canEdit = isStockIn && (user?.canEditBatch(b) ?? false);
+      final canEdit = isStockIn && (user?.canManageBatch(b) ?? false);
       final canSelect =
           isStockOut; // ← ✅ Always show quantity adjust in Stock Out
 

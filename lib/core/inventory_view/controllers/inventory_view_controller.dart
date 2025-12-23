@@ -204,16 +204,19 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
     // Read once (no rebuilds here).
     final session = ds.readState();
 
-    final enteredByName = (user.displayName.trim().isNotEmpty)
+    // Prefer displayName, fall back to WhatsApp number
+    final enteredByName = user.displayName.trim().isNotEmpty
         ? user.displayName.trim()
-        : user.email.trim();
-    final enteredByEmail = user.email.trim();
+        : user.phoneNumber.trim();
+
+    // Backwards-compat: param is still named enteredByEmail, but value is WA number
+    final enteredByPhone = user.phoneNumber.trim();
 
     // Ensure there’s an active session (engine will resume or start new).
     if (!session.isActive) {
       await ds.ensureActive(
         enteredByName: enteredByName,
-        enteredByEmail: enteredByEmail,
+        enteredByEmail: enteredByPhone,
         source: '', // no source yet; engine ignores empty
         storeId: null, // provide one if you already know it
       );

@@ -14,7 +14,9 @@ import 'package:afyakit/shared/types/result.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/utils/user_format.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 class IssueLifecycleController {
@@ -32,45 +34,69 @@ class IssueLifecycleController {
     required this.currentUser,
   }) : service = IssueService(tenantId),
        batchService = IssueBatchService(tenantId: tenantId, ref: ref) {
-    // Seed engine with a reasonable initial actor (will be refreshed per action).
+    // Seed engine with a reasonable initial actor (WA-first identity).
     final actorName = resolveUserDisplay(
       displayName: currentUser.displayName,
-      email: currentUser.email,
+      email: '', // 👈 de-prioritise email completely
       phone: currentUser.phoneNumber,
       uid: currentUser.uid,
     );
+
+    final primaryRole = staffRoleLabel(currentUser);
+    final staffRolesStr = currentUser.staffRoles.isEmpty
+        ? '-'
+        : currentUser.staffRoles.map((r) => r.name).join(', ');
+
     _engine = IssueLifecycleEngine(
       issueService: service,
       batchService: batchService,
       actor: AuditActor(
         uid: currentUser.uid,
         name: actorName,
-        role: currentUser.role.name,
+        // Audit trail friendly label ("Member" or highest staff role)
+        role: primaryRole,
       ),
     );
 
     if (kDebugMode) {
       debugPrint(
         '[Lifecycle] init tenant=$tenantId user=${currentUser.uid} '
-        'role=${currentUser.role.name} actorName="$actorName"',
+        'role=$primaryRole staffRoles=[$staffRolesStr] actorName="$actorName"',
       );
     }
   }
 
-  // Get the freshest actor (name: displayName → email → phone → uid)
-  void _refreshActor() {
-    final u = ref.read(currentUserValueProvider) ?? currentUser;
+  // Get the freshest actor (name: displayName → WhatsApp → uid)
+  Future<void> _refreshActor() async {
+    final u = ref.read(currentUserValueProvider);
+
+    if (u == null) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Lifecycle] _refreshActor: no current user, skipping actor update',
+        );
+      }
+      return;
+    }
+
     final actorName = resolveUserDisplay(
       displayName: u.displayName,
-      email: u.email,
+      email: '', // 👈 keep email out of the display chain
       phone: u.phoneNumber,
       uid: u.uid,
     );
-    _engine.actor = AuditActor(uid: u.uid, name: actorName, role: u.role.name);
+
+    final primaryRole = staffRoleLabel(u);
+    final staffRolesStr = u.staffRoles.isEmpty
+        ? '-'
+        : u.staffRoles.map((r) => r.name).join(', ');
+
+    _engine.actor = AuditActor(uid: u.uid, name: actorName, role: primaryRole);
 
     if (kDebugMode) {
       debugPrint(
-        '[Lifecycle] actor refreshed: uid=${u.uid} name="$actorName" role=${u.role.name}',
+        '[Lifecycle] actor refreshed: uid=${u.uid} name="$actorName" '
+        'role=$primaryRole staffRoles=[$staffRolesStr]',
       );
     }
   }
@@ -80,11 +106,12 @@ class IssueLifecycleController {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> approve(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] approve ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Approve this request?')) return;
+
     final res = await _engine.approve(record);
     res.fold(
       ok: (out) async {
@@ -96,11 +123,12 @@ class IssueLifecycleController {
   }
 
   Future<void> reject(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] reject ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Reject this request?')) return;
+
     final res = await _engine.reject(record);
     res.fold(
       ok: (out) async {
@@ -112,11 +140,12 @@ class IssueLifecycleController {
   }
 
   Future<void> cancel(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] cancel ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Cancel this request?')) return;
+
     final res = await _engine.cancel(record);
     res.fold(
       ok: (out) async {
@@ -128,11 +157,12 @@ class IssueLifecycleController {
   }
 
   Future<void> markAsIssued(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] issue ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Mark as issued?')) return;
+
     try {
       final res = await _engine.markAsIssued(context, record);
       res.fold(
@@ -151,11 +181,12 @@ class IssueLifecycleController {
   }
 
   Future<void> markAsReceived(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] receive ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Confirm stock received?')) return;
+
     try {
       final res = await _engine.markAsReceived(record);
       res.fold(
@@ -174,11 +205,12 @@ class IssueLifecycleController {
   }
 
   Future<void> markAsDisposed(BuildContext context, IssueRecord record) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] dispose ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Dispose these items?')) return;
+
     try {
       final res = await _engine.markAsDisposed(context, record);
       res.fold(
@@ -201,11 +233,12 @@ class IssueLifecycleController {
     IssueRecord record,
     String reason,
   ) async {
-    _refreshActor();
+    await _refreshActor();
     debugPrint(
       '[Lifecycle] dispense ENTER id=${record.id} status=${record.status}',
     );
     if (!await _confirm(context, 'Dispense these items?')) return;
+
     try {
       final res = await _engine.markAsDispensed(context, record, reason);
       res.fold(
@@ -231,6 +264,7 @@ class IssueLifecycleController {
     final rec = out.record;
     final path = 'tenants/$tenantId/issues/${rec.id}';
     debugPrint('[Write] apply id=${rec.id} newStatus=${rec.status} path=$path');
+
     try {
       await batchService.applyStatusUpdate(context, rec, out.message);
       debugPrint('[Write] applied id=${rec.id} newStatus=${rec.status}');

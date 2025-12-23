@@ -1,4 +1,6 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+// lib/features/inventory_view/widgets/batch_row.dart (or wherever it lives)
+
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
@@ -50,7 +52,10 @@ class BatchRow extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         final isStockOut = mode.isStockOut;
-        final canEdit = user?.canEditBatch(batch) ?? false;
+
+        // 🔧 changed here: use canManageBatch instead of canEditBatch
+        final canEdit = user?.canManageBatch(batch) ?? false;
+
         final canModifyQty = isStockOut || canEdit;
         final isExpired = _isBatchExpired(batch);
         final storeName = resolveLocationName(batch.storeId, stores, []);

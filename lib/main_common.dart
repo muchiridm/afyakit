@@ -36,8 +36,7 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
     persistenceEnabled: true,
   );
 
-  final invite = _extractInviteFromUri(Uri.base);
-
+  // Resolve tenant slug (v2)
   final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
   BootLog.d('Using v2 tenant: $slug');
 
@@ -47,12 +46,8 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
         tenantSlugProvider.overrideWithValue(slug),
         authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
       ],
-      child: AfyaKitApp(
-        isInviteFlow: invite != null,
-        inviteParams: invite != null
-            ? <String, String>{'tenant': slug, 'uid': invite.uid}
-            : null,
-      ),
+      // 🎯 Invite flow removed – AfyaKitApp no longer gets invite params
+      child: const AfyaKitApp(),
     ),
   );
 }
@@ -71,30 +66,6 @@ void _installGlobalErrorHandlers() {
     debugPrintStack(stackTrace: stack);
     return true; // prevent silent crash
   };
-}
-
-/// Shape for invite info
-final class _InviteInfo {
-  final String uid;
-  const _InviteInfo(this.uid);
-}
-
-/// Parse /invite/accept?uid=... from current URL on web
-_InviteInfo? _extractInviteFromUri(Uri uri) {
-  BootLog.d('Uri.base = $uri  (pathSegments=${uri.pathSegments})');
-
-  final segs = uri.pathSegments;
-  final uid = uri.queryParameters['uid'];
-  final isInviteFlow =
-      segs.length >= 2 &&
-      segs[0] == 'invite' &&
-      segs[1] == 'accept' &&
-      uid != null;
-
-  BootLog.d('isInviteFlow=$isInviteFlow uid=$uid');
-
-  if (!isInviteFlow) return null;
-  return _InviteInfo(uid);
 }
 
 /// Print current Firebase wiring so we can see what project/build we’re on.

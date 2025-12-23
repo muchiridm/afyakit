@@ -213,29 +213,6 @@ class AllUsersController extends StateNotifier<AllUsersState> {
     }
   }
 
-  /// HQ-level invite: creates/ensures Firebase Auth user and membership.
-  Future<void> inviteUser({required String email, required String role}) async {
-    final trimmed = email.trim();
-    if (trimmed.isEmpty) {
-      SnackService.showError('❌ Email is required');
-      return;
-    }
-
-    try {
-      final svc = await _ensureSvc();
-      await svc.inviteUser(email: trimmed, role: role);
-
-      SnackService.showInfo('✅ Invite sent to $trimmed');
-      // Optionally refresh the list so the new user shows up
-      await refresh();
-    } catch (e, st) {
-      if (kDebugMode) {
-        debugPrint('🧨 AllUsers.inviteUser failed: $e\n$st');
-      }
-      SnackService.showError('❌ Failed to invite user: $e');
-    }
-  }
-
   // ── background hydrator for legacy users ─────────────────────
   void _hydrateMissingMemberships(List<AllUser> items) {
     // fire-and-forget; errors are already surfaced inside fetchMemberships

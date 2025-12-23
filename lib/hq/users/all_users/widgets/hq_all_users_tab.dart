@@ -29,27 +29,6 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
     super.dispose();
   }
 
-  void _openInviteSheet(AllUsersController ctrl) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: _InviteUserSheet(
-          onSubmit: (email, role) async {
-            await ctrl.inviteUser(email: email, role: role);
-            if (mounted) {
-              Navigator.of(context).pop();
-              await ctrl.refresh();
-            }
-          },
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(allUsersControllerProvider);
@@ -129,105 +108,7 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.person_add),
-        label: const Text('Invite User'),
-        onPressed: () => _openInviteSheet(ctrl),
-      ),
-    );
-  }
-}
-
-class _InviteUserSheet extends StatefulWidget {
-  const _InviteUserSheet({required this.onSubmit});
-
-  final Future<void> Function(String email, String role) onSubmit;
-
-  @override
-  State<_InviteUserSheet> createState() => _InviteUserSheetState();
-}
-
-class _InviteUserSheetState extends State<_InviteUserSheet> {
-  final _emailCtl = TextEditingController();
-  String _role = 'client';
-  bool _submitting = false;
-
-  @override
-  void dispose() {
-    _emailCtl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSubmit() async {
-    final email = _emailCtl.text.trim();
-    if (email.isEmpty) return;
-
-    setState(() => _submitting = true);
-    try {
-      await widget.onSubmit(email, _role);
-    } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-      ).copyWith(top: 16, bottom: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Invite User', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _emailCtl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              hintText: 'user@example.com',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _role,
-            decoration: const InputDecoration(
-              labelText: 'Role',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'owner', child: Text('Owner')),
-              DropdownMenuItem(value: 'admin', child: Text('Admin')),
-              DropdownMenuItem(value: 'manager', child: Text('Manager')),
-              DropdownMenuItem(value: 'staff', child: Text('Staff')),
-              DropdownMenuItem(value: 'client', child: Text('Client')),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _role = value);
-            },
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton.icon(
-              icon: _submitting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(_submitting ? 'Inviting…' : 'Send Invite'),
-              onPressed: _submitting ? null : _handleSubmit,
-            ),
-          ),
-        ],
-      ),
+      // ❌ No more invite FAB (invite flow removed from controller/service)
     );
   }
 }

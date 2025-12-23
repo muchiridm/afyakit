@@ -1,6 +1,6 @@
 // lib/core/records/issues/controllers/form/issue_form_controller.dart
 
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/issues/controllers/form/issue_form_engine.dart';
 import 'package:afyakit/core/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/core/records/issues/services/inventory_snapshot.dart';
@@ -15,7 +15,7 @@ import 'package:afyakit/core/records/issues/services/issue_service.dart';
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
 import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:uuid/uuid.dart'; // 👈 NEW
+import 'package:uuid/uuid.dart';
 
 final issueFormControllerProvider =
     StateNotifierProvider.autoDispose<IssueFormController, IssueFormState>(
@@ -25,8 +25,8 @@ final issueFormControllerProvider =
 class IssueFormController extends SafeStateNotifier<IssueFormState> {
   final Ref ref;
 
-  // 👇 Single stable key per screen/session to prevent dupes on double-click
-  final String _requestKey = const Uuid().v4(); // 👈 NEW
+  /// Single stable key per screen/session to prevent dupes on double-click.
+  final String _requestKey = const Uuid().v4();
 
   IssueFormController(this.ref) : super(IssueFormState());
 
@@ -54,6 +54,10 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     state = state.copyWith(selectedIssue: record);
   }
 
+  // ────────────────────────────────────────────
+  // Submit multi-cart → one issue per store
+  // ────────────────────────────────────────────
+
   Future<void> submit(BuildContext context) async {
     final cartState = ref.read(multiCartProvider);
     final user = ref.read(currentUserProvider).asData?.value;
@@ -70,29 +74,34 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     }
 
     state = state.copyWith(isSubmitting: true);
+
     try {
+      // Snapshot of inventory at submit time
       final snap = readInventorySnapshot(ref);
 
-      final tenantId = ref.read(tenantSlugProvider);
-      final engine = IssueFormEngine(IssueService(tenantId));
+      // Use shared engine (which already knows the tenant/service)
+      final engine = ref.read(issueFormEngineProvider);
 
       final result = await engine.submitMultiCart(
-        userId: user.uid,
+        requester: user, // 👈 full AuthUser
         cartState: cartState,
         batches: snap.batches,
         meds: snap.meds,
         cons: snap.cons,
         equips: snap.equips,
-        requestKeyBase: _requestKey, // 👈 NOW VALID
+        requestKeyBase: _requestKey, // 👈 stable, per-screen key
       );
 
       if (result.allSuccess) {
         ref.read(multiCartProvider.notifier).clearAll();
         SnackService.showSuccess('✅ All issue requests submitted!');
-        if (context.mounted) Navigator.of(context).pop();
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
       } else {
         SnackService.showError('⚠️ Some submissions failed.');
         if (result.storeErrors.isNotEmpty) {
+          // Show the first error detail as a follow-up
           SnackService.showError(result.storeErrors.values.first);
         }
       }
@@ -100,6 +109,10 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
       state = state.copyWith(isSubmitting: false);
     }
   }
+
+  // ────────────────────────────────────────────
+  // Legacy list loader (dashboard/history)
+  // ────────────────────────────────────────────
 
   Future<void> loadIssuedRecords() async {
     if (!mounted) return;

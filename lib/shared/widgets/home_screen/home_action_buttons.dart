@@ -1,4 +1,6 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+// lib/shared/widgets/home_screen/home_action_buttons.dart
+
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/core/auth_users/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
@@ -15,17 +17,30 @@ class HomeActionButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserValueProvider);
-    if (user == null) return const SizedBox.shrink();
+    // AsyncValue<AuthUser?> → AuthUser?
+    final userAsync = ref.watch(currentUserProvider);
+    final AuthUser? user = userAsync.valueOrNull;
+
+    // DEBUG: see what the model actually has
+    userAsync.whenData((u) {
+      debugPrint('AUTH DEBUG → uid=${u?.uid}');
+      debugPrint(
+        'AUTH DEBUG → staffRoles=${u?.staffRoles.map((r) => r.wire).toList()}',
+      );
+      debugPrint(
+        'AUTH DEBUG → isAdmin=${u?.isAdmin} '
+        'canAccessAdminPanel=${u?.canAccessAdminPanel}',
+      );
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 600;
 
         // Order of groups/rows. Each inner list is rendered together.
-        // "hq" shows only for super admins via `allowed`.
+        // "hq" row is effectively hidden (no mapping in actionsMap).
         final buttonPairs = [
-          ['hq'], // 👈 HQ row (hidden if not super admin)
+          ['hq'], // reserved / hidden row
           ['admin', 'reports'],
           ['stockIn', 'stockOut'],
           ['records'],
@@ -36,9 +51,15 @@ class HomeActionButtons extends ConsumerWidget {
             .map((pair) {
               return pair
                   .map((key) => actionsMap[key])
-                  .where(
-                    (a) => a != null && (a.allowed == null || a.allowed!(user)),
-                  )
+                  .where((a) {
+                    if (a == null) return false;
+                    if (a.allowed == null) return true;
+                    final u = user;
+                    if (u == null) {
+                      return false; // no user → no privileged actions
+                    }
+                    return a.allowed!(u);
+                  })
                   .cast<PermissionedAction>()
                   .toList();
             })
@@ -117,6 +138,7 @@ class HomeActionButtons extends ConsumerWidget {
         label: 'Records',
         destination: const RecordsDashboardScreen(),
       ),
+      // 'hq' intentionally not mapped → row becomes a no-op
     };
   }
 

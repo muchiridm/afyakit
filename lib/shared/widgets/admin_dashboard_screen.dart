@@ -1,7 +1,7 @@
 // lib/core/admin/screens/admin_dashboard_screen.dart
 
 import 'package:afyakit/api/afyakit/tests/api_test_screen.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 
 import 'package:afyakit/core/backup/backup_screen.dart';
 import 'package:afyakit/core/import/importer/import_inventory_screen.dart';
@@ -23,7 +23,7 @@ class AdminDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final meAsync = ref.watch(currentAuthUserProvider);
+    final meAsync = ref.watch(currentUserProvider);
 
     return meAsync.when(
       loading: () =>

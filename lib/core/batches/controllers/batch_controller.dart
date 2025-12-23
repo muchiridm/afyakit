@@ -1,6 +1,6 @@
 // lib/features/batches/controllers/batch_controller.dart
 import 'dart:async';
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_controller.dart';
 import 'package:afyakit/core/inventory_locations/inventory_location_type_enum.dart';
@@ -92,35 +92,39 @@ class BatchEditorController extends StateNotifier<BatchState> {
 
     _ensureDebounce?.cancel();
     _ensureDebounce = Timer(const Duration(milliseconds: 200), () async {
-      final user = await ref.read(currentUserFutureProvider.future);
-      final email = (user?.email ?? '').trim().toLowerCase();
+      final user = ref.read(currentUserValueProvider);
+      final phone = (user?.phoneNumber ?? '').trim();
       final name = (user?.displayName ?? 'Unknown').trim();
-      if (email.isEmpty) return;
+
+      if (phone.isEmpty) return;
 
       await ref
           .read(deliverySessionEngineProvider.notifier)
           .ensureActive(
             enteredByName: name,
-            enteredByEmail: email,
+            // still named enteredByEmail in engine, but we now pass WhatsApp number
+            enteredByEmail: phone,
             source: src,
             storeId: s,
           );
     });
   }
 
-  // ⬇️ NEW: immediate ensure (non-debounced) used in save()
+  // ⬇️ immediate ensure (non-debounced) used in save()
   Future<void> _ensureActiveNowIfPossible({
-    required String email,
+    required String phone,
     required String name,
   }) async {
     final s = (state.storeId ?? '').trim();
     final src = (state.source ?? '').trim();
-    if (s.isEmpty || src.isEmpty || email.isEmpty) return;
+    if (s.isEmpty || src.isEmpty || phone.isEmpty) return;
+
     await ref
         .read(deliverySessionEngineProvider.notifier)
         .ensureActive(
           enteredByName: name,
-          enteredByEmail: email,
+          // same here – backend field name unchanged
+          enteredByEmail: phone,
           source: src,
           storeId: s,
         );
@@ -149,13 +153,15 @@ class BatchEditorController extends StateNotifier<BatchState> {
 
   // ── Save via BatchEngine (engine ensures session again) ──────
   Future<bool> save() async {
-    final user = await ref.read(currentUserFutureProvider.future);
-    final email = (user?.email ?? '').trim().toLowerCase();
+    final user = ref.read(currentUserValueProvider);
+    final phone = (user?.phoneNumber ?? '').trim();
     final name = (user?.displayName ?? 'Unknown').trim();
     final uid = (user?.uid ?? 'unknown').trim();
 
-    if (email.isEmpty) {
-      SnackService.showError('You must be signed in to record deliveries.');
+    if (phone.isEmpty) {
+      SnackService.showError(
+        'You must be signed in with a WhatsApp number to record deliveries.',
+      );
       return false;
     }
 
@@ -167,7 +173,7 @@ class BatchEditorController extends StateNotifier<BatchState> {
 
     try {
       // Ensure immediately (don’t rely on the debounce timer)
-      await _ensureActiveNowIfPossible(email: email, name: name);
+      await _ensureActiveNowIfPossible(phone: phone, name: name);
 
       final engine = ref.read(batchEngineProvider(tenantId).notifier);
       await engine.save(
@@ -177,10 +183,11 @@ class BatchEditorController extends StateNotifier<BatchState> {
         existing: batch,
         enteredByUid: uid,
         enteredByName: name,
-        enteredByEmail: email,
+        // still called enteredByEmail in engine; value is WA number
+        enteredByEmail: phone,
       );
 
-      // ⬇️ NEW: remember last used to the temp session
+      // remember last used to the temp session
       await ref
           .read(deliverySessionEngineProvider.notifier)
           .rememberLastUsed(
@@ -223,7 +230,6 @@ class BatchEditorController extends StateNotifier<BatchState> {
           'This cannot be undone.',
       confirmText: 'Delete',
       cancelText: 'Cancel',
-      // confirmColor: Colors.redAccent, // DialogService already defaults to red
     );
     if (!ok) return false;
 

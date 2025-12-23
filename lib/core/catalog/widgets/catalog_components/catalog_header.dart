@@ -289,7 +289,7 @@ class _HeaderButtons extends StatelessWidget {
     final count = quoteItemCount ?? 0;
     final canViewCart = onViewQuote != null && count > 0;
 
-    String _cartLabel() {
+    String cartLabel() {
       if (count <= 0) return 'Cart';
 
       final total = quoteTotalLabel;
@@ -305,7 +305,7 @@ class _HeaderButtons extends StatelessWidget {
         FilledButton.icon(
           onPressed: canViewCart ? onViewQuote : null,
           icon: const Icon(Icons.shopping_cart_outlined),
-          label: Text(_cartLabel()),
+          label: Text(cartLabel()),
         ),
       if (onLogin != null)
         FilledButton.tonal(

@@ -1,5 +1,5 @@
 import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,9 +42,8 @@ class IssueDetailsScreen extends ConsumerWidget {
       data: (issue) {
         if (issue == null) return _buildNotFound('Issue');
 
-        final requestedBy = ref
-            .watch(userDisplayProvider(issue.requestedByUid))
-            .maybeWhen(data: (v) => v, orElse: () => issue.requestedByUid);
+        // 👉 We only have requestedByUid; use that directly
+        final requestedByDisplay = issue.requestedByUid;
 
         return asyncUser.when(
           loading: _buildLoading,
@@ -74,7 +73,7 @@ class IssueDetailsScreen extends ConsumerWidget {
               context,
               issue,
               user,
-              requestedBy,
+              requestedByDisplay,
               controller,
               asyncStores,
               fromStoreName: fromStoreName,
@@ -168,7 +167,6 @@ class IssueDetailsScreen extends ConsumerWidget {
                   runSpacing: 4,
                   children: [
                     _info('Type', entry.itemType.label),
-                    // ✅ no fallback to itemName
                     _info('Brand', entry.brand),
                     _info('Group', entry.itemGroup),
                     _info('Strength', entry.strength),

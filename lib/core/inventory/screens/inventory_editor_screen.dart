@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:afyakit/core/inventory/controllers/forms/consumable_controller.dart';
 import 'package:afyakit/core/inventory/controllers/forms/equipment_controller.dart';
 import 'package:afyakit/core/inventory/controllers/forms/medication_controller.dart';

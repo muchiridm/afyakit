@@ -14,7 +14,7 @@ import 'package:afyakit/api/afyakit/providers.dart'; // ⬅️ NEW (afyakitClien
 import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart'; // ⬅️ NEW (tenantId)
 import 'package:afyakit/core/import/importer/models/import_type_x.dart';
 import 'package:afyakit/core/import/importer/models/inventory_import_result.dart';
-import 'package:afyakit/core/auth_users/providers/auth_session/token_provider.dart';
+import 'package:afyakit/core/auth_users/providers/token_provider.dart';
 
 /// Service provider
 final inventoryImportServiceProvider = Provider<InventoryImportService>((ref) {

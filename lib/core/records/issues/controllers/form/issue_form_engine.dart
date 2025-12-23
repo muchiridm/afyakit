@@ -1,5 +1,6 @@
 // lib/core/records/issues/controllers/form/issue_form_engine.dart
 
+import 'package:afyakit/core/auth_users/models/auth_user_model.dart';
 import 'package:afyakit/core/batches/models/batch_record.dart';
 import 'package:afyakit/core/inventory/models/items/consumable_item.dart';
 import 'package:afyakit/core/inventory/models/items/equipment_item.dart';
@@ -36,14 +37,17 @@ class IssueFormEngine {
 
   /// Creates one issue per `fromStore` in the cart in an **idempotent** way.
   /// Supply a stable `requestKeyBase` (e.g., generated when the screen opens).
+  ///
+  /// `requester` is the full current user so we can snapshot
+  /// uid + name + email into the IssueRecord.
   Future<SubmitResult> submitMultiCart({
-    required String userId,
+    required AuthUser requester,
     required MultiCartState cartState,
     required List<BatchRecord> batches,
     required List<MedicationItem> meds,
     required List<ConsumableItem> cons,
     required List<EquipmentItem> equips,
-    required String requestKeyBase, // 👈 NEW
+    required String requestKeyBase,
   }) async {
     var allSuccess = true;
     final errors = <String, String>{};
@@ -55,18 +59,21 @@ class IssueFormEngine {
 
       if (cart.isEmpty) continue;
 
+      // Basic per-store validation
       if (cart.type != IssueType.dispose &&
           (cart.destination?.trim().isEmpty ?? true)) {
         allSuccess = false;
         errors[storeId] = 'Destination missing for store $storeId';
         continue;
       }
+
       if (cart.fromStore?.trim().isEmpty ?? true) {
         allSuccess = false;
         errors[storeId] = 'Origin store not set for $storeId';
         continue;
       }
 
+      // Build denormalised record + entries for this store
       final submissions = buildIssueSubmissionFromCart(
         cart: cart.batchQuantities,
         fromStore: cart.fromStore!,
@@ -77,7 +84,7 @@ class IssueFormEngine {
         type: cart.type,
         toStore: cart.destination ?? '',
         date: cart.requestDate,
-        requestedBy: userId,
+        requester: requester, // 👈 full user, not just uid
         note: cart.note,
         status: 'pending',
         approvedBy: null,
@@ -94,9 +101,11 @@ class IssueFormEngine {
       }
 
       var storeOk = true;
+
       for (var i = 0; i < submissions.length; i++) {
         final s = submissions[i];
 
+        // Per-issue validation
         final validation = IssueValidator.validateSubmission(
           record: s.record,
           entries: s.entries,
@@ -110,7 +119,7 @@ class IssueFormEngine {
         }
 
         try {
-          // 👇 Idempotent create with deterministic doc id per (screen, store, index)
+          // Idempotent create with deterministic doc id per (screen, store, index)
           final requestKey = '$requestKeyBase-$storeId-$i';
           await service.createIssueWithEntriesIdempotent(
             requestKey: requestKey,
@@ -125,7 +134,9 @@ class IssueFormEngine {
         }
       }
 
-      if (storeOk) okStores.add(storeId);
+      if (storeOk) {
+        okStores.add(storeId);
+      }
     }
 
     return SubmitResult(

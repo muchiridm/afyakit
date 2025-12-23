@@ -26,7 +26,6 @@ String resolveUserDisplay({
 extension AuthUserDisplayX on AuthUser {
   String displayLabel() => resolveUserDisplay(
     displayName: displayName,
-    email: email,
     phone: phoneNumber,
     uid: uid,
   );

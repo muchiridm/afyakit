@@ -2,18 +2,17 @@
 
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_slug_provider.dart';
 import 'package:afyakit/hq/tenants/services/tenant_profile_loader.dart';
 
-import 'package:afyakit/core/auth_users/services/auth_session_service.dart';
-
+import 'package:afyakit/hq/tenants/dtos/team_member_dto.dart';
 import 'package:afyakit/hq/users/all_users/all_user_model.dart';
-import 'package:afyakit/hq/tenants/dtos/team_member_dto.dart'; // just for the DTO shape
 
 /// ─────────────────────────────────────────────────────────────
 /// Loader singleton
@@ -24,12 +23,12 @@ final _profileLoaderProvider = Provider.autoDispose<TenantProfileLoader>((ref) {
 });
 
 /// ─────────────────────────────────────────────────────────────
-/// "tenantProfileProvider" → synchronous placeholder v2 profile
-/// callers that need the real-time one should use the stream/future
+/// Synchronous placeholder profile
+/// Callers that need live data should use the stream/future providers.
 /// ─────────────────────────────────────────────────────────────
 final tenantProfileProvider = Provider<TenantProfile>((ref) {
   final slug = ref.watch(tenantSlugProvider);
-  ref.watch(_profileLoaderProvider); // keep it alive
+  ref.watch(_profileLoaderProvider); // keep loader warm
 
   return TenantProfile(
     id: slug,
@@ -64,7 +63,6 @@ final tenantProfileStreamProvider = StreamProvider.autoDispose<TenantProfile>((
 });
 
 /// Smaller rebuild surface — display name
-/// (FIX: this provider now reads the plain profile, not .maybeWhen)
 final tenantDisplayNameProvider = Provider.autoDispose<String>((ref) {
   final slug = ref.watch(tenantSlugProvider);
   final asyncProfile = ref.watch(tenantProfileStreamProvider);
@@ -97,6 +95,7 @@ final tenantsStreamProvider = StreamProvider.autoDispose<List<TenantProfile>>((
       });
 });
 
+/// Same list but sorted alphabetically by display name
 final tenantsStreamProviderSorted =
     StreamProvider.autoDispose<List<TenantProfile>>((ref) {
       final base = ref.watch(tenantsStreamProvider.stream);
@@ -176,44 +175,42 @@ final tenantAdminsStreamProvider = StreamProvider.autoDispose
     });
 
 /// ─────────────────────────────────────────────────────────────
-/// Firestore tenant-guard → v2-only slug
+/// Firestore tenant-guard → lightweight, no auth_session_service
+/// Ensures there is a signed-in Firebase user and a fresh token
+/// for the current tenant slug.
 /// ─────────────────────────────────────────────────────────────
 final firestoreTenantGuardProvider = FutureProvider.autoDispose<void>((
   ref,
 ) async {
-  // 👇 use the API-safe slug
   final tenantSlug = ref.watch(tenantSlugProvider);
-  final ops = await ref.watch(authSessionServiceProvider(tenantSlug).future);
 
+  // Keep alive briefly to avoid re-running for every tiny consumer.
   final link = ref.keepAlive();
   Timer? purge;
-  ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
+  ref.onCancel(() {
+    purge = Timer(const Duration(seconds: 20), link.close);
+  });
   ref.onResume(() => purge?.cancel());
 
-  Future<Map<String, dynamic>> readClaims() async {
-    final claims = await ops.getClaims();
-    if (kDebugMode) debugPrint('🔎 [guard] claims after read: $claims');
-    return claims;
+  final fbUser = fb.FirebaseAuth.instance.currentUser;
+  if (fbUser == null) {
+    if (kDebugMode) {
+      debugPrint('⚠️ [guard] no Firebase user for tenant=$tenantSlug');
+    }
+    return;
   }
 
-  var claims = await readClaims();
-  final initialTenant = (claims['tenantId'] ?? claims['tenant']) as String?;
-  final isSuper = claims['superadmin'] == true;
-
-  if (!isSuper && initialTenant != tenantSlug) {
-    debugPrint(
-      '🛠 [guard] claimTenant=$initialTenant ≠ selected=$tenantSlug → syncing…',
-    );
-    await ops.syncClaimsAndRefresh();
-    claims = await readClaims();
+  try {
+    // Force a fresh token; backend / security rules will see latest claims.
+    await fbUser.getIdToken(true);
+    if (kDebugMode) {
+      debugPrint(
+        '✅ [guard] token refreshed for tenant=$tenantSlug (uid=${fbUser.uid})',
+      );
+    }
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint('❌ [guard] failed to refresh token for $tenantSlug: $e\n$st');
+    }
   }
-
-  final finalTenant = (claims['tenantId'] ?? claims['tenant']) as String?;
-  if (!isSuper && finalTenant != tenantSlug) {
-    throw StateError(
-      'Tenant claim mismatch after sync (claim=$finalTenant, selected=$tenantSlug)',
-    );
-  }
-
-  debugPrint('✅ [guard] claims ready for tenant=$tenantSlug (super=$isSuper)');
 });

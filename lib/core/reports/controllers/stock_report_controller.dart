@@ -1,6 +1,6 @@
 // 📦 Dependencies
 
-import 'package:afyakit/core/auth_users/providers/auth_session/current_user_providers.dart';
+import 'package:afyakit/core/auth_users/providers/current_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -176,7 +176,7 @@ class StockReportController {
   }
 
   Future<void> saveProposedOrder(BuildContext context, WidgetRef ref) async {
-    final user = await ref.read(currentUserFutureProvider.future);
+    final user = ref.read(currentUserValueProvider);
 
     if (user == null) {
       if (context.mounted) {

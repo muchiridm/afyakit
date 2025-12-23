@@ -1,254 +1,174 @@
 // lib/core/auth_users/models/auth_user_model.dart
-import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/shared/utils/normalize/normalize_date.dart';
-import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-
+import 'package:afyakit/core/auth_users/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth_users/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth_users/extensions/user_role_x.dart';
-import 'package:afyakit/core/auth_users/extensions/user_badge_x.dart';
+import 'package:afyakit/core/auth_users/extensions/user_type_x.dart';
 
 class AuthUser {
-  // ── auth / session fields
+  // ────────────── Identity (immutable) ──────────────
   final String uid;
-  final String email;
-  final String? phoneNumber;
-  final UserStatus status; // ✅ enum now
-  final String tenantId;
-  final DateTime? invitedOn;
-  final DateTime? activatedOn;
-  final Map<String, dynamic>? claims;
+  final String phoneNumber; // canonical Firebase identity (E.164)
+  final String tenantId; // membership scope
 
-  // ── profile fields
+  // ────────────── Status / type ──────────────
+  final UserStatus status; // active | disabled | invited
+  final UserType type; // member | staff
+
+  // ────────────── Profile / membership ──────────────
   final String displayName;
-  final UserRole role;
   final List<String> stores;
   final String? avatarUrl;
 
-  // ── professional tags (non-authoritative for permissions)
-  final List<UserBadge> badges;
+  /// Tenant-scoped email (NOT Firebase Auth email).
+  final String? email;
+
+  /// Tenant-scoped human account number (e.g. DP-000123).
+  ///
+  /// This is the member/staff account number within a tenant and can be kept
+  /// in sync with external systems (e.g. Zoho Books contact_number).
+  final String? accountNumber;
+
+  /// Normalized Firebase custom claims for this session (optional).
+  final Map<String, dynamic>? claims;
+
+  /// HQ / platform-level superadmin (optional; mostly for AfyaKit HQ).
+  final bool isSuperAdmin;
+
+  /// Multi-role staff capabilities.
+  ///
+  /// Empty list ⇒ no specific staff capabilities.
+  /// `type` controls the high-level “member vs staff” dashboard behavior.
+  final List<StaffRole> staffRoles;
 
   const AuthUser({
     required this.uid,
-    required this.email,
-    required this.status,
+    required this.phoneNumber,
     required this.tenantId,
-    this.phoneNumber,
-    this.invitedOn,
-    this.activatedOn,
-    this.claims,
+    this.status = UserStatus.active,
+    this.type = UserType.member,
     this.displayName = '',
-    this.role = UserRole.client,
     this.stores = const [],
     this.avatarUrl,
-    this.badges = const [],
+    this.email,
+    this.accountNumber,
+    this.claims,
+    this.isSuperAdmin = false,
+    this.staffRoles = const [],
   });
 
-  bool get isSuperAdmin => claims?['superadmin'] == true;
+  // ────────────── Parsing ──────────────
+
+  factory AuthUser.fromMap(Map<String, dynamic> json) {
+    final uid = (json['uid'] ?? '').toString().trim();
+    final phone = (json['phoneNumber'] ?? '').toString().trim();
+    final tenant = (json['tenantId'] ?? '').toString().trim();
+
+    if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
+    if (phone.isEmpty) throw ArgumentError('AuthUser requires phoneNumber');
+    if (tenant.isEmpty) throw ArgumentError('AuthUser requires tenantId');
+
+    // Optional claims (may be absent for most flows)
+    Map<String, dynamic>? parsedClaims;
+    final rawClaims = json['claims'];
+    if (rawClaims is Map) {
+      parsedClaims = rawClaims.map((k, v) => MapEntry(k.toString(), v));
+    }
+
+    final isSuperAdmin = json['isSuperAdmin'] == true;
+
+    // Multi-role staffRoles (string[] → StaffRole[])
+    final parsedStaffRoles = <StaffRole>[];
+    final rawStaffRoles = json['staffRoles'];
+    if (rawStaffRoles is List) {
+      for (final v in rawStaffRoles) {
+        final name = v.toString().trim();
+        final parsed = StaffRole.tryParse(name);
+        if (parsed != null) parsedStaffRoles.add(parsed);
+      }
+    }
+
+    // UserType:
+    //  - prefer explicit `type` / `userType` from backend
+    //  - otherwise derive from staffRoles / isSuperAdmin
+    UserType type;
+    final rawType = json['type'] ?? json['userType'];
+    if (rawType is String) {
+      type = UserType.fromString(rawType);
+    } else if (parsedStaffRoles.isNotEmpty || isSuperAdmin) {
+      type = UserType.staff;
+    } else {
+      type = UserType.member;
+    }
+
+    return AuthUser(
+      uid: uid,
+      phoneNumber: phone,
+      tenantId: tenant,
+      status: UserStatus.fromString(json['status'] ?? 'active'),
+      type: type,
+      displayName: (json['displayName'] ?? '').toString(),
+      stores: (json['stores'] is List)
+          ? (json['stores'] as List).whereType<String>().toList()
+          : const [],
+      avatarUrl: (json['avatarUrl'] as String?)?.trim(),
+      email: (json['email'] as String?)?.trim(),
+      accountNumber: (json['accountNumber'] as String?)?.trim(),
+      claims: parsedClaims,
+      isSuperAdmin: isSuperAdmin,
+      staffRoles: parsedStaffRoles,
+    );
+  }
+
+  factory AuthUser.fromJson(Map<String, dynamic> json) =>
+      AuthUser.fromMap(json);
+
+  // ────────────── Mutable bits only ──────────────
 
   AuthUser copyWith({
-    String? uid,
-    String? email,
-    String? phoneNumber,
     UserStatus? status,
-    String? tenantId,
-    DateTime? invitedOn,
-    DateTime? activatedOn,
-    Map<String, dynamic>? claims,
+    UserType? type,
     String? displayName,
-    UserRole? role,
     List<String>? stores,
     String? avatarUrl,
-    List<UserBadge>? badges,
+    String? email,
+    String? accountNumber,
+    Map<String, dynamic>? claims,
+    bool? isSuperAdmin,
+    List<StaffRole>? staffRoles,
   }) {
     return AuthUser(
-      uid: uid ?? this.uid,
-      email: email ?? this.email,
-      phoneNumber: phoneNumber ?? this.phoneNumber,
+      uid: uid, // immutable
+      phoneNumber: phoneNumber, // immutable
+      tenantId: tenantId, // immutable
       status: status ?? this.status,
-      tenantId: tenantId ?? this.tenantId,
-      invitedOn: invitedOn ?? this.invitedOn,
-      activatedOn: activatedOn ?? this.activatedOn,
-      claims: claims ?? this.claims,
+      type: type ?? this.type,
       displayName: displayName ?? this.displayName,
-      role: role ?? this.role,
       stores: stores ?? this.stores,
       avatarUrl: avatarUrl ?? this.avatarUrl,
-      badges: badges ?? this.badges,
+      email: email ?? this.email,
+      accountNumber: accountNumber ?? this.accountNumber,
+      claims: claims ?? this.claims,
+      isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
+      staffRoles: staffRoles ?? this.staffRoles,
     );
   }
 
-  /// Main factory.
-  ///
-  /// - `uid` → from API first, else from `fbUser`, else throw
-  /// - `email` / `phone` → API → claims → Firebase → throw if both missing
-  /// - `tenantId` → API → claims → fallbackTenantId → throw
-  factory AuthUser.fromMap(
-    String uid,
-    Map<String, dynamic> json, {
-    fb.User? fbUser,
-    String? fallbackTenantId,
-  }) {
-    final Map<String, dynamic>? claims = (json['claims'] is Map)
-        ? Map<String, dynamic>.from(json['claims'])
-        : null;
-
-    String s(dynamic v) => (v ?? '').toString().trim();
-
-    // ── UID
-    // API may send empty uid; prefer a real one from Firebase if so
-    final apiUid = s(uid);
-    final fbUid = fbUser?.uid.trim();
-    final finalUid = apiUid.isNotEmpty ? apiUid : (fbUid ?? '');
-    if (finalUid.isEmpty) {
-      throw ArgumentError('❌ AuthUser must have a uid (API or Firebase).');
-    }
-
-    // ── email / phone
-    final apiEmail = s(json['email']);
-    final claimsEmail = s(claims?['email']);
-    final fbEmail = fbUser?.email?.trim() ?? '';
-
-    final email = apiEmail.isNotEmpty
-        ? apiEmail
-        : (claimsEmail.isNotEmpty ? claimsEmail : fbEmail);
-
-    final apiPhone = s(json['phoneNumber']);
-    final claimsPhone = s(claims?['phone']).isNotEmpty
-        ? s(claims?['phone'])
-        : s(claims?['phone_number']);
-    final fbPhone = fbUser?.phoneNumber?.trim() ?? '';
-
-    final phone = apiPhone.isNotEmpty
-        ? apiPhone
-        : (claimsPhone.isNotEmpty ? claimsPhone : fbPhone);
-
-    // ── tenantId (API → claims → fallbackTenantId)
-    final apiTenant = s(json['tenantId']);
-    final claimsTenant = s(claims?['tenant']).isNotEmpty
-        ? s(claims?['tenant'])
-        : (s(claims?['tenantId']).isNotEmpty
-              ? s(claims?['tenantId'])
-              : s(claims?['tenant_id']));
-    final tenantId = apiTenant.isNotEmpty
-        ? apiTenant
-        : (claimsTenant.isNotEmpty ? claimsTenant : (fallbackTenantId ?? ''));
-
-    // ── status → enum
-    final statusStr = s(json['status']).isNotEmpty
-        ? s(json['status'])
-        : 'invited';
-    final status = UserStatus.fromString(statusStr);
-
-    // ── role (API → claims → default)
-    final rawRole = s(json['role']);
-    final claimRole = s(claims?['role']);
-    final roleStr = rawRole.isNotEmpty ? rawRole : claimRole;
-    final role = UserRole.fromString(roleStr.isNotEmpty ? roleStr : 'client');
-
-    // ── displayName
-    final displayName = s(json['displayName']).isNotEmpty
-        ? s(json['displayName'])
-        : (s(claims?['displayName']).isNotEmpty
-              ? s(claims?['displayName'])
-              : s(claims?['name']));
-
-    // ── stores (API → claims)
-    List<String> storesModel = _normalizeStores(json['stores']);
-    final List<String> storesClaims = _normalizeStores(claims?['stores']);
-    if (storesModel.isEmpty && storesClaims.isNotEmpty) {
-      storesModel = storesClaims;
-    }
-
-    // ── badges (API → claims)
-    final topBadges = badgesFromAny(json['badges']);
-    final claimBadges = badgesFromAny(claims?['badges']);
-    final badges = topBadges.isNotEmpty ? topBadges : claimBadges;
-
-    final user = AuthUser(
-      uid: finalUid,
-      email: email,
-      phoneNumber: phone.isNotEmpty ? phone : null,
-      status: status,
-      tenantId: tenantId,
-      invitedOn: normalizeDate(json['invitedOn']),
-      activatedOn: normalizeDate(json['activatedOn']),
-      claims: claims,
-      displayName: displayName,
-      role: role,
-      stores: storesModel,
-      avatarUrl: (s(json['avatarUrl']).isNotEmpty)
-          ? s(json['avatarUrl'])
-          : null,
-      badges: badges,
-    );
-
-    if (kDebugMode) {
-      debugPrint(
-        '🧩 [AuthUser.fromMap] uid=${user.uid} email=${user.email} '
-        'status=${user.status.wire} role=${user.role.name} tenant=${user.tenantId} '
-        'stores=${user.stores} badges=${user.badges.map((b) => b.name).toList()}',
-      );
-    }
-
-    // ── invariants (after merging Firebase!)
-    final hasEmail = user.email.trim().isNotEmpty;
-    final hasPhone = user.phoneNumber?.trim().isNotEmpty == true;
-    if (!hasEmail && !hasPhone) {
-      throw ArgumentError(
-        '❌ AuthUser must have at least an email or phone number (API+claims+Firebase all empty).',
-      );
-    }
-    if (user.tenantId.trim().isEmpty) {
-      throw ArgumentError(
-        '❌ AuthUser must have a valid tenantId (API/claims/fallback).',
-      );
-    }
-
-    return user;
-  }
-
-  /// Keep backward compat but now it can’t merge Firebase.
-  factory AuthUser.fromJson(Map<String, dynamic> json) =>
-      AuthUser.fromMap((json['uid'] ?? '').toString(), json);
-
-  Map<String, dynamic> toMap() {
-    return {
-      'email': email,
-      'phoneNumber': phoneNumber,
-      'status': status.wire,
-      'tenantId': tenantId,
-      'invitedOn': invitedOn?.toIso8601String(),
-      'activatedOn': activatedOn?.toIso8601String(),
-      if (claims != null) 'claims': claims,
-      'displayName': displayName,
-      'role': role.name,
-      'stores': stores,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
-      if (badges.isNotEmpty) 'badges': badges.map((b) => b.name).toList(),
-    };
-  }
-
-  static List<String> _normalizeStores(dynamic raw) {
-    if (raw == null) return const [];
-    if (raw is List) {
-      return raw
-          .whereType<String>()
-          .expand((s) => s.split(','))
-          .map((s) => s.normalize())
-          .where((s) => s.isNotEmpty)
-          .toSet()
-          .toList();
-    }
-    if (raw is String) {
-      return raw
-          .split(',')
-          .map((s) => s.normalize())
-          .where((s) => s.isNotEmpty)
-          .toSet()
-          .toList();
-    }
-    return const [];
-  }
+  // Full serialization (for caching / logging); not for PATCH.
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'phoneNumber': phoneNumber,
+    'tenantId': tenantId,
+    'status': status.wire,
+    'type': type.wire,
+    'displayName': displayName,
+    'stores': stores,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    if (email != null && email!.isNotEmpty) 'email': email,
+    if (accountNumber != null && accountNumber!.isNotEmpty)
+      'accountNumber': accountNumber,
+    if (claims != null && claims!.isNotEmpty) 'claims': claims,
+    if (isSuperAdmin) 'isSuperAdmin': true,
+    if (staffRoles.isNotEmpty)
+      'staffRoles': staffRoles.map((r) => r.name).toList(),
+  };
 }
