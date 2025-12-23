@@ -1,9 +1,11 @@
 // lib/app/hq_app.dart
+
 import 'package:flutter/material.dart';
 
-import '../modules/hq/base/auth/hq_gate.dart';
 import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
+
+import '../features/hq/base/auth/hq_gate.dart';
 
 class HqApp extends StatelessWidget {
   const HqApp({super.key});
@@ -20,7 +22,6 @@ class HqApp extends StatelessWidget {
         useMaterial3: true,
       ),
       builder: (context, child) {
-        // quick QoL: dismiss keyboard on outside tap
         return GestureDetector(
           behavior: HitTestBehavior.deferToChild,
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),

@@ -1,75 +1,81 @@
-// lib/api/afyakit/routes.dart
+// lib/core/api/afyakit/routes.dart
 
 import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/shared/uri.dart';
-import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
 class AfyaKitRoutes {
+  AfyaKitRoutes(String tenantId) : tenantId = tenantId.trim().toLowerCase();
+
+  /// Tenant slug/id used in API base: .../api/:tenantId
   final String tenantId;
-  AfyaKitRoutes(this.tenantId);
 
   // ─────────────────────────────────────────────
   // Bases
   // ─────────────────────────────────────────────
+
+  /// Tenant base: https://host/api/:tenantId
   String get _tenantBase => apiBaseUrl(tenantId);
 
-  /// Core base (trim the tenant suffix → https://host/api)
+  /// Core base: https://host/api
+  ///
+  /// We derive it by removing the final path segment if it equals [tenantId].
   String get _coreBase {
     final u = Uri.parse(_tenantBase);
-    final segs = u.pathSegments;
-    if (segs.isNotEmpty && segs.last == tenantId) {
-      final core = u.replace(pathSegments: segs.take(segs.length - 1));
-      return core.toString();
+
+    // Normalize path segments (avoid surprises from trailing slashes).
+    final segs = u.pathSegments.where((s) => s.trim().isNotEmpty).toList();
+
+    if (segs.isNotEmpty && segs.last.toLowerCase() == tenantId) {
+      final coreSegs = segs.take(segs.length - 1).toList();
+      return u.replace(pathSegments: coreSegs).toString();
     }
-    return _tenantBase; // fallback (misconfig)
+
+    // Fallback: if config already points to core, keep it.
+    return u.toString();
   }
 
   Uri _uri(String path, {Map<String, String>? query}) {
-    final uri = Uri.parse(joinBaseAndPath(_tenantBase, path));
+    final p = _cleanPath(path);
+    final uri = Uri.parse(joinBaseAndPath(_tenantBase, p));
     debugUri('URI tenant', uri);
     return query != null ? uri.replace(queryParameters: query) : uri;
   }
 
   Uri _uriCore(String path, {Map<String, String>? query}) {
-    final uri = Uri.parse(joinBaseAndPath(_coreBase, path));
+    final p = _cleanPath(path);
+    final uri = Uri.parse(joinBaseAndPath(_coreBase, p));
     debugUri('URI core', uri);
     return query != null ? uri.replace(queryParameters: query) : uri;
   }
 
-  String _seg(String s) => Uri.encodeComponent(s);
+  static String _cleanPath(String path) {
+    final p = path.trim();
+    if (p.isEmpty) return '';
+    return p.startsWith('/') ? p.substring(1) : p;
+  }
+
+  String _seg(String s) => Uri.encodeComponent(s.trim());
 
   // ─────────────────────────────────────────────
   // 🔐 Public auth (tenant-scoped; no auth header)
   // ─────────────────────────────────────────────
 
-  /// Check membership / client status (used around OTP login flows)
   Uri checkUserStatus() => _uri('auth_login/check-user-status');
-
-  /// Start WhatsApp OTP login (phone-first flow)
   Uri waStart() => _uri('auth_login/wa/start');
-
-  /// Start SMS OTP login (Termii)
   Uri smsStart() => _uri('auth_login/sms/start');
-
-  /// Start Email OTP login (phone identity, email delivery)
   Uri emailStart() => _uri('auth_login/email/start');
-
-  /// Verify OTP and get Firebase custom token (WA / SMS / Email)
   Uri otpVerify() => _uri('auth_login/otp/verify');
 
   // ─────────────────────────────────────────────
   // 👤 Auth Session (tenant-scoped; authenticated)
   // ─────────────────────────────────────────────
 
-  /// Fetch the current tenant membership profile
   Uri getCurrentUser() => _uri('auth/session/me');
-
-  /// Refresh Firebase custom claims (for elevated roles; clients are no-op)
   Uri syncClaims() => _uri('auth/session/sync-claims');
 
   // ─────────────────────────────────────────────
   // 👥 Auth Users (tenant-scoped; authenticated)
-  // Used by HQ / admin surfaces, not by client login.
   // ─────────────────────────────────────────────
 
   Uri getAllUsers() => _uri('auth_users');
@@ -81,34 +87,29 @@ class AfyaKitRoutes {
   // 🧑‍💼 HQ / Global (core; superadmin-gated on server)
   // ─────────────────────────────────────────────
 
-  /// Global directory: GET /api/users
-  Uri listGlobalUsers({String? tenant, String? search, int limit = 50}) =>
-      _uriCore(
-        'users',
-        query: {
-          if (tenant != null && tenant.isNotEmpty) 'tenantId': tenant,
-          if (search != null && search.isNotEmpty) 'search': search,
-          'limit': '$limit',
-        },
-      );
+  Uri listGlobalUsers({
+    String? tenant,
+    String? search,
+    int limit = 50,
+  }) => _uriCore(
+    'users',
+    query: {
+      if (tenant != null && tenant.trim().isNotEmpty) 'tenantId': tenant.trim(),
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      'limit': '$limit',
+    },
+  );
 
-  /// Create a global directory user: POST /api/users
   Uri createGlobalUser() => _uriCore('users');
-
-  /// Update a global directory user: PATCH /api/users/:uid
   Uri updateGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
-
-  /// Delete a global directory user: DELETE /api/users/:uid
   Uri deleteGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
 
-  /// Read-only memberships for a given uid: GET /api/users/:uid/memberships
   Uri fetchUserMemberships(String uid) =>
       _uriCore('users/${_seg(uid)}/memberships');
 
   Uri listSuperAdmins() => _uriCore('superadmins');
   Uri setSuperAdmin(String uid) => _uriCore('superadmins/${_seg(uid)}');
 
-  /// HQ: list users in a specific tenant
   Uri hqListTenantUsers(
     String targetTenantId, {
     String? search,
@@ -121,50 +122,40 @@ class AfyaKitRoutes {
     },
   );
 
-  /// HQ: upsert membership for a specific tenant/user (role/active flip)
   Uri hqUpsertUserMembership(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
-  /// HQ: remove a user from a specific tenant
   Uri hqDeleteUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
   // ─────────────────────────────────────────────
-  // 🏢 Tenants (HQ/global; NO :tenantId suffix in path)
+  // 🏢 Tenants (HQ/global; core)
   // ─────────────────────────────────────────────
 
-  Uri listTenants() => _uriCore('tenants'); // GET
-  Uri createTenant() => _uriCore('tenants'); // POST
-  Uri getTenant(String slug) => _uriCore('tenants/${_seg(slug)}'); // GET
-  Uri updateTenant(String slug) => _uriCore('tenants/${_seg(slug)}'); // PATCH
-  Uri deleteTenant(String slug) => _uriCore('tenants/${_seg(slug)}'); // DELETE
+  Uri listTenants() => _uriCore('tenants');
+  Uri createTenant() => _uriCore('tenants');
+  Uri getTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+  Uri updateTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+  Uri deleteTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
 
-  Uri setTenantStatus(String slug) =>
-      _uriCore('tenants/${_seg(slug)}/status'); // POST
-
+  Uri setTenantStatus(String slug) => _uriCore('tenants/${_seg(slug)}/status');
   Uri setTenantFlag(String slug, String key) =>
-      _uriCore('tenants/${_seg(slug)}/flags/${_seg(key)}'); // PATCH
+      _uriCore('tenants/${_seg(slug)}/flags/${_seg(key)}');
 
-  Uri setTenantOwner(String slug) =>
-      _uriCore('tenants/${_seg(slug)}/owner'); // POST
+  Uri setTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
+  Uri removeTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
 
-  Uri removeTenantOwner(String slug) =>
-      _uriCore('tenants/${_seg(slug)}/owner'); // DELETE
-
-  Uri listDomains(String slug) =>
-      _uriCore('tenants/${_seg(slug)}/domains'); // GET
-
-  Uri addDomain(String slug) =>
-      _uriCore('tenants/${_seg(slug)}/domains'); // POST
+  Uri listDomains(String slug) => _uriCore('tenants/${_seg(slug)}/domains');
+  Uri addDomain(String slug) => _uriCore('tenants/${_seg(slug)}/domains');
 
   Uri verifyDomain(String slug, String domain) =>
-      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/verify'); // POST
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/verify');
 
   Uri makePrimaryDomain(String slug, String domain) =>
-      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/primary'); // POST
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/primary');
 
   Uri removeDomain(String slug, String domain) =>
-      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}'); // DELETE
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}');
 
   // ─────────────────────────────────────────────
   // 📦 Inventory (tenant-scoped; authenticated)
@@ -172,12 +163,13 @@ class AfyaKitRoutes {
 
   Uri inventory(String itemType) =>
       _uri('inventory', query: {'type': itemType});
-
   Uri createItem() => _uri('inventory');
 
   Uri itemById(String id, {String? type}) => _uri(
     'inventory/${_seg(id)}',
-    query: type != null ? {'type': type} : null,
+    query: (type != null && type.trim().isNotEmpty)
+        ? {'type': type.trim()}
+        : null,
   );
 
   // ─────────────────────────────────────────────
@@ -205,15 +197,11 @@ class AfyaKitRoutes {
   // ─────────────────────────────────────────────
 
   Uri listBatches(String storeId) => _uri('stores/${_seg(storeId)}/batches');
-
-  Uri createBatch(String storeId) =>
-      _uri('stores/${_seg(storeId)}/batches'); // POST
-
+  Uri createBatch(String storeId) => _uri('stores/${_seg(storeId)}/batches');
   Uri updateBatch(String storeId, String batchId) =>
-      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}'); // PATCH
-
+      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
   Uri deleteBatch(String storeId, String batchId) =>
-      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}'); // DELETE
+      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
 
   // ─────────────────────────────────────────────
   // 📥 Imports (tenant-scoped; authenticated)
@@ -240,7 +228,7 @@ class AfyaKitRoutes {
   Uri importTemplate(String type) => _uri('imports/templates/$type');
 
   // ─────────────────────────────────────────────
-  // 🏓 Ping (tenant-scoped; public or auth—server decides)
+  // 🏓 Ping
   // ─────────────────────────────────────────────
 
   Uri ping() => _uri('ping');

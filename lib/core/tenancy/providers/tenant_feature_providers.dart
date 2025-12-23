@@ -1,65 +1,72 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/tenancy/models/feature_keys.dart';
+import 'package:afyakit/core/tenancy/models/feature_registry.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 
-/// Returns true if the tenant has enabled a module key OR one of its sub-keys.
-///
-/// Examples:
-/// - enabled(FeatureKeys.retail) checks:
-///     retail == true OR retail.* == true
-/// - enabled(FeatureKeys.retailCatalog) checks:
-///     retail == true OR retail.catalog == true
+/// Single truth:
+/// TenantProfile.features is a map of { moduleKey: bool } (root modules only).
 final isFeatureEnabledProvider = Provider.autoDispose.family<bool, String>((
   ref,
   key,
 ) {
-  final asyncProfile = ref.watch(tenantProfileProvider);
+  final k = key.trim();
+  if (k.isEmpty) return false;
 
-  return asyncProfile.maybeWhen(
-    data: (p) {
-      // Direct feature check
-      if (p.has(key)) return true;
-
-      // Module root "retail" should enable "retail.catalog" etc.
-      // If key is a subfeature, check its root too.
-      final dot = key.indexOf('.');
-      if (dot > 0) {
-        final root = key.substring(0, dot);
-        if (p.has(root)) return true;
-      }
-
-      // If key is a root module, check any sub-features enabled.
-      // (Backward-compatible if tenants only set retail.catalog etc.)
-      if (!key.contains('.')) {
-        final prefix = '$key.';
-        for (final entry in p.features.features.entries) {
-          if (entry.value == true && entry.key.startsWith(prefix)) return true;
-        }
-      }
-
-      return false;
-    },
-    orElse: () => false,
-  );
+  final profileAsync = ref.watch(tenantProfileProvider);
+  return profileAsync.maybeWhen(data: (p) => p.has(k), orElse: () => false);
 });
 
-/// Convenience provider for "module enabled" checks.
+/// Alias: module == feature (since we only do root modules right now)
 final isModuleEnabledProvider = Provider.autoDispose.family<bool, String>((
   ref,
   moduleKey,
 ) {
-  // Enforce moduleKey is root-ish, but don't crash.
   return ref.watch(isFeatureEnabledProvider(moduleKey));
 });
 
-/// Common booleans used by shells.
-// lib/core/tenancy/providers/tenant_feature_providers.dart
+/// Convenience booleans used in shells (optional, but nice).
+final tenantHqEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.hq));
+});
+
+final tenantInventoryEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.inventory));
+});
 
 final tenantRetailEnabledProvider = Provider.autoDispose<bool>((ref) {
   return ref.watch(isModuleEnabledProvider(FeatureKeys.retail));
 });
 
-final tenantInventoryEnabledProvider = Provider.autoDispose<bool>((ref) {
-  return ref.watch(isModuleEnabledProvider(FeatureKeys.inventory));
+final tenantDispensingEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.dispensing));
+});
+
+final tenantLabsEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.labs));
+});
+
+final tenantConsultationEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.consultation));
+});
+
+final tenantRiderEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isModuleEnabledProvider(FeatureKeys.rider));
+});
+
+/// Handy for HQ editor: list all modules from the registry.
+final allModuleDefsProvider = Provider.autoDispose<List<ModuleDef>>((ref) {
+  return FeatureRegistry.modules;
+});
+
+/// ✅ Staff can toggle into "member view" only if tenant has any member UX enabled.
+/// Keep this explicit and boring; expand as you add member-facing modules.
+final tenantMemberUxEnabledProvider = Provider.autoDispose<bool>((ref) {
+  final retail = ref.watch(tenantRetailEnabledProvider);
+
+  // later:
+  // final consultation = ref.watch(tenantConsultationEnabledProvider);
+  // final labs = ref.watch(tenantLabsEnabledProvider);
+
+  return retail;
 });

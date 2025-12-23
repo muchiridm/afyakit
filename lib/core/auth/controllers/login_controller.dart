@@ -180,16 +180,6 @@ class LoginController extends StateNotifier<LoginState> {
       return false;
     }
 
-    if (kDebugMode) {
-      // ignore: avoid_print
-      print(
-        '[OTP][FE] LoginController.verifyCode → channel=$channel '
-        'phone=$phone code=$trimmedCode '
-        'email=${channel == OtpChannel.email ? trimmedEmail : null} '
-        'attemptId=${state.attemptId}',
-      );
-    }
-
     if (!mounted) return false;
     state = state.copyWith(verifying: true);
 
@@ -202,6 +192,11 @@ class LoginController extends StateNotifier<LoginState> {
         attemptId: state.attemptId,
         email: channel == OtpChannel.email ? trimmedEmail : null,
       );
+
+      // ✅ IMPORTANT: reset attempt + UI state so the form collapses
+      if (mounted) {
+        state = LoginState.initial();
+      }
 
       SnackService.showSuccess('Signed in!');
       return true;
@@ -244,7 +239,6 @@ class LoginController extends StateNotifier<LoginState> {
       SnackService.showError('Something went wrong signing you in');
       return false;
     } finally {
-      // No `return` in finally – just guard the state update.
       if (mounted) {
         state = state.copyWith(verifying: false);
       }

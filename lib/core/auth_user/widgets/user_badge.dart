@@ -1,7 +1,4 @@
-// lib/modules/core/auth_users/widgets/user_badge.dart
-
-import 'package:afyakit/core/tenancy/models/feature_keys.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/shared/providers/home_view_mode_provider.dart';
@@ -27,14 +24,9 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
   Widget build(BuildContext context) {
     final meAsync = ref.watch(currentUserProvider);
     final viewMode = ref.watch(homeViewModeProvider);
-    final tenantProfileAsync = ref.watch(tenantProfileProvider);
 
-    // Treat failure / missing profile as "retail off" (safe default).
-    final bool retailEnabled = tenantProfileAsync.maybeWhen(
-      data: (p) =>
-          p.has(FeatureKeys.retail) || p.has(FeatureKeys.retailCatalog),
-      orElse: () => false,
-    );
+    // ✅ New simplified features system: module roots only.
+    final retailEnabled = ref.watch(tenantRetailEnabledProvider);
 
     return meAsync.when(
       loading: () => const SizedBox(
@@ -53,9 +45,11 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
         final hasStaffWorkspace = user.type.hasStaffWorkspace;
         final actualStaffLabel = staffRoleLabel(user);
 
+        // Members shouldn't care about enabled modules; this switch is only
+        // for staff users who also have retail enabled (so they can see retail/member view).
         final String roleLabel;
         if (!hasStaffWorkspace) {
-          roleLabel = user.type.label; // "Member"
+          roleLabel = user.type.label; // e.g. "Member"
         } else if (!retailEnabled) {
           roleLabel = actualStaffLabel;
         } else {
@@ -159,7 +153,7 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
               ),
             ),
 
-            // RIGHT HALF: role (+ switch icon) → toggle view
+            // RIGHT HALF: role (+ switch icon) → toggle view (only when enabled)
             if (showSwitcher && onToggleView != null)
               MouseRegion(
                 cursor: SystemMouseCursors.click,

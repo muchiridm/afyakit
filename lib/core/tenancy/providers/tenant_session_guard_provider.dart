@@ -14,12 +14,76 @@ const _apiBase = String.fromEnvironment(
   defaultValue: 'https://api.afyakit.app/api',
 );
 
+String _normTenant(String s) => s.trim().toLowerCase();
+
+bool _is2xx(int? s) => s != null && s >= 200 && s < 300;
+
+/// De-dupe per UID (claims are per-user; session checks are per-user-per-tenant).
+/// This prevents multiple widgets / providers from stampeding the same guard.
+final Map<String, Future<void>> _inflightByKey = <String, Future<void>>{};
+
+@immutable
+class TenantSessionCheckResult {
+  final int statusCode;
+  final Map<String, dynamic>? body;
+
+  const TenantSessionCheckResult({
+    required this.statusCode,
+    required this.body,
+  });
+
+  bool get ok => _is2xx(statusCode);
+
+  String? get errorCode =>
+      body == null ? null : body!['error']?.toString().trim();
+
+  String? get message =>
+      body == null ? null : body!['message']?.toString().trim();
+}
+
+Future<TenantSessionCheckResult> _checkSessionForTenant({
+  required String tenantSlug,
+  required fb.User fbUser,
+}) async {
+  // We DO NOT force-refresh claims here.
+  // We only need a valid bearer token; tenant is decided by URL + membership doc on server.
+  final token = await fbUser.getIdToken();
+
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: _apiBase,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 20),
+      sendTimeout: const Duration(seconds: 20),
+      validateStatus: (s) => s != null && s < 500,
+      receiveDataWhenStatusError: true,
+    ),
+  );
+
+  final resp = await dio.get(
+    '/$tenantSlug/auth/session/me',
+    options: Options(
+      headers: <String, String>{
+        if (token != null && token.trim().isNotEmpty)
+          'Authorization': 'Bearer ${token.trim()}',
+      },
+    ),
+  );
+
+  Map<String, dynamic>? body;
+  if (resp.data is Map) {
+    body = Map<String, dynamic>.from(resp.data as Map);
+  }
+
+  return TenantSessionCheckResult(statusCode: resp.statusCode ?? 0, body: body);
+}
+
 final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
   ref,
 ) async {
-  final tenantSlug = ref.watch(tenantSlugProvider);
+  final tenantSlug = _normTenant(ref.watch(tenantSlugProvider));
 
-  // keep alive briefly to avoid thrashing
+  // Keep alive briefly to avoid re-trigger storms during rebuilds/navigation.
   final link = ref.keepAlive();
   Timer? purge;
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
@@ -31,57 +95,70 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
     return;
   }
 
-  // 1) Refresh token first
-  await fbUser.getIdToken(true);
+  final uid = fbUser.uid;
 
-  // 2) Check claims
-  final before = await fbUser.getIdTokenResult();
-  final claims = before.claims ?? const <String, dynamic>{};
-  final claimTenant = (claims['tenant'] ?? claims['tenantId'])?.toString();
+  // Key on UID + tenant (because user can be valid in tenant A but not tenant B).
+  final key = '$uid@$tenantSlug';
 
-  if (claimTenant == tenantSlug) {
-    if (kDebugMode) {
-      debugPrint('✅ [tenant-guard] claims already match ($tenantSlug)');
-    }
-    return;
+  final inflight = _inflightByKey[key];
+  if (inflight != null) {
+    if (kDebugMode) debugPrint('⏳ [tenant-guard] reuse inflight key=$key');
+    return inflight;
   }
 
-  if (kDebugMode) {
-    debugPrint(
-      '⚠️ [tenant-guard] claim mismatch: claimTenant=$claimTenant pathTenant=$tenantSlug → syncing…',
-    );
-  }
+  final future = () async {
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '🧭 [tenant-guard] check session tenant=$tenantSlug uid=$uid',
+        );
+      }
 
-  // 3) Call backend to sync claims
-  final dio = Dio(BaseOptions(baseUrl: _apiBase));
-  final idToken = await fbUser.getIdToken();
-
-  final r = await dio.post(
-    '/$tenantSlug/auth/session/sync-claims',
-    options: Options(
-      headers: {'Authorization': 'Bearer $idToken'},
-      validateStatus: (s) => s != null && s < 500,
-      receiveDataWhenStatusError: true,
-    ),
-  );
-
-  if (r.statusCode != 200 && r.statusCode != 204) {
-    if (kDebugMode) {
-      debugPrint(
-        '⚠️ [tenant-guard] sync-claims refused (status=${r.statusCode}) body=${r.data}',
+      final r = await _checkSessionForTenant(
+        tenantSlug: tenantSlug,
+        fbUser: fbUser,
       );
+
+      if (kDebugMode) {
+        debugPrint(
+          '🧾 [tenant-guard] /auth/session/me http=${r.statusCode} '
+          'error=${r.errorCode ?? '-'} msg=${r.message ?? '-'} body=${r.body}',
+        );
+      }
+
+      if (r.ok) {
+        if (kDebugMode) {
+          debugPrint('✅ [tenant-guard] OK tenant=$tenantSlug uid=$uid');
+        }
+        return;
+      }
+
+      // Hard failure: membership missing/disabled/forbidden etc.
+      //
+      // NOTE:
+      // - 401 usually means "no/expired token"
+      // - 403 means "valid token but not allowed for this tenant"
+      //
+      // Choose your policy:
+      // - Either throw (so AuthGate can react)
+      // - Or signOut here
+      //
+      // I prefer THROWING here, and letting your gates decide.
+      throw DioException(
+        requestOptions: RequestOptions(path: '/$tenantSlug/auth/session/me'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/$tenantSlug/auth/session/me'),
+          statusCode: r.statusCode,
+          data: r.body,
+        ),
+        type: DioExceptionType.badResponse,
+        error: 'tenant-session-check-failed',
+      );
+    } finally {
+      _inflightByKey.remove(key);
     }
-    // Do not throw; just proceed with mismatch (app can still show login etc.)
-    return;
-  }
+  }();
 
-  // 4) Force refresh so new claims show up
-  await fbUser.getIdToken(true);
-
-  if (kDebugMode) {
-    final after = await fbUser.getIdTokenResult();
-    final newTenant = (after.claims?['tenant'] ?? after.claims?['tenantId'])
-        ?.toString();
-    debugPrint('✅ [tenant-guard] synced. new claimTenant=$newTenant');
-  }
+  _inflightByKey[key] = future;
+  return future;
 });

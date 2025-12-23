@@ -1,8 +1,15 @@
+// lib/core/api/shared/uri.dart
+
 import 'package:flutter/foundation.dart';
 
 String joinBaseAndPath(String base, String path) {
-  final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-  final p = path.startsWith('/') ? path.substring(1) : path;
+  final b = base.trim().endsWith('/')
+      ? base.trim().substring(0, base.trim().length - 1)
+      : base.trim();
+  final p = path.trim().startsWith('/')
+      ? path.trim().substring(1)
+      : path.trim();
+  if (p.isEmpty) return b;
   return '$b/$p';
 }
 

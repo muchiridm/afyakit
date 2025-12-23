@@ -1,7 +1,7 @@
-import 'package:afyakit/modules/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/modules/inventory/items/models/items/medication_item.dart';
-import 'package:afyakit/modules/inventory/items/models/items/consumable_item.dart';
-import 'package:afyakit/modules/inventory/items/models/items/equipment_item.dart';
+import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
+import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
+import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
+import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
 
 ItemType resolveItemType(dynamic item, [ItemType fallback = ItemType.unknown]) {
   if (item is MedicationItem) return ItemType.medication;

@@ -10,8 +10,8 @@ import 'package:afyakit/core/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
 
-import 'package:afyakit/modules/inventory/items/models/items/base_inventory_item.dart';
-import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
+import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
+import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
   // ────────────────────────────────────────────

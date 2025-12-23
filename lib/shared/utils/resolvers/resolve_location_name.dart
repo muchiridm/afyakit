@@ -1,6 +1,6 @@
 // lib/shared/utils/resolvers/resolve_location_name.dart
-import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
-import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
 String resolveLocationName(
   String? id,

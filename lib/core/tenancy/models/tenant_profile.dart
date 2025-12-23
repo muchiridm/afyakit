@@ -9,9 +9,6 @@ import 'tenant_features.dart';
 import 'tenant_assets.dart';
 import 'tenant_details.dart';
 
-/// ─────────────────────────────────────────────
-/// The actual Tenant Profile
-/// ─────────────────────────────────────────────
 @immutable
 class TenantProfile {
   final String id;
@@ -32,28 +29,51 @@ class TenantProfile {
     this.status = TenantStatus.active,
   });
 
+  static String _str(dynamic v, {String fallback = ''}) {
+    final s = v?.toString().trim();
+    return (s == null || s.isEmpty) ? fallback : s;
+  }
+
+  static String? _strOrNull(dynamic v) {
+    final s = v?.toString().trim();
+    return (s == null || s.isEmpty) ? null : s;
+  }
+
+  static Json _json(dynamic v) {
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return const <String, dynamic>{};
+  }
+
   factory TenantProfile.fromFirestore(String id, Json d) {
-    // For v2 tenants we have a nested `profile` map.
-    // For older tenants, fields such as tagline/website/email/whatsapp
-    // live at the root. Fall back to the whole document so
-    // TenantDetails can pick them up.
-    final Json profileMap =
-        (d['profile'] as Map?)?.cast<String, dynamic>() ?? d;
+    // v2 shape: `profile` nested map (client-facing + SEO fields).
+    // v1 shape: those fields at the root.
+    final Json profileMap = _json(d['profile']).isNotEmpty
+        ? _json(d['profile'])
+        : d;
+
+    final displayName = _str(d['displayName'], fallback: id);
+
+    final primaryColorHex = _str(
+      d['primaryColorHex'] ?? d['primaryColor'],
+      fallback: '#2196F3',
+    );
+
+    final featuresMap = _json(d['features']);
+    final assetsMap = _json(d['assets']);
+
+    final statusStr = _strOrNull(d['status']); // tolerate non-string values
+    final status = TenantStatusX.parse(statusStr);
 
     return TenantProfile(
       id: id,
-      displayName: (d['displayName'] ?? id).toString(),
-      primaryColorHex: (d['primaryColorHex'] ?? d['primaryColor'] ?? '#2196F3')
-          .toString(),
+      displayName: displayName,
+      primaryColorHex: primaryColorHex,
       features: TenantFeatures.fromMap(
-        (d['features'] as Map?)?.cast<String, dynamic>(),
+        featuresMap.isEmpty ? null : featuresMap,
       ),
-      assets: TenantAssets.fromMap(
-        (d['assets'] as Map?)?.cast<String, dynamic>(),
-      ),
-      // ⬇️ now sees `tagline`, `website`, `email`, etc. even if they’re root-level
+      assets: TenantAssets.fromMap(assetsMap.isEmpty ? null : assetsMap),
       details: TenantDetails.fromMap(profileMap),
-      status: TenantStatusX.parse(d['status'] as String?),
+      status: status,
     );
   }
 
@@ -68,26 +88,28 @@ class TenantProfile {
   /// Title suitable for browser tab / SEO.
   ///
   /// Priority:
-  ///   profile.details.seoTitle → displayName → id
-  String get webTitle => details.seoTitle?.trim().isNotEmpty == true
-      ? details.seoTitle!.trim()
-      : (displayName.isNotEmpty ? displayName : id);
+  ///   details.seoTitle → displayName → id
+  String get webTitle {
+    final seo = details.seoTitle?.trim();
+    if (seo != null && seo.isNotEmpty) return seo;
+    if (displayName.trim().isNotEmpty) return displayName.trim();
+    return id;
+  }
 
   /// Description suitable for <meta name="description">.
   ///
   /// Priority:
-  ///   profile.details.seoDescription → tagline → supportNote → empty string
+  ///   details.seoDescription → tagline → supportNote → empty string
   String get webDescription {
-    if (details.seoDescription != null &&
-        details.seoDescription!.trim().isNotEmpty) {
-      return details.seoDescription!.trim();
-    }
-    if (details.tagline != null && details.tagline!.trim().isNotEmpty) {
-      return details.tagline!.trim();
-    }
-    if (details.supportNote != null && details.supportNote!.trim().isNotEmpty) {
-      return details.supportNote!.trim();
-    }
+    final seo = details.seoDescription?.trim();
+    if (seo != null && seo.isNotEmpty) return seo;
+
+    final tagline = details.tagline?.trim();
+    if (tagline != null && tagline.isNotEmpty) return tagline;
+
+    final note = details.supportNote?.trim();
+    if (note != null && note.isNotEmpty) return note;
+
     return '';
   }
 }

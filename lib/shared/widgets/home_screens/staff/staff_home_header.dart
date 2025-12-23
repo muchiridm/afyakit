@@ -5,7 +5,7 @@ import 'package:afyakit/shared/widgets/home_screens/common/catalog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';
-import 'package:afyakit/modules/inventory/records/deliveries/widgets/delivery_banner.dart';
+import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/core/auth/widgets/logout_button.dart';
 
 class StaffHomeHeader extends ConsumerWidget {

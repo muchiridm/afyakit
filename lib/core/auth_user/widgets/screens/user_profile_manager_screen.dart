@@ -6,10 +6,11 @@ import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/core/auth_user/widgets/user_profile_card.dart';
+import 'package:afyakit/features/hq/users/tenant_users_provider.dart';
 
-import 'package:afyakit/modules/inventory/locations/inventory_location.dart';
-import 'package:afyakit/modules/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';

@@ -1,13 +1,13 @@
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/modules/inventory/records/shared/records_dashboard_screen.dart';
+import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/modules/inventory/views/screens/stock_screen.dart';
-import 'package:afyakit/modules/inventory/views/utils/inventory_mode_enum.dart';
-import 'package:afyakit/modules/inventory/reports/screens/reports_dashboard_screen.dart';
+import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
+import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
+import 'package:afyakit/features/inventory/reports/screens/reports_dashboard_screen.dart';
 import 'package:afyakit/shared/widgets/screens/admin_dashboard_screen.dart';
 
 class StaffHomeActions extends ConsumerWidget {

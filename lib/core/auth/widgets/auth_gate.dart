@@ -1,4 +1,4 @@
-// lib/core/auth_users/widgets/auth_gate.dart
+// lib/core/auth/widgets/auth_gate.dart
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';

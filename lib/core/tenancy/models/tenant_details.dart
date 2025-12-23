@@ -1,12 +1,7 @@
-// lib/core/tenancy/models/tenant_details.dart
-
 import 'package:flutter/foundation.dart';
 
 import 'tenant_json.dart';
 
-/// ─────────────────────────────────────────────
-/// Details (client-facing info + SEO)
-/// ─────────────────────────────────────────────
 @immutable
 class TenantDetails {
   final String? tagline;
@@ -18,14 +13,7 @@ class TenantDetails {
   final String? locale;
   final String? supportNote;
 
-  /// Optional, tenant-controlled SEO title for the site.
-  ///
-  /// If null, we can fall back to [TenantProfile.displayName] or [tagline].
   final String? seoTitle;
-
-  /// Optional, tenant-controlled SEO / site description.
-  ///
-  /// If null, we can fall back to [tagline] or [supportNote].
   final String? seoDescription;
 
   final Map<String, String> social;
@@ -51,43 +39,47 @@ class TenantDetails {
     required this.payments,
   });
 
+  static String? _s(dynamic v) {
+    final t = v?.toString().trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
+  static Map<String, String> _toStrMap(dynamic src) {
+    if (src is! Map) return const <String, String>{};
+    return {for (final e in src.entries) '${e.key}': '${e.value}'};
+  }
+
+  static Json _toJsonMap(dynamic v) {
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return const <String, dynamic>{};
+  }
+
   factory TenantDetails.fromMap(Json? m) {
     final x = (m ?? const <String, dynamic>{});
 
-    Map<String, String> toStrMap(Map? src) => {
-      for (final e in (src ?? const {}).entries) '${e.key}': '${e.value}',
-    };
-
     return TenantDetails(
-      tagline: x['tagline'] as String?,
-      website: x['website'] as String?,
-      email: x['email'] as String?,
-      whatsapp: x['whatsapp'] as String?,
-      currency: (x['currency'] as String?) ?? 'KES',
-      locale: x['locale'] as String?,
-      supportNote: x['supportNote'] as String?,
-
-      // SEO fields (all optional)
-      seoTitle: x['seoTitle'] as String?,
-      seoDescription: x['seoDescription'] as String?,
-
-      social: toStrMap(x['social'] as Map?),
-      hours: toStrMap(x['hours'] as Map?),
-      address: Map<String, dynamic>.from((x['address'] as Map?) ?? const {}),
-      compliance: Map<String, dynamic>.from(
-        (x['compliance'] as Map?) ?? const {},
-      ),
-      payments: Map<String, dynamic>.from((x['payments'] as Map?) ?? const {}),
+      tagline: _s(x['tagline']),
+      website: _s(x['website']),
+      email: _s(x['email']),
+      whatsapp: _s(x['whatsapp']),
+      currency: _s(x['currency']) ?? 'KES',
+      locale: _s(x['locale']),
+      supportNote: _s(x['supportNote']),
+      seoTitle: _s(x['seoTitle']),
+      seoDescription: _s(x['seoDescription']),
+      social: _toStrMap(x['social']),
+      hours: _toStrMap(x['hours']),
+      address: _toJsonMap(x['address']),
+      compliance: _toJsonMap(x['compliance']),
+      payments: _toJsonMap(x['payments']),
     );
   }
 
   // ───── mobile money (explicit) ─────
-  String? get mobileMoneyName => payments['mobileMoneyName'] as String?;
-  String? get mobileMoneyAccount => payments['mobileMoneyAccount'] as String?;
-  String? get mobileMoneyNumber => payments['mobileMoneyNumber'] as String?;
+  String? get mobileMoneyName => _s(payments['mobileMoneyName']);
+  String? get mobileMoneyAccount => _s(payments['mobileMoneyAccount']);
+  String? get mobileMoneyNumber => _s(payments['mobileMoneyNumber']);
 
   // ───── registration number (explicit) ─────
-  String? get registrationNumber => compliance['registrationNumber'] as String?;
-
-  // bank is intentionally not exposed
+  String? get registrationNumber => _s(compliance['registrationNumber']);
 }

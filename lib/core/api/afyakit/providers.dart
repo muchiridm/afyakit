@@ -1,4 +1,4 @@
-// lib/api/afyakit/providers.dart
+// lib/core/api/afyakit/providers.dart
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
@@ -9,15 +9,27 @@ import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 
 final afyakitClientProvider = FutureProvider<AfyaKitClient>((ref) async {
-  // IMPORTANT: ensure claims match tenant BEFORE any protected API call
+  // Ensure claims match tenant BEFORE any protected API call
   await ref.watch(tenantSessionGuardProvider.future);
 
-  final tenantId = ref.watch(tenantSlugProvider);
+  // Prime a fresh token once after guard attempts sync/poll.
+  // This helps in the common case where getIdToken() lags behind newly-minted claims.
+  final user = fb.FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    try {
+      await user.getIdToken(true);
+    } catch (_) {
+      // Ignore: we'll still proceed; interceptor will handle missing token.
+    }
+  }
+
+  final tenantId = ref.watch(tenantSlugProvider).trim().toLowerCase();
   final base = apiBaseUrl(tenantId);
 
   return AfyaKitClient.create(
     baseUrl: base,
-    getToken: () async =>
-        await fb.FirebaseAuth.instance.currentUser?.getIdToken(),
+    getToken: () async => fb.FirebaseAuth.instance.currentUser?.getIdToken(),
+    getFreshToken: () async =>
+        fb.FirebaseAuth.instance.currentUser?.getIdToken(true),
   );
 });

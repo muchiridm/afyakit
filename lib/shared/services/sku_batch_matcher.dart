@@ -1,7 +1,7 @@
 //lib/shared/services/sku_batch_matcher.dart
 
-import 'package:afyakit/modules/inventory/batches/models/batch_record.dart';
-import 'package:afyakit/modules/inventory/items/models/items/base_inventory_item.dart';
+import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
+import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 
 class SkuBatchMatcher {

@@ -1,7 +1,7 @@
 import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:flutter/material.dart';
-import 'package:afyakit/modules/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
+import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
 
 class UserProfileCard extends StatelessWidget {
   final String displayName;

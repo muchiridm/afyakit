@@ -1,5 +1,3 @@
-// lib/shared/widgets/home_screens/tenant_home_shell.dart
-
 import 'package:afyakit/core/tenancy/models/feature_keys.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/tenancy/widgets/feature_gate.dart';
@@ -7,7 +5,7 @@ import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth/widgets/login_screen.dart';
-import 'package:afyakit/modules/retail/catalog/widgets/screens/catalog_screen.dart';
+import 'package:afyakit/features/retail/catalog/widgets/screens/catalog_screen.dart';
 import 'package:afyakit/shared/providers/home_view_mode_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,10 +21,8 @@ class TenantHomeShell extends ConsumerWidget {
     final userAsync = ref.watch(currentUserProvider);
     final viewMode = ref.watch(homeViewModeProvider);
 
-    // ✅ Single source of truth for feature booleans.
-    // Your tenant_feature_providers.dart should compute these from tenantProfileProvider
-    // and return safe defaults (false) while loading/error.
-    final retailEnabled = ref.watch(tenantRetailEnabledProvider);
+    // ✅ Staff can toggle into "member view" only if tenant has ANY member UX enabled.
+    final memberUxEnabled = ref.watch(tenantMemberUxEnabledProvider);
 
     return userAsync.when(
       loading: () =>
@@ -37,7 +33,7 @@ class TenantHomeShell extends ConsumerWidget {
         // ────────────── GUEST MODE ──────────────
         if (user == null) {
           return const FeatureGate(
-            featureKey: FeatureKeys.retailCatalog,
+            featureKey: FeatureKeys.retail,
             fallback: LoginScreen(),
             child: CatalogScreen(),
           );
@@ -49,12 +45,12 @@ class TenantHomeShell extends ConsumerWidget {
         }
 
         // ────────────── STAFF USERS ──────────────
-        // Retail disabled for this tenant → no toggle, always staff home.
-        if (!retailEnabled) {
+        // No member-facing UX → no toggle; always staff home.
+        if (!memberUxEnabled) {
           return StaffHomeScreen(user: user);
         }
 
-        // Retail enabled → allow staff/member toggle.
+        // Member UX exists → allow staff/member toggle.
         return viewMode == HomeViewMode.staff
             ? StaffHomeScreen(user: user)
             : MemberHomeScreen(user: user);

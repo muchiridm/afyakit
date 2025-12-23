@@ -1,5 +1,7 @@
 // lib/main_common.dart
 
+import 'package:afyakit/app/app_mode.dart';
+import 'package:afyakit/app/app_root.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +13,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 
-import 'package:afyakit/app/afyakit_app.dart';
 import 'package:afyakit/core/domains/services/domain_tenant_resolver.dart';
 
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
@@ -21,7 +22,10 @@ final class BootLog {
   static void e(String msg) => debugPrint('💥 $msg');
 }
 
-Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
+Future<void> bootstrapAndRun({
+  required String defaultTenantSlug,
+  AppMode appMode = AppMode.tenant,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   _installGlobalErrorHandlers();
@@ -36,18 +40,26 @@ Future<void> bootstrapAndRun({required String defaultTenantSlug}) async {
     persistenceEnabled: true,
   );
 
-  // Resolve tenant slug (v2)
-  final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
-  BootLog.d('Using v2 tenant: $slug');
+  // Resolve tenant slug only for tenant mode.
+  String? resolvedSlug;
+  if (appMode == AppMode.tenant) {
+    final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
+    resolvedSlug = slug;
+    BootLog.d('Using tenant: $slug');
+  } else {
+    BootLog.d('Running in HQ mode (no tenant slug resolution)');
+  }
 
   runApp(
     ProviderScope(
       overrides: [
-        tenantSlugProvider.overrideWithValue(slug),
         authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
+
+        // Only override tenantSlugProvider in tenant mode.
+        if (resolvedSlug != null)
+          tenantSlugProvider.overrideWithValue(resolvedSlug),
       ],
-      // 🎯 Invite flow removed – AfyaKitApp no longer gets invite params
-      child: const AfyaKitApp(),
+      child: AppRoot(mode: appMode),
     ),
   );
 }
@@ -64,11 +76,10 @@ void _installGlobalErrorHandlers() {
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     BootLog.e('ZoneError: $error');
     debugPrintStack(stackTrace: stack);
-    return true; // prevent silent crash
+    return true;
   };
 }
 
-/// Print current Firebase wiring so we can see what project/build we’re on.
 void _logFirebaseAppInfo(bool emulatorEnabled) {
   final o = Firebase.app().options;
 
@@ -86,7 +97,7 @@ void _logFirebaseAppInfo(bool emulatorEnabled) {
   );
 }
 
-/// In debug: can opt in with
+/// In debug: opt in with
 ///   --dart-define=USE_AUTH_EMULATOR=true
 Future<bool> _configureAuthForDev() async {
   if (!kDebugMode) return false;

@@ -62,25 +62,34 @@ class _OtpLoginScreenState extends ConsumerState<OtpLoginScreen> {
       email: _channel == OtpChannel.email ? _emailCtrl.text : null,
       channel: _channel,
     );
-    // Any navigation / gating is handled by outer layers reacting to auth/session.
+
+    // If auth gating/navigating happens, this widget may already be gone.
+    if (!mounted) return;
+    // (Nothing else to do here currently.)
   }
 
   Future<void> _verifyCode() async {
     final controller = ref.read(loginControllerProvider.notifier);
 
-    await controller.verifyCode(
+    final ok = await controller.verifyCode(
       phoneE164: _phoneCtrl.text,
       code: _codeCtrl.text,
       email: _channel == OtpChannel.email ? _emailCtrl.text : null,
       channel: _channel,
     );
 
-    // This widget remains neutral:
-    // - No navigation
-    // - No tenant-specific logic
-    //
-    // Auth/session changes should be observed by AuthGate/HqGate or
-    // whatever root-level gate you use.
+    // Gate may have already replaced this screen.
+    if (!mounted) return;
+
+    if (!ok) return;
+
+    // ✅ clear visible login UI state (even if gate takes over)
+    _codeCtrl.clear();
+    FocusScope.of(context).unfocus();
+
+    // Optional: also clear phone/email if you prefer
+    // _phoneCtrl.clear();
+    // _emailCtrl.clear();
   }
 
   @override
@@ -175,17 +184,6 @@ class _OtpLoginScreenState extends ConsumerState<OtpLoginScreen> {
   Widget _buildChannelSelector() {
     return SegmentedButton<OtpChannel>(
       segments: const [
-        // WhatsApp + SMS temporarily disabled until providers are ready.
-        // ButtonSegment<OtpChannel>(
-        //   value: OtpChannel.wa,
-        //   label: Text('WhatsApp'),
-        //   icon: Icon(Icons.chat_bubble_outline),
-        // ),
-        // ButtonSegment<OtpChannel>(
-        //   value: OtpChannel.sms,
-        //   label: Text('SMS'),
-        //   icon: Icon(Icons.sms),
-        // ),
         ButtonSegment<OtpChannel>(
           value: OtpChannel.email,
           label: Text('Email'),
@@ -194,10 +192,13 @@ class _OtpLoginScreenState extends ConsumerState<OtpLoginScreen> {
       ],
       selected: {_channel},
       onSelectionChanged: (selection) {
+        if (!mounted) return;
+
         setState(() {
           _channel = selection.first;
           _codeCtrl.clear();
         });
+
         // Reset attempt state in controller when channel changes
         ref.read(loginControllerProvider.notifier).resetAttempt();
       },

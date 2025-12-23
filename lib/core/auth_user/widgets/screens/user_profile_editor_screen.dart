@@ -11,8 +11,8 @@ import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/shared/widgets/screens/base_screen.dart';
 import 'package:afyakit/shared/widgets/screens/screen_header.dart';
 
-import 'package:afyakit/modules/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/modules/inventory/locations/inventory_location_type_enum.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
 class UserProfileEditorScreen extends ConsumerStatefulWidget {
   const UserProfileEditorScreen({super.key, this.user});

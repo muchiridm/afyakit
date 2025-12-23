@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:afyakit/modules/hq/tenants/utils/tenant_util.dart';
+import 'package:afyakit/features/hq/tenants/utils/tenant_util.dart';
 
 /// Domain binding returned by /tenants/:slug/domains
 @immutable

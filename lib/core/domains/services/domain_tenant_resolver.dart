@@ -7,16 +7,9 @@ String resolveTenantSlug({String defaultSlug = 'afyakit'}) {
 
   final uri = Uri.base;
 
-  // 1) ?tenant=foo wins
   final q = (uri.queryParameters['tenant'] ?? '').trim().toLowerCase();
   if (q.isNotEmpty) return q;
 
-  // 2) simple host heuristics (keep what you had)
-  final host = uri.host.toLowerCase();
-  if (host.contains('danab')) return 'danabtmc';
-  if (host.contains('dawapap')) return 'dawapap';
-
-  // 3) fallback
   return defaultSlug;
 }
 
