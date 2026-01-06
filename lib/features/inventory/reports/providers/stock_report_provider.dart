@@ -1,16 +1,22 @@
 // lib/features/reports/providers/stock_report_provider.dart
+
 import 'dart:async';
+
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/features/inventory/batches/services/batch_repo.dart';
 import 'package:afyakit/features/inventory/items/services/inventory_repo_service.dart';
 import 'package:afyakit/features/inventory/reports/services/stock_report_service.dart';
-import 'package:afyakit/features/inventory/batches/services/batch_repo.dart';
 
 final batchRepoProvider = Provider.autoDispose<BatchRepo>((_) => BatchRepo());
 
+/// Loads the StockReportService snapshot for the currently selected tenant.
+///
+/// ✅ Safe to watch in UI (use .when / .maybeWhen / .valueOrNull).
+/// ✅ Logs errors and rethrows so AsyncValue becomes AsyncError (not microtask crash).
 final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   ref,
 ) async {
@@ -18,7 +24,7 @@ final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   final inventoryRepo = ref.watch(inventoryRepoProvider);
   final batchRepo = ref.watch(batchRepoProvider);
 
-  // 🔐 make sure the ID token’s tenant matches the selected tenant
+  // 🔐 Ensure the ID token’s tenant matches the selected tenant
   await ref.read(tenantSessionGuardProvider.future);
 
   // keepAlive to reduce thrash
@@ -26,6 +32,7 @@ final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   Timer? purge;
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
   ref.onResume(() => purge?.cancel());
+  ref.onDispose(() => purge?.cancel());
 
   try {
     final medications = await inventoryRepo.getMedications(tenantId);
@@ -48,12 +55,8 @@ final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
       batches: batches,
     );
   } catch (e, st) {
-    debugPrint('❌ [stockReportProvider] tenant=$tenantId error=$e\n$st');
+    debugPrint('❌ [stockReportProvider] tenant=$tenantId error=$e');
+    debugPrintStack(stackTrace: st);
     rethrow;
   }
-});
-
-final resolvedStockReportProvider = Provider<StockReportService>((ref) {
-  final async = ref.watch(stockReportProvider);
-  return async.requireValue;
 });

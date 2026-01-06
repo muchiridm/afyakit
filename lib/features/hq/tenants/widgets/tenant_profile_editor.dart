@@ -123,8 +123,8 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
               ),
               const SizedBox(height: 8),
 
-              ModuleTogglesSection(
-                modules: FeatureRegistry.modules,
+              FeatureTogglesSection(
+                modules: FeatureRegistry.features,
                 values: _features,
                 onChanged: (key, v) => setState(() => _features[key] = v),
               ),

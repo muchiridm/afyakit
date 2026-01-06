@@ -12,8 +12,8 @@ import 'package:afyakit/features/inventory/items/models/items/equipment_item.dar
 import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

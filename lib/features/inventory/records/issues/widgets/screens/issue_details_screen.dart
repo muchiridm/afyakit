@@ -15,8 +15,8 @@ import 'package:afyakit/features/inventory/records/issues/extensions/issue_statu
 import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/inventory/records/issues/providers/issue_streams_provider.dart';
 
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
-import 'package:afyakit/shared/widgets/record_screens/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:intl/intl.dart';
 

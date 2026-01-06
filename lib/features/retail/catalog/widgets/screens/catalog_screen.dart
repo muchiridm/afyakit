@@ -1,6 +1,5 @@
 // lib/core/catalog/widgets/screens/catalog_screen.dart
 
-import 'package:afyakit/core/api/dawaindex/providers.dart';
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
@@ -9,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
 
 import '../catalog_components/catalog_header.dart';
 import '../catalog_components/search_bar.dart';
@@ -53,77 +52,47 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   void _onScroll() {
-    final ctrl = ref.read(catalogControllerProvider.notifier);
+    final state = ref.read(catalogControllerProvider);
     final atEnd =
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
-    if (ref.read(catalogControllerProvider).hasMore && atEnd) {
-      ctrl.loadMore();
+
+    if (state.hasMore && atEnd) {
+      ref.read(catalogControllerProvider.notifier).loadMore();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final diClientAsync = ref.watch(diApiClientProvider);
+    final itemsAsync = ref.watch(catalogItemsProvider);
+    final state = ref.watch(catalogControllerProvider);
+    final ctrl = ref.read(catalogControllerProvider.notifier);
 
-    return diClientAsync.when(
-      loading: () => const BaseScreen(
-        scrollable: true,
-        maxContentWidth: 1100,
-        header: CatalogHeader(
-          selectedForm: '',
-          onFormChanged: _noopFormChanged,
-        ),
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => BaseScreen(
-        scrollable: true,
-        maxContentWidth: 1100,
-        header: const CatalogHeader(
-          selectedForm: '',
-          onFormChanged: _noopFormChanged,
-        ),
-        body: Center(
-          child: Text(
-            'Failed to load catalog source:\n$e',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-      data: (_) {
-        final itemsAsync = ref.watch(catalogItemsProvider);
-        final state = ref.watch(catalogControllerProvider);
-        final ctrl = ref.read(catalogControllerProvider.notifier);
+    // cart (quote) state
+    final quoteState = ref.watch(orderControllerProvider);
+    final quoteItemCount = quoteState.lines.length;
 
-        // cart (quote) state
-        final quoteState = ref.watch(orderControllerProvider);
-        final quoteItemCount = quoteState.lines.length;
+    final String? quoteTotalLabel = quoteItemCount == 0
+        ? null
+        : 'KES ${_formatPriceCeil(quoteState.estimatedTotal)}';
 
-        final String? quoteTotalLabel = quoteItemCount == 0
+    return BaseScreen(
+      scrollable: true,
+      maxContentWidth: 1100,
+      header: CatalogHeader(
+        selectedForm: state.query.form,
+        onFormChanged: (form) =>
+            ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
+        quoteItemCount: quoteItemCount,
+        quoteTotalLabel: quoteTotalLabel,
+        onViewQuote: quoteItemCount == 0
             ? null
-            : 'KES ${_formatPriceCeil(quoteState.estimatedTotal)}';
-
-        return BaseScreen(
-          scrollable: true,
-          maxContentWidth: 1100,
-          header: CatalogHeader(
-            selectedForm: state.query.form,
-            onFormChanged: (form) =>
-                ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
-            quoteItemCount: quoteItemCount,
-            quoteTotalLabel: quoteTotalLabel,
-            onViewQuote: quoteItemCount == 0
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const OrderScreen(),
-                      ),
-                    );
-                  },
-          ),
-          body: _buildBody(itemsAsync, state),
-        );
-      },
+            : () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const OrderScreen()),
+                );
+              },
+      ),
+      body: _buildBody(itemsAsync, state),
     );
   }
 
@@ -228,5 +197,3 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     );
   }
 }
-
-void _noopFormChanged(String _) {}

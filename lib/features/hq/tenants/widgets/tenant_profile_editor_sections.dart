@@ -134,15 +134,15 @@ class TenantProfileMobileMoneySection extends StatelessWidget {
   }
 }
 
-class ModuleTogglesSection extends StatelessWidget {
-  const ModuleTogglesSection({
+class FeatureTogglesSection extends StatelessWidget {
+  const FeatureTogglesSection({
     super.key,
     required this.modules,
     required this.values,
     required this.onChanged,
   });
 
-  final List<ModuleDef> modules;
+  final List<FeatureDef> modules;
   final Map<String, bool> values;
   final void Function(String key, bool value) onChanged;
 

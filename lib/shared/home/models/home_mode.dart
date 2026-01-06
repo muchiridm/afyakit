@@ -1,0 +1,1 @@
+enum HomeMode { staff, member }

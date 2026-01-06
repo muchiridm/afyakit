@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/preferences/item_preferences_controller.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 
 class ItemPreferencesScreen extends ConsumerStatefulWidget {
   const ItemPreferencesScreen({super.key});

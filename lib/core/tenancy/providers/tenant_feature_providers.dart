@@ -55,8 +55,8 @@ final tenantRiderEnabledProvider = Provider.autoDispose<bool>((ref) {
 });
 
 /// Handy for HQ editor: list all modules from the registry.
-final allModuleDefsProvider = Provider.autoDispose<List<ModuleDef>>((ref) {
-  return FeatureRegistry.modules;
+final allModuleDefsProvider = Provider.autoDispose<List<FeatureDef>>((ref) {
+  return FeatureRegistry.features;
 });
 
 /// ✅ Staff can toggle into "member view" only if tenant has any member UX enabled.
