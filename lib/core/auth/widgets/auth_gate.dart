@@ -1,0 +1,40 @@
+// lib/core/auth/widgets/auth_gate.dart
+
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/auth/controllers/session_controller.dart';
+import 'package:afyakit/shared/widgets/screens/splash_screen.dart';
+import 'package:afyakit/core/auth/widgets/login_screen.dart';
+import 'package:afyakit/shared/widgets/home_screens/tenant_home_shell.dart';
+
+class AuthGate extends ConsumerStatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tenantId = ref.read(tenantSlugProvider);
+      ref.read(sessionControllerProvider(tenantId).notifier).init();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tenantId = ref.watch(tenantSlugProvider);
+    final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
+
+    return sessionAsync.when(
+      loading: () => const SplashScreen(),
+      error: (_, __) => const LoginScreen(),
+      data: (_) => const TenantHomeShell(),
+    );
+  }
+}

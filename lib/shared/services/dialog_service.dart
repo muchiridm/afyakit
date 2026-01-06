@@ -1,7 +1,7 @@
 // lib/shared/services/dialog_service.dart
 
-import 'package:afyakit/app/afyakit_app.dart';
-import 'package:afyakit/core/inventory_locations/inventory_location.dart';
+import 'package:afyakit/app/app_navigator.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:flutter/material.dart';
 
 /// Centralized dialogs with a safe context fallback.
@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 class DialogService {
   /// Resolve a usable BuildContext.
   static BuildContext? _ctx(BuildContext? context) {
-    return context ?? navigatorKey.currentContext;
+    return context ?? appNavigatorKey.currentContext;
   }
 
   /// Confirm dialog that NEVER returns null.

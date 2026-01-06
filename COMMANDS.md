@@ -1,3 +1,5 @@
+# COMMANDS.md
+
 # ─────────────────────────────────────────────
 
 # 0) One time per shell
@@ -6,7 +8,7 @@
 
 export TENANTS="afyakit danabtmc dawapap"
 
-# now `make deploy-all` + `make run-web-all` know what to loop
+# Now `make deploy-all`, `make web-all`, `make run-web-all`, etc. know what to loop.
 
 # ─────────────────────────────────────────────
 
@@ -19,11 +21,11 @@ make run-web danabtmc
 make run-web dawapap
 make run-web rpmoc
 
-# or launch all (each on its own port, from WEB_PORT_BASE=5000)
+# Or launch all (each on its own port, from WEB_PORT_BASE=5000)
 
 make run-web-all
 
-# uses $TENANTS
+# Uses $TENANTS
 
 # ─────────────────────────────────────────────
 
@@ -34,47 +36,51 @@ make run-web-all
 make run afyakit
 make run danabtmc
 make run dawapap
+make run rpmoc
 
-# or all (will iterate TENANTS and try to run on device/emulator)
+# Or run all tenants sequentially on the same device/emulator
 
 make run-android-all
 
-# ─────────────────────────────────────────────
-
-# 3) Build web bundle (shared tenant entry)
+# Uses $TENANTS
 
 # ─────────────────────────────────────────────
 
-# build once → build/web
-
-make web
+# 3) Build web bundle (per tenant)
 
 # ─────────────────────────────────────────────
 
-# 4) Deploy per tenant (now uses site-specific firebase.<site>.json)
+make web afyakit
+make web danabtmc
+make web dawapap
+
+# Build all tenants (loops $TENANTS)
+
+make web-all
 
 # ─────────────────────────────────────────────
 
-make deploy afyakit # → uses firebase.afyakit.json if present
-make deploy danabtmc # → uses firebase.danabtmc.json if present
-make deploy dawapap # → uses firebase.dawapap.json if present
+# 4) Deploy web per tenant (site-specific firebase.<site>.json)
 
-# full matrix deploy (loops TENANTS, picks right json per tenant)
+# ─────────────────────────────────────────────
+
+make deploy afyakit # uses firebase.afyakit.json if present, else firebase.json
+make deploy danabtmc # uses firebase.danabtmc.json if present, else firebase.json
+make deploy dawapap # uses firebase.dawapap.json if present, else firebase.json
+
+# Deploy all tenants (loops $TENANTS)
 
 make deploy-all
 
-# build + deploy all in one go
-
-make release-web-all
-
-# = make web + make deploy-all
-
-# build + deploy single tenant
+# Build + deploy single tenant
 
 make release-web dawapap
 make release-web afyakit
 make release-web danabtmc
-make release-web rpmoc
+
+# Build + deploy all tenants
+
+make release-web-all
 
 # ─────────────────────────────────────────────
 
@@ -82,14 +88,21 @@ make release-web rpmoc
 
 # ─────────────────────────────────────────────
 
-# run HQ on Chrome
+# HQ uses the SAME entrypoint, switched by APP=hq
+
+# Run HQ on Chrome (fixed port :5000)
 
 make run-hq-web
 
-# run HQ on device
+# Run HQ on device
 
 make run-hq
 
-# build + deploy HQ (uses firebase.hq.json if it exists)
+# Build + deploy HQ
 
-make web-hq && make deploy-hq
+make web-hq
+make deploy-hq
+
+# One-liner
+
+make release-web-hq

@@ -1,0 +1,235 @@
+// lib/core/api/afyakit/routes.dart
+
+import 'package:afyakit/core/api/afyakit/config.dart';
+import 'package:afyakit/core/api/shared/uri.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
+
+class AfyaKitRoutes {
+  AfyaKitRoutes(String tenantId) : tenantId = tenantId.trim().toLowerCase();
+
+  /// Tenant slug/id used in API base: .../api/:tenantId
+  final String tenantId;
+
+  // ─────────────────────────────────────────────
+  // Bases
+  // ─────────────────────────────────────────────
+
+  /// Tenant base: https://host/api/:tenantId
+  String get _tenantBase => apiBaseUrl(tenantId);
+
+  /// Core base: https://host/api
+  ///
+  /// We derive it by removing the final path segment if it equals [tenantId].
+  String get _coreBase {
+    final u = Uri.parse(_tenantBase);
+
+    // Normalize path segments (avoid surprises from trailing slashes).
+    final segs = u.pathSegments.where((s) => s.trim().isNotEmpty).toList();
+
+    if (segs.isNotEmpty && segs.last.toLowerCase() == tenantId) {
+      final coreSegs = segs.take(segs.length - 1).toList();
+      return u.replace(pathSegments: coreSegs).toString();
+    }
+
+    // Fallback: if config already points to core, keep it.
+    return u.toString();
+  }
+
+  Uri _uri(String path, {Map<String, String>? query}) {
+    final p = _cleanPath(path);
+    final uri = Uri.parse(joinBaseAndPath(_tenantBase, p));
+    debugUri('URI tenant', uri);
+    return query != null ? uri.replace(queryParameters: query) : uri;
+  }
+
+  Uri _uriCore(String path, {Map<String, String>? query}) {
+    final p = _cleanPath(path);
+    final uri = Uri.parse(joinBaseAndPath(_coreBase, p));
+    debugUri('URI core', uri);
+    return query != null ? uri.replace(queryParameters: query) : uri;
+  }
+
+  static String _cleanPath(String path) {
+    final p = path.trim();
+    if (p.isEmpty) return '';
+    return p.startsWith('/') ? p.substring(1) : p;
+  }
+
+  String _seg(String s) => Uri.encodeComponent(s.trim());
+
+  // ─────────────────────────────────────────────
+  // 🔐 Public auth (tenant-scoped; no auth header)
+  // ─────────────────────────────────────────────
+
+  Uri checkUserStatus() => _uri('auth_login/check-user-status');
+  Uri waStart() => _uri('auth_login/wa/start');
+  Uri smsStart() => _uri('auth_login/sms/start');
+  Uri emailStart() => _uri('auth_login/email/start');
+  Uri otpVerify() => _uri('auth_login/otp/verify');
+
+  // ─────────────────────────────────────────────
+  // 👤 Auth Session (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri getCurrentUser() => _uri('auth/session/me');
+  Uri syncClaims() => _uri('auth/session/sync-claims');
+
+  // ─────────────────────────────────────────────
+  // 👥 Auth Users (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri getAllUsers() => _uri('auth_users');
+  Uri getUserById(String uid) => _uri('auth_users/${_seg(uid)}');
+  Uri updateUser(String uid) => _uri('auth_users/${_seg(uid)}');
+  Uri deleteUser(String uid) => _uri('auth_users/${_seg(uid)}');
+
+  // ─────────────────────────────────────────────
+  // 🧑‍💼 HQ / Global (core; superadmin-gated on server)
+  // ─────────────────────────────────────────────
+
+  Uri listGlobalUsers({
+    String? tenant,
+    String? search,
+    int limit = 50,
+  }) => _uriCore(
+    'users',
+    query: {
+      if (tenant != null && tenant.trim().isNotEmpty) 'tenantId': tenant.trim(),
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      'limit': '$limit',
+    },
+  );
+
+  Uri createGlobalUser() => _uriCore('users');
+  Uri updateGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
+  Uri deleteGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
+
+  Uri fetchUserMemberships(String uid) =>
+      _uriCore('users/${_seg(uid)}/memberships');
+
+  Uri listSuperAdmins() => _uriCore('superadmins');
+  Uri setSuperAdmin(String uid) => _uriCore('superadmins/${_seg(uid)}');
+
+  Uri hqListTenantUsers(
+    String targetTenantId, {
+    String? search,
+    int limit = 50,
+  }) => _uriCore(
+    'tenants/${_seg(targetTenantId)}/auth_users',
+    query: {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      'limit': '$limit',
+    },
+  );
+
+  Uri hqUpsertUserMembership(String targetTenantId, String uid) =>
+      _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
+
+  Uri hqDeleteUser(String targetTenantId, String uid) =>
+      _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
+
+  // ─────────────────────────────────────────────
+  // 🏢 Tenants (HQ/global; core)
+  // ─────────────────────────────────────────────
+
+  Uri listTenants() => _uriCore('tenants');
+  Uri createTenant() => _uriCore('tenants');
+  Uri getTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+  Uri updateTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+  Uri deleteTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+
+  Uri setTenantStatus(String slug) => _uriCore('tenants/${_seg(slug)}/status');
+  Uri setTenantFlag(String slug, String key) =>
+      _uriCore('tenants/${_seg(slug)}/flags/${_seg(key)}');
+
+  Uri setTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
+  Uri removeTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
+
+  Uri listDomains(String slug) => _uriCore('tenants/${_seg(slug)}/domains');
+  Uri addDomain(String slug) => _uriCore('tenants/${_seg(slug)}/domains');
+
+  Uri verifyDomain(String slug, String domain) =>
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/verify');
+
+  Uri makePrimaryDomain(String slug, String domain) =>
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}/primary');
+
+  Uri removeDomain(String slug, String domain) =>
+      _uriCore('tenants/${_seg(slug)}/domains/${_seg(domain)}');
+
+  // ─────────────────────────────────────────────
+  // 📦 Inventory (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri inventory(String itemType) =>
+      _uri('inventory', query: {'type': itemType});
+  Uri createItem() => _uri('inventory');
+
+  Uri itemById(String id, {String? type}) => _uri(
+    'inventory/${_seg(id)}',
+    query: (type != null && type.trim().isNotEmpty)
+        ? {'type': type.trim()}
+        : null,
+  );
+
+  // ─────────────────────────────────────────────
+  // ⚙️ Preferences (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri preferenceField(String itemType, String field) =>
+      _uri('preferences/${_seg(itemType)}/${_seg(field)}');
+
+  // ─────────────────────────────────────────────
+  // 📍 Inventory Locations (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri getTypedLocations(InventoryLocationType type) =>
+      _uri('inventory-locations/${type.asString}');
+
+  Uri addTypedLocation(InventoryLocationType type) =>
+      _uri('inventory-locations/${type.asString}');
+
+  Uri deleteTypedLocation(InventoryLocationType type, String id) =>
+      _uri('inventory-locations/${type.asString}/${_seg(id)}');
+
+  // ─────────────────────────────────────────────
+  // 🧪 Batches (tenant-scoped; authenticated, per store)
+  // ─────────────────────────────────────────────
+
+  Uri listBatches(String storeId) => _uri('stores/${_seg(storeId)}/batches');
+  Uri createBatch(String storeId) => _uri('stores/${_seg(storeId)}/batches');
+  Uri updateBatch(String storeId, String batchId) =>
+      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
+  Uri deleteBatch(String storeId, String batchId) =>
+      _uri('stores/${_seg(storeId)}/batches/${_seg(batchId)}');
+
+  // ─────────────────────────────────────────────
+  // 📥 Imports (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri importInventory({
+    required String type,
+    bool dryRun = true,
+    bool persist = false,
+  }) => _uri(
+    'imports/inventory',
+    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+  );
+
+  Uri importInventoryRaw({
+    required String type,
+    bool dryRun = true,
+    bool persist = false,
+  }) => _uri(
+    'imports/inventory-raw',
+    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+  );
+
+  Uri importTemplate(String type) => _uri('imports/templates/$type');
+
+  // ─────────────────────────────────────────────
+  // 🏓 Ping
+  // ─────────────────────────────────────────────
+
+  Uri ping() => _uri('ping');
+}

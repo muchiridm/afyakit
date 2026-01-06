@@ -1,7 +1,7 @@
-import 'package:afyakit/core/inventory/controllers/forms/consumable_controller.dart';
-import 'package:afyakit/core/inventory/controllers/forms/equipment_controller.dart';
-import 'package:afyakit/core/inventory/controllers/forms/medication_controller.dart';
-import 'package:afyakit/core/inventory/extensions/item_type_x.dart';
+import 'package:afyakit/features/inventory/items/controllers/forms/consumable_controller.dart';
+import 'package:afyakit/features/inventory/items/controllers/forms/equipment_controller.dart';
+import 'package:afyakit/features/inventory/items/controllers/forms/medication_controller.dart';
+import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 T resolveFormController<T>(WidgetRef ref, ItemType type) {
