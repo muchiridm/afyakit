@@ -274,4 +274,21 @@ class AfyaKitRoutes {
 
   Uri zohoDeleteContact(String contactId) =>
       _uri('zoho/v1/contacts/${_seg(contactId)}');
+
+  // ─────────────────────────────────────────────
+  // 💼 Zoho Quotes (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri zohoListQuotes({int limit = 50, int page = 1}) =>
+      _uri('zoho/v1/quotes', query: {'limit': '$limit', 'page': '$page'});
+
+  Uri zohoGetQuote(String quoteId) => _uri('zoho/v1/quotes/${_seg(quoteId)}');
+
+  Uri zohoCreateQuote() => _uri('zoho/v1/quotes');
+
+  Uri zohoUpdateQuote(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}');
+
+  Uri zohoDeleteQuote(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}');
 }

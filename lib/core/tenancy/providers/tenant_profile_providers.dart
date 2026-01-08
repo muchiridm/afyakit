@@ -1,7 +1,9 @@
 // lib/core/tenancy/providers/tenant_profile_providers.dart
 
+import 'package:afyakit/core/tenancy/models/tenant_assets.dart';
+import 'package:afyakit/core/tenancy/models/tenant_details.dart';
+import 'package:afyakit/core/tenancy/models/tenant_features.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,16 +19,29 @@ final _tenantProfileLoaderProvider = Provider.autoDispose<TenantProfileLoader>((
   return TenantProfileLoader(db);
 });
 
-/// Fetch-once (with cache fallback), same as v1 but v2 model.
+/// ✅ Fetch-once profile (public bootstrap).
+/// IMPORTANT:
+/// - Must NOT depend on auth session.
+/// - Must NOT be bricked by deleted users / missing memberships.
 final tenantProfileProvider = FutureProvider.autoDispose<TenantProfile>((
   ref,
 ) async {
-  await ref.watch(
-    tenantSessionGuardProvider.future,
-  ); // 👈 ensures claims are sane
   final slug = ref.watch(tenantSlugProvider);
   final loader = ref.watch(_tenantProfileLoaderProvider);
-  return loader.load(slug);
+
+  try {
+    return await loader.load(slug);
+  } catch (_) {
+    // ✅ Hard failsafe: let UI render login/guest even if profile load fails.
+    return TenantProfile(
+      id: slug,
+      displayName: slug,
+      primaryColorHex: '#2196F3',
+      features: TenantFeatures.fromMap(null),
+      assets: TenantAssets.fromMap(null),
+      details: TenantDetails.fromMap(const {}),
+    );
+  }
 });
 
 /// Live stream version (admin dashboards, HQ, etc.)
@@ -38,13 +53,11 @@ final tenantProfileStreamProvider = StreamProvider.autoDispose<TenantProfile>((
   return loader.stream(slug);
 });
 
-/// Smaller rebuild surface — just the display name
 final tenantProfileDisplayNameProvider = Provider.autoDispose<String>((ref) {
   final asyncProfile = ref.watch(tenantProfileProvider);
   return asyncProfile.maybeWhen(data: (p) => p.displayName, orElse: () => '');
 });
 
-/// Smaller rebuild surface — primary color
 final tenantProfilePrimaryColorProvider = Provider.autoDispose<Color?>((ref) {
   final asyncProfile = ref.watch(tenantProfileProvider);
   return asyncProfile.maybeWhen(
@@ -53,13 +66,11 @@ final tenantProfilePrimaryColorProvider = Provider.autoDispose<Color?>((ref) {
   );
 });
 
-/// Smaller rebuild surface — logo url (you had this logic in assets)
 final tenantProfileLogoUrlProvider = Provider.autoDispose<String?>((ref) {
   final asyncProfile = ref.watch(tenantProfileProvider);
   return asyncProfile.maybeWhen(data: (p) => p.logoUrl(), orElse: () => null);
 });
 
-/// Display name with slug fallback (useful for headers).
 final tenantDisplayNameProvider = Provider.autoDispose<String>((ref) {
   final slug = ref.watch(tenantSlugProvider);
   final asyncProfile = ref.watch(tenantProfileProvider);

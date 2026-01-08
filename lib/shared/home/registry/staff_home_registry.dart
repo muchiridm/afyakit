@@ -9,6 +9,7 @@ import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/retail/catalog/widgets/screens/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/shared/home/models/staff_feature_def.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/admin_dashboard_screen.dart';
 import 'package:flutter/material.dart';
@@ -21,32 +22,16 @@ final class StaffHomeRegistry {
   // Public API (tenancy-aware)
   // ─────────────────────────────────────────────────────────────
 
-  /// Feature tiles (Inventory, Retail, Reporting, etc.)
-  /// Source of truth = FeatureRegistry
-  ///
-  /// ✅ Tenancy-aware:
-  /// - TenantProfile.features gates modules (except those marked not tenant-toggleable)
-  /// - You can still hide/disable per-user via allowed/allowedRef
   static List<StaffFeatureDef> featureTiles(WidgetRef ref, AuthUser user) {
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
     return FeatureRegistry.features
-        .map(
-          (f) => StaffFeatureDef(
-            featureKey: f.key,
-            destination: f.entry, // may be null
-          ),
-        )
+        .map((f) => StaffFeatureDef(featureKey: f.key, destination: f.entry))
         .where((d) => _isVisibleForTenant(profile, d))
         .where((d) => _isAllowedForUser(ref, user, d))
         .toList(growable: false);
   }
 
-  /// All staff actions (flattened)
-  ///
-  /// ✅ Tenancy-aware:
-  /// - A tenant can enable inventory but disable reporting, etc.
-  /// - HQ stays independent (not tenant-toggleable)
   static List<StaffFeatureDef> quickActions(WidgetRef ref, AuthUser user) {
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
@@ -56,7 +41,6 @@ final class StaffHomeRegistry {
         .toList(growable: false);
   }
 
-  /// Actions belonging to a specific feature
   static List<StaffFeatureDef> actionsFor(
     WidgetRef ref,
     AuthUser user,
@@ -67,7 +51,7 @@ final class StaffHomeRegistry {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Source of truth list for actions (do NOT call directly from UI)
+  // Source of truth list for actions
   // ─────────────────────────────────────────────────────────────
 
   static const List<StaffFeatureDef> _quickActions = [
@@ -119,6 +103,14 @@ final class StaffHomeRegistry {
       destination: _contacts,
       allowedRef: _allowContactsForStaffRetailTenant,
     ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.retail,
+      labelOverride: 'Quotes', // ✅ NEW
+      iconOverride: Icons.request_quote_outlined, // ✅ NEW
+      destination: _quotes, // ✅ NEW
+      allowedRef:
+          _allowQuotesForStaffRetailTenant, // ✅ NEW (mirrors Contacts gate)
+    ),
 
     // ───────── Admin (HQ) ─────────
     StaffFeatureDef(
@@ -127,7 +119,7 @@ final class StaffHomeRegistry {
       iconOverride: Icons.admin_panel_settings,
       destination: _admin,
       allowed: _canAccessAdmin,
-      enabledByTenantFeature: false, // HQ is not tenant-toggleable
+      enabledByTenantFeature: false,
     ),
   ];
 
@@ -151,6 +143,8 @@ final class StaffHomeRegistry {
 
   static Widget _catalog(BuildContext _) => const CatalogScreen();
 
+  static Widget _quotes(BuildContext _) => const QuotesListScreen(); // ✅ NEW
+
   // ─────────────────────────────────────────────────────────────
   // Gates
   // ─────────────────────────────────────────────────────────────
@@ -158,6 +152,16 @@ final class StaffHomeRegistry {
   static bool _canAccessAdmin(AuthUser u) => u.canAccessAdminPanel;
 
   static bool _allowContactsForStaffRetailTenant(WidgetRef ref, AuthUser u) {
+    if (!u.isStaff) return false;
+
+    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    if (profile == null) return false;
+
+    return profile.features.enabled(FeatureKeys.retail);
+  }
+
+  static bool _allowQuotesForStaffRetailTenant(WidgetRef ref, AuthUser u) {
+    // same gate as contacts for now (staff + retail enabled)
     if (!u.isStaff) return false;
 
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
@@ -174,14 +178,9 @@ final class StaffHomeRegistry {
     dynamic /*TenantProfile?*/ profile,
     StaffFeatureDef def,
   ) {
-    // HQ (and anything else you mark) is not tenant-toggleable
     if (def.enabledByTenantFeature == false) return true;
-
-    // If profile isn't loaded yet, fail closed (hide) to prevent flicker.
-    // If you prefer "optimistic show then hide", change this.
     if (profile == null) return false;
 
-    // Tenant gates by module key
     final key = def.featureKey.trim();
     if (key.isEmpty) return false;
 

@@ -1,63 +1,23 @@
-// lib/features/contacts/models/zoho_contact.dart
+// lib/features/retail/contacts/models/zoho_contact.dart
 
-class ZohoContact {
-  const ZohoContact({
-    required this.contactId,
-    required this.displayName, // ✅ only required field in FE
-    this.personName, // optional
-    this.companyName, // optional
+class PersonContact {
+  const PersonContact({
+    required this.personName,
+    this.contactPersonId,
     this.email,
     this.phone,
     this.mobile,
-    this.status,
+    this.isPrimary,
   });
 
-  final String contactId;
-
-  /// FE-required label (maps to Zoho `contact_name`)
-  final String displayName;
-
-  /// Optional: person name (stored in Zoho as primary contact_person)
-  final String? personName;
-
-  /// Optional: company / organization name (Zoho `company_name`)
-  final String? companyName;
-
-  /// These map to the PRIMARY contact person in Zoho (when we send contact_persons).
-  /// If Zoho returns top-level email/phone/mobile, we still accept them.
+  final String personName; // required when object exists
+  final String? contactPersonId;
   final String? email;
   final String? phone;
   final String? mobile;
+  final bool? isPrimary;
 
-  /// Zoho typically uses "active" / "inactive"
-  final String? status;
-
-  bool get isActive => (status ?? '').toLowerCase() != 'inactive';
-
-  String get bestPhone {
-    final m = mobile?.trim();
-    if (m != null && m.isNotEmpty) return m;
-    final p = phone?.trim();
-    if (p != null && p.isNotEmpty) return p;
-    return '';
-  }
-
-  /// What to show on UI tiles (prefer displayName, fallback)
-  String get title {
-    final d = displayName.trim();
-    if (d.isNotEmpty) return d;
-    final p = personName?.trim();
-    if (p != null && p.isNotEmpty) return p;
-    final c = companyName?.trim();
-    if (c != null && c.isNotEmpty) return c;
-    return '';
-  }
-
-  // ─────────────────────────────────────────────
-  // JSON helpers (no `any`)
-  // ─────────────────────────────────────────────
-
-  static String? _readString(Object? v) {
+  static String? _s(Object? v) {
     if (v is String) {
       final t = v.trim();
       return t.isEmpty ? null : t;
@@ -65,36 +25,126 @@ class ZohoContact {
     return null;
   }
 
-  static Map<String, Object?>? _readMap(Object? v) {
-    if (v is Map) {
-      return v.cast<String, Object?>();
+  static Map<String, Object?>? _m(Object? v) {
+    if (v is Map) return v.cast<String, Object?>();
+    return null;
+  }
+
+  factory PersonContact.fromJson(Object? raw) {
+    final j = _m(raw);
+    if (j == null) {
+      throw StateError('person_contact must be a JSON object');
+    }
+
+    final name = _s(j['person_name']) ?? '';
+    if (name.isEmpty) {
+      throw StateError('person_contact.person_name is required');
+    }
+
+    return PersonContact(
+      personName: name,
+      contactPersonId: _s(j['contact_person_id']),
+      email: _s(j['email']),
+      phone: _s(j['phone']),
+      mobile: _s(j['mobile']),
+      isPrimary: j['is_primary'] is bool ? j['is_primary'] as bool : null,
+    );
+  }
+
+  Map<String, Object?> toJsonForUpsert() {
+    final name = personName.trim();
+    if (name.isEmpty) {
+      throw StateError('personName cannot be empty');
+    }
+
+    return <String, Object?>{
+      'person_name': name,
+      if ((email ?? '').trim().isNotEmpty) 'email': email!.trim(),
+      if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
+      if ((mobile ?? '').trim().isNotEmpty) 'mobile': mobile!.trim(),
+    };
+  }
+}
+
+class ZohoContact {
+  const ZohoContact({
+    required this.contactId,
+    required this.displayName, // ✅ only required field in FE
+    this.companyName,
+    this.personContact,
+    this.status,
+  });
+
+  final String contactId;
+  final String displayName;
+  final String? companyName;
+  final PersonContact? personContact;
+  final String? status;
+
+  bool get isActive => (status ?? '').toLowerCase() != 'inactive';
+
+  String get bestPhone {
+    final m = personContact?.mobile?.trim();
+    if (m != null && m.isNotEmpty) return m;
+    final p = personContact?.phone?.trim();
+    if (p != null && p.isNotEmpty) return p;
+    return '';
+  }
+
+  String get title {
+    final d = displayName.trim();
+    if (d.isNotEmpty) return d;
+    final p = personContact?.personName.trim();
+    if (p != null && p.isNotEmpty) return p;
+    final c = companyName?.trim();
+    if (c != null && c.isNotEmpty) return c;
+    return '';
+  }
+
+  // ─────────────────────────────────────────────
+  // JSON helpers (strict, no any)
+  // ─────────────────────────────────────────────
+
+  static String? _s(Object? v) {
+    if (v is String) {
+      final t = v.trim();
+      return t.isEmpty ? null : t;
     }
     return null;
   }
 
-  static List<Object?>? _readList(Object? v) {
+  static Map<String, Object?>? _m(Object? v) {
+    if (v is Map) return v.cast<String, Object?>();
+    return null;
+  }
+
+  static List<Object?>? _l(Object? v) {
     if (v is List) return v.cast<Object?>();
     return null;
   }
 
-  static String? _joinName(String? first, String? last) {
-    final f = first?.trim() ?? '';
-    final l = last?.trim() ?? '';
-    final full = [f, l].where((s) => s.isNotEmpty).join(' ');
-    return full.isEmpty ? null : full;
+  static String _deriveDisplayName({
+    required String? display,
+    required String? company,
+    required String? person,
+  }) {
+    final d = (display ?? '').trim();
+    if (d.isNotEmpty) return d;
+    final c = (company ?? '').trim();
+    if (c.isNotEmpty) return c;
+    final p = (person ?? '').trim();
+    if (p.isNotEmpty) return p;
+    return 'Contact';
   }
 
-  static ({String? personName, String? email, String? phone, String? mobile})
-  _pickPrimaryContactPerson(Map<String, Object?> json) {
-    final cpsRaw = _readList(json['contact_persons']);
-    if (cpsRaw == null || cpsRaw.isEmpty) {
-      return (personName: null, email: null, phone: null, mobile: null);
-    }
+  // Legacy Zoho fallback: contact_persons array
+  static PersonContact? _pickPrimaryFromZohoLegacy(Map<String, Object?> j) {
+    final cpsRaw = _l(j['contact_persons']);
+    if (cpsRaw == null || cpsRaw.isEmpty) return null;
 
-    // Prefer is_primary_contact == true, else first item.
     Map<String, Object?>? primary;
     for (final item in cpsRaw) {
-      final m = _readMap(item);
+      final m = _m(item);
       if (m == null) continue;
       final isPrimary = m['is_primary_contact'];
       if (isPrimary is bool && isPrimary == true) {
@@ -102,107 +152,197 @@ class ZohoContact {
         break;
       }
     }
-    primary ??= _readMap(cpsRaw.first);
+    primary ??= _m(cpsRaw.first);
+    if (primary == null) return null;
 
-    if (primary == null) {
-      return (personName: null, email: null, phone: null, mobile: null);
-    }
+    final first = _s(primary['first_name']);
+    final last = _s(primary['last_name']);
+    final full = [
+      first ?? '',
+      last ?? '',
+    ].where((s) => s.trim().isNotEmpty).join(' ').trim();
+    final personName = full.isEmpty ? null : full;
 
-    final first = _readString(primary['first_name']);
-    final last = _readString(primary['last_name']);
+    if (personName == null) return null;
 
-    return (
-      personName: _joinName(first, last),
-      email: _readString(primary['email']),
-      phone: _readString(primary['phone']),
-      mobile: _readString(primary['mobile']),
+    return PersonContact(
+      personName: personName,
+      contactPersonId: _s(primary['contact_person_id']),
+      email: _s(primary['email']) ?? _s(j['email']),
+      phone: _s(primary['phone']) ?? _s(j['phone']),
+      mobile: _s(primary['mobile']) ?? _s(j['mobile']),
+      isPrimary: true,
     );
   }
-
-  // ─────────────────────────────────────────────
-  // Mapping
-  // ─────────────────────────────────────────────
 
   factory ZohoContact.fromJson(Map<String, dynamic> json) {
     final j = json.cast<String, Object?>();
 
-    final id = _readString(j['contact_id']) ?? '';
-    final display = _readString(j['contact_name']) ?? '';
+    // New API (preferred)
+    final id = _s(j['contact_id']) ?? '';
+    final display = _s(j['display_name']); // ✅ new
+    final company = _s(j['company_name']);
+    final status = _s(j['status']);
 
-    final primary = _pickPrimaryContactPerson(j);
+    PersonContact? person;
+    if (j.containsKey('person_contact')) {
+      final rawPc = j['person_contact'];
+      if (rawPc == null) {
+        person = null;
+      } else {
+        person = PersonContact.fromJson(rawPc);
+      }
+    } else {
+      // Legacy fallbacks while migrating
+      final legacyPersonName = _s(j['person_name']);
+      if (legacyPersonName != null) {
+        person = PersonContact(
+          personName: legacyPersonName,
+          email: _s(j['email']),
+          phone: _s(j['phone']),
+          mobile: _s(j['mobile']),
+        );
+      } else {
+        person = _pickPrimaryFromZohoLegacy(j);
+      }
+    }
 
-    // Zoho sometimes returns email/phone/mobile at top-level too — use them as fallback.
-    final email = primary.email ?? _readString(j['email']);
-    final phone = primary.phone ?? _readString(j['phone']);
-    final mobile = primary.mobile ?? _readString(j['mobile']);
+    // Also accept Zoho's contact_name during transition
+    final zohoContactName = _s(j['contact_name']);
+    final derived = _deriveDisplayName(
+      display: display ?? zohoContactName,
+      company: company,
+      person: person?.personName,
+    );
 
     return ZohoContact(
       contactId: id,
-      displayName: display,
-      personName: primary.personName,
-      companyName: _readString(j['company_name']),
-      email: email,
-      phone: phone,
-      mobile: mobile,
-      status: _readString(j['status']),
+      displayName: derived,
+      companyName: company,
+      personContact: person,
+      status: status,
     );
   }
 
-  Map<String, dynamic> toCreateJson() {
-    final d = displayName.trim();
+  /// Create payload for NEW backend contract.
+  Map<String, Object?> toCreateJson() {
+    final dn = displayName.trim();
+    if (dn.isEmpty) {
+      throw StateError('displayName is required');
+    }
+
     final company = (companyName ?? '').trim();
-    final person = (personName ?? '').trim();
-    final emailV = (email ?? '').trim();
-    final phoneV = (phone ?? '').trim();
-    final mobileV = (mobile ?? '').trim();
 
-    return <String, dynamic>{
-      'contact_name': d,
+    return <String, Object?>{
+      'display_name': dn,
       if (company.isNotEmpty) 'company_name': company,
-      if (person.isNotEmpty) 'person_name': person,
-      if (emailV.isNotEmpty) 'email': emailV,
-      if (phoneV.isNotEmpty) 'phone': phoneV,
-      if (mobileV.isNotEmpty) 'mobile': mobileV,
-    };
-  }
-
-  Map<String, dynamic> toUpdateJson() {
-    final d = displayName.trim();
-    final company = (companyName ?? '').trim();
-    final person = (personName ?? '').trim();
-    final emailV = (email ?? '').trim();
-    final phoneV = (phone ?? '').trim();
-    final mobileV = (mobile ?? '').trim();
-
-    return <String, dynamic>{
-      if (d.isNotEmpty) 'contact_name': d,
-      if (company.isNotEmpty) 'company_name': company,
-      if (person.isNotEmpty) 'person_name': person,
-      if (emailV.isNotEmpty) 'email': emailV,
-      if (phoneV.isNotEmpty) 'phone': phoneV,
-      if (mobileV.isNotEmpty) 'mobile': mobileV,
+      if (personContact != null)
+        'person_contact': personContact!.toJsonForUpsert(),
     };
   }
 
   ZohoContact copyWith({
     String? contactId,
     String? displayName,
-    String? personName,
     String? companyName,
-    String? email,
-    String? phone,
-    String? mobile,
+    PersonContact? personContact,
     String? status,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
       displayName: displayName ?? this.displayName,
-      personName: personName ?? this.personName,
       companyName: companyName ?? this.companyName,
-      email: email ?? this.email,
-      phone: phone ?? this.phone,
-      mobile: mobile ?? this.mobile,
+      personContact: personContact ?? this.personContact,
       status: status ?? this.status,
     );
+  }
+}
+
+/// Patch object for updates that supports:
+/// - omitted field => do not touch
+/// - value => set/update
+/// - null => clear/delete
+class ContactUpdatePatch {
+  const ContactUpdatePatch({
+    this.displayName,
+    this.companyName,
+    this.personContact,
+  });
+
+  /// If provided, must not be empty.
+  final String? displayName;
+
+  /// null => clear company name
+  /// string => set company name
+  final String? companyName;
+
+  /// null => delete person contact
+  /// object => upsert person contact
+  final PersonContactPatch? personContact;
+
+  Map<String, Object?> toJson() {
+    final out = <String, Object?>{};
+
+    if (displayName != null) {
+      final dn = displayName!.trim();
+      if (dn.isEmpty) {
+        throw StateError('displayName cannot be empty');
+      }
+      out['display_name'] = dn;
+    }
+
+    if (companyName != null) {
+      // Treat empty as clear
+      final cn = companyName!.trim();
+      out['company_name'] = cn.isEmpty ? '' : cn;
+    }
+
+    if (personContact != null) {
+      out['person_contact'] = personContact!.toJson();
+    }
+
+    return out;
+  }
+}
+
+class PersonContactPatch {
+  const PersonContactPatch({
+    this.personName,
+    this.email,
+    this.phone,
+    this.mobile,
+    this.delete,
+  });
+
+  /// If delete==true, backend should delete primary person contact.
+  final bool? delete;
+
+  final String? personName;
+  final String? email;
+  final String? phone;
+  final String? mobile;
+
+  Map<String, Object?>? toJson() {
+    if (delete == true) {
+      return null; // IMPORTANT: caller sets person_contact: null
+    }
+
+    final out = <String, Object?>{};
+
+    if (personName != null) {
+      final pn = personName!.trim();
+      out['person_name'] = pn.isEmpty ? '' : pn;
+    }
+    if (email != null) {
+      out['email'] = email!.trim().isEmpty ? '' : email!.trim();
+    }
+    if (phone != null) {
+      out['phone'] = phone!.trim().isEmpty ? '' : phone!.trim();
+    }
+    if (mobile != null) {
+      out['mobile'] = mobile!.trim().isEmpty ? '' : mobile!.trim();
+    }
+
+    return out;
   }
 }

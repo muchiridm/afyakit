@@ -1,4 +1,5 @@
 // lib/core/tenancy/providers/tenant_session_guard_provider.dart
+// (FULL FILE with minimal edits)
 
 import 'dart:async';
 
@@ -15,11 +16,9 @@ const _apiBase = String.fromEnvironment(
 );
 
 String _normTenant(String s) => s.trim().toLowerCase();
-
 bool _is2xx(int? s) => s != null && s >= 200 && s < 300;
 
 /// De-dupe per UID (claims are per-user; session checks are per-user-per-tenant).
-/// This prevents multiple widgets / providers from stampeding the same guard.
 final Map<String, Future<void>> _inflightByKey = <String, Future<void>>{};
 
 @immutable
@@ -45,8 +44,6 @@ Future<TenantSessionCheckResult> _checkSessionForTenant({
   required String tenantSlug,
   required fb.User fbUser,
 }) async {
-  // We DO NOT force-refresh claims here.
-  // We only need a valid bearer token; tenant is decided by URL + membership doc on server.
   final token = await fbUser.getIdToken();
 
   final dio = Dio(
@@ -83,7 +80,6 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
 ) async {
   final tenantSlug = _normTenant(ref.watch(tenantSlugProvider));
 
-  // Keep alive briefly to avoid re-trigger storms during rebuilds/navigation.
   final link = ref.keepAlive();
   Timer? purge;
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
@@ -96,8 +92,6 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
   }
 
   final uid = fbUser.uid;
-
-  // Key on UID + tenant (because user can be valid in tenant A but not tenant B).
   final key = '$uid@$tenantSlug';
 
   final inflight = _inflightByKey[key];
@@ -122,38 +116,26 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
       if (kDebugMode) {
         debugPrint(
           '🧾 [tenant-guard] /auth/session/me http=${r.statusCode} '
-          'error=${r.errorCode ?? '-'} msg=${r.message ?? '-'} body=${r.body}',
+          'error=${r.errorCode ?? '-'} msg=${r.message ?? '-'}',
         );
       }
 
       if (r.ok) {
-        if (kDebugMode) {
+        if (kDebugMode)
           debugPrint('✅ [tenant-guard] OK tenant=$tenantSlug uid=$uid');
-        }
         return;
       }
 
-      // Hard failure: membership missing/disabled/forbidden etc.
-      //
-      // NOTE:
-      // - 401 usually means "no/expired token"
-      // - 403 means "valid token but not allowed for this tenant"
-      //
-      // Choose your policy:
-      // - Either throw (so AuthGate can react)
-      // - Or signOut here
-      //
-      // I prefer THROWING here, and letting your gates decide.
-      throw DioException(
-        requestOptions: RequestOptions(path: '/$tenantSlug/auth/session/me'),
-        response: Response(
-          requestOptions: RequestOptions(path: '/$tenantSlug/auth/session/me'),
-          statusCode: r.statusCode,
-          data: r.body,
-        ),
-        type: DioExceptionType.badResponse,
-        error: 'tenant-session-check-failed',
-      );
+      // ✅ If session is invalid for this tenant, force guest.
+      // Do NOT throw: throwing bricks providers that await this (and creates trap states).
+      if (kDebugMode) {
+        debugPrint(
+          '🚪 [tenant-guard] invalid session; signing out uid=$uid tenant=$tenantSlug',
+        );
+      }
+
+      await fb.FirebaseAuth.instance.signOut();
+      return;
     } finally {
       _inflightByKey.remove(key);
     }

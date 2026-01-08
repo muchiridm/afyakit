@@ -186,8 +186,9 @@ final class AfyaKitClient {
               final resp = await http.fetch(req);
               return handler.resolve(resp);
             } catch (err) {
-              if (kDebugMode)
+              if (kDebugMode) {
                 debugPrint('❌ [api] conn-timeout retry failed: $err');
+              }
               // fall through to normal handling
             }
           }

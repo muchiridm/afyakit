@@ -1,15 +1,33 @@
-// lib/shared/services/dialog_service.dart
-
 import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:flutter/material.dart';
 
 /// Centralized dialogs with a safe context fallback.
-/// Prefers an explicitly passed [context]; otherwise uses [navigatorKey.currentContext].
+/// Prefers an explicitly passed [context]; otherwise uses [appNavigatorKey.currentContext].
 class DialogService {
   /// Resolve a usable BuildContext.
   static BuildContext? _ctx(BuildContext? context) {
     return context ?? appNavigatorKey.currentContext;
+  }
+
+  /// ✅ Generic showDialog wrapper for any custom dialog widget.
+  static Future<T?> show<T>({
+    BuildContext? context,
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) async {
+    final ctx = _ctx(context);
+    if (ctx == null) {
+      debugPrint('[DialogService.show] No context available → null');
+      return null;
+    }
+
+    return showDialog<T>(
+      context: ctx,
+      useRootNavigator: true,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
   }
 
   /// Confirm dialog that NEVER returns null.
@@ -31,6 +49,7 @@ class DialogService {
 
     final result = await showDialog<bool>(
       context: ctx,
+      useRootNavigator: true,
       barrierDismissible: barrierDismissible,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -73,6 +92,7 @@ class DialogService {
 
     await showDialog<void>(
       context: ctx,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -108,6 +128,7 @@ class DialogService {
 
     final result = await showDialog<String>(
       context: ctx,
+      useRootNavigator: true,
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
@@ -143,26 +164,29 @@ class DialogService {
     return (result == null || result.trim().isEmpty) ? null : result.trim();
   }
 
-  /// Store selection dialog.
-  /// Returns the selected storeIds or null if cancelled.
-  static Future<List<String>?> editStoreList(
-    List<InventoryLocation> allStores,
-    List<String> selectedStoreIds, {
+  /// ✅ Generic multi-select dialog (DRY core).
+  static Future<List<String>?> multiSelect({
     BuildContext? context,
-    String title = 'Edit Store Access',
+    required String title,
+    required List<String> allIds,
+    required String Function(String id) labelOf,
+    required List<String> selectedIds,
     String cancelText = 'Cancel',
     String saveText = 'Save',
+    bool barrierDismissible = true,
   }) async {
     final ctx = _ctx(context);
     if (ctx == null) {
-      debugPrint('[DialogService.editStoreList] No context available → null');
+      debugPrint('[DialogService.multiSelect] No context available → null');
       return null;
     }
 
-    final selected = Set<String>.from(selectedStoreIds);
+    final selected = <String>{...selectedIds};
 
     return showDialog<List<String>>(
       context: ctx,
+      useRootNavigator: true,
+      barrierDismissible: barrierDismissible,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -178,20 +202,20 @@ class DialogService {
                 width: double.maxFinite,
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: allStores.length,
+                  itemCount: allIds.length,
                   itemBuilder: (_, index) {
-                    final store = allStores[index];
-                    final isSelected = selected.contains(store.id);
+                    final id = allIds[index];
+                    final isSelected = selected.contains(id);
 
                     return CheckboxListTile(
                       value: isSelected,
-                      title: Text(store.name),
+                      title: Text(labelOf(id)),
                       onChanged: (checked) {
                         setState(() {
                           if (checked == true) {
-                            selected.add(store.id);
+                            selected.add(id);
                           } else {
-                            selected.remove(store.id);
+                            selected.remove(id);
                           }
                         });
                       },
@@ -213,6 +237,29 @@ class DialogService {
           },
         );
       },
+    );
+  }
+
+  /// Convenience wrapper for store selection.
+  static Future<List<String>?> editStoreList(
+    List<InventoryLocation> allStores,
+    List<String> selectedStoreIds, {
+    BuildContext? context,
+    String title = 'Edit Store Access',
+    String cancelText = 'Cancel',
+    String saveText = 'Save',
+  }) {
+    final ids = allStores.map((s) => s.id).toList(growable: false);
+    final byId = {for (final s in allStores) s.id: s.name};
+
+    return multiSelect(
+      context: context,
+      title: title,
+      allIds: ids,
+      labelOf: (id) => byId[id] ?? id,
+      selectedIds: selectedStoreIds,
+      cancelText: cancelText,
+      saveText: saveText,
     );
   }
 }

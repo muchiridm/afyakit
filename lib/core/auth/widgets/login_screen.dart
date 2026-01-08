@@ -1,5 +1,8 @@
+// lib/core/auth/widgets/login_screen.dart
+
+import 'package:afyakit/core/auth/models/otp_login_copy.dart';
+import 'package:afyakit/core/auth/widgets/otp_login_screen.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/auth_user/widgets/screens/otp_login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,11 +13,6 @@ class LoginScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantName = ref.watch(tenantDisplayNameProvider);
 
-    return OtpLoginScreen(
-      appTitle: tenantName,
-      headerTitle: tenantName,
-      headerSubtitle: 'Sign in with Email OTP',
-      description: 'We will email you a one-time login code.',
-    );
+    return OtpLoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName));
   }
 }
