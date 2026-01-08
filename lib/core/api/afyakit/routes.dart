@@ -232,4 +232,46 @@ class AfyaKitRoutes {
   // ─────────────────────────────────────────────
 
   Uri ping() => _uri('ping');
+
+  // ─────────────────────────────────────────────
+  // 💊 DawaIndex Proxy (tenant-scoped; authenticated or public depending on BE)
+  // ─────────────────────────────────────────────
+
+  Uri diSalesTiles({String? q, String? form, int limit = 50, int offset = 0}) =>
+      _uri(
+        'dawaindex/v1/sales/tiles',
+        query: {
+          if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+          if (form != null && form.trim().isNotEmpty) 'form': form.trim(),
+          'limit': '$limit',
+          'offset': '$offset',
+        },
+      );
+
+  // Core (not tenant-scoped) - mostly for setup
+  Uri zohoOAuthCallback() => _uriCore('zoho/oauth/callback');
+
+  // ─────────────────────────────────────────────
+  // 💼 Zoho Books (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri zohoListContacts({String? search, int limit = 50, int page = 1}) => _uri(
+    'zoho/v1/contacts',
+    query: {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      'limit': '$limit',
+      'page': '$page',
+    },
+  );
+
+  Uri zohoGetContact(String contactId) =>
+      _uri('zoho/v1/contacts/${_seg(contactId)}');
+
+  Uri zohoCreateContact() => _uri('zoho/v1/contacts');
+
+  Uri zohoUpdateContact(String contactId) =>
+      _uri('zoho/v1/contacts/${_seg(contactId)}');
+
+  Uri zohoDeleteContact(String contactId) =>
+      _uri('zoho/v1/contacts/${_seg(contactId)}');
 }

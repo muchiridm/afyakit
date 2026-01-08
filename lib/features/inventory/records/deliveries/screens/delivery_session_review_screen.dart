@@ -1,8 +1,8 @@
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_engine.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_controller.dart';
 
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_review_summary.dart';

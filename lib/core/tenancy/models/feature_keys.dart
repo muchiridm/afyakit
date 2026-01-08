@@ -1,8 +1,11 @@
-/// Central registry of module feature keys (ROOT MODULES ONLY).
+// lib/core/tenancy/models/feature_keys.dart
+
+/// Central registry of feature keys (ROOT FEATURES ONLY).
 /// Keep this intentionally small and stable.
 ///
 /// Tenants store these as:
 ///   features: { inventory: true, retail: false, ... }
+///
 abstract class FeatureKeys {
   const FeatureKeys._();
 

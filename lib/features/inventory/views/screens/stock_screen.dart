@@ -8,8 +8,8 @@ import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/views/controllers/inventory_view_controller.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_browser_components/inventory_browser.dart';
-import 'package:afyakit/shared/widgets/screens/base_screen.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

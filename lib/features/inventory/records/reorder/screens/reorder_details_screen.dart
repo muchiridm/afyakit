@@ -1,8 +1,8 @@
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/inventory/records/reorder/models/reorder_item.dart';
 import 'package:afyakit/features/inventory/records/reorder/models/reorder_record.dart';
-import 'package:afyakit/shared/widgets/record_screens/detail_record_screen.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:flutter/material.dart';
 
 class ReorderDetailScreen extends StatelessWidget {

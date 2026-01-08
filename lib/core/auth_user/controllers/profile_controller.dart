@@ -7,7 +7,7 @@ import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_user/services/user_profile_service.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/widgets/home_screens/member/member_home_screen.dart';
+import 'package:afyakit/shared/home/widgets/tenant_home_shell.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -321,7 +321,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
       SnackService.showSuccess('Profile updated');
 
-      _afterFrame(() async {
+      _afterFrame(() {
         if (!mounted) return;
 
         if (state.isAdminEditing) {
@@ -332,22 +332,15 @@ class ProfileController extends StateNotifier<ProfileFormState> {
           return;
         }
 
-        // Self-profile: fetch fresh user so we don't navigate with stale data.
-        try {
-          final fresh = await svc.getCurrentUser();
-          if (!mounted) return;
+        // ✅ Self-profile: refresh session user + go back to canonical home shell.
+        // This avoids hardcoding MemberHomeScreen (old world).
+        ref.invalidate(currentUserProvider);
+        ref.invalidate(currentUserValueProvider);
 
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => MemberHomeScreen(user: fresh)),
-            (_) => false,
-          );
-        } catch (_) {
-          // If refresh fails, fall back to previous behavior.
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => MemberHomeScreen(user: user)),
-            (_) => false,
-          );
-        }
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const TenantHomeShell()),
+          (_) => false,
+        );
       });
     } catch (_) {
       SnackService.showError('Failed to update profile.');

@@ -11,8 +11,8 @@ import 'package:afyakit/features/inventory/items/providers/item_stream_providers
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';
 
-import 'package:afyakit/shared/widgets/record_screens/detail_record_screen.dart';
-import 'package:afyakit/shared/widgets/screens/screen_header.dart';
+import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
+import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:afyakit/shared/services/sku_batch_matcher.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';

@@ -1,6 +1,6 @@
 // lib/hq/auth/hq_login_screen.dart
 
-import 'package:afyakit/shared/widgets/screens/otp_login_screen.dart';
+import 'package:afyakit/core/auth_user/widgets/screens/otp_login_screen.dart';
 import 'package:flutter/material.dart';
 
 /// HQ login uses the shared OTP flow (phone + email OTP).

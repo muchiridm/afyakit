@@ -1,7 +1,10 @@
 // lib/main_common.dart
 
+import 'dart:async';
+
 import 'package:afyakit/app/app_mode.dart';
 import 'package:afyakit/app/app_root.dart';
+import 'package:afyakit/core/domains/services/domain_tenant_resolver.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +15,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
-
-import 'package:afyakit/core/domains/services/domain_tenant_resolver.dart';
+import 'package:afyakit/shared/debug/riverpod_logger.dart';
 
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 
@@ -26,41 +28,53 @@ Future<void> bootstrapAndRun({
   required String defaultTenantSlug,
   AppMode appMode = AppMode.tenant,
 }) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // ✅ EnsureInitialized + runApp MUST be in the same zone.
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  _installGlobalErrorHandlers();
+      _installGlobalErrorHandlers();
 
-  BootLog.d('Initializing Firebase…');
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      BootLog.d('Initializing Firebase…');
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
 
-  final usingAuthEmulator = await _configureAuthForDev();
-  _logFirebaseAppInfo(usingAuthEmulator);
+      final usingAuthEmulator = await _configureAuthForDev();
+      _logFirebaseAppInfo(usingAuthEmulator);
 
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-  );
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+      );
 
-  // Resolve tenant slug only for tenant mode.
-  String? resolvedSlug;
-  if (appMode == AppMode.tenant) {
-    final slug = await resolveTenantSlugAsync(defaultSlug: defaultTenantSlug);
-    resolvedSlug = slug;
-    BootLog.d('Using tenant: $slug');
-  } else {
-    BootLog.d('Running in HQ mode (no tenant slug resolution)');
-  }
+      // Resolve tenant slug only for tenant mode.
+      String? resolvedSlug;
+      if (appMode == AppMode.tenant) {
+        final slug = await resolveTenantSlugAsync(
+          defaultSlug: defaultTenantSlug,
+        );
+        resolvedSlug = slug;
+        BootLog.d('Using tenant: $slug');
+      } else {
+        BootLog.d('Running in HQ mode (no tenant slug resolution)');
+      }
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
-
-        // Only override tenantSlugProvider in tenant mode.
-        if (resolvedSlug != null)
-          tenantSlugProvider.overrideWithValue(resolvedSlug),
-      ],
-      child: AppRoot(mode: appMode),
-    ),
+      runApp(
+        ProviderScope(
+          observers: const [RiverpodLogger()],
+          overrides: [
+            authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
+            if (resolvedSlug != null)
+              tenantSlugProvider.overrideWithValue(resolvedSlug),
+          ],
+          child: AppRoot(mode: appMode),
+        ),
+      );
+    },
+    (Object error, StackTrace stack) {
+      BootLog.e('ZoneError(runZonedGuarded): $error');
+      debugPrintStack(stackTrace: stack);
+    },
   );
 }
 
@@ -68,13 +82,12 @@ void _installGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     BootLog.e('FlutterError: ${details.exceptionAsString()}');
-    if (details.stack != null) {
-      debugPrintStack(stackTrace: details.stack);
-    }
+    final st = details.stack;
+    if (st != null) debugPrintStack(stackTrace: st);
   };
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    BootLog.e('ZoneError: $error');
+    BootLog.e('PlatformDispatcherError: $error');
     debugPrintStack(stackTrace: stack);
     return true;
   };
@@ -97,8 +110,6 @@ void _logFirebaseAppInfo(bool emulatorEnabled) {
   );
 }
 
-/// In debug: opt in with
-///   --dart-define=USE_AUTH_EMULATOR=true
 Future<bool> _configureAuthForDev() async {
   if (!kDebugMode) return false;
 

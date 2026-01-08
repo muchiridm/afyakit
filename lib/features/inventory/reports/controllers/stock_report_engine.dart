@@ -1,4 +1,7 @@
+// lib/features/inventory/reports/controllers/stock_report_engine.dart
+
 import 'dart:async';
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
@@ -22,12 +25,17 @@ import 'package:afyakit/features/inventory/reports/providers/stock_report_servic
 final stockReportEngineProvider =
     StateNotifierProvider<StockReportEngine, StockReportState>((ref) {
       final engine = StockReportEngine(ref)..loadInitialViewMode();
-      ref.onDispose(() async {
+
+      // ⚠️ onDispose must be sync. Fire-and-forget flush.
+      ref.onDispose(() {
         engine.cleanup();
+
+        // best effort: don't await in onDispose
         if (engine._syncService.hasPending) {
-          await engine.flushPendingUpdates();
+          unawaited(engine.flushPendingUpdates());
         }
       });
+
       return engine;
     });
 
@@ -40,7 +48,9 @@ class StockReportEngine extends StateNotifier<StockReportState> {
   StockReportEngine(this.ref) : super(StockReportState.initial());
 
   // Services via ref
-  StockReportLoader get _loader => ref.read(stockReportLoaderProvider);
+  Future<StockReportLoader> get _loader =>
+      ref.read(stockReportLoaderProvider.future);
+
   SkuFieldUpdater get _syncService => ref.read(skuFieldSyncServiceProvider);
   ReorderService get _reorderService => ref.read(reorderServiceProvider);
 
@@ -67,14 +77,19 @@ class StockReportEngine extends StateNotifier<StockReportState> {
   // 🔄 View Mode
   Future<void> setViewMode(StockViewMode mode) async {
     if (!mounted) return;
+
     await _withSyncing(() async {
       if (_syncService.hasPending) await flushPendingUpdates();
-      final newState = await _loader.loadViewMode(
+
+      final loader = await _loader;
+
+      final newState = await loader.loadViewMode(
         mode: mode,
         currentState: state,
       );
+
       setState(newState);
-      _applyFiltersForCurrentTab(newState);
+      await _applyFiltersForCurrentTab(newState);
     });
   }
 
@@ -102,27 +117,32 @@ class StockReportEngine extends StateNotifier<StockReportState> {
     if (!mounted || index < 0 || index >= validTabs.length) return;
     final next = state.copyWith(tabIndex: index);
     setState(next);
-    _applyFiltersForCurrentTab(next);
+
+    // fire-and-forget; tab change shouldn't block UI
+    unawaited(_applyFiltersForCurrentTab(next));
   }
 
   void setSearchQuery(String query) {
     if (!mounted) return;
     _searchDebounce?.cancel();
+
     // update state with new query
     state = state.copyWith(searchQuery: query);
 
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
-      // Re-apply filters for the current tab & mode (this updates the right bucket)
-      _applyFiltersForCurrentTab(state);
+      unawaited(_applyFiltersForCurrentTab(state));
     });
   }
 
-  void _applyFiltersForCurrentTab(StockReportState s) {
+  Future<void> _applyFiltersForCurrentTab(StockReportState s) async {
+    final loader = await _loader;
     final tabType = s.currentTabType;
-    _loader.applyFiltersToTab(s, tabType, updateState: _updateState);
+
+    loader.applyFiltersToTab(s, tabType, updateState: _updateState);
+
     if (s.viewMode.isGrouped) {
-      _loader.applyFiltersToGroupedReports(
+      loader.applyFiltersToGroupedReports(
         state: s,
         itemType: tabType,
         updateState: _updateState,
@@ -130,40 +150,44 @@ class StockReportEngine extends StateNotifier<StockReportState> {
     }
   }
 
-  void applyFiltersToCurrentView() {
+  Future<void> applyFiltersToCurrentView() async {
+    final loader = await _loader;
+
     if (state.viewMode.isFlatList) {
-      _loader.applyFilters(state, updateState: setState);
+      loader.applyFilters(state, updateState: setState);
     } else {
-      rebuildGroupedFilters();
+      await rebuildGroupedFilters();
     }
   }
 
-  void rebuildGroupedFilters() {
+  Future<void> rebuildGroupedFilters() async {
+    final loader = await _loader;
     final s = state;
+
     if (s.viewMode == StockViewMode.groupedPerStore) {
-      // build & filter the per-store list
-      final grouped = _loader.buildPerStoreFromRaw(s.rawTabReports, s);
+      final grouped = loader.buildPerStoreFromRaw(s.rawTabReports, s);
       setState(s.copyWith(groupedPerStoreReports: grouped));
     } else {
-      // build & filter the per-sku list
-      final grouped = _loader.buildGroupedFromRaw(s.rawTabReports, s);
+      final grouped = loader.buildGroupedFromRaw(s.rawTabReports, s);
       setState(s.copyWith(groupedPerSkuReports: grouped));
     }
-    // ensure final pass through your general filter pipeline
-    _loader.applyFilters(state, updateState: _updateState);
+
+    loader.applyFilters(state, updateState: _updateState);
   }
 
   // ✍🏽 SKU Edits
-  void updateSkuField({
+  Future<void> updateSkuField({
     required String itemId,
     required ItemType type,
     required String field,
     required dynamic newValue,
-  }) {
+  }) async {
     if (!mounted) return;
 
+    final loader = await _loader;
+
     final updated = _syncService.updateLocally(
-      current: _loader.getCurrentEditableList(state, type),
+      current: loader.getCurrentEditableList(state, type),
       itemId: itemId,
       field: field,
       value: newValue,
@@ -171,7 +195,7 @@ class StockReportEngine extends StateNotifier<StockReportState> {
     );
 
     if (updated != null) {
-      final updatedList = _loader.updateListInState(state, type, [updated]);
+      final updatedList = loader.updateListInState(state, type, [updated]);
       setState(updatedList);
 
       // ✅ Flush immediately after local update
@@ -183,12 +207,13 @@ class StockReportEngine extends StateNotifier<StockReportState> {
   Future<void> flushPendingUpdates() async {
     if (!mounted) return;
 
-    final updatedReports = await _syncService.flush();
+    final loader = await _loader;
 
+    final updatedReports = await _syncService.flush();
     if (updatedReports.isEmpty) return;
 
     // 1️⃣ Patch rawTabReports (single source of truth)
-    final patched = _loader.patchRawReports(
+    final patched = loader.patchRawReports(
       current: state.rawTabReports,
       updates: updatedReports,
     );
@@ -198,20 +223,26 @@ class StockReportEngine extends StateNotifier<StockReportState> {
     setState(newState);
 
     // 3️⃣ Re-apply filters to sync derived views
-    _loader.applyFilters(newState, updateState: _updateState);
+    loader.applyFilters(newState, updateState: _updateState);
   }
 
   // 🔁 Refresh
   Future<void> refresh() async {
     if (!mounted) return;
+
     await _withSyncing(() async {
       if (_syncService.hasPending) await flushPendingUpdates();
+
+      final loader = await _loader;
+
       final cleared = _resetFilters(state);
       setState(cleared);
-      final refreshed = await _loader.loadViewMode(
+
+      final refreshed = await loader.loadViewMode(
         mode: cleared.viewMode,
         currentState: cleared,
       );
+
       setState(refreshed);
     });
   }
@@ -234,11 +265,11 @@ class StockReportEngine extends StateNotifier<StockReportState> {
     // 3) Export with name resolution
     await StockReportExporter.export(
       context: context,
-      reports: reports, // ✅ filtered list only
+      reports: reports,
       viewMode: state.viewMode,
       itemType: state.currentTabType,
-      stores: stores, // ✅ for resolveLocationName(...)
-      dispensaries: dispensaries, // ✅ for resolveLocationName(...)
+      stores: stores,
+      dispensaries: dispensaries,
     );
   }
 
@@ -260,6 +291,8 @@ class StockReportEngine extends StateNotifier<StockReportState> {
 
   Future<void> clearProposedOrders() async {
     await _withSyncing(() async {
+      final loader = await _loader;
+
       // 1. Clear backend
       await _reorderService.clearProposedOrders();
 
@@ -276,12 +309,17 @@ class StockReportEngine extends StateNotifier<StockReportState> {
       setState(newState);
 
       // 4. Rebuild derived views
-      _applyFiltersForCurrentTab(newState);
+      await _applyFiltersForCurrentTab(newState);
 
       debugPrint('🧹 Proposed orders cleared (backend + local)');
+
+      // keep analyzer happy: loader is used in this method; even if you later remove,
+      // no harm.
+      // ignore: unused_local_variable
+      final _ = loader;
     });
 
-    // 🔄 5. Refresh from backend to clear remaining stale values
+    // 5. Refresh from backend to clear remaining stale values
     await refresh();
   }
 
