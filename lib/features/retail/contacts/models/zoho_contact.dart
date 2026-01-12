@@ -73,6 +73,7 @@ class ZohoContact {
     this.companyName,
     this.personContact,
     this.status,
+    this.contactType, // ✅ NEW
   });
 
   final String contactId;
@@ -80,6 +81,10 @@ class ZohoContact {
   final String? companyName;
   final PersonContact? personContact;
   final String? status;
+
+  /// Zoho Books contact type: "customer", "vendor", sometimes "customer_vendor".
+  /// When null, treat as unknown.
+  final String? contactType;
 
   bool get isActive => (status ?? '').toLowerCase() != 'inactive';
 
@@ -99,6 +104,22 @@ class ZohoContact {
     final c = companyName?.trim();
     if (c != null && c.isNotEmpty) return c;
     return '';
+  }
+
+  // ─────────────────────────────────────────────
+  // Contact type helpers (for filtering UI)
+  // ─────────────────────────────────────────────
+
+  String get contactTypeNorm => (contactType ?? '').trim().toLowerCase();
+
+  bool get isCustomer {
+    final t = contactTypeNorm;
+    return t == 'customer' || t == 'customer_vendor';
+  }
+
+  bool get isVendor {
+    final t = contactTypeNorm;
+    return t == 'vendor' || t == 'customer_vendor';
   }
 
   // ─────────────────────────────────────────────
@@ -161,8 +182,8 @@ class ZohoContact {
       first ?? '',
       last ?? '',
     ].where((s) => s.trim().isNotEmpty).join(' ').trim();
-    final personName = full.isEmpty ? null : full;
 
+    final personName = full.isEmpty ? null : full;
     if (personName == null) return null;
 
     return PersonContact(
@@ -178,11 +199,14 @@ class ZohoContact {
   factory ZohoContact.fromJson(Map<String, dynamic> json) {
     final j = json.cast<String, Object?>();
 
-    // New API (preferred)
     final id = _s(j['contact_id']) ?? '';
-    final display = _s(j['display_name']); // ✅ new
+    final display = _s(j['display_name']);
     final company = _s(j['company_name']);
     final status = _s(j['status']);
+
+    // ✅ NEW: parse contact_type (Zoho Books field)
+    // Some APIs might send "type" or "contact_type" depending on your backend mapping.
+    final contactType = _s(j['contact_type']) ?? _s(j['type']);
 
     PersonContact? person;
     if (j.containsKey('person_contact')) {
@@ -221,6 +245,7 @@ class ZohoContact {
       companyName: company,
       personContact: person,
       status: status,
+      contactType: contactType,
     );
   }
 
@@ -238,6 +263,10 @@ class ZohoContact {
       if (company.isNotEmpty) 'company_name': company,
       if (personContact != null)
         'person_contact': personContact!.toJsonForUpsert(),
+
+      // Optional: you can set contact_type on create IF your backend supports it.
+      // If not, leave it out.
+      // if ((contactType ?? '').trim().isNotEmpty) 'contact_type': contactType!.trim(),
     };
   }
 
@@ -247,6 +276,7 @@ class ZohoContact {
     String? companyName,
     PersonContact? personContact,
     String? status,
+    String? contactType,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
@@ -254,6 +284,7 @@ class ZohoContact {
       companyName: companyName ?? this.companyName,
       personContact: personContact ?? this.personContact,
       status: status ?? this.status,
+      contactType: contactType ?? this.contactType,
     );
   }
 }
@@ -292,7 +323,6 @@ class ContactUpdatePatch {
     }
 
     if (companyName != null) {
-      // Treat empty as clear
       final cn = companyName!.trim();
       out['company_name'] = cn.isEmpty ? '' : cn;
     }
@@ -314,7 +344,6 @@ class PersonContactPatch {
     this.delete,
   });
 
-  /// If delete==true, backend should delete primary person contact.
   final bool? delete;
 
   final String? personName;

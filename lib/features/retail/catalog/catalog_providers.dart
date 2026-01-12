@@ -1,4 +1,4 @@
-// lib/core/catalog/catalog_providers.dart
+// lib/features/retail/catalog/catalog_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

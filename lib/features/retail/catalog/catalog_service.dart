@@ -1,4 +1,4 @@
-// lib/core/catalog/catalog_service.dart
+// lib/features/retail/catalog/catalog_service.dart
 
 import 'dart:convert';
 import 'package:dio/dio.dart';

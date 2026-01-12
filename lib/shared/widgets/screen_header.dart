@@ -129,8 +129,12 @@ class ScreenHeader extends StatelessWidget {
     return const SizedBox(width: 48);
   }
 
+  // Small helper to keep alignment stable when trailing is null
+  Widget _buildTrailingSlotPlaceholder() => const SizedBox(width: 48);
+
   // ───────────────── narrow
   Widget _buildNarrow(BuildContext context) {
+    // ✅ If no title, keep the old behavior (controls row + optional badge)
     if (!_hasTitle) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -149,28 +153,24 @@ class ScreenHeader extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    // ✅ NEW: Keep title + trailing on the SAME ROW even on narrow screens.
+    // Layout: [Back]  [Title centered]  [Trailing]
+    return Row(
       children: [
-        Row(children: [_buildLeadingSlot(context), const Spacer()]),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        _buildLeadingSlot(context),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            if (showUserBadge) const UserBadge(),
-            if (trailing != null) trailing!,
-          ],
-        ),
+        const SizedBox(width: 6),
+        // Keep trailing tight; don’t bring UserBadge here (too bulky on narrow).
+        trailing ?? _buildTrailingSlotPlaceholder(),
       ],
     );
   }

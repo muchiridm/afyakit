@@ -36,11 +36,15 @@ class DeliveryRecordTile extends StatelessWidget {
         .join(', ');
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+      margin: const EdgeInsets.symmetric(
+        vertical: 4,
+      ), // ✅ remove horizontal inset
       elevation: 1,
       child: ListTile(
         dense: true,
         visualDensity: VisualDensity.compact,
+        // ✅ match IssueRecordTile so the “content box” is consistent
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         leading: CircleAvatar(
           backgroundColor: Colors.teal.withOpacity(0.15),
           child: const Icon(Icons.local_shipping, color: Colors.teal, size: 20),

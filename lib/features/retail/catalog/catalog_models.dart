@@ -1,4 +1,4 @@
-// lib/core/catalog/catalog_models.dart
+// lib/features/retail/catalog/catalog_models.dart
 
 import 'package:flutter/foundation.dart';
 

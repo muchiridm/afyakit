@@ -1,15 +1,16 @@
-// lib/shared/home/widgets/common/home_header.dart
-
 import 'package:afyakit/core/auth/widgets/logout_button.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/shared/home/widgets/common/catalog_button.dart';
-import 'package:afyakit/shared/home/widgets/common/home_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_user/widgets/user_badge.dart';
 import '../../models/home_mode.dart';
+
+// ✅ NEW
+import 'package:afyakit/shared/widgets/app_card.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({
@@ -23,14 +24,10 @@ class HomeHeader extends ConsumerWidget {
 
   final HomeMode mode;
 
-  /// Member-only greeting bits (pass null for staff)
   final String? greetingName;
   final String? memberId;
 
-  /// Staff-only extras
   final bool showDeliveryBanner;
-
-  /// Desired width for the “card column”
   final double panelWidth;
 
   bool get _isMember => mode == HomeMode.member;
@@ -52,13 +49,13 @@ class HomeHeader extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        wrapPanel(HomeCard(child: _HeaderCardContent(title: tenantName))),
+        wrapPanel(AppCard(child: _HeaderCardContent(title: tenantName))),
         if (_isMember) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: AppShape.gap10),
           wrapPanel(_MemberGreeting(name: greetingName, memberId: memberId)),
         ],
         if (showDeliveryBanner) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppShape.gap8),
           wrapPanel(const DeliveryBanner()),
         ],
       ],
@@ -76,10 +73,7 @@ class _HeaderCardContent extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, c) {
-        final maxW = c.maxWidth;
-
-        // Tight is where "Catalog + Badge + Logout" can start squeezing.
-        final tight = maxW < 340;
+        final tight = c.maxWidth < 340;
 
         final titleStyle = theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w900,
@@ -88,7 +82,6 @@ class _HeaderCardContent extends StatelessWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Row 1: Title (highest)
             Text(
               title,
               textAlign: TextAlign.center,
@@ -96,18 +89,11 @@ class _HeaderCardContent extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: titleStyle,
             ),
-
-            const SizedBox(height: 8),
-
-            // ── Row 2: Catalog | UserBadge | Logout (same level)
+            const SizedBox(height: AppShape.gap8),
             Row(
               children: [
-                // Left: Catalog
                 const CatalogButton(),
-
-                const SizedBox(width: 10),
-
-                // Center: Badge, but must shrink safely (no overflow)
+                const SizedBox(width: AppShape.gap10),
                 Expanded(
                   child: Center(
                     child: FittedBox(
@@ -117,10 +103,7 @@ class _HeaderCardContent extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                const SizedBox(width: 10),
-
-                // Right: Logout
+                const SizedBox(width: AppShape.gap10),
                 LogoutButton(dense: tight),
               ],
             ),
