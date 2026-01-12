@@ -15,10 +15,7 @@ final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
   final routes = AfyaKitRoutes(tenantId);
-
-  // ✅ afyakitClientProvider is a FutureProvider, so await it
   final api = await ref.watch(afyakitClientProvider.future);
-
   return ZohoContactsService(api: api, routes: routes);
 });
 
@@ -40,18 +37,30 @@ class ZohoContactsService {
     );
 
     final res = await api.getUri(uri);
-
     final data = _asJsonMap(res.data);
-    final contactsRaw = data['contacts'];
 
-    if (contactsRaw is List) {
-      return contactsRaw
+    final raw = data['contacts'];
+    if (raw is List) {
+      return raw
           .whereType<Map>()
           .map((m) => ZohoContact.fromJson(m.cast<String, dynamic>()))
           .toList();
     }
 
-    return <ZohoContact>[];
+    return const <ZohoContact>[];
+  }
+
+  /// ✅ IMPORTANT: Get the enriched contact (includes person_contact if present).
+  Future<ZohoContact> get(String contactId) async {
+    final uri = routes.zohoGetContact(contactId); // <- ensure routes has this
+    final res = await api.getUri(uri);
+
+    final data = _asJsonMap(res.data);
+    final raw = data['contact'];
+    if (raw is Map) {
+      return ZohoContact.fromJson(raw.cast<String, dynamic>());
+    }
+    throw StateError('Unexpected response shape: missing "contact"');
   }
 
   Future<ZohoContact> create(ZohoContact input) async {
@@ -66,9 +75,21 @@ class ZohoContactsService {
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
-  Future<ZohoContact> update(String contactId, ZohoContact input) async {
+  /// Patch update (supports clear/delete semantics).
+  Future<ZohoContact> updatePatch(
+    String contactId,
+    ContactUpdatePatch patch,
+  ) async {
     final uri = routes.zohoUpdateContact(contactId);
-    final res = await api.putUri(uri, data: input.toUpdateJson());
+
+    final body = patch.toJson();
+
+    // Special-case: delete person contact
+    if (patch.personContact?.delete == true) {
+      body['person_contact'] = null;
+    }
+
+    final res = await api.putUri(uri, data: body);
 
     final data = _asJsonMap(res.data);
     final raw = data['contact'];
@@ -76,6 +97,27 @@ class ZohoContactsService {
       return ZohoContact.fromJson(raw.cast<String, dynamic>());
     }
     throw StateError('Unexpected response shape: missing "contact"');
+  }
+
+  /// Convenience: update from a full model.
+  Future<ZohoContact> updateFromModel(
+    String contactId,
+    ZohoContact input,
+  ) async {
+    final patch = ContactUpdatePatch(
+      displayName: input.displayName,
+      companyName: input.companyName,
+      personContact: input.personContact == null
+          ? const PersonContactPatch(delete: true)
+          : PersonContactPatch(
+              personName: input.personContact!.personName,
+              email: input.personContact!.email,
+              phone: input.personContact!.phone,
+              mobile: input.personContact!.mobile,
+            ),
+    );
+
+    return updatePatch(contactId, patch);
   }
 
   Future<void> delete(String contactId) async {

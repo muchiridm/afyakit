@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/contacts_controller.dart';
-import '../../contacts/models/zoho_contact.dart'; // ✅ adjust path if needed
+import '../../contacts/models/zoho_contact.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
@@ -14,85 +14,187 @@ class ContactsScreen extends ConsumerWidget {
     final state = ref.watch(contactsControllerProvider);
     final ctl = ref.read(contactsControllerProvider.notifier);
 
+    final loadingAny = state.loadingList || state.loadingDetail;
+
     return Scaffold(
-      appBar: _buildAppBar(state, ctl),
-      floatingActionButton: _buildFab(state, ctl, context),
-      body: _buildBody(context, state, ctl),
-    );
-  }
-
-  AppBar _buildAppBar(ContactsState state, ContactsController ctl) {
-    return AppBar(
-      title: const Text('Contacts'),
-      actions: [
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: state.loading ? null : () => ctl.refresh(),
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFab(
-    ContactsState state,
-    ContactsController ctl,
-    BuildContext context,
-  ) {
-    return FloatingActionButton(
-      onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
-      child: const Icon(Icons.add),
-    );
-  }
-
-  Widget _buildBody(
-    BuildContext context,
-    ContactsState state,
-    ContactsController ctl,
-  ) {
-    return Column(
-      children: [
-        _buildSearchBar(state, ctl),
-        if (state.error != null) _buildErrorBanner(context, state, ctl),
-        Expanded(child: _buildList(context, state, ctl)),
-        if (state.saving) const LinearProgressIndicator(minHeight: 3),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar(ContactsState state, ContactsController ctl) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search contacts…',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: state.search.trim().isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear',
-                  onPressed: () {
-                    ctl.setSearch('');
-                    ctl.refresh();
-                  },
-                  icon: const Icon(Icons.clear),
+      appBar: AppBar(
+        title: const Text('Contacts'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: state.saving ? null : () => ctl.refresh(),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New'),
+      ),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: () => ctl.refresh(),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _SearchBar(
+                    value: state.search,
+                    enabled: !state.saving,
+                    loading:
+                        state.loadingList, // only list search shows spinner
+                    onChanged: ctl.setSearch,
+                    onClear: () => ctl.setSearch(''),
+                    onSubmit: () => ctl.refresh(),
+                  ),
                 ),
-        ),
-        onChanged: ctl.setSearch,
-        onSubmitted: (_) => ctl.refresh(),
+
+                if (state.error != null)
+                  SliverToBoxAdapter(
+                    child: _ErrorBanner(
+                      message: state.error!,
+                      onRetry: () => ctl.refresh(),
+                    ),
+                  ),
+
+                _buildSliverBody(context, state, ctl),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 88)),
+              ],
+            ),
+          ),
+
+          // subtle top loading line while keeping list visible
+          if (loadingAny) const LinearProgressIndicator(minHeight: 2),
+
+          // saving indicator at bottom
+          if (state.saving)
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildErrorBanner(
+  Widget _buildSliverBody(
     BuildContext context,
     ContactsState state,
     ContactsController ctl,
   ) {
+    if (state.items.isEmpty && state.loadingList) {
+      return const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (state.items.isEmpty) {
+      final hasQuery = state.search.trim().isNotEmpty;
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: _EmptyState(
+          title: hasQuery ? 'No results' : 'No contacts yet',
+          subtitle: hasQuery
+              ? 'Try a different search.'
+              : 'Create your first contact to start quoting in Zoho.',
+          actionLabel: hasQuery ? 'Clear search' : 'Create contact',
+          onAction: () {
+            if (hasQuery) {
+              ctl.setSearch('');
+              ctl.refresh();
+            } else {
+              ctl.openCreateFlow(context);
+            }
+          },
+        ),
+      );
+    }
+
+    return SliverList.separated(
+      itemCount: state.items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, i) {
+        final c = state.items[i];
+        return _ContactTile(
+          contact: c,
+          enabled: !state.saving,
+          onTap: () => ctl.openExistingFlow(context, c),
+        );
+      },
+    );
+  }
+}
+
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({
+    required this.value,
+    required this.enabled,
+    required this.loading,
+    required this.onChanged,
+    required this.onClear,
+    required this.onSubmit,
+  });
+
+  final String value;
+  final bool enabled;
+  final bool loading;
+  final void Function(String) onChanged;
+  final VoidCallback onClear;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: TextField(
+        enabled: enabled,
+        decoration: InputDecoration(
+          hintText: 'Search contacts…',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: value.trim().isEmpty
+              ? (loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null)
+              : IconButton(
+                  tooltip: 'Clear',
+                  onPressed: enabled ? onClear : null,
+                  icon: const Icon(Icons.clear),
+                ),
+        ),
+        onChanged: onChanged,
+        onSubmitted: (_) => onSubmit(),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Material(
-        color: Theme.of(context).colorScheme.errorContainer,
+        color: scheme.errorContainer,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -100,16 +202,14 @@ class ContactsScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  state.error!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
+                  message,
+                  style: TextStyle(color: scheme.onErrorContainer),
                 ),
               ),
               IconButton(
                 tooltip: 'Retry',
-                onPressed: () => ctl.refresh(),
-                icon: const Icon(Icons.refresh),
+                onPressed: onRetry,
+                icon: Icon(Icons.refresh, color: scheme.onErrorContainer),
               ),
             ],
           ),
@@ -117,57 +217,105 @@ class ContactsScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildList(
-    BuildContext context,
-    ContactsState state,
-    ContactsController ctl,
-  ) {
-    return RefreshIndicator(
-      onRefresh: () => ctl.refresh(),
-      child: state.loading && state.items.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: state.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final c = state.items[i];
-                return _buildContactTile(context, state, ctl, c);
-              },
-            ),
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.people_alt_outlined, size: 44),
+              const SizedBox(height: 12),
+              Text(title, style: t.titleLarge, textAlign: TextAlign.center),
+              const SizedBox(height: 6),
+              Text(subtitle, style: t.bodyMedium, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: onAction, child: Text(actionLabel)),
+            ],
+          ),
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildContactTile(
-    BuildContext context,
-    ContactsState state,
-    ContactsController ctl,
-    ZohoContact c,
-  ) {
-    final subtitle = _subtitleFrom(c);
+class _ContactTile extends StatelessWidget {
+  const _ContactTile({
+    required this.contact,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final ZohoContact contact;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = contact.displayName.trim();
+    final subtitle = _subtitleFrom(contact);
 
     return ListTile(
-      onTap: state.saving ? null : () => ctl.openExistingFlow(context, c),
-      title: Text(c.displayName),
+      enabled: enabled,
+      onTap: enabled ? onTap : null,
+      leading: CircleAvatar(child: Text(_initials(title))),
+      title: Text(title.isEmpty ? 'Contact' : title),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
-      leading: CircleAvatar(child: Text(_initials(c.displayName))),
+      trailing: const Icon(Icons.chevron_right),
     );
   }
 
   String _subtitleFrom(ZohoContact c) {
-    final person = (c.personName ?? '').trim();
+    final display = c.displayName.trim();
+
+    final person = c.personContact?.personName.trim() ?? '';
     final company = (c.companyName ?? '').trim();
 
-    if (person.isEmpty && company.isEmpty) return '';
-    if (person.isEmpty) return company;
-    if (company.isEmpty) return person;
-    return '$person • $company';
+    final phone = c.bestPhone.trim();
+    final email = (c.personContact?.email ?? '').trim();
+
+    final parts = <String>[];
+
+    if (person.isNotEmpty && person != display) parts.add(person);
+    if (company.isNotEmpty && company != display) parts.add(company);
+
+    if (phone.isNotEmpty) {
+      parts.add(phone);
+    } else if (email.isNotEmpty) {
+      parts.add(email);
+    }
+
+    return parts.take(2).join(' • ');
   }
 
   String _initials(String name) {
-    final t = name.trim();
-    if (t.isEmpty) return '?';
-    return t[0].toUpperCase();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

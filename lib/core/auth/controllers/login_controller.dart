@@ -1,14 +1,12 @@
-// lib/core/auth_users/controllers/login_controller.dart
+// lib/core/auth/controllers/login_controller.dart
 
 import 'package:afyakit/core/auth/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/services/auth_service.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Public enum so both controller + UI can share it.
 enum OtpChannel { wa, sms, email }
 
 @immutable
@@ -18,11 +16,15 @@ class LoginState {
   final bool codeSent;
   final String? attemptId;
 
+  /// 🔑 UI signal: close OTP screen
+  final bool closeScreen;
+
   const LoginState({
     required this.sending,
     required this.verifying,
     required this.codeSent,
     required this.attemptId,
+    required this.closeScreen,
   });
 
   factory LoginState.initial() => const LoginState(
@@ -30,6 +32,7 @@ class LoginState {
     verifying: false,
     codeSent: false,
     attemptId: null,
+    closeScreen: false,
   );
 
   LoginState copyWith({
@@ -37,12 +40,14 @@ class LoginState {
     bool? verifying,
     bool? codeSent,
     String? attemptId,
+    bool? closeScreen,
   }) {
     return LoginState(
       sending: sending ?? this.sending,
       verifying: verifying ?? this.verifying,
       codeSent: codeSent ?? this.codeSent,
       attemptId: attemptId ?? this.attemptId,
+      closeScreen: closeScreen ?? this.closeScreen,
     );
   }
 }
@@ -59,13 +64,15 @@ class LoginController extends StateNotifier<LoginState> {
   final Ref _ref;
   final String _tenantId;
 
-  /// Reset attempt state when user switches channel.
-  void resetAttempt() {
+  // ─────────────────────────────────────────────
+  // Public API (UI calls only these)
+  // ─────────────────────────────────────────────
+
+  void reset() {
     if (!mounted) return;
-    state = state.copyWith(codeSent: false, attemptId: null);
+    state = LoginState.initial();
   }
 
-  /// Send OTP via selected channel.
   Future<void> sendCode({
     required String phoneE164,
     String? email,
@@ -81,17 +88,14 @@ class LoginController extends StateNotifier<LoginState> {
 
     if (channel == OtpChannel.email &&
         (trimmedEmail == null || trimmedEmail.isEmpty)) {
-      SnackService.showError('Enter the email address to send the code to');
+      SnackService.showError('Enter the email address');
       return;
     }
 
-    if (!mounted) return;
-    state = state.copyWith(sending: true, codeSent: false, attemptId: null);
+    state = state.copyWith(sending: true);
 
     try {
       final auth = await _ref.read(authServiceProvider(_tenantId).future);
-
-      if (!mounted) return;
 
       final res = switch (channel) {
         OtpChannel.wa => await auth.startWaOtp(phone),
@@ -102,155 +106,58 @@ class LoginController extends StateNotifier<LoginState> {
         ),
       };
 
-      if (!mounted) return;
-
-      if (res.throttled) {
-        SnackService.showError('Too many attempts. Try again later.');
-        return;
-      }
-
       if (!res.ok) {
-        SnackService.showError('Failed to send code. Please try again.');
+        SnackService.showError('Failed to send code');
         return;
       }
 
       state = state.copyWith(codeSent: true, attemptId: res.attemptId);
 
-      switch (channel) {
-        case OtpChannel.wa:
-          SnackService.showInfo('Code sent on WhatsApp');
-          break;
-        case OtpChannel.sms:
-          SnackService.showInfo('Code sent via SMS');
-          break;
-        case OtpChannel.email:
-          SnackService.showInfo('Code sent to your email');
-          break;
-      }
-    } on DioException catch (dioErr) {
-      final status = dioErr.response?.statusCode;
-      final data = dioErr.response?.data;
-      final rawError = (data is Map && data['error'] is String)
-          ? data['error'] as String
-          : data?.toString();
-
-      if (status == 409) {
-        if (kDebugMode) {
-          final existingEmail = _extractExistingEmail(rawError);
-          // ignore: avoid_print
-          print(
-            '[OTP][FE] EMAIL_CONFLICT (start) '
-            'phone=$phone existing=$existingEmail raw=$rawError',
-          );
-        }
-
-        SnackService.showError(
-          'This phone number is already linked to a different email in our system.\n'
-          'To continue, use that email address to log in by email, or choose WhatsApp / SMS instead.',
-        );
-      } else if (status == 429) {
-        SnackService.showError('Too many attempts. Try again later.');
-      } else {
-        SnackService.showError('Could not send code. Please try again.');
-      }
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('Email/WA/SMS OTP start failed: $e\n$st');
-      SnackService.showError('Network error while sending code');
+      SnackService.showInfo(
+        channel == OtpChannel.email ? 'Code sent to your email' : 'Code sent',
+      );
     } finally {
-      if (!mounted) return;
-      state = state.copyWith(sending: false);
+      if (mounted) {
+        state = state.copyWith(sending: false);
+      }
     }
   }
 
-  /// Verify OTP and sign in via SessionController.
-  /// Returns true on success so the UI can react (if it wants).
-  Future<bool> verifyCode({
+  Future<void> verifyCode({
     required String phoneE164,
     required String code,
     String? email,
     required OtpChannel channel,
   }) async {
-    final phone = phoneE164.trim();
-    final trimmedEmail = email?.trim();
     final trimmedCode = code.trim();
 
     if (trimmedCode.length != 6) {
       SnackService.showError('Enter 6-digit code');
-      return false;
+      return;
     }
 
-    if (!mounted) return false;
     state = state.copyWith(verifying: true);
 
     try {
       final session = _ref.read(sessionControllerProvider(_tenantId).notifier);
 
       await session.signInWithOtp(
-        phoneE164: phone,
+        phoneE164: phoneE164.trim(),
         code: trimmedCode,
         attemptId: state.attemptId,
-        email: channel == OtpChannel.email ? trimmedEmail : null,
+        email: channel == OtpChannel.email ? email?.trim() : null,
       );
 
-      // ✅ IMPORTANT: reset attempt + UI state so the form collapses
-      if (mounted) {
-        state = LoginState.initial();
-      }
-
       SnackService.showSuccess('Signed in!');
-      return true;
-    } on DioException catch (dioErr) {
-      final status = dioErr.response?.statusCode;
-      final data = dioErr.response?.data;
-      final codeStr = (data is Map && data['error'] is String)
-          ? data['error'] as String
-          : null;
-      final rawError = (data is Map && data['error'] is String)
-          ? data['error'] as String
-          : data?.toString();
 
-      if (status == 401 &&
-          (codeStr == 'INVALID_CODE' || codeStr == 'EXPIRED')) {
-        SnackService.showError('Invalid or expired code');
-      } else if (status == 429) {
-        SnackService.showError('Too many attempts. Try again later.');
-      } else if (status == 409) {
-        if (kDebugMode) {
-          final existingEmail = _extractExistingEmail(rawError);
-          // ignore: avoid_print
-          print(
-            '[OTP][FE] EMAIL_CONFLICT (verify) '
-            'phone=$phone existing=$existingEmail raw=$rawError',
-          );
-        }
-
-        SnackService.showError(
-          'This phone number is already linked to a different email in our system.\n'
-          'If this doesn’t look right, please contact support or try WhatsApp / SMS login instead.',
-        );
-      } else {
-        SnackService.showError('Could not verify code. Please try again.');
-      }
-      return false;
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('OTP verify failed: $e\n$st');
-      SnackService.showError('Something went wrong signing you in');
-      return false;
+      // ✅ single source of truth
+      state = LoginState.initial().copyWith(closeScreen: true);
+    } catch (e) {
+      SnackService.showError('Could not verify code');
     } finally {
       if (mounted) {
         state = state.copyWith(verifying: false);
       }
     }
-  }
-
-  /// Parse "existing=foo@bar.com" from backend error strings like:
-  /// "Email conflict for account: existing=foo@bar.com, requested=bar@baz.com"
-  /// Used only for debug logs; never surfaced to the user.
-  String? _extractExistingEmail(String? raw) {
-    if (raw == null) return null;
-    final match = RegExp(r'existing=([^,]+)').firstMatch(raw);
-    return match?.group(1)?.trim();
   }
 }
