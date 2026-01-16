@@ -34,12 +34,8 @@ class DiSalesTile {
 
   /// Creates a "best-effort" tile when editing a quote loaded from Zoho.
   ///
-  /// Zoho estimates often have line_items that aren't tied to Zoho "Items",
-  /// so we reconstruct something stable enough for your QuoteDraft logic.
-  ///
-  /// - canonKey/groupKey derived from name (stable-ish)
-  /// - offerCount = 0 (unknown in Zoho payload)
-  /// - best prices/supplier unknown
+  /// If [canonKey]/[groupKey] are provided (e.g. Zoho line_item_id),
+  /// they will be used as stable keys. Otherwise we derive from name.
   static DiSalesTile fallbackFromName({
     required String name,
     String? description,
@@ -48,14 +44,24 @@ class DiSalesTile {
     String? bestSupplier,
     bool? priceRequestRequired,
     String? form,
+
+    // ✅ NEW (optional, backward compatible)
+    String? canonKey,
+    String? groupKey,
   }) {
     final title = name.trim().isEmpty ? 'Item' : name.trim();
     final desc = (description ?? '').trim();
-    final key = _slugKey(title);
+
+    final ck = (canonKey ?? '').trim();
+    final gk = (groupKey ?? '').trim();
+
+    final derived = _slugKey(title);
+    final resolvedCanonKey = ck.isNotEmpty ? ck : derived;
+    final resolvedGroupKey = gk.isNotEmpty ? gk : resolvedCanonKey;
 
     return DiSalesTile(
-      canonKey: key,
-      groupKey: key,
+      canonKey: resolvedCanonKey,
+      groupKey: resolvedGroupKey,
       tileTitle: title,
       tileDesc: desc.isEmpty ? null : desc,
       form: (form ?? '').trim().isEmpty ? null : form!.trim(),
@@ -71,7 +77,6 @@ class DiSalesTile {
 
   static String _slugKey(String s) {
     final t = s.trim().toLowerCase();
-    // keep only letters/numbers, collapse spaces to underscore
     final cleaned = t
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
         .trim()
@@ -106,63 +111,6 @@ class DiSalesTile {
       bestSellPrice: _n(j['best_sell_price']),
       bestSupplier: _s(j['best_supplier']),
       priceRequestRequired: _b(j['price_request_required']),
-    );
-  }
-}
-
-class Paged<T> {
-  const Paged({
-    required this.items,
-    required this.total,
-    required this.offset,
-    required this.nextOffset,
-  });
-
-  final List<T> items;
-  final int total;
-  final int offset;
-  final int? nextOffset;
-
-  static int _i(Object? v, {required int def}) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return def;
-  }
-
-  static Map<String, Object?> _m(Object? v) {
-    if (v is Map) return v.cast<String, Object?>();
-    return const <String, Object?>{};
-  }
-
-  static Paged<T> fromJson<T>(
-    Object? raw,
-    T Function(Map<String, dynamic>) itemFromJson,
-  ) {
-    final j = _m(raw);
-
-    final itemsRaw = j['items'];
-    final items = <T>[];
-    if (itemsRaw is List) {
-      for (final it in itemsRaw) {
-        if (it is Map) {
-          items.add(itemFromJson(it.cast<String, dynamic>()));
-        }
-      }
-    }
-
-    final total = _i(j['total'], def: items.length);
-    final offset = _i(j['offset'], def: 0);
-
-    int? nextOffset;
-    final no = j['nextOffset'] ?? j['next_offset'];
-    if (no is int) nextOffset = no;
-    if (no is num) nextOffset = no.toInt();
-
-    return Paged(
-      items: items,
-      total: total,
-      offset: offset,
-      nextOffset: nextOffset,
     );
   }
 }

@@ -1,69 +1,95 @@
-import 'package:afyakit/features/retail/sales/invoices/models/invoice_draft.dart';
 import 'package:flutter/foundation.dart';
+
+import 'package:afyakit/features/retail/sales/invoices/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/sales/invoices/models/zoho_invoice_payment.dart';
+import 'package:afyakit/features/retail/sales/invoices/models/payment_draft.dart';
 
 @immutable
 class InvoiceState {
-  const InvoiceState({
-    this.submitting = false,
-    this.loadingEdit = false,
+  InvoiceState({
+    this.loading = false,
+    this.loadingPayments = false,
+    this.downloadingPdf = false, // ✅ MUST default to false
+    this.savingPayment = false,
+    this.deletingPayment = false,
     this.error,
-    this.lastCreatedInvoiceId,
-    this.editingInvoiceId,
-    this.loadedEditId,
-    InvoiceDraft? draft,
-    this.invoiceDate,
-  }) : draft = draft ?? const InvoiceDraft();
+    this.invoiceId,
+    this.invoice,
+    this.payments = const <ZohoInvoicePayment>[],
+    PaymentDraft? paymentDraft,
+    this.editingPaymentId,
+  }) : paymentDraft = paymentDraft ?? PaymentDraft.today();
 
-  final bool submitting;
-  final bool loadingEdit;
+  final bool loading;
+  final bool loadingPayments;
+
+  final bool downloadingPdf; // ✅ MUST be non-nullable bool
+
+  final bool savingPayment;
+  final bool deletingPayment;
 
   final String? error;
-  final String? lastCreatedInvoiceId;
 
-  final String? editingInvoiceId;
-  final String? loadedEditId;
+  final String? invoiceId;
+  final ZohoInvoice? invoice;
 
-  final InvoiceDraft draft;
-  final DateTime? invoiceDate;
+  final List<ZohoInvoicePayment> payments;
 
-  bool get isEditing => (editingInvoiceId ?? '').trim().isNotEmpty;
-  bool get busy => submitting || loadingEdit;
+  final PaymentDraft paymentDraft;
 
-  bool get hasLines => draft.lines.isNotEmpty;
-  num get total => draft.total;
-  String get customerLabel => draft.displayContactName;
+  final String? editingPaymentId;
+
+  bool get busy =>
+      loading ||
+      loadingPayments ||
+      downloadingPdf ||
+      savingPayment ||
+      deletingPayment;
+
+  bool get hasInvoice => invoice != null;
+  bool get hasPayments => payments.isNotEmpty;
+
+  String get customerName => (invoice?.customerName ?? '').trim();
+  String get status => (invoice?.status ?? '').trim();
+  num get total => invoice?.total ?? 0;
+  num get balance => invoice?.balance ?? 0;
+
+  bool get isEditingPayment => (editingPaymentId ?? '').trim().isNotEmpty;
 
   InvoiceState copyWith({
-    bool? submitting,
-    bool? loadingEdit,
+    bool? loading,
+    bool? loadingPayments,
+    bool? downloadingPdf, // ✅ optional param
+    bool? savingPayment,
+    bool? deletingPayment,
     String? error,
     bool clearError = false,
-    String? lastCreatedInvoiceId,
-    bool clearLastCreatedId = false,
-    String? editingInvoiceId,
-    bool clearEditingInvoiceId = false,
-    String? loadedEditId,
-    bool clearLoadedEditId = false,
-    InvoiceDraft? draft,
-    bool clearDraft = false,
-    DateTime? invoiceDate,
-    bool clearInvoiceDate = false,
+    String? invoiceId,
+    bool clearInvoiceId = false,
+    ZohoInvoice? invoice,
+    bool clearInvoice = false,
+    List<ZohoInvoicePayment>? payments,
+    bool clearPayments = false,
+    PaymentDraft? paymentDraft,
+    String? editingPaymentId,
+    bool clearEditingPaymentId = false,
   }) {
     return InvoiceState(
-      submitting: submitting ?? this.submitting,
-      loadingEdit: loadingEdit ?? this.loadingEdit,
+      loading: loading ?? this.loading,
+      loadingPayments: loadingPayments ?? this.loadingPayments,
+      downloadingPdf: downloadingPdf ?? this.downloadingPdf, // ✅ never null
+      savingPayment: savingPayment ?? this.savingPayment,
+      deletingPayment: deletingPayment ?? this.deletingPayment,
       error: clearError ? null : (error ?? this.error),
-      lastCreatedInvoiceId: clearLastCreatedId
+      invoiceId: clearInvoiceId ? null : (invoiceId ?? this.invoiceId),
+      invoice: clearInvoice ? null : (invoice ?? this.invoice),
+      payments: clearPayments
+          ? const <ZohoInvoicePayment>[]
+          : (payments ?? this.payments),
+      paymentDraft: paymentDraft ?? this.paymentDraft,
+      editingPaymentId: clearEditingPaymentId
           ? null
-          : (lastCreatedInvoiceId ?? this.lastCreatedInvoiceId),
-      editingInvoiceId: clearEditingInvoiceId
-          ? null
-          : (editingInvoiceId ?? this.editingInvoiceId),
-      loadedEditId: clearLoadedEditId
-          ? null
-          : (loadedEditId ?? this.loadedEditId),
-      draft: clearDraft ? const InvoiceDraft() : (draft ?? this.draft),
-      invoiceDate: clearInvoiceDate ? null : (invoiceDate ?? this.invoiceDate),
+          : (editingPaymentId ?? this.editingPaymentId),
     );
   }
 }

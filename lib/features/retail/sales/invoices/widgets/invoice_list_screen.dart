@@ -1,9 +1,6 @@
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/features/retail/sales/invoices/controllers/invoice_list_controller.dart';
 import 'package:afyakit/features/retail/sales/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/sales/invoices/widgets/invoice_detail_screen.dart';
-import 'package:afyakit/features/retail/sales/invoices/widgets/invoice_editor_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart'
     show CatalogScreen;
 import 'package:afyakit/shared/home/widgets/tenant_home_shell.dart';
@@ -28,9 +25,6 @@ class InvoicesListScreen extends ConsumerWidget {
     final state = ref.watch(invoicesListControllerProvider);
     final ctl = ref.read(invoicesListControllerProvider.notifier);
 
-    final me = ref.watch(currentUserProvider).valueOrNull;
-    final canManageInvoices = me?.canManageInvoices ?? false;
-
     return AppPageScaffold(
       appBar: _buildAppBar(context, state, ctl),
       fab: _buildFab(context),
@@ -50,15 +44,7 @@ class InvoicesListScreen extends ConsumerWidget {
                   ),
                 ),
               ],
-              Expanded(
-                child: _buildBody(
-                  context,
-                  ref,
-                  state,
-                  ctl,
-                  canManageInvoices: canManageInvoices,
-                ),
-              ),
+              Expanded(child: _buildBody(context, state, ctl)),
               if (state.loadingMore)
                 const Padding(
                   padding: EdgeInsets.only(top: AppShape.gap8),
@@ -134,44 +120,15 @@ class InvoicesListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _editInvoice(
-    BuildContext context,
-    WidgetRef ref,
-    ZohoInvoice inv,
-  ) async {
-    final me = ref.read(currentUserProvider).valueOrNull;
-    if (me == null || !me.canManageInvoices) {
-      _toast(context, 'Not allowed');
-      return;
-    }
-
-    final id = inv.invoiceId.trim();
-    if (id.isEmpty) {
-      _toast(context, 'Missing invoice id');
-      return;
-    }
-
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => InvoiceEditorScreen(editingInvoiceId: id),
-      ),
-    );
-
-    // Defensive refresh
-    ref.read(invoicesListControllerProvider.notifier).refresh(reset: true);
-  }
-
   // ─────────────────────────────────────────────
   // Body
   // ─────────────────────────────────────────────
 
   Widget _buildBody(
     BuildContext context,
-    WidgetRef ref,
     PagedQueryState<ZohoInvoice> state,
-    InvoicesListController ctl, {
-    required bool canManageInvoices,
-  }) {
+    InvoicesListController ctl,
+  ) {
     if (state.loading && state.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -209,9 +166,6 @@ class InvoicesListScreen extends ConsumerWidget {
                           inv: state.items[j],
                           onOpen: () =>
                               _openExistingInvoice(context, state.items[j]),
-                          onEdit: canManageInvoices
-                              ? () => _editInvoice(context, ref, state.items[j])
-                              : null,
                         ),
                       ),
                       if (j != state.items.length - 1)
@@ -296,17 +250,10 @@ class InvoicesListScreen extends ConsumerWidget {
 // ─────────────────────────────────────────────
 
 class _InvoiceRow extends StatelessWidget {
-  const _InvoiceRow({
-    required this.inv,
-    required this.onOpen,
-    required this.onEdit,
-  });
+  const _InvoiceRow({required this.inv, required this.onOpen});
 
   final ZohoInvoice inv;
   final VoidCallback onOpen;
-
-  /// If null => hide edit affordance entirely.
-  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -352,14 +299,6 @@ class _InvoiceRow extends StatelessWidget {
                       ),
                       const SizedBox(width: AppShape.gap10),
                       _StatusChip(status: inv.status),
-                      if (onEdit != null) ...[
-                        const SizedBox(width: AppShape.gap6),
-                        IconButton(
-                          tooltip: 'Edit invoice',
-                          onPressed: onEdit,
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: AppShape.gap6),

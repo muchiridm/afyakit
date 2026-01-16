@@ -313,9 +313,29 @@ class AfyaKitRoutes {
   Uri zohoDeleteQuote(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}');
 
+  /// 🆕 PDF (inline)
+  Uri zohoQuotePdf(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}/pdf');
+
+  /// 🆕 Email quote
+  Uri zohoSendQuote(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}/email');
+
+  /// 🆕 Mark quote as sent
+  Uri zohoMarkQuoteSent(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}/status/sent');
+
+  /// 🆕 Convert quote → invoice
+  Uri zohoConvertQuoteToInvoice(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}/convert-to-invoice');
+
   // ─────────────────────────────────────────────
   // 💼 Zoho Invoices (tenant-scoped; authenticated)
   // ─────────────────────────────────────────────
+
+  /// 🆕 PDF (inline)
+  Uri zohoInvoicePdf(String invoiceId) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}/pdf');
 
   Uri zohoListInvoices({int limit = 50, int page = 1}) =>
       _uri('zoho/v1/invoices', query: {'limit': '$limit', 'page': '$page'});
@@ -323,11 +343,22 @@ class AfyaKitRoutes {
   Uri zohoGetInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
 
-  Uri zohoCreateInvoice() => _uri('zoho/v1/invoices');
-
   Uri zohoUpdateInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
 
-  Uri zohoDeleteInvoice(String invoiceId) =>
-      _uri('zoho/v1/invoices/${_seg(invoiceId)}');
+  // ─────────────────────────────────────────────
+  // 💳 Zoho Payments (Invoice payments)
+  // ─────────────────────────────────────────────
+
+  Uri zohoListInvoicePayments({required String invoiceId}) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}/payments');
+
+  Uri zohoCreateInvoicePayment({required String invoiceId}) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}/payments');
+
+  Uri zohoUpdatePayment({required String paymentId}) =>
+      _uri('zoho/v1/payments/${_seg(paymentId)}');
+
+  Uri zohoDeletePayment({required String paymentId}) =>
+      _uri('zoho/v1/payments/${_seg(paymentId)}');
 }

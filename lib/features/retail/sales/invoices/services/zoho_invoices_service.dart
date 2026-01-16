@@ -1,3 +1,8 @@
+// lib/features/retail/sales/invoices/services/zoho_invoices_service.dart
+
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -6,8 +11,9 @@ import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
-import '../models/invoice_draft.dart';
+import '../models/payment_draft.dart';
 import '../models/zoho_invoice.dart';
+import '../models/zoho_invoice_payment.dart';
 
 typedef JsonMap = Map<String, dynamic>;
 
@@ -27,6 +33,8 @@ class ZohoInvoicesService {
   final AfyaKitRoutes routes;
 
   static final DateFormat _zohoDateFmt = DateFormat('yyyy-MM-dd');
+
+  // ───────────────────────── Read ─────────────────────────
 
   Future<List<ZohoInvoice>> list({int limit = 50, int page = 1}) async {
     final uri = routes.zohoListInvoices(limit: limit, page: page);
@@ -51,7 +59,10 @@ class ZohoInvoicesService {
   }
 
   Future<JsonMap> getInvoice(String invoiceId) async {
-    final uri = routes.zohoGetInvoice(invoiceId);
+    final id = invoiceId.trim();
+    if (id.isEmpty) throw ArgumentError('invoiceId is empty');
+
+    final uri = routes.zohoGetInvoice(id);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -63,166 +74,164 @@ class ZohoInvoicesService {
     throw StateError('Unexpected response shape: missing invoice object');
   }
 
-  Future<JsonMap> createInvoiceFromDraft(
-    InvoiceDraft draft, {
-    DateTime? invoiceDate,
-  }) async {
-    final body = _buildDraftPayload(
-      draft,
-      requireCustomer: true,
-      invoiceDate: invoiceDate,
-      includeLineItemIds: false, // ✅ create never needs line ids
-    );
-
-    final uri = routes.zohoCreateInvoice();
-    final res = await api.postUri(uri, data: body);
-    return _asJsonMap(res.data);
-  }
-
-  Future<String?> createInvoiceIdFromDraft(
-    InvoiceDraft draft, {
-    DateTime? invoiceDate,
-  }) async {
-    final res = await createInvoiceFromDraft(draft, invoiceDate: invoiceDate);
-    final raw = res['invoice'] ?? res;
-    if (raw is Map) {
-      final m = raw.cast<String, dynamic>();
-      final id = (m['invoice_id'] ?? m['id'])?.toString().trim();
-      return (id == null || id.isEmpty) ? null : id;
-    }
-    return null;
-  }
-
-  Future<JsonMap> updateInvoiceFromDraft(
-    String invoiceId,
-    InvoiceDraft draft, {
-    DateTime? invoiceDate,
-  }) async {
-    final body = _buildDraftPayload(
-      draft,
-      requireCustomer: false,
-      invoiceDate: invoiceDate,
-      includeLineItemIds: true, // ✅ critical for edit/update
-    );
-
-    final uri = routes.zohoUpdateInvoice(invoiceId);
-    final res = await api.putUri(uri, data: body);
-    return _asJsonMap(res.data);
-  }
-
+  /// Optional tiny patcher (notes/terms/reference) if you still want it.
+  /// If you truly want invoices read-only, you can delete this method.
   Future<JsonMap> updateInvoice(String invoiceId, JsonMap patch) async {
-    final uri = routes.zohoUpdateInvoice(invoiceId);
+    final id = invoiceId.trim();
+    if (id.isEmpty) throw ArgumentError('invoiceId is empty');
+
+    final uri = routes.zohoUpdateInvoice(id);
     final res = await api.putUri(uri, data: patch);
     return _asJsonMap(res.data);
   }
 
-  Future<void> delete(String invoiceId) async {
-    final uri = routes.zohoDeleteInvoice(invoiceId);
+  // ───────────────────────── PDF ─────────────────────────
+
+  /// ✅ Fetch invoice PDF bytes for PdfPreviewScreen.
+  ///
+  /// This should hit your backend route that proxies Zoho Books invoice PDF.
+  /// Expected response: application/pdf (raw bytes).
+  Future<Uint8List> getPdf(String invoiceId) async {
+    final id = invoiceId.trim();
+    if (id.isEmpty) throw ArgumentError('invoiceId is empty');
+
+    final uri = routes.zohoInvoicePdf(id);
+
+    final res = await api.getUri(
+      uri,
+      options: Options(
+        responseType: ResponseType.bytes,
+        // Optional: if your backend returns 404 while you rollout, you can
+        // soften this like you did for payments. But for PDF, I prefer failing loudly.
+      ),
+    );
+
+    final data = res.data;
+    if (data is List<int>) return Uint8List.fromList(data);
+
+    throw StateError('Unexpected PDF response type: ${data.runtimeType}');
+  }
+
+  // ───────────────────────── Payments ─────────────────────────
+
+  /// ✅ List payments for one invoice.
+  ///
+  /// IMPORTANT:
+  /// Your backend may not implement this route yet. When it returns 404,
+  /// we treat that as "payments not supported" and return [] so the UI keeps working.
+  Future<List<ZohoInvoicePayment>> listPayments(String invoiceId) async {
+    final id = invoiceId.trim();
+    if (id.isEmpty) throw ArgumentError('invoiceId is empty');
+
+    final uri = routes.zohoListInvoicePayments(invoiceId: id);
+
+    // ✅ Accept 404 so Dio doesn't throw
+    final res = await api.getUri(
+      uri,
+      options: Options(
+        validateStatus: (code) {
+          if (code == null) return false;
+          if (code == 404) return true; // treat as supported "no route"
+          return code >= 200 && code < 300;
+        },
+        extra: const {'silence404': true}, // optional: used by Patch 2 below
+      ),
+    );
+
+    // 404 => backend route not implemented => "no payments feature" => []
+    if (res.statusCode == 404) return const <ZohoInvoicePayment>[];
+
+    final data = _asJsonMap(res.data);
+
+    final raw =
+        data['payments'] ??
+        data['customerpayments'] ??
+        data['payment_details'] ??
+        data['items'];
+
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((m) => ZohoInvoicePayment.fromJson(m.cast<String, dynamic>()))
+          .toList(growable: false);
+    }
+
+    return const <ZohoInvoicePayment>[];
+  }
+
+  Future<JsonMap> recordPayment(String invoiceId, PaymentDraft draft) async {
+    final id = invoiceId.trim();
+    if (id.isEmpty) throw ArgumentError('invoiceId is empty');
+
+    final amt = _safeAmount(draft.amount);
+    if (amt <= 0) throw ArgumentError('amount must be > 0');
+
+    final uri = routes.zohoCreateInvoicePayment(invoiceId: id);
+
+    final body = <String, Object?>{
+      'amount': amt,
+      'date': _zohoDateFmt.format(_dateOnly(draft.date)),
+      if (_cleanOrNull(draft.mode) != null)
+        'payment_mode': _cleanOrNull(draft.mode),
+      if (_cleanOrNull(draft.referenceNumber) != null)
+        'reference_number': _cleanOrNull(draft.referenceNumber),
+      if (_cleanOrNull(draft.description) != null)
+        'description': _cleanOrNull(draft.description),
+      if (_cleanOrNull(draft.accountId) != null)
+        'account_id': _cleanOrNull(draft.accountId),
+    };
+
+    final res = await api.postUri(uri, data: body);
+    return _asJsonMap(res.data);
+  }
+
+  Future<JsonMap> updatePayment(String paymentId, PaymentDraft draft) async {
+    final id = paymentId.trim();
+    if (id.isEmpty) throw ArgumentError('paymentId is empty');
+
+    final uri = routes.zohoUpdatePayment(paymentId: id);
+
+    final body = <String, Object?>{
+      'amount': _safeAmount(draft.amount),
+      'date': _zohoDateFmt.format(_dateOnly(draft.date)),
+      if (_cleanOrNull(draft.mode) != null)
+        'payment_mode': _cleanOrNull(draft.mode),
+      if (_cleanOrNull(draft.referenceNumber) != null)
+        'reference_number': _cleanOrNull(draft.referenceNumber),
+      if (_cleanOrNull(draft.description) != null)
+        'description': _cleanOrNull(draft.description),
+      if (_cleanOrNull(draft.accountId) != null)
+        'account_id': _cleanOrNull(draft.accountId),
+    };
+
+    final res = await api.putUri(uri, data: body);
+    return _asJsonMap(res.data);
+  }
+
+  Future<void> deletePayment(String paymentId) async {
+    final id = paymentId.trim();
+    if (id.isEmpty) throw ArgumentError('paymentId is empty');
+
+    final uri = routes.zohoDeletePayment(paymentId: id);
     await api.deleteUri(uri);
   }
 
-  // ───────────────────────── Payload builder ─────────────────────────
+  // ───────────────────────── Helpers ─────────────────────────
 
-  JsonMap _buildDraftPayload(
-    InvoiceDraft draft, {
-    required bool requireCustomer,
-    required bool includeLineItemIds,
-    DateTime? invoiceDate,
-  }) {
-    final customerId = (draft.contactId ?? draft.contact?.contactId ?? '')
-        .trim();
-
-    if (requireCustomer && customerId.isEmpty) {
-      throw StateError('customer is required (missing contactId)');
-    }
-
-    if (draft.lines.isEmpty) {
-      throw StateError('invoice must have at least one line');
-    }
-
-    final reference = _cleanOrNull(draft.reference);
-    final notes = _cleanOrNull(draft.customerNotes);
-
-    final dateStr = invoiceDate == null
-        ? null
-        : _zohoDateFmt.format(invoiceDate);
-    final dueStr = draft.dueDate == null
-        ? null
-        : _zohoDateFmt.format(draft.dueDate!);
-
-    return <String, Object?>{
-      if (customerId.isNotEmpty) 'customer_id': customerId,
-      if (dateStr != null) 'date': dateStr,
-      if (dueStr != null) 'due_date': dueStr,
-      if (reference != null) 'reference_number': reference,
-      if (notes != null) 'notes': notes,
-
-      'line_items': draft.lines
-          .map((InvoiceLineDraft l) {
-            final qty = _safeQty(l.quantity);
-            final rate = _safeRate(l.rate);
-
-            final name = _safeLineName(l);
-            final description = _safeLineDescription(l);
-
-            final lineItemId = (l.lineItemId ?? '').trim();
-
-            return <String, Object?>{
-              if (includeLineItemIds && lineItemId.isNotEmpty)
-                'line_item_id': lineItemId,
-              'name': name,
-              if (description != null) 'description': description,
-              'quantity': qty,
-              'rate': rate,
-            };
-          })
-          .toList(growable: false),
-    };
-  }
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static String? _cleanOrNull(String? v) {
     final t = (v ?? '').trim();
     return t.isEmpty ? null : t;
   }
 
-  static int _safeQty(int q) {
-    if (q < 1) return 1;
-    if (q > 9999) return 9999;
-    return q;
+  static num _safeAmount(num v) {
+    if (v.isNaN || v.isInfinite) return 0;
+    if (v < 0) return 0;
+    return v;
   }
 
-  static num _safeRate(num r) {
-    if (r.isNaN || r.isInfinite) return 0;
-    if (r < 0) return 0;
-    return r;
-  }
-
-  static String _safeLineName(InvoiceLineDraft line) {
-    final tile = line.tile;
-
-    final d = (line.description ?? '').trim();
-    if (d.isNotEmpty) return _truncate(d, 120);
-
-    final title = (tile.tileTitle).trim();
-    if (title.isNotEmpty) return _truncate(title, 120);
-
-    final fallback = (tile.tileDesc ?? '').trim();
-    return _truncate(fallback.isNotEmpty ? fallback : 'Item', 120);
-  }
-
-  static String? _safeLineDescription(InvoiceLineDraft line) {
-    final desc = (line.tile.tileDesc ?? '').trim();
-    if (desc.isEmpty) return null;
-    return _truncate(desc, 500);
-  }
-
-  static String _truncate(String v, int max) {
-    final s = v.trim();
-    if (s.length <= max) return s;
-    return s.substring(0, max - 1).trimRight();
-  }
-
-  JsonMap _asJsonMap(Object? v) {
+  static JsonMap _asJsonMap(Object? v) {
     if (v is Map<String, dynamic>) return v;
     if (v is Map) return v.cast<String, dynamic>();
     throw StateError('Expected JSON object but got ${v.runtimeType}');

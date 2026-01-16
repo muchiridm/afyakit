@@ -1,5 +1,8 @@
 // lib/features/retail/sales/quotes/services/zoho_quotes_service.dart
 
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -30,6 +33,8 @@ class ZohoQuotesService {
 
   static final DateFormat _zohoDateFmt = DateFormat('yyyy-MM-dd');
 
+  // ───────────────────────── List / Get ─────────────────────────
+
   Future<List<ZohoQuote>> list({int limit = 50, int page = 1}) async {
     final uri = routes.zohoListQuotes(limit: limit, page: page);
     final res = await api.getUri(uri);
@@ -57,7 +62,6 @@ class ZohoQuotesService {
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
-
     final raw = data['quote'] ?? data['estimate'] ?? data;
 
     if (raw is Map<String, dynamic>) return raw;
@@ -65,6 +69,8 @@ class ZohoQuotesService {
 
     throw StateError('Unexpected response shape: missing quote object');
   }
+
+  // ───────────────────────── Create / Update / Delete ─────────────────────────
 
   Future<JsonMap> createQuoteFromDraft(
     QuoteDraft draft, {
@@ -74,7 +80,7 @@ class ZohoQuotesService {
       draft,
       requireCustomer: true,
       quoteDate: quoteDate,
-      includeLineItemIds: false, // ✅ create never needs line ids
+      includeLineItemIds: false,
     );
 
     final uri = routes.zohoCreateQuote();
@@ -88,6 +94,7 @@ class ZohoQuotesService {
   }) async {
     final res = await createQuoteFromDraft(draft, quoteDate: quoteDate);
     final raw = res['quote'] ?? res['estimate'] ?? res;
+
     if (raw is Map) {
       final m = raw.cast<String, dynamic>();
       final id = (m['quote_id'] ?? m['estimate_id'] ?? m['id'])
@@ -95,6 +102,7 @@ class ZohoQuotesService {
           .trim();
       return (id == null || id.isEmpty) ? null : id;
     }
+
     return null;
   }
 
@@ -107,7 +115,7 @@ class ZohoQuotesService {
       draft,
       requireCustomer: false,
       quoteDate: quoteDate,
-      includeLineItemIds: true, // ✅ critical for edit/update
+      includeLineItemIds: true,
     );
 
     final uri = routes.zohoUpdateQuote(quoteId);
@@ -124,6 +132,65 @@ class ZohoQuotesService {
   Future<void> delete(String quoteId) async {
     final uri = routes.zohoDeleteQuote(quoteId);
     await api.deleteUri(uri);
+  }
+
+  // ───────────────────────── PDF ─────────────────────────
+
+  /// Returns raw PDF bytes for inline rendering / download.
+  ///
+  /// Requires AfyaKitClient.getUri to accept dio.Options (see client patch below).
+  Future<Uint8List> getPdf(String quoteId) async {
+    final uri = routes.zohoQuotePdf(quoteId);
+
+    final res = await api.getUri(
+      uri,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: const {'Accept': 'application/pdf'},
+      ),
+    );
+
+    final data = res.data;
+
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+
+    throw StateError('Expected PDF bytes but got ${data.runtimeType}');
+  }
+
+  // ───────────────────────── Send / Mark Sent ─────────────────────────
+
+  Future<void> sendQuote(String quoteId) async {
+    final uri = routes.zohoSendQuote(quoteId);
+    await api.postUri(uri);
+  }
+
+  Future<void> markQuoteSent(String quoteId) async {
+    final uri = routes.zohoMarkQuoteSent(quoteId);
+    await api.postUri(uri);
+  }
+
+  Future<void> sendAndMarkSent(String quoteId) async {
+    await sendQuote(quoteId);
+    await markQuoteSent(quoteId);
+  }
+
+  // ───────────────────────── Convert to Invoice ─────────────────────────
+
+  Future<JsonMap> convertToInvoice(
+    String quoteId, {
+    DateTime? invoiceDate,
+    DateTime? dueDate,
+  }) async {
+    final uri = routes.zohoConvertQuoteToInvoice(quoteId);
+
+    final body = <String, Object?>{
+      if (invoiceDate != null) 'invoice_date': _zohoDateFmt.format(invoiceDate),
+      if (dueDate != null) 'due_date': _zohoDateFmt.format(dueDate),
+    };
+
+    final res = await api.postUri(uri, data: body.isEmpty ? null : body);
+    return _asJsonMap(res.data);
   }
 
   // ───────────────────────── Payload builder ─────────────────────────
@@ -147,7 +214,6 @@ class ZohoQuotesService {
 
     final reference = _cleanOrNull(draft.reference);
     final notes = _cleanOrNull(draft.customerNotes);
-
     final dateStr = quoteDate == null ? null : _zohoDateFmt.format(quoteDate);
 
     return <String, Object?>{
@@ -155,7 +221,6 @@ class ZohoQuotesService {
       if (dateStr != null) 'date': dateStr,
       if (reference != null) 'reference_number': reference,
       if (notes != null) 'notes': notes,
-
       'line_items': draft.lines
           .map((QuoteLineDraft l) {
             final qty = _safeQty(l.quantity);
@@ -167,10 +232,8 @@ class ZohoQuotesService {
             final lineItemId = (l.lineItemId ?? '').trim();
 
             return <String, Object?>{
-              // ✅ Only include for update flows, when present
               if (includeLineItemIds && lineItemId.isNotEmpty)
                 'line_item_id': lineItemId,
-
               'name': name,
               if (description != null) 'description': description,
               'quantity': qty,
@@ -204,7 +267,7 @@ class ZohoQuotesService {
     final d = (line.description ?? '').trim();
     if (d.isNotEmpty) return _truncate(d, 120);
 
-    final title = (tile.tileTitle).trim();
+    final title = tile.tileTitle.trim();
     if (title.isNotEmpty) return _truncate(title, 120);
 
     final fallback = (tile.tileDesc ?? '').trim();

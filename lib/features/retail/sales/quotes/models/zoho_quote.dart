@@ -24,7 +24,8 @@ class ZohoQuoteLineItem {
 
   factory ZohoQuoteLineItem.fromJson(JsonMap j) {
     final name = (j['name'] ?? '').toString().trim();
-    final desc = (j['description'] ?? '').toString().trim();
+    final descRaw = (j['description'] ?? '').toString().trim();
+
     final qRaw = j['quantity'];
     final rRaw = j['rate'];
 
@@ -34,9 +35,11 @@ class ZohoQuoteLineItem {
     final id = (j['line_item_id'] ?? '').toString().trim();
     final totalRaw = j['item_total'];
 
+    final desc = descRaw.isEmpty ? null : descRaw;
+
     return ZohoQuoteLineItem(
       name: name,
-      description: desc.isEmpty ? null : desc,
+      description: desc,
       quantity: qty,
       rate: rate,
       lineItemId: id.isEmpty ? null : id,
@@ -64,7 +67,7 @@ class ZohoQuote {
 
   final String quoteId;
   final String customerName;
-  final String status; // "draft", "sent", etc. keep open-ended
+  final String status; // "draft", "sent", etc.
   final DateTime? date;
   final num total;
 
@@ -82,14 +85,21 @@ class ZohoQuote {
   final List<ZohoQuoteLineItem> lineItems;
 
   factory ZohoQuote.fromJson(JsonMap j) {
-    final id = (j['estimate_id'] ?? j['quote_id'] ?? j['id'] ?? '').toString();
-    final name = (j['customer_name'] ?? j['contact_name'] ?? '').toString();
-    final status = (j['status'] ?? '').toString();
+    final id = (j['estimate_id'] ?? j['quote_id'] ?? j['id'] ?? '')
+        .toString()
+        .trim();
+
+    final name = (j['customer_name'] ?? j['contact_name'] ?? '')
+        .toString()
+        .trim();
+
+    final status = (j['status'] ?? '').toString().trim();
 
     DateTime? date;
     final rawDate = j['date'] ?? j['estimate_date'];
-    if (rawDate is String && rawDate.trim().isNotEmpty) {
-      date = DateTime.tryParse(rawDate.trim());
+    if (rawDate is String) {
+      final s = rawDate.trim();
+      if (s.isNotEmpty) date = DateTime.tryParse(s);
     }
 
     final totalRaw = j['total'];
