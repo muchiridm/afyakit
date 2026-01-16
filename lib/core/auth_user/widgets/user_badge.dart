@@ -1,5 +1,4 @@
 import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/shared/home/models/home_mode.dart';
 import 'package:afyakit/shared/home/providers/home_mode_provider.dart';
@@ -9,6 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 import 'package:afyakit/core/auth_user/utils/user_format.dart'; // staffRoleLabel
+
+// ✅ NEW
+import 'package:afyakit/core/tenancy/models/feature_keys.dart';
+import 'package:afyakit/core/tenancy/widgets/feature_gate.dart';
 
 class UserBadge extends ConsumerStatefulWidget {
   const UserBadge({super.key});
@@ -39,32 +42,44 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
         final displayName = user.displayLabel();
 
         final hasStaffWorkspace = user.type.hasStaffWorkspace;
-        final allowSwitch = hasStaffWorkspace;
 
         // Canonical staff label (Owner/Admin/Manager/etc) with safe fallback
         final rawStaffLabel = staffRoleLabel(user).trim();
         final staffLabel = rawStaffLabel.isEmpty ? 'Staff' : rawStaffLabel;
 
         debugPrint(
-          'UserBadge: mode=$mode allowSwitch=$allowSwitch '
-          'user=${user.uid} type=${user.type} staffLabel="$staffLabel"',
+          'UserBadge: mode=$mode user=${user.uid} type=${user.type} staffLabel="$staffLabel"',
         );
 
-        final roleLabel = _roleLabel(
-          user: user,
-          hasStaffWorkspace: hasStaffWorkspace,
-          allowSwitch: allowSwitch,
-          mode: mode,
-          staffLabel: staffLabel,
-        );
+        // Member-only users: no switching logic needed.
+        if (!hasStaffWorkspace) {
+          final roleLabel = user.type.label;
+          return _buildBadge(
+            context,
+            displayName: displayName,
+            roleLabel: roleLabel,
+            showSwitcher: false,
+            isStaffView: false,
+            onToggleView: null,
+            onTapProfile: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const UserProfileEditorScreen(),
+                ),
+              );
+            },
+          );
+        }
 
-        return _buildBadge(
+        // ✅ Staff users: only allow Member toggle when retail is enabled.
+        final badgeWithSwitch = _buildBadge(
           context,
           displayName: displayName,
-          roleLabel: roleLabel,
-          showSwitcher: allowSwitch,
-          isStaffView: allowSwitch && mode == HomeMode.staff,
-          onToggleView: allowSwitch ? () => _toggleMode(ref, mode) : null,
+          roleLabel: mode == HomeMode.member ? 'Member' : staffLabel,
+          showSwitcher: true,
+          isStaffView: mode == HomeMode.staff,
+          onToggleView: () => _toggleMode(ref, mode),
           onTapProfile: () {
             Navigator.push(
               context,
@@ -74,28 +89,34 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
             );
           },
         );
+
+        final badgeNoSwitch = _buildBadge(
+          context,
+          displayName: displayName,
+          roleLabel: staffLabel,
+          showSwitcher: false,
+          isStaffView: true,
+          onToggleView: null,
+          onTapProfile: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const UserProfileEditorScreen(),
+              ),
+            );
+          },
+        );
+
+        return FeatureGate(
+          featureKey: FeatureKeys.retail,
+          fallback: badgeNoSwitch,
+          child: badgeWithSwitch,
+        );
       },
     );
   }
 
   // ────────────────── logic helpers ──────────────────
-
-  String _roleLabel({
-    required AuthUser user,
-    required bool hasStaffWorkspace,
-    required bool allowSwitch,
-    required HomeMode mode,
-    required String staffLabel,
-  }) {
-    // Member-only users: show their type label
-    if (!hasStaffWorkspace) return user.type.label;
-
-    // Staff users without toggle (shouldn't happen with current logic)
-    if (!allowSwitch) return staffLabel;
-
-    // Staff users with toggle: reflect current mode
-    return mode == HomeMode.member ? 'Member' : staffLabel;
-  }
 
   void _toggleMode(WidgetRef ref, HomeMode current) {
     final next = current == HomeMode.staff ? HomeMode.member : HomeMode.staff;

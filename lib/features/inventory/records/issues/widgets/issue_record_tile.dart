@@ -44,7 +44,9 @@ class IssueRecordTile extends StatelessWidget {
     ], []);
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      margin: const EdgeInsets.symmetric(
+        vertical: 4,
+      ), // ✅ remove horizontal inset
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(

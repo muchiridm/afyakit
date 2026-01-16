@@ -195,6 +195,17 @@ extension AuthUserX on AuthUser {
       isDoctor || isPharmacist || isStaff || isSuperAdmin;
 
   // ────────────────────────────────────────────
+  // Retail / Zoho permissions
+  // ────────────────────────────────────────────
+
+  /// Only managers/admins/owners (or superadmin) can edit/delete invoices.
+  bool get canManageInvoices =>
+      isActive && (isSuperAdmin || isOwner || isAdmin || isManager);
+
+  bool get canEditInvoice => canManageInvoices;
+  bool get canDeleteInvoice => canManageInvoices;
+
+  // ────────────────────────────────────────────
   // Remote update helper
   // ────────────────────────────────────────────
 

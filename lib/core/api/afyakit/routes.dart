@@ -255,8 +255,29 @@ class AfyaKitRoutes {
   // 💼 Zoho Books (tenant-scoped; authenticated)
   // ─────────────────────────────────────────────
 
-  Uri zohoListContacts({String? search, int limit = 50, int page = 1}) => _uri(
+  /// List contacts (optionally filtered by type).
+  ///
+  /// Supported by our backend:
+  /// - type=customer | vendor | customer_vendor
+  /// - OR contact_type=customer (backend accepts both)
+  Uri zohoListContacts({
+    String? search,
+    String? type, // ✅ NEW
+    int limit = 50,
+    int page = 1,
+  }) => _uri(
     'zoho/v1/contacts',
+    query: {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
+      'limit': '$limit',
+      'page': '$page',
+    },
+  );
+
+  /// Convenience endpoint: customers only
+  Uri zohoListCustomers({String? search, int limit = 50, int page = 1}) => _uri(
+    'zoho/v1/contacts/customers',
     query: {
       if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
       'limit': '$limit',
@@ -291,4 +312,22 @@ class AfyaKitRoutes {
 
   Uri zohoDeleteQuote(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}');
+
+  // ─────────────────────────────────────────────
+  // 💼 Zoho Invoices (tenant-scoped; authenticated)
+  // ─────────────────────────────────────────────
+
+  Uri zohoListInvoices({int limit = 50, int page = 1}) =>
+      _uri('zoho/v1/invoices', query: {'limit': '$limit', 'page': '$page'});
+
+  Uri zohoGetInvoice(String invoiceId) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}');
+
+  Uri zohoCreateInvoice() => _uri('zoho/v1/invoices');
+
+  Uri zohoUpdateInvoice(String invoiceId) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}');
+
+  Uri zohoDeleteInvoice(String invoiceId) =>
+      _uri('zoho/v1/invoices/${_seg(invoiceId)}');
 }

@@ -3,6 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/shared/layout/app_page_scaffold.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
+import 'package:afyakit/shared/widgets/app_card.dart';
+import 'package:afyakit/shared/widgets/app_tile.dart';
+
 import '../controllers/contacts_controller.dart';
 import '../../contacts/models/zoho_contact.dart';
 
@@ -16,9 +21,10 @@ class ContactsScreen extends ConsumerWidget {
 
     final loadingAny = state.loadingList || state.loadingDetail;
 
-    return Scaffold(
+    return AppPageScaffold(
       appBar: AppBar(
         title: const Text('Contacts'),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -27,11 +33,13 @@ class ContactsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+
+      fab: FloatingActionButton.extended(
         onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
         icon: const Icon(Icons.add),
         label: const Text('New'),
       ),
+
       body: Stack(
         children: [
           RefreshIndicator(
@@ -39,18 +47,27 @@ class ContactsScreen extends ConsumerWidget {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                // ── Search
                 SliverToBoxAdapter(
-                  child: _SearchBar(
-                    value: state.search,
-                    enabled: !state.saving,
-                    loading:
-                        state.loadingList, // only list search shows spinner
-                    onChanged: ctl.setSearch,
-                    onClear: () => ctl.setSearch(''),
-                    onSubmit: () => ctl.refresh(),
+                  child: AppCard(
+                    title: 'Search',
+                    icon: Icons.search,
+                    child: _SearchBar(
+                      value: state.search,
+                      enabled: !state.saving,
+                      loading: state.loadingList,
+                      onChanged: ctl.setSearch,
+                      onClear: () => ctl.setSearch(''),
+                      onSubmit: () => ctl.refresh(),
+                    ),
                   ),
                 ),
 
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppShape.gap12),
+                ),
+
+                // ── Error banner
                 if (state.error != null)
                   SliverToBoxAdapter(
                     child: _ErrorBanner(
@@ -59,17 +76,21 @@ class ContactsScreen extends ConsumerWidget {
                     ),
                   ),
 
+                if (state.error != null)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: AppShape.gap12),
+                  ),
+
+                // ── Main list / empty states
                 _buildSliverBody(context, state, ctl),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 88)),
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
               ],
             ),
           ),
 
-          // subtle top loading line while keeping list visible
           if (loadingAny) const LinearProgressIndicator(minHeight: 2),
 
-          // saving indicator at bottom
           if (state.saving)
             const Positioned(
               left: 0,
@@ -87,6 +108,7 @@ class ContactsScreen extends ConsumerWidget {
     ContactsState state,
     ContactsController ctl,
   ) {
+    // First load skeleton
     if (state.items.isEmpty && state.loadingList) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -94,8 +116,10 @@ class ContactsScreen extends ConsumerWidget {
       );
     }
 
+    // Empty state
     if (state.items.isEmpty) {
       final hasQuery = state.search.trim().isNotEmpty;
+
       return SliverFillRemaining(
         hasScrollBody: false,
         child: _EmptyState(
@@ -116,17 +140,27 @@ class ContactsScreen extends ConsumerWidget {
       );
     }
 
-    return SliverList.separated(
-      itemCount: state.items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        final c = state.items[i];
-        return _ContactTile(
-          contact: c,
-          enabled: !state.saving,
-          onTap: () => ctl.openExistingFlow(context, c),
-        );
-      },
+    // Contacts list — Home-style: Card container + Tile rows
+    return SliverToBoxAdapter(
+      child: AppCard(
+        title: 'Contacts',
+        icon: Icons.people_alt_outlined,
+        child: Column(
+          children: [
+            for (int i = 0; i < state.items.length; i++) ...[
+              AppTile(
+                child: _ContactTile(
+                  contact: state.items[i],
+                  enabled: !state.saving,
+                  onTap: () => ctl.openExistingFlow(context, state.items[i]),
+                ),
+              ),
+              if (i != state.items.length - 1)
+                const SizedBox(height: AppShape.gap10),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -150,33 +184,32 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: TextField(
-        enabled: enabled,
-        decoration: InputDecoration(
-          hintText: 'Search contacts…',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: value.trim().isEmpty
-              ? (loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null)
-              : IconButton(
-                  tooltip: 'Clear',
-                  onPressed: enabled ? onClear : null,
-                  icon: const Icon(Icons.clear),
-                ),
-        ),
-        onChanged: onChanged,
-        onSubmitted: (_) => onSubmit(),
+    final trimmed = value.trim();
+
+    return TextField(
+      enabled: enabled,
+      decoration: InputDecoration(
+        hintText: 'Search contacts…',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: trimmed.isEmpty
+            ? (loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null)
+            : IconButton(
+                tooltip: 'Clear',
+                onPressed: enabled ? onClear : null,
+                icon: const Icon(Icons.clear),
+              ),
       ),
+      onChanged: onChanged,
+      onSubmitted: (_) => onSubmit(),
     );
   }
 }
@@ -189,31 +222,29 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Material(
-        color: scheme.errorContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(color: scheme.onErrorContainer),
-                ),
+    return AppTile(
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: scheme.error, size: 20),
+          const SizedBox(width: AppShape.gap10),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
               ),
-              IconButton(
-                tooltip: 'Retry',
-                onPressed: onRetry,
-                icon: Icon(Icons.refresh, color: scheme.onErrorContainer),
-              ),
-            ],
+            ),
           ),
-        ),
+          IconButton(
+            tooltip: 'Retry',
+            onPressed: onRetry,
+            icon: Icon(Icons.refresh, color: scheme.error),
+          ),
+        ],
       ),
     );
   }
@@ -245,11 +276,11 @@ class _EmptyState extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.people_alt_outlined, size: 44),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppShape.gap12),
               Text(title, style: t.titleLarge, textAlign: TextAlign.center),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppShape.gap6),
               Text(subtitle, style: t.bodyMedium, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppShape.gap16),
               FilledButton(onPressed: onAction, child: Text(actionLabel)),
             ],
           ),
@@ -276,8 +307,10 @@ class _ContactTile extends StatelessWidget {
     final subtitle = _subtitleFrom(contact);
 
     return ListTile(
+      dense: true,
       enabled: enabled,
       onTap: enabled ? onTap : null,
+      contentPadding: EdgeInsets.zero, // AppTile already pads
       leading: CircleAvatar(child: Text(_initials(title))),
       title: Text(title.isEmpty ? 'Contact' : title),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),

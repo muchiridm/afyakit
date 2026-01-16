@@ -121,8 +121,9 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
       }
 
       if (r.ok) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('✅ [tenant-guard] OK tenant=$tenantSlug uid=$uid');
+        }
         return;
       }
 

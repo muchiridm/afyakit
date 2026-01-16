@@ -7,9 +7,10 @@ import 'package:afyakit/features/inventory/records/shared/records_dashboard_scre
 import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
-import 'package:afyakit/features/retail/catalog/widgets/screens/catalog_screen.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
+import 'package:afyakit/features/retail/sales/invoices/widgets/invoice_list_screen.dart';
+import 'package:afyakit/features/retail/sales/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/shared/home/models/staff_feature_def.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/admin_dashboard_screen.dart';
 import 'package:flutter/material.dart';
@@ -105,11 +106,19 @@ final class StaffHomeRegistry {
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
-      labelOverride: 'Quotes', // ✅ NEW
-      iconOverride: Icons.request_quote_outlined, // ✅ NEW
-      destination: _quotes, // ✅ NEW
-      allowedRef:
-          _allowQuotesForStaffRetailTenant, // ✅ NEW (mirrors Contacts gate)
+      labelOverride: 'Quotes',
+      iconOverride: Icons.request_quote_outlined,
+      destination: _quotes,
+      allowedRef: _allowRetailDocsForStaffRetailTenant,
+    ),
+
+    // ✅ NEW: Invoices
+    StaffFeatureDef(
+      featureKey: FeatureKeys.retail,
+      labelOverride: 'Invoices',
+      iconOverride: Icons.receipt_outlined,
+      destination: _invoices,
+      allowedRef: _allowRetailDocsForStaffRetailTenant,
     ),
 
     // ───────── Admin (HQ) ─────────
@@ -143,7 +152,10 @@ final class StaffHomeRegistry {
 
   static Widget _catalog(BuildContext _) => const CatalogScreen();
 
-  static Widget _quotes(BuildContext _) => const QuotesListScreen(); // ✅ NEW
+  static Widget _quotes(BuildContext _) => const QuotesListScreen();
+
+  static Widget _invoices(BuildContext _) =>
+      const InvoicesListScreen(); // ✅ NEW
 
   // ─────────────────────────────────────────────────────────────
   // Gates
@@ -160,8 +172,8 @@ final class StaffHomeRegistry {
     return profile.features.enabled(FeatureKeys.retail);
   }
 
-  static bool _allowQuotesForStaffRetailTenant(WidgetRef ref, AuthUser u) {
-    // same gate as contacts for now (staff + retail enabled)
+  /// ✅ Shared gate for Quotes + Invoices (and any other retail docs).
+  static bool _allowRetailDocsForStaffRetailTenant(WidgetRef ref, AuthUser u) {
     if (!u.isStaff) return false;
 
     final profile = ref.watch(tenantProfileProvider).valueOrNull;

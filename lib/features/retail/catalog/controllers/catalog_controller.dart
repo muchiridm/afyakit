@@ -1,4 +1,4 @@
-// lib/core/catalog/controllers/catalog_controller.dart
+// lib/features/retail/catalog/controllers/catalog_controller.dart
 
 import 'dart:async';
 

@@ -1,9 +1,6 @@
-// lib/shared/home/widgets/staff/staff_latest_activity_panel.dart
-
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_feature_providers.dart';
 import 'package:afyakit/shared/home/models/activity_entry.dart';
-import 'package:afyakit/shared/home/widgets/common/home_card.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,19 +13,20 @@ import 'package:afyakit/features/inventory/records/issues/providers/issue_stream
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_record_tile.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/issue_record_tile.dart';
 
+// ✅ NEW
+import 'package:afyakit/shared/widgets/app_card.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
+
 class StaffLatestActivityPanel extends ConsumerWidget {
   const StaffLatestActivityPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantSlugProvider);
-
-    // ✅ Feature gates (rename if your provider names differ)
     final inventoryEnabled = ref.watch(tenantInventoryEnabledProvider);
 
-    // If inventory isn't enabled, don't watch inventory streams at all.
     if (!inventoryEnabled) {
-      return const HomeCard(
+      return const AppCard(
         title: 'Latest Activity',
         icon: Icons.notifications_none,
         child: Text(
@@ -38,7 +36,6 @@ class StaffLatestActivityPanel extends ConsumerWidget {
       );
     }
 
-    // Inventory is enabled → safe to watch inventory providers.
     final issuesAsync = ref.watch(issuesStreamProvider(tenantId));
     final deliveriesAsync = ref.watch(deliveryRecordsStreamProvider(tenantId));
 
@@ -62,7 +59,7 @@ class StaffLatestActivityPanel extends ConsumerWidget {
         dispensariesAsync.hasError;
 
     if (isLoading) {
-      return const HomeCard(
+      return const AppCard(
         title: 'Latest Activity',
         icon: Icons.notifications_none,
         child: Center(
@@ -76,7 +73,7 @@ class StaffLatestActivityPanel extends ConsumerWidget {
     }
 
     if (hasError) {
-      return const HomeCard(
+      return const AppCard(
         title: 'Latest Activity',
         icon: Icons.notifications_none,
         child: Text(
@@ -112,11 +109,11 @@ class StaffLatestActivityPanel extends ConsumerWidget {
 
     final latest = entries
         .sorted((a, b) => b.date.compareTo(a.date))
-        .take(3)
+        .take(5)
         .toList(growable: false);
 
     if (latest.isEmpty) {
-      return const HomeCard(
+      return const AppCard(
         title: 'Latest Activity',
         icon: Icons.notifications_none,
         child: Text(
@@ -126,11 +123,27 @@ class StaffLatestActivityPanel extends ConsumerWidget {
       );
     }
 
-    return HomeCard(
+    return AppCard(
       title: 'Latest Activity',
       icon: Icons.notifications_none,
       child: Column(
-        children: latest.map((e) => e.widget).toList(growable: false),
+        children: [
+          for (int i = 0; i < latest.length; i++) ...[
+            latest[i].widget,
+            if (i != latest.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(top: AppShape.gap8),
+                child: Divider(
+                  height: AppShape.gap16,
+                  thickness: 1,
+                  color: AppShape.hairline(
+                    Theme.of(context),
+                    opacity: 0.20,
+                  ).color,
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

@@ -2,7 +2,7 @@
 
 import 'package:afyakit/core/tenancy/models/feature_keys.dart';
 import 'package:afyakit/core/tenancy/widgets/feature_gate.dart';
-import 'package:afyakit/features/retail/catalog/widgets/screens/catalog_screen.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:flutter/material.dart';
 
 class CatalogButton extends StatelessWidget {

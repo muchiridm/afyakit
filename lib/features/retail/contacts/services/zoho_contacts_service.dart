@@ -19,40 +19,79 @@ final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   return ZohoContactsService(api: api, routes: routes);
 });
 
+enum ZohoContactTypeFilter { any, customerOnly, vendorOnly }
+
 class ZohoContactsService {
   ZohoContactsService({required this.api, required this.routes});
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
 
+  static String? _toZohoType(ZohoContactTypeFilter f) {
+    switch (f) {
+      case ZohoContactTypeFilter.any:
+        return null;
+      case ZohoContactTypeFilter.customerOnly:
+        return 'customer';
+      case ZohoContactTypeFilter.vendorOnly:
+        return 'vendor';
+    }
+  }
+
+  static bool _matchesFilter(ZohoContact c, ZohoContactTypeFilter f) {
+    if (f == ZohoContactTypeFilter.any) return true;
+
+    final t = (c.contactType ?? '').trim().toLowerCase();
+
+    // If backend didn't include contact_type, we cannot trust client-side filtering.
+    // In that case, just allow it through (server-side filter is the real guard).
+    if (t.isEmpty) return true;
+
+    switch (f) {
+      case ZohoContactTypeFilter.customerOnly:
+        return t == 'customer' || t == 'customer_vendor';
+      case ZohoContactTypeFilter.vendorOnly:
+        return t == 'vendor' || t == 'customer_vendor';
+      case ZohoContactTypeFilter.any:
+        return true;
+    }
+  }
+
   Future<List<ZohoContact>> list({
     String? search,
     int limit = 50,
     int page = 1,
+
+    /// Default to customers for sales flows.
+    ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
   }) async {
     final uri = routes.zohoListContacts(
       search: search,
       limit: limit,
       page: page,
+      type: _toZohoType(type), // ✅ server-side filter
     );
 
     final res = await api.getUri(uri);
     final data = _asJsonMap(res.data);
 
     final raw = data['contacts'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((m) => ZohoContact.fromJson(m.cast<String, dynamic>()))
-          .toList();
-    }
+    if (raw is! List) return const <ZohoContact>[];
 
-    return const <ZohoContact>[];
+    final items = raw
+        .whereType<Map>()
+        .map((m) => ZohoContact.fromJson(m.cast<String, dynamic>()))
+        .toList(growable: false);
+
+    // ✅ fallback filter (only effective if backend also includes contactType in DTO)
+    if (type == ZohoContactTypeFilter.any) return items;
+
+    return items.where((c) => _matchesFilter(c, type)).toList(growable: false);
   }
 
   /// ✅ IMPORTANT: Get the enriched contact (includes person_contact if present).
   Future<ZohoContact> get(String contactId) async {
-    final uri = routes.zohoGetContact(contactId); // <- ensure routes has this
+    final uri = routes.zohoGetContact(contactId);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -75,7 +114,6 @@ class ZohoContactsService {
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
-  /// Patch update (supports clear/delete semantics).
   Future<ZohoContact> updatePatch(
     String contactId,
     ContactUpdatePatch patch,
@@ -84,7 +122,6 @@ class ZohoContactsService {
 
     final body = patch.toJson();
 
-    // Special-case: delete person contact
     if (patch.personContact?.delete == true) {
       body['person_contact'] = null;
     }
@@ -99,7 +136,6 @@ class ZohoContactsService {
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
-  /// Convenience: update from a full model.
   Future<ZohoContact> updateFromModel(
     String contactId,
     ZohoContact input,

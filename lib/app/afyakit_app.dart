@@ -10,6 +10,9 @@ import 'package:afyakit/core/branding/services/web_branding.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/auth/widgets/auth_gate.dart';
 
+// ✅ NEW
+import 'package:afyakit/shared/theme/app_theme_overrides.dart';
+
 class AfyaKitApp extends ConsumerWidget {
   const AfyaKitApp({super.key});
 
@@ -36,16 +39,19 @@ class AfyaKitApp extends ConsumerWidget {
         // Web side-effects: favicon/title/meta/theme-color
         applyTenantBrandingToDom(profile);
 
+        final baseTheme = ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: profile.primaryColor),
+          useMaterial3: true,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        );
+
         return MaterialApp(
           title: profile.displayName,
           debugShowCheckedModeBanner: false,
           navigatorKey: appNavigatorKey,
           scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: profile.primaryColor),
-            useMaterial3: true,
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-          ),
+          // ✅ Apply “Home curves” everywhere
+          theme: applyHomeLook(baseTheme),
           home: const AuthGate(),
         );
       },
