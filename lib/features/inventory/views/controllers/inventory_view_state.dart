@@ -1,4 +1,4 @@
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/features/inventory/shared/sku_batch_matcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';

@@ -1,21 +1,20 @@
 import 'package:afyakit/features/inventory/locations/screens/inventory_location_preferences_screen.dart';
 import 'package:flutter/material.dart';
+
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class LocationsScreen extends StatelessWidget {
   const LocationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BaseScreen(
-      maxContentWidth: 600,
+    return AppPage(
+      maxWidth: 600,
       scrollable: false,
-      header: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: ScreenHeader('Location Settings'),
-      ),
+      header: const AppHeader(title: 'Location Settings'),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

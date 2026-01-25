@@ -1,5 +1,5 @@
-import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:flutter/material.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({

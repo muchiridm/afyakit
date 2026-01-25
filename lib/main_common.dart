@@ -2,8 +2,8 @@
 
 import 'dart:async';
 
-import 'package:afyakit/app/app_mode.dart';
-import 'package:afyakit/app/app_root.dart';
+import 'package:afyakit/core/app/app_mode.dart';
+import 'package:afyakit/core/app/app_root.dart';
 import 'package:afyakit/core/domains/services/domain_tenant_resolver.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';

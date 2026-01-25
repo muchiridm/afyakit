@@ -1,20 +1,23 @@
-import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/features/inventory/records/issues/providers/grouped_cart_provider.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
+import 'package:afyakit/features/inventory/records/issues/providers/grouped_cart_provider.dart';
+
+import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
+
 import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_state.dart';
+import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class IssueRequestScreen extends ConsumerWidget {
   const IssueRequestScreen({super.key});
@@ -43,13 +46,10 @@ class IssueRequestScreen extends ConsumerWidget {
         ? dispensaries
         : stores;
 
-    return BaseScreen(
+    return AppPage(
       scrollable: true,
-      maxContentWidth: 700,
-      header: const Padding(
-        padding: EdgeInsets.fromLTRB(8, 16, 16, 8),
-        child: ScreenHeader('Issue Request'),
-      ),
+      maxWidth: 700,
+      header: const AppHeader(title: 'Issue Request'),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -188,10 +188,9 @@ class IssueRequestScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '🛒 Store: ${resolveLocationName(storeId, stores, [])}',
+                '🛒 Store: ${resolveLocationName(storeId, stores, const [])}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-
               Text('• Items: ${items.length}'),
               Text('• Batches: $totalBatches'),
               Text('• Quantity: $totalQty'),
@@ -209,6 +208,7 @@ class IssueRequestScreen extends ConsumerWidget {
     MultiCartState cart,
   ) {
     final hasItems = cart.cartsByStore.values.any((c) => c.isNotEmpty);
+
     final needsDestination =
         state.type != IssueType.dispose &&
         (state.toStore?.trim().isEmpty ?? true);

@@ -1,24 +1,27 @@
-// lib/core/records/issues/widgets/issue_details_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/shared/utils/format/format_date.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
+
 import 'package:afyakit/features/inventory/records/issues/controllers/action/issue_action_controller.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/inventory/records/issues/providers/issue_streams_provider.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
-import 'package:afyakit/shared/utils/format/format_date.dart';
-import 'package:intl/intl.dart';
 
 class IssueDetailsScreen extends ConsumerWidget {
   final String issueId;
@@ -28,28 +31,36 @@ class IssueDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantSlugProvider);
     final key = (tenantId: tenantId, issueId: issueId);
+
     final issueAsync = ref.watch(issueFullProvider(key));
     final asyncUser = ref.watch(currentUserProvider);
+
     final asyncStores = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
     );
     final asyncDispensaries = ref.watch(
       inventoryLocationProvider(InventoryLocationType.dispensary),
     );
+
     final controller = ref.watch(issueActionControllerProvider);
 
     return issueAsync.when(
-      loading: _buildLoading,
-      error: (e, _) => _buildError('issue', e),
+      loading: () => _pageLoading(title: 'Issue Request Details'),
+      error: (e, _) => _pageError(title: 'Issue Request Details', error: e),
       data: (issue) {
-        if (issue == null) return _buildNotFound('Issue');
+        if (issue == null) {
+          return _pageNotFound(title: 'Issue Request Details', entity: 'Issue');
+        }
 
         return asyncUser.when(
-          loading: _buildLoading,
-          error: (e, _) => _buildError('user', e),
+          loading: () => _pageLoading(title: 'Issue Request Details'),
+          error: (e, _) => _pageError(title: 'Issue Request Details', error: e),
           data: (user) {
             if (user == null || controller == null) {
-              return _buildNotFound('User or Controller');
+              return _pageNotFound(
+                title: 'Issue Request Details',
+                entity: 'User or Controller',
+              );
             }
 
             final stores =
@@ -83,16 +94,29 @@ class IssueDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoading() => const BaseScreen(
-    scrollable: false,
-    body: Center(child: CircularProgressIndicator()),
-  );
+  Widget _pageLoading({required String title}) {
+    return AppPage(
+      scrollable: false,
+      header: AppHeader(title: title),
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
 
-  Widget _buildError(String source, Object error) =>
-      BaseScreen(body: Center(child: Text('❌ Failed to load $source: $error')));
+  Widget _pageError({required String title, required Object error}) {
+    return AppPage(
+      scrollable: false,
+      header: AppHeader(title: title),
+      body: Center(child: Text('❌ Failed to load: $error')),
+    );
+  }
 
-  Widget _buildNotFound(String entity) =>
-      BaseScreen(body: Center(child: Text('⚠️ $entity not found.')));
+  Widget _pageNotFound({required String title, required String entity}) {
+    return AppPage(
+      scrollable: false,
+      header: AppHeader(title: title),
+      body: Center(child: Text('⚠️ $entity not found.')),
+    );
+  }
 
   Widget _buildScreen(
     BuildContext context,
@@ -105,7 +129,7 @@ class IssueDetailsScreen extends ConsumerWidget {
   }) {
     return DetailRecordScreen(
       maxContentWidth: 1000,
-      header: AppBar(title: const Text('Issue Request Details')),
+      header: const AppHeader(title: 'Issue Request Details'),
       contentSections: [
         _buildSummary(issue, fromStoreName, toStoreName),
         const Divider(height: 32),
@@ -210,9 +234,10 @@ class IssueDetailsScreen extends ConsumerWidget {
     IssueActionController controller,
     AsyncValue<List<InventoryLocation>> allStores,
   ) {
-    if (allStores is! AsyncData) return [];
+    if (allStores is! AsyncData) return const [];
 
     final stores = allStores.value ?? const <InventoryLocation>[];
+
     final actions = controller.getAvailableActions(
       user: user,
       record: issue,

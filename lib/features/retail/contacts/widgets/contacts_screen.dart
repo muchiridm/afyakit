@@ -3,16 +3,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/layout/app_page_scaffold.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
 import '../controllers/contacts_controller.dart';
-import '../../contacts/models/zoho_contact.dart';
+import '../../shared/models/zoho_contact.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
+
+  // Keep consistent with your other retail list screens.
+  static const double _contentMaxW = 900;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,18 +24,20 @@ class ContactsScreen extends ConsumerWidget {
 
     final loadingAny = state.loadingList || state.loadingDetail;
 
-    return AppPageScaffold(
-      appBar: AppBar(
-        title: const Text('Contacts'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: state.saving ? null : () => ctl.refresh(),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    return AppPage(
+      scrollable: false,
+      maxWidth: _contentMaxW,
+
+      // ✅ AppPage now builds a constrained app bar aligned with body
+      title: 'Contacts',
+      showBack: true,
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: state.saving ? null : () => ctl.refresh(),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
 
       fab: FloatingActionButton.extended(
         onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
@@ -108,7 +113,6 @@ class ContactsScreen extends ConsumerWidget {
     ContactsState state,
     ContactsController ctl,
   ) {
-    // First load skeleton
     if (state.items.isEmpty && state.loadingList) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -116,7 +120,6 @@ class ContactsScreen extends ConsumerWidget {
       );
     }
 
-    // Empty state
     if (state.items.isEmpty) {
       final hasQuery = state.search.trim().isNotEmpty;
 
@@ -140,7 +143,6 @@ class ContactsScreen extends ConsumerWidget {
       );
     }
 
-    // Contacts list — Home-style: Card container + Tile rows
     return SliverToBoxAdapter(
       child: AppCard(
         title: 'Contacts',
@@ -310,7 +312,7 @@ class _ContactTile extends StatelessWidget {
       dense: true,
       enabled: enabled,
       onTap: enabled ? onTap : null,
-      contentPadding: EdgeInsets.zero, // AppTile already pads
+      contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(child: Text(_initials(title))),
       title: Text(title.isEmpty ? 'Contact' : title),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),

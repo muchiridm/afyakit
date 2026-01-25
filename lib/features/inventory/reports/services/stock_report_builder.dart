@@ -4,7 +4,7 @@ import 'package:afyakit/features/inventory/items/models/items/base_inventory_ite
 import 'package:afyakit/features/inventory/reports/extensions/stock_report_x.dart';
 import 'package:afyakit/features/inventory/reports/extensions/stock_view_mode_enum.dart';
 import 'package:afyakit/features/inventory/reports/models/stock_report.dart';
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/features/inventory/shared/sku_batch_matcher.dart';
 
 class StockReportBuilder {
   final List<BaseInventoryItem> items;

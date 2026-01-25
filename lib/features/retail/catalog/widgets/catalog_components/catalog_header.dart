@@ -7,7 +7,7 @@ import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
 import 'package:afyakit/core/branding/providers/tenant_logo_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
-import 'package:afyakit/shared/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +20,9 @@ class CatalogHeader extends ConsumerWidget {
   final String? quoteTotalLabel; // formatted total e.g. "KES 9,147"
   final VoidCallback? onViewQuote;
 
+  /// ✅ NEW: clear cart
+  final VoidCallback? onClearQuote;
+
   const CatalogHeader({
     super.key,
     required this.selectedForm,
@@ -27,6 +30,7 @@ class CatalogHeader extends ConsumerWidget {
     this.quoteItemCount,
     this.quoteTotalLabel,
     this.onViewQuote,
+    this.onClearQuote,
   });
 
   static const double _bp = 820;
@@ -74,6 +78,7 @@ class CatalogHeader extends ConsumerWidget {
                     quoteItemCount: quoteItemCount,
                     quoteTotalLabel: quoteTotalLabel,
                     onViewQuote: onViewQuote,
+                    onClearQuote: onClearQuote,
                     onLogin: () async => requireAuth(context, ref),
                     centered: true,
                     horizontal: true,
@@ -102,6 +107,7 @@ class CatalogHeader extends ConsumerWidget {
                         quoteItemCount: quoteItemCount,
                         quoteTotalLabel: quoteTotalLabel,
                         onViewQuote: onViewQuote,
+                        onClearQuote: onClearQuote,
                         onLogin: () async => requireAuth(context, ref),
                         centered: false,
                         horizontal: false,
@@ -270,7 +276,10 @@ class _ContactItem extends StatelessWidget {
 class _HeaderButtons extends ConsumerWidget {
   final int? quoteItemCount;
   final String? quoteTotalLabel;
+
   final VoidCallback? onViewQuote;
+  final VoidCallback? onClearQuote; // ✅ NEW
+
   final VoidCallback? onLogin;
   final bool centered;
   final bool horizontal;
@@ -281,6 +290,7 @@ class _HeaderButtons extends ConsumerWidget {
     this.quoteItemCount,
     this.quoteTotalLabel,
     this.onViewQuote,
+    this.onClearQuote,
     this.onLogin,
   });
 
@@ -291,6 +301,7 @@ class _HeaderButtons extends ConsumerWidget {
 
     final count = quoteItemCount ?? 0;
     final canViewCart = onViewQuote != null && count > 0;
+    final canClearCart = onClearQuote != null && count > 0;
 
     // Cart label
     String cartLabel() {
@@ -327,13 +338,26 @@ class _HeaderButtons extends ConsumerWidget {
         : null;
 
     // ─────────────────────────────────────────────
+    // Clear cart button (only if cart has items)
+    // ─────────────────────────────────────────────
+    final clearCartButton = count > 0
+        ? IconButton(
+            tooltip: 'Clear cart',
+            onPressed: canClearCart ? onClearQuote : null,
+            icon: const Icon(Icons.delete_outline),
+          )
+        : null;
+
+    // ─────────────────────────────────────────────
     // Compose children in order:
     // Home (if logged in)
-    // Cart (if any)
+    // Clear (if cart has items)
+    // Cart (always shown if callback provided)
     // Login (if not logged in)
     // ─────────────────────────────────────────────
     final children = <Widget>[
       if (homeButton != null) homeButton,
+      if (clearCartButton != null) clearCartButton,
       if (onViewQuote != null)
         FilledButton.icon(
           onPressed: canViewCart ? onViewQuote : null,

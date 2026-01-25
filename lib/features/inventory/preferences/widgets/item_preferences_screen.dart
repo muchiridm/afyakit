@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/preferences/item_preferences_controller.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class ItemPreferencesScreen extends ConsumerStatefulWidget {
   const ItemPreferencesScreen({super.key});
@@ -41,14 +42,17 @@ class _ItemPreferencesScreenState extends ConsumerState<ItemPreferencesScreen>
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BaseScreen(
+    return AppPage(
       scrollable: false,
-      maxContentWidth: 800,
-      header: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: ScreenHeader('Item Preferences'),
-      ),
+      maxWidth: 800,
+      header: const AppHeader(title: 'Item Preferences'),
       body: Column(
         children: [
           _buildTabs(),
@@ -82,7 +86,7 @@ class _ItemPreferencesScreenState extends ConsumerState<ItemPreferencesScreen>
   }
 
   Widget _buildPreferencesSection(ItemType type) {
-    final fields = fieldsByType[type] ?? [];
+    final fields = fieldsByType[type] ?? const <ItemPreferenceField>[];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

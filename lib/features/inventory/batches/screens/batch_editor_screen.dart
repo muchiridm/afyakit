@@ -1,19 +1,24 @@
 // lib/features/batches/screens/batch_editor_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+
 import 'package:afyakit/features/inventory/batches/controllers/batch_args.dart';
 import 'package:afyakit/features/inventory/batches/controllers/batch_controller.dart';
 import 'package:afyakit/features/inventory/batches/controllers/batch_state.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/batches/models/dropdown_option.dart';
+
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class BatchEditorScreen extends ConsumerWidget {
   final String tenantId;
@@ -52,18 +57,33 @@ class BatchEditorScreen extends ConsumerWidget {
     final sessionAsync = ref.watch(currentUserProvider);
 
     return sessionAsync.when(
-      loading: _loader,
-      error: _error,
+      loading: () => const AppPage(
+        scrollable: false,
+        maxWidth: 800,
+        header: AppHeader(title: 'Batch'),
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => AppPage(
+        scrollable: false,
+        maxWidth: 800,
+        header: const AppHeader(title: 'Batch'),
+        body: Center(child: Text('Error loading user: $e')),
+      ),
       data: (user) {
         if (user == null) {
-          return const Center(child: Text('❌ No user session found'));
+          return const AppPage(
+            scrollable: false,
+            maxWidth: 800,
+            header: AppHeader(title: 'Batch'),
+            body: Center(child: Text('❌ No user session found')),
+          );
         }
 
-        return BaseScreen(
+        return AppPage(
           scrollable: false,
-          maxContentWidth: 800,
-          header: ScreenHeader(
-            isEditing ? 'Edit Batch' : 'Add Batch',
+          maxWidth: 800,
+          header: AppHeader(
+            title: isEditing ? 'Edit Batch' : 'Add Batch',
             trailing: isEditing
                 ? IconButton(
                     icon: const Icon(Icons.delete, color: Colors.redAccent),
@@ -225,7 +245,6 @@ class BatchEditorScreen extends ConsumerWidget {
             border: Border.all(color: Colors.blueGrey.shade100),
           ),
           child: Text(
-            // Keep the screen dumb: show only name + type
             '${item.name} • ${item.type.name.toUpperCase()}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
@@ -245,6 +264,7 @@ class BatchEditorScreen extends ConsumerWidget {
     final formatted = date != null
         ? DateFormat('yyyy-MM-dd').format(date)
         : '—';
+
     return GestureDetector(
       onTap: () async {
         final picked = await showDatePicker(
@@ -337,7 +357,7 @@ class BatchEditorScreen extends ConsumerWidget {
   Widget _error(Object e, StackTrace _) =>
       Center(child: Text('Error loading data: $e'));
 
-  // ── helpers to keep UI dumb but resilient ─────────────────────
+  // ── helpers ──────────────────────────────────────────────────
 
   List<DropdownOption<String>> _toStoreOptions({
     required List<InventoryLocation> stores,
@@ -348,7 +368,6 @@ class BatchEditorScreen extends ConsumerWidget {
         DropdownOption<String>(value: s.id, label: s.name),
     ];
 
-    // If editing and the current store isn’t in the loaded list, include it so the UI displays correctly.
     if (currentStoreId != null &&
         currentStoreId.isNotEmpty &&
         !opts.any((o) => o.value == currentStoreId)) {

@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth/controllers/session_controller.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/splash_screen.dart';
 import 'package:afyakit/core/auth/widgets/login_screen.dart';
-import 'package:afyakit/shared/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});

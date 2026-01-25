@@ -1,5 +1,3 @@
-// lib/features/retail/catalog/controllers/cart_controller.dart
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,6 +19,7 @@ class CatalogCartLine extends CartLine {
   const CatalogCartLine({required this.tile, required this.qty});
 
   final CatalogTile tile;
+
   @override
   final int qty;
 
@@ -60,11 +59,12 @@ class ManualCartLine extends CartLine {
     num? rate,
     int? qty,
   }) {
+    final nextNameRaw = name ?? this.name;
+    final nextNameTrim = nextNameRaw.trim();
+
     return ManualCartLine(
       manualId: manualId,
-      name: (name ?? this.name).trim().isEmpty
-          ? this.name
-          : (name ?? this.name).trim(),
+      name: nextNameTrim.isEmpty ? this.name : nextNameTrim,
       description: clearDescription ? null : (description ?? this.description),
       rate: rate ?? this.rate,
       qty: qty ?? this.qty,
@@ -78,6 +78,7 @@ class ManualCartLine extends CartLine {
 @immutable
 class CartState {
   const CartState({required this.lines});
+
   final List<CartLine> lines;
 
   const CartState.empty() : lines = const <CartLine>[];
@@ -132,6 +133,15 @@ class CartController extends StateNotifier<CartState> {
 
   int _indexOfKey(String key) => state.lines.indexWhere((l) => l.key == key);
 
+  /// Centralized state set: if list becomes empty, reset to CartState.empty()
+  void _setLines(List<CartLine> nextLines) {
+    if (nextLines.isEmpty) {
+      state = const CartState.empty();
+    } else {
+      state = CartState(lines: List<CartLine>.unmodifiable(nextLines));
+    }
+  }
+
   // ───────────────────────── Catalog lines ─────────────────────────
 
   int getQty(CatalogTile tile) {
@@ -148,12 +158,10 @@ class CartController extends StateNotifier<CartState> {
 
     if (idx == -1) {
       final qty = _clampQty(delta < 1 ? 1 : delta);
-      state = CartState(
-        lines: <CartLine>[
-          ...state.lines,
-          CatalogCartLine(tile: tile, qty: qty),
-        ],
-      );
+      _setLines(<CartLine>[
+        ...state.lines,
+        CatalogCartLine(tile: tile, qty: qty),
+      ]);
       return;
     }
 
@@ -163,7 +171,7 @@ class CartController extends StateNotifier<CartState> {
 
     final nextLines = [...state.lines];
     nextLines[idx] = current.copyWithQty(nextQty);
-    state = CartState(lines: nextLines);
+    _setLines(nextLines);
   }
 
   void setQtyForCatalog(CatalogTile tile, int qty) {
@@ -173,18 +181,16 @@ class CartController extends StateNotifier<CartState> {
     if (idx == -1) {
       if (qty > 0) {
         final safe = _clampQty(qty);
-        state = CartState(
-          lines: <CartLine>[
-            ...state.lines,
-            CatalogCartLine(tile: tile, qty: safe),
-          ],
-        );
+        _setLines(<CartLine>[
+          ...state.lines,
+          CatalogCartLine(tile: tile, qty: safe),
+        ]);
       }
       return;
     }
 
     if (qty <= 0) {
-      removeByKey(key);
+      removeByKey(key); // will auto-clear if last line
       return;
     }
 
@@ -194,7 +200,7 @@ class CartController extends StateNotifier<CartState> {
 
     final nextLines = [...state.lines];
     nextLines[idx] = current.copyWithQty(safe);
-    state = CartState(lines: nextLines);
+    _setLines(nextLines);
   }
 
   // ───────────────────────── Manual lines ─────────────────────────
@@ -211,20 +217,17 @@ class CartController extends StateNotifier<CartState> {
 
     final id = 'm_${DateTime.now().microsecondsSinceEpoch}';
 
-    state = CartState(
-      lines: <CartLine>[
-        ...state.lines,
-        ManualCartLine(
-          manualId: id,
-          name: safeName,
-          description: (description ?? '').trim().isEmpty
-              ? null
-              : description!.trim(),
-          rate: safeRate,
-          qty: safeQty,
-        ),
-      ],
-    );
+    final descTrim = (description ?? '').trim();
+    _setLines(<CartLine>[
+      ...state.lines,
+      ManualCartLine(
+        manualId: id,
+        name: safeName,
+        description: descTrim.isEmpty ? null : descTrim,
+        rate: safeRate,
+        qty: safeQty,
+      ),
+    ]);
 
     return id;
   }
@@ -268,16 +271,20 @@ class CartController extends StateNotifier<CartState> {
       clearDescription: clearDescription,
     );
 
-    state = CartState(lines: nextLines);
+    _setLines(nextLines);
   }
 
   // ───────────────────────── Common ─────────────────────────
 
   void removeByKey(String key) {
-    if (key.trim().isEmpty) return;
-    state = CartState(
-      lines: state.lines.where((l) => l.key != key).toList(growable: false),
-    );
+    final k = key.trim();
+    if (k.isEmpty) return;
+
+    final nextLines = state.lines
+        .where((l) => l.key != k)
+        .toList(growable: false);
+
+    _setLines(nextLines); // if empty => CartState.empty()
   }
 
   void clear() {

@@ -1,10 +1,11 @@
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class LocationPreferencesScreen extends ConsumerStatefulWidget {
   final InventoryLocationType type;
@@ -21,19 +22,22 @@ class _LocationPreferencesState
   final _inputController = TextEditingController();
 
   @override
+  void dispose() {
+    _inputController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final locationState = ref.watch(inventoryLocationProvider(widget.type));
     final controller = ref.read(
       inventoryLocationProvider(widget.type).notifier,
     );
 
-    return BaseScreen(
+    return AppPage(
       scrollable: false,
-      maxContentWidth: 600,
-      header: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: ScreenHeader(_getTitle(widget.type)),
-      ),
+      maxWidth: 600,
+      header: AppHeader(title: _getTitle(widget.type)),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: locationState.when(
@@ -95,8 +99,9 @@ class _LocationPreferencesState
               isDense: true,
             ),
             onSubmitted: (value) async {
-              if (value.trim().isNotEmpty) {
-                await controller.add(value.trim());
+              final v = value.trim();
+              if (v.isNotEmpty) {
+                await controller.add(v);
                 _inputController.clear();
               }
             },

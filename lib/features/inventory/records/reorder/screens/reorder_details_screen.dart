@@ -1,9 +1,11 @@
+import 'package:flutter/material.dart';
+
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/inventory/records/reorder/models/reorder_item.dart';
 import 'package:afyakit/features/inventory/records/reorder/models/reorder_record.dart';
 import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:flutter/material.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
 
 class ReorderDetailScreen extends StatelessWidget {
   final ReorderRecord record;
@@ -19,8 +21,7 @@ class ReorderDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return DetailRecordScreen(
       maxContentWidth: 900,
-      header: ScreenHeader('Reorder: ${record.id}', showBack: true),
-
+      header: AppHeader(title: 'Reorder: ${record.id}'),
       contentSections: [
         _buildMetaCard(record),
         _buildItemsList(record, itemMap),
@@ -103,9 +104,13 @@ class ReorderDetailScreen extends StatelessWidget {
   ) {
     final item = itemMap[reorderItem.itemId];
     final name = item?.name ?? 'Unknown Item';
-    final brand = item?.name.isNotEmpty == true
-        ? ' • Brand: ${item!.name}'
+
+    // NOTE: your original code used item.name as “Brand” which looks like a bug.
+    // If you have item.brand, swap it in here.
+    final brandText = (item != null && item.name.trim().isNotEmpty)
+        ? ' • Brand: ${item.name}'
         : '';
-    return '$name\nQty: ${reorderItem.quantity}$brand';
+
+    return '$name\nQty: ${reorderItem.quantity}$brandText';
   }
 }

@@ -1,22 +1,19 @@
-// lib/core/catalog/widgets/screens/catalog_screen.dart
+// lib/features/retail/catalog/widgets/catalog_screen.dart
 
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
 import 'package:afyakit/features/retail/catalog/controllers/cart_controller.dart';
-import 'package:afyakit/features/retail/sales/quotes/widgets/quote_editor_screen.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 import 'catalog_components/catalog_header.dart';
-import 'catalog_components/search_bar.dart';
 import 'catalog_components/catalog_grid.dart';
-import 'catalog_components/skeletons.dart';
-import 'catalog_components/error_pane.dart';
-import 'catalog_components/sheet_header.dart';
+import 'catalog_components/catalog_ui_bits.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
@@ -46,6 +43,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _searchC.dispose();
     super.dispose();
@@ -69,22 +67,34 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
     // cart (quote) state
     final quoteState = ref.watch(cartControllerProvider);
-    final quoteItemCount = quoteState.lines.length;
+    final quoteLineCount = quoteState.lines.length;
 
-    final String? quoteTotalLabel = quoteItemCount == 0
+    final String? quoteTotalLabel = quoteLineCount == 0
         ? null
         : 'KES ${_formatPriceCeil(quoteState.estimatedTotal)}';
 
-    return BaseScreen(
+    return AppPage(
+      // Catalog is one scrolling document: header + search + grid
       scrollable: true,
-      maxContentWidth: 1100,
+      maxWidth: 1100,
       header: CatalogHeader(
         selectedForm: state.query.form,
         onFormChanged: (form) =>
             ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
-        quoteItemCount: quoteItemCount,
+        quoteItemCount: quoteLineCount,
         quoteTotalLabel: quoteTotalLabel,
-        onViewQuote: quoteItemCount == 0
+        onClearQuote: quoteLineCount == 0
+            ? null
+            : () {
+                ref.read(cartControllerProvider.notifier).clear();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cart cleared'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+        onViewQuote: quoteLineCount == 0
             ? null
             : () {
                 Navigator.of(context).push(

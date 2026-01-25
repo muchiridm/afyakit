@@ -1,17 +1,18 @@
 // lib/core/import/importer/import_inventory_screen.dart
 import 'dart:typed_data';
-import 'package:afyakit/features/inventory/import/importer/controllers/import_state.dart';
+
 import 'package:flutter/material.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-
+import 'package:afyakit/features/inventory/import/importer/controllers/import_state.dart';
 import 'package:afyakit/features/inventory/import/importer/models/import_type_x.dart';
 import 'controllers/import_controller.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 
 class ImportInventoryScreen extends ConsumerStatefulWidget {
   const ImportInventoryScreen({super.key});
@@ -33,10 +34,10 @@ class _ImportInventoryScreenState extends ConsumerState<ImportInventoryScreen> {
     final canImport =
         (st.validatedCount ?? 0) > 0 && !st.isLoading && st.fileName != null;
 
-    return BaseScreen(
+    return AppPage(
       scrollable: false,
-      maxContentWidth: 720,
-      header: const ScreenHeader('Import Inventory'),
+      maxWidth: 720,
+      header: const AppHeader(title: 'Import Inventory'),
       body: _buildBody(context, st, ctrl, canValidate, canImport),
     );
   }
@@ -128,7 +129,6 @@ class _ImportInventoryScreenState extends ConsumerState<ImportInventoryScreen> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        // NEW: Match Preferences button → controller handles everything
         ElevatedButton.icon(
           onPressed: st.fileName != null && !st.isLoading
               ? () => ctrl.runMatcherFlow(context: context, type: _uploadType)

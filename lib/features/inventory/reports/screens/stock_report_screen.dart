@@ -6,16 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/features/inventory/reports/extensions/stock_view_mode_enum.dart';
 import 'package:afyakit/features/inventory/reports/extensions/stock_order_filter_enum.dart';
+import 'package:afyakit/features/inventory/reports/extensions/stock_view_mode_enum.dart';
 
 import 'package:afyakit/features/inventory/reports/widgets/filters/stock_filter_bar.dart';
-import 'package:afyakit/features/inventory/reports/widgets/stock_table/stock_report_header.dart';
+import 'package:afyakit/features/inventory/reports/widgets/stock_table/stock_report_tabs.dart';
 import 'package:afyakit/features/inventory/reports/widgets/stock_table/stock_table.dart';
 import 'package:afyakit/features/inventory/reports/widgets/stock_table/stock_table_footer_bar.dart';
-import 'package:afyakit/features/inventory/reports/widgets/stock_table/stock_report_tabs.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class StockReportScreen extends ConsumerStatefulWidget {
   const StockReportScreen({super.key, this.showToggleViewButton = false});
@@ -32,6 +32,13 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen>
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,11 +60,11 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen>
             }
           });
 
-          return BaseScreen(
+          return AppPage(
             scrollable: false,
-            constrainHeader: true,
-            constrainBody: false,
-            constrainFooter: false,
+            // Stock report wants full-width table, but constrained header bits.
+            // AppPage will constrain header automatically and let body stretch.
+            header: _buildHeader(context),
             body: _buildBody(controller, stores),
             footer: _buildFooter(state, controller, context),
           );
@@ -66,24 +73,36 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen>
     );
   }
 
+  Widget _buildHeader(BuildContext context) {
+    // If you still want your custom StockReportHeaderBar, you can drop it here.
+    // But since you said “use the new layout files”, AppHeader is the new default.
+    return const AppHeader(title: 'Stock Report');
+  }
+
   Widget _buildBody(
     StockReportController controller,
     List<InventoryLocation> stores,
   ) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const StockReportHeaderBar(title: 'Stock Report', showBack: true),
+        // Filters (constrained via AppPage header area already; body can be full width)
         StockFilterBar(
           allStores: stores,
           disabled: false,
           searchBar: _buildSearchField(controller),
         ),
+
+        // Tabs
         StockReportTabs(
           key: ValueKey(controller.state.tabIndex),
           tabs: controller.validTabs,
           onTabChanged: controller.setTab,
         ),
+
         const Divider(height: 1),
+
+        // Table (full width)
         Expanded(
           child: StockTable(
             scrollController: _scrollController,

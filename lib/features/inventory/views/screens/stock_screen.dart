@@ -1,15 +1,15 @@
 // lib/features/src/inventory_view/screens/stock_screen.dart
 
-import 'package:afyakit/features/inventory/views/widgets/inventory_speed_dial.dart';
+import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/cart_drawer.dart';
-import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/views/controllers/inventory_view_controller.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_browser_components/inventory_browser.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/features/inventory/views/widgets/inventory_speed_dial.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,10 +24,11 @@ class StockScreen extends ConsumerStatefulWidget {
 
 class _StockScreenState extends ConsumerState<StockScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  late final TabController _tabController;
+
   final List<ItemType> _types = ItemType.values
       .where((t) => t != ItemType.unknown)
-      .toList();
+      .toList(growable: false);
 
   bool get isStockOut => widget.mode.isStockOut;
 
@@ -47,34 +48,41 @@ class _StockScreenState extends ConsumerState<StockScreen>
   Widget build(BuildContext context) {
     final multiCart = ref.watch(multiCartProvider);
 
-    return Scaffold(
-      floatingActionButton: widget.mode.isStockIn
-          ? InventorySpeedDial(
-              onAdd: (type) {
-                final controller = ref.read(
-                  inventoryViewControllerFamily(type).notifier,
-                );
-                controller.createItem(context);
-              },
-            )
-          : null,
-      body: BaseScreen(
-        maxContentWidth: 1000,
-        scrollable: false,
+    return AppPage(
+      scrollable: false,
+      maxWidth: 1000,
+
+      // keep the page header constrained to the same width as body
+      header: _buildHeader(context, multiCart),
+
+      // keep drawer behavior exactly as before (StockOut -> cart drawer)
+      // AppPage doesn't have an endDrawer slot, so we wrap it with a Scaffold.
+      body: _ScaffoldShell(
         endDrawer: isStockOut ? const CartDrawer(action: 'dispense') : null,
-        header: _buildHeader(multiCart),
-        body: _buildTabBarView(multiCart),
+        fab: widget.mode.isStockIn
+            ? InventorySpeedDial(
+                onAdd: (type) {
+                  final controller = ref.read(
+                    inventoryViewControllerFamily(type).notifier,
+                  );
+                  controller.createItem(context);
+                },
+              )
+            : null,
+        child: _buildTabBarView(multiCart),
       ),
     );
   }
 
-  Widget _buildHeader(MultiCartState multiCart) {
+  Widget _buildHeader(BuildContext context, MultiCartState multiCart) {
     final total = multiCart.totalQuantity;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ScreenHeader(
-          widget.mode.label,
+        AppHeader(
+          title: widget.mode.label,
+          // AppHeader already supplies back by default; keep it consistent
           trailing: isStockOut
               ? Stack(
                   clipBehavior: Clip.none,
@@ -127,53 +135,76 @@ class _StockScreenState extends ConsumerState<StockScreen>
   Widget _buildTabBarView(MultiCartState multiCart) {
     return TabBarView(
       controller: _tabController,
-      children: _types.map((type) {
-        final state = ref.watch(inventoryViewControllerFamily(type));
-        final controller = ref.read(
-          inventoryViewControllerFamily(type).notifier,
-        );
+      children: _types
+          .map((type) {
+            final state = ref.watch(inventoryViewControllerFamily(type));
+            final controller = ref.read(
+              inventoryViewControllerFamily(type).notifier,
+            );
 
-        final userStore = multiCart.activeStoreId;
-        final activeCart = userStore != null
-            ? multiCart.cartFor(userStore)
-            : null;
+            final userStore = multiCart.activeStoreId;
+            final activeCart = userStore != null
+                ? multiCart.cartFor(userStore)
+                : null;
 
-        return InventoryBrowser(
-          key: ValueKey('${widget.mode.name}-${type.name}'),
-          type: type,
-          mode: widget.mode,
-          enableSelectionCart: isStockOut,
-          showBatches: true,
-          batchQuantities: activeCart?.batchQuantities ?? {},
-          items: state.items,
-          matcher: state.matcher?.map ?? const {},
-          query: state.query,
-          sortAscending: state.sortAscending,
-          isLoading: state.isLoading,
-          error: state.error,
-          onQueryChanged: controller.setQuery,
-          onSortToggle: controller.toggleSort,
-          onQtyChange: isStockOut
-              ? (itemId, batchId, qty) {
-                  if (userStore != null) {
-                    ref
-                        .read(multiCartProvider.notifier)
-                        .updateQuantity(
-                          itemId: itemId,
-                          batchId: batchId,
-                          qty: qty,
-                          storeId: userStore,
-                          itemType: type,
-                        );
-                  }
-                }
-              : null,
-          onAddToCart: null,
-        );
-      }).toList(),
+            return InventoryBrowser(
+              key: ValueKey('${widget.mode.name}-${type.name}'),
+              type: type,
+              mode: widget.mode,
+              enableSelectionCart: isStockOut,
+              showBatches: true,
+              batchQuantities: activeCart?.batchQuantities ?? const {},
+              items: state.items,
+              matcher: state.matcher?.map ?? const {},
+              query: state.query,
+              sortAscending: state.sortAscending,
+              isLoading: state.isLoading,
+              error: state.error,
+              onQueryChanged: controller.setQuery,
+              onSortToggle: controller.toggleSort,
+              onQtyChange: isStockOut
+                  ? (itemId, batchId, qty) {
+                      if (userStore != null) {
+                        ref
+                            .read(multiCartProvider.notifier)
+                            .updateQuantity(
+                              itemId: itemId,
+                              batchId: batchId,
+                              qty: qty,
+                              storeId: userStore,
+                              itemType: type,
+                            );
+                      }
+                    }
+                  : null,
+              onAddToCart: null,
+            );
+          })
+          .toList(growable: false),
     );
   }
 
-  String _capitalize(String text) =>
-      text[0].toUpperCase() + text.substring(1).toLowerCase();
+  String _capitalize(String text) => text.isEmpty
+      ? text
+      : text[0].toUpperCase() + text.substring(1).toLowerCase();
+}
+
+/// Tiny wrapper so we can keep `endDrawer` + FAB behavior even though AppPage
+/// returns its own Scaffold.
+class _ScaffoldShell extends StatelessWidget {
+  const _ScaffoldShell({required this.child, this.endDrawer, this.fab});
+
+  final Widget child;
+  final Widget? endDrawer;
+  final Widget? fab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent, // let AppPage own page background
+      endDrawer: endDrawer,
+      floatingActionButton: fab,
+      body: child,
+    );
+  }
 }

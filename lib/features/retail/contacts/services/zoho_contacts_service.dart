@@ -1,7 +1,8 @@
 // lib/features/retail/contacts/services/zoho_contacts_service.dart
 
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes.dart';
@@ -18,6 +19,18 @@ final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   final api = await ref.watch(afyakitClientProvider.future);
   return ZohoContactsService(api: api, routes: routes);
 });
+
+/// ✅ One-liner provider for UI: "give me contact by id"
+final zohoContactByIdProvider = FutureProvider.family
+    .autoDispose<ZohoContact, String>((ref, contactId) {
+      final id = contactId.trim();
+      if (id.isEmpty) {
+        throw StateError('contactId is empty');
+      }
+      return ref
+          .read(zohoContactsServiceProvider.future)
+          .then((svc) => svc.get(id));
+    });
 
 enum ZohoContactTypeFilter { any, customerOnly, vendorOnly }
 
@@ -61,15 +74,13 @@ class ZohoContactsService {
     String? search,
     int limit = 50,
     int page = 1,
-
-    /// Default to customers for sales flows.
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
   }) async {
     final uri = routes.zohoListContacts(
       search: search,
       limit: limit,
       page: page,
-      type: _toZohoType(type), // ✅ server-side filter
+      type: _toZohoType(type),
     );
 
     final res = await api.getUri(uri);
@@ -83,13 +94,10 @@ class ZohoContactsService {
         .map((m) => ZohoContact.fromJson(m.cast<String, dynamic>()))
         .toList(growable: false);
 
-    // ✅ fallback filter (only effective if backend also includes contactType in DTO)
     if (type == ZohoContactTypeFilter.any) return items;
-
     return items.where((c) => _matchesFilter(c, type)).toList(growable: false);
   }
 
-  /// ✅ IMPORTANT: Get the enriched contact (includes person_contact if present).
   Future<ZohoContact> get(String contactId) async {
     final uri = routes.zohoGetContact(contactId);
     final res = await api.getUri(uri);
@@ -100,6 +108,17 @@ class ZohoContactsService {
       return ZohoContact.fromJson(raw.cast<String, dynamic>());
     }
     throw StateError('Unexpected response shape: missing "contact"');
+  }
+
+  /// ✅ UI-friendly helper: best-effort fetch.
+  Future<ZohoContact?> getOrNull(String contactId) async {
+    final id = contactId.trim();
+    if (id.isEmpty) return null;
+    try {
+      return await get(id);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<ZohoContact> create(ZohoContact input) async {

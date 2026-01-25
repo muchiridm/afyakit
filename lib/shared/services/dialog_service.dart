@@ -1,16 +1,14 @@
-import 'package:afyakit/app/app_navigator.dart';
+// lib/shared/services/dialog_service.dart
+
+import 'package:afyakit/core/app/app_navigator.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:flutter/material.dart';
 
-/// Centralized dialogs with a safe context fallback.
-/// Prefers an explicitly passed [context]; otherwise uses [appNavigatorKey.currentContext].
 class DialogService {
-  /// Resolve a usable BuildContext.
   static BuildContext? _ctx(BuildContext? context) {
     return context ?? appNavigatorKey.currentContext;
   }
 
-  /// ✅ Generic showDialog wrapper for any custom dialog widget.
   static Future<T?> show<T>({
     BuildContext? context,
     required WidgetBuilder builder,
@@ -30,8 +28,6 @@ class DialogService {
     );
   }
 
-  /// Confirm dialog that NEVER returns null.
-  /// If no context can be resolved, returns false and logs.
   static Future<bool> confirm({
     BuildContext? context,
     required String title,
@@ -77,7 +73,6 @@ class DialogService {
     return result ?? false;
   }
 
-  /// Simple alert dialog. No-op if context unavailable.
   static Future<void> alert({
     BuildContext? context,
     required String title,
@@ -124,47 +119,22 @@ class DialogService {
       return null;
     }
 
-    final controller = TextEditingController(text: initialValue);
-
-    final result = await showDialog<String>(
+    final result = await showDialog<String?>(
       context: ctx,
       useRootNavigator: true,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: TextField(
-            controller: controller,
-            maxLines: isMultiline ? null : 1,
-            autofocus: true,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: Text(cancelText),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final input = controller.text.trim();
-                Navigator.pop(context, input.isEmpty ? null : input);
-              },
-              child: Text(confirmText),
-            ),
-          ],
-        );
-      },
+      builder: (context) => _PromptDialog(
+        title: title,
+        initialValue: initialValue,
+        confirmText: confirmText,
+        cancelText: cancelText,
+        isMultiline: isMultiline,
+      ),
     );
 
-    return (result == null || result.trim().isEmpty) ? null : result.trim();
+    final trimmed = (result ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
-  /// ✅ Generic multi-select dialog (DRY core).
   static Future<List<String>?> multiSelect({
     BuildContext? context,
     required String title,
@@ -240,7 +210,6 @@ class DialogService {
     );
   }
 
-  /// Convenience wrapper for store selection.
   static Future<List<String>?> editStoreList(
     List<InventoryLocation> allStores,
     List<String> selectedStoreIds, {
@@ -260,6 +229,71 @@ class DialogService {
       selectedIds: selectedStoreIds,
       cancelText: cancelText,
       saveText: saveText,
+    );
+  }
+}
+
+class _PromptDialog extends StatefulWidget {
+  const _PromptDialog({
+    required this.title,
+    required this.initialValue,
+    required this.confirmText,
+    required this.cancelText,
+    required this.isMultiline,
+  });
+
+  final String title;
+  final String? initialValue;
+  final String confirmText;
+  final String cancelText;
+  final bool isMultiline;
+
+  @override
+  State<_PromptDialog> createState() => _PromptDialogState();
+}
+
+class _PromptDialogState extends State<_PromptDialog> {
+  late final TextEditingController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final input = _ctl.text.trim();
+    Navigator.pop(context, input.isEmpty ? null : input);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        widget.title,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      content: TextField(
+        controller: _ctl,
+        maxLines: widget.isMultiline ? null : 1,
+        autofocus: true,
+        decoration: const InputDecoration(border: OutlineInputBorder()),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text(widget.cancelText),
+        ),
+        ElevatedButton(onPressed: _submit, child: Text(widget.confirmText)),
+      ],
     );
   }
 }

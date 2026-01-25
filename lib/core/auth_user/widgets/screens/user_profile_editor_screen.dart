@@ -1,18 +1,19 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/core/auth_user/controllers/profile_controller.dart';
 import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class UserProfileEditorScreen extends ConsumerStatefulWidget {
   const UserProfileEditorScreen({super.key, this.user});
@@ -45,12 +46,20 @@ class _UserProfileEditorScreenState
 
     // Still loading and no user yet → spinner
     if (state.loading && state.user == null) {
-      return const BaseScreen(body: Center(child: CircularProgressIndicator()));
+      return const AppPage(
+        maxWidth: 720,
+        scrollable: false,
+        header: AppHeader(title: 'Profile'),
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     // Finished loading but no user → error
     if (state.user == null) {
-      return BaseScreen(
+      return AppPage(
+        maxWidth: 720,
+        scrollable: false,
+        header: const AppHeader(title: 'Profile'),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -72,13 +81,10 @@ class _UserProfileEditorScreenState
     final isAdminEditing = state.isAdminEditing;
     final title = isAdminEditing ? 'Edit User Profile' : 'My Profile';
 
-    return BaseScreen(
-      maxContentWidth: 720,
+    return AppPage(
+      maxWidth: 720,
       scrollable: true,
-      header: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: ScreenHeader(title),
-      ),
+      header: AppHeader(title: title),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -120,7 +126,6 @@ class _UserProfileEditorScreenState
     );
   }
 
-  /// Top card: show all identity data upfront.
   Widget _buildIdentitySection(AuthUser user, ProfileFormState state) {
     final safeEmail = (user.email != null && user.email!.trim().isNotEmpty)
         ? user.email
@@ -176,7 +181,6 @@ class _UserProfileEditorScreenState
     );
   }
 
-  /// Display name edit (for everyone).
   Widget _buildEditableSection(ProfileFormState state) {
     return Card(
       elevation: 0,
@@ -262,7 +266,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status
             Text(
               'Account Status',
               style: Theme.of(context).textTheme.titleSmall,
@@ -288,7 +291,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
               ),
             const SizedBox(height: 16),
 
-            // Roles
             Text('Roles', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             if (isAdminEditing)
@@ -296,9 +298,7 @@ class _RoleAndStoreSection extends ConsumerWidget {
                 spacing: 8,
                 runSpacing: 4,
                 children: StaffRole.values.map((role) {
-                  final selected = effectiveRoles.any(
-                    (r) => r == role,
-                  ); // simple contains
+                  final selected = effectiveRoles.any((r) => r == role);
                   return FilterChip(
                     label: Text(role.label),
                     selected: selected,
@@ -316,7 +316,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
               ),
             const SizedBox(height: 16),
 
-            // Stores
             Text(
               'Assigned Stores',
               style: Theme.of(context).textTheme.titleSmall,
@@ -343,7 +342,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
                   );
                 }
 
-                // Admin: multiselect chips for stores
                 if (allStores.isEmpty) {
                   return const Text('No stores configured for this tenant.');
                 }
