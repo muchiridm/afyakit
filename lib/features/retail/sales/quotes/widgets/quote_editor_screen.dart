@@ -34,8 +34,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   bool get _isEdit => (widget.editingQuoteId ?? '').trim().isNotEmpty;
 
-  // ───────────────────────── lifecycle ─────────────────────────
-
   @override
   void initState() {
     super.initState();
@@ -97,8 +95,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  // ───────────────────────── build ─────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(quoteControllerProvider);
@@ -108,8 +104,19 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       onWillPop: () => _handleBack(context, s, ctl),
       child: AppPageScaffold(
         appBar: _buildAppBar(context, s, ctl),
-        scrollable: false, // we manage internal layout with Expanded
-        body: _buildBody(context, s, ctl),
+        scrollable: false,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // ✅ Critical: force bounded height so Column/Expanded can layout safely.
+              return SizedBox(
+                height: constraints.maxHeight,
+                width: double.infinity,
+                child: _buildBody(context, s, ctl),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -122,6 +129,35 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     return AppBar(
       title: Text(_isEdit ? 'Edit quote' : 'Request a quote'),
       actions: [
+        // ✅ Add menu (no AppPageScaffold fab needed)
+        PopupMenuButton<_AddAction>(
+          tooltip: 'Add',
+          enabled: !s.busy,
+          onSelected: (a) => _handleAddAction(context, a, s, ctl),
+          itemBuilder: (ctx) => const [
+            PopupMenuItem(
+              value: _AddAction.addCustomLine,
+              child: Text('Add custom item'),
+            ),
+            PopupMenuItem(
+              value: _AddAction.goToCatalog,
+              child: Text('Add from catalog'),
+            ),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Center(
+              child: Row(
+                children: const [
+                  Icon(Icons.add),
+                  SizedBox(width: 6),
+                  Text('Add'),
+                ],
+              ),
+            ),
+          ),
+        ),
+
         if (_isEdit)
           TextButton(
             onPressed: s.busy
@@ -131,7 +167,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                     if (!ok) return;
                     ctl.cancelEdit();
                     if (!context.mounted) return;
-                    Navigator.of(context).pop(false); // changed=false
+                    Navigator.of(context).pop(false);
                   },
             child: const Text('Cancel'),
           ),
@@ -145,7 +181,38 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  // ───────────────────────── actions / navigation ─────────────────────────
+  Future<void> _handleAddAction(
+    BuildContext context,
+    _AddAction action,
+    QuoteState s,
+    QuoteController ctl,
+  ) async {
+    if (s.busy) return;
+
+    if (action == _AddAction.goToCatalog) {
+      // This assumes you already have navigation to catalog elsewhere.
+      // If you want: push catalog screen and come back, then ctl.ensureDraftFromCart(...)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Open catalog from your existing flow.')),
+      );
+      return;
+    }
+
+    if (action == _AddAction.addCustomLine) {
+      final ok = await _ensureAuthed(context);
+      if (!ok) return;
+
+      final name = await _editTextDialog(
+        context,
+        title: 'Custom item name',
+        initial: '',
+      );
+      // allow blank name -> user can edit later
+      ctl.addCustomLine(name: name);
+
+      return;
+    }
+  }
 
   Future<bool> _ensureAuthed(BuildContext context) => requireAuth(context, ref);
 
@@ -154,8 +221,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteState s,
     QuoteController ctl,
   ) async {
-    if (!_isEdit) return true; // create-mode: allow back
-    if (s.busy) return false; // block while busy
+    if (!_isEdit) return true;
+    if (s.busy) return false;
 
     final ok = await _confirmDiscard(context);
     if (!ok) return false;
@@ -163,8 +230,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     ctl.cancelEdit();
     return true;
   }
-
-  // ───────────────────────── VM adapters ─────────────────────────
 
   String _currencyCodeFromState(QuoteState s) => 'KES';
 
@@ -209,7 +274,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               : tileDesc;
 
           return SalesDocLineVm(
-            title: title,
+            title: title.isEmpty ? 'Item' : title,
             subtitle: subtitle,
             qty: line.quantity,
             rate: widget.requirePrices ? line.rate : 0,
@@ -218,25 +283,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         .toList(growable: false);
   }
 
-  // ───────────────────────── UI builders ─────────────────────────
-
   Widget _buildBody(BuildContext context, QuoteState s, QuoteController ctl) {
-    final lines = s.draft.lines;
-    final hasLines = lines.isNotEmpty;
-
-    if (!hasLines) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ErrorBanner(s.error),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('No items. Add items from the catalog.'),
-          ),
-        ],
-      );
-    }
-
     final meta = _metaVm(s);
     final vmLines = _lineVms(s);
     final busy = s.busy;
@@ -246,7 +293,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       children: [
         ErrorBanner(s.error),
 
-        // Header panel
         SalesDocHeader(
           title: 'Quote',
           meta: meta,
@@ -267,66 +313,67 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
         const Divider(height: 1),
 
-        // Lines (fills the middle)
+        // ✅ If no lines, still fill space and avoid “no size” hit test issues
         Expanded(
-          child: SalesDocLinesList(
-            currencyCode: meta.currencyCode,
-            lines: vmLines,
-            mode: SalesDocMode.edit,
+          child: s.draft.lines.isEmpty
+              ? const Center(child: Text('No items. Tap “Add” to create one.'))
+              : SalesDocLinesList(
+                  currencyCode: meta.currencyCode,
+                  lines: vmLines,
+                  mode: SalesDocMode.edit,
 
-            onEditName: busy
-                ? null
-                : (index) async {
-                    final current = vmLines[index].title.trim();
-                    final next = await _editTextDialog(
-                      context,
-                      title: 'Line name',
-                      initial: current,
-                    );
-                    if (next == null) return;
+                  onEditName: busy
+                      ? null
+                      : (index) async {
+                          final current = vmLines[index].title.trim();
+                          final next = await _editTextDialog(
+                            context,
+                            title: 'Line name',
+                            initial: current,
+                          );
+                          if (next == null) return;
 
-                    final tile = s.draft.lines[index].tile;
-                    ctl.updateDraftName(tile, next);
-                  },
+                          final tile = s.draft.lines[index].tile;
+                          ctl.updateDraftName(tile, next);
+                        },
 
-            onEditQtyRate: busy
-                ? null
-                : (index) async {
-                    final line = s.draft.lines[index];
+                  onEditQtyRate: busy
+                      ? null
+                      : (index) async {
+                          final line = s.draft.lines[index];
 
-                    final res = await _editQtyRateDialog(
-                      context,
-                      title: 'Edit line',
-                      initialQty: line.quantity,
-                      initialRate: line.rate,
-                      enableRate: widget.requirePrices,
-                    );
-                    if (res == null) return;
+                          final res = await _editQtyRateDialog(
+                            context,
+                            title: 'Edit line',
+                            initialQty: line.quantity,
+                            initialRate: line.rate,
+                            enableRate: widget.requirePrices,
+                          );
+                          if (res == null) return;
 
-                    final tile = line.tile;
+                          final tile = line.tile;
 
-                    if (res.qty <= 0) {
-                      ctl.updateDraftQty(tile, 0);
-                      return;
-                    }
+                          if (res.qty <= 0) {
+                            ctl.updateDraftQty(tile, 0);
+                            return;
+                          }
 
-                    ctl.updateDraftQty(tile, res.qty);
+                          ctl.updateDraftQty(tile, res.qty);
 
-                    if (widget.requirePrices) {
-                      ctl.updateDraftRate(tile, res.rate);
-                    }
-                  },
+                          if (widget.requirePrices) {
+                            ctl.updateDraftRate(tile, res.rate);
+                          }
+                        },
 
-            onRemoveLine: busy
-                ? null
-                : (index) {
-                    final tile = s.draft.lines[index].tile;
-                    ctl.updateDraftQty(tile, 0);
-                  },
-          ),
+                  onRemoveLine: busy
+                      ? null
+                      : (index) {
+                          final tile = s.draft.lines[index].tile;
+                          ctl.updateDraftQty(tile, 0);
+                        },
+                ),
         ),
 
-        // Bottom bar(s)
         if (widget.requirePrices)
           SalesDocTotalBar(
             label: _isEdit ? 'Total' : 'Estimated total',
@@ -400,7 +447,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               if (!done) return;
               if (!context.mounted) return;
 
-              Navigator.of(context).pop(true); // changed=true
+              Navigator.of(context).pop(true);
             },
     );
   }
@@ -470,13 +517,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                 if (id == null || id.trim().isEmpty) return;
                 if (!context.mounted) return;
 
-                Navigator.of(context).pop(true); // changed=true
+                Navigator.of(context).pop(true);
               },
       ),
     );
   }
-
-  // ───────────────────────── dialogs ─────────────────────────
 
   Future<bool> _confirmDelete(BuildContext context) async {
     final res = await showDialog<bool>(
@@ -552,6 +597,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     return t.isEmpty ? null : t;
   }
 }
+
+enum _AddAction { addCustomLine, goToCatalog }
 
 class _QtyRateResult {
   const _QtyRateResult(this.qty, this.rate);

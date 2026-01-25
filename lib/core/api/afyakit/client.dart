@@ -45,8 +45,14 @@ void _setBearerOrRemoveHeader(RequestOptions options, String? token) {
 
 /// Extra flags used in Dio RequestOptions.extra
 final class _ExtraKeys {
-  static const retriedAuth = 'retried'; // your existing one
+  static const retriedAuth = 'retried';
   static const retriedConnTimeout = 'retriedConnTimeout';
+
+  /// ✅ Optional: allow 404 without throwing (validateStatus).
+  static const allow404 = 'allow404';
+
+  /// ✅ Optional: when allow404 is on, suppress the response log for 404.
+  static const silence404 = 'silence404';
 }
 
 final class AfyaKitClient {
@@ -71,9 +77,20 @@ final class AfyaKitClient {
       sendTimeout: sendT,
     );
 
-    // ─────────────────────────────────────────────
-    // Debug: confirm the client we created (baseUrl + timeouts)
-    // ─────────────────────────────────────────────
+    // ✅ Validate status:
+    // - default behavior: 200-299 are OK
+    // - if requestOptions.extra['allow404'] == true, then 404 is also OK
+    http.options = http.options.copyWith(
+      validateStatus: (code) {
+        final c = code ?? 0;
+
+        // Note: validateStatus on BaseOptions has no access to RequestOptions.extra.
+        // So we ALSO set validateStatus on per-request Options in getUri/postUri/putUri/deleteUri.
+        // This remains as a safe default.
+        return c >= 200 && c < 300;
+      },
+    );
+
     if (kDebugMode) {
       debugPrint(
         '🧪 [api] init baseUrl=${http.options.baseUrl} '
@@ -88,7 +105,6 @@ final class AfyaKitClient {
 
     // ─────────────────────────────────────────────
     // Debug: always log the exact URL and error type.
-    // This is the missing info from your console logs.
     // ─────────────────────────────────────────────
     http.interceptors.add(
       InterceptorsWrapper(
@@ -103,8 +119,23 @@ final class AfyaKitClient {
         },
         onResponse: (r, h) {
           if (kDebugMode) {
+            final status = r.statusCode ?? 0;
+            final extra = r.requestOptions.extra;
+            final allow404 = extra[_ExtraKeys.allow404] == true;
+            final silence404 = extra[_ExtraKeys.silence404] == true;
+
+            // ✅ If we intentionally allow 404, don't log it as ✅.
+            if (status == 404 && allow404) {
+              if (!silence404) {
+                debugPrint(
+                  'ℹ️ [api] ← 404 (allowed) ${r.requestOptions.method} ${r.requestOptions.uri}',
+                );
+              }
+              return h.next(r);
+            }
+
             debugPrint(
-              '✅ [api] ← ${r.statusCode} ${r.requestOptions.method} ${r.requestOptions.uri}',
+              '✅ [api] ← $status ${r.requestOptions.method} ${r.requestOptions.uri}',
             );
           }
           h.next(r);
@@ -123,7 +154,7 @@ final class AfyaKitClient {
     );
 
     // ─────────────────────────────────────────────
-    // Auth header injector + auth-refresh retry (your logic, preserved)
+    // Auth header injector + auth-refresh retry (preserved)
     // ─────────────────────────────────────────────
     http.interceptors.add(
       InterceptorsWrapper(
@@ -146,22 +177,17 @@ final class AfyaKitClient {
 
           return handler.next(options);
         },
-
-        // ✅ Retry rules:
-        // 1) Auth retry (401/419/440) - your original behavior.
-        // 2) Connection-timeout retry (once) - helps flaky dev networks.
         onError: (e, handler) async {
           final status = e.response?.statusCode ?? 0;
           final options = e.requestOptions;
 
           // ─────────────────────────────────────────────
-          // (A) Retry once on *connection timeout*
+          // (A) Retry once on connection timeout (idempotent only)
           // ─────────────────────────────────────────────
           final wasConnRetried =
               options.extra[_ExtraKeys.retriedConnTimeout] == true;
           final isConnTimeout = e.type == DioExceptionType.connectionTimeout;
 
-          // Only retry idempotent requests by default (GET/HEAD).
           final isIdempotent =
               options.method.toUpperCase() == 'GET' ||
               options.method.toUpperCase() == 'HEAD';
@@ -189,7 +215,6 @@ final class AfyaKitClient {
               if (kDebugMode) {
                 debugPrint('❌ [api] conn-timeout retry failed: $err');
               }
-              // fall through to normal handling
             }
           }
 
@@ -244,20 +269,34 @@ final class AfyaKitClient {
   // ─────────────────────────────────────────────
   // ✅ Convenience wrappers (Uri-based)
   // ─────────────────────────────────────────────
-  //
-  // NOTE:
-  // AfyaKitRoutes returns a fully-built Uri (including query string),
-  // so we DO NOT pass queryParameters here.
+
+  Options _mergeOptions(Options? options, {required bool allow404}) {
+    final extra = <String, dynamic>{
+      ...?options?.extra,
+      if (allow404) _ExtraKeys.allow404: true,
+    };
+
+    return (options ?? Options()).copyWith(
+      extra: extra,
+      // ✅ Per-request validateStatus so we can allow 404 selectively.
+      validateStatus: (code) {
+        final c = code ?? 0;
+        if (allow404 && c == 404) return true;
+        return c >= 200 && c < 300;
+      },
+    );
+  }
 
   Future<Response<T>> getUri<T>(
     Uri uri, {
     Options? options,
     CancelToken? cancelToken,
     ProgressCallback? onReceiveProgress,
+    bool allow404 = false,
   }) {
     return dio.getUri<T>(
       uri,
-      options: options,
+      options: _mergeOptions(options, allow404: allow404),
       cancelToken: cancelToken,
       onReceiveProgress: onReceiveProgress,
     );
@@ -270,11 +309,12 @@ final class AfyaKitClient {
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
+    bool allow404 = false,
   }) {
     return dio.postUri<T>(
       uri,
       data: data,
-      options: options,
+      options: _mergeOptions(options, allow404: allow404),
       cancelToken: cancelToken,
       onSendProgress: onSendProgress,
       onReceiveProgress: onReceiveProgress,
@@ -288,11 +328,12 @@ final class AfyaKitClient {
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
+    bool allow404 = false,
   }) {
     return dio.putUri<T>(
       uri,
       data: data,
-      options: options,
+      options: _mergeOptions(options, allow404: allow404),
       cancelToken: cancelToken,
       onSendProgress: onSendProgress,
       onReceiveProgress: onReceiveProgress,
@@ -304,11 +345,12 @@ final class AfyaKitClient {
     Object? data,
     Options? options,
     CancelToken? cancelToken,
+    bool allow404 = false,
   }) {
     return dio.deleteUri<T>(
       uri,
       data: data,
-      options: options,
+      options: _mergeOptions(options, allow404: allow404),
       cancelToken: cancelToken,
     );
   }

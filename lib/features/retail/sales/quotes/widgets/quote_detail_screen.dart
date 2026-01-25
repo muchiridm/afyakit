@@ -1,19 +1,19 @@
 // lib/features/retail/quotes/widgets/quote_detail_screen.dart
 
+import 'package:afyakit/shared/widgets/pdf/pdf_preview_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import 'package:afyakit/shared/layout/app_page_scaffold.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
 
+import 'package:afyakit/features/retail/sales/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/sales/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/sales/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/features/retail/sales/quotes/widgets/quotes_list_screen.dart';
 
 import 'package:afyakit/features/retail/sales/widgets/sales_doc_body.dart';
 import 'package:afyakit/features/retail/sales/widgets/sales_doc_header.dart';
-
-final _zohoDate = DateFormat('yyyy-MM-dd');
 
 class QuoteDetailScreen extends ConsumerStatefulWidget {
   const QuoteDetailScreen({super.key, required this.quoteId});
@@ -24,6 +24,8 @@ class QuoteDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
+  bool _acting = false;
+
   // ─────────────────────────────────────────────
   // Navigation
   // ─────────────────────────────────────────────
@@ -38,12 +40,66 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!context.mounted) return;
 
     if (changed == true) {
-      // Saved or deleted => go back to list, clean stack.
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const QuotesListScreen()),
         (_) => false,
       );
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────────
+
+  Future<void> _runAction(Future<void> Function() fn) async {
+    if (_acting) return;
+    setState(() => _acting = true);
+    try {
+      await fn();
+    } catch (e) {
+      SnackService.showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _viewPdf(ZohoQuotesService svc) async {
+    await _runAction(() async {
+      final bytes = await svc.getPdf(widget.quoteId);
+
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfPreviewScreen(
+            bytes: bytes,
+            title: 'Quote PDF',
+            fileName: 'quote_${widget.quoteId}.pdf',
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _send(ZohoQuotesService svc) async {
+    await _runAction(() async {
+      await svc.sendQuote(widget.quoteId);
+      SnackService.showSuccess('Quote sent');
+    });
+  }
+
+  Future<void> _markSent(ZohoQuotesService svc) async {
+    await _runAction(() async {
+      await svc.markQuoteSent(widget.quoteId);
+      SnackService.showSuccess('Marked as sent');
+    });
+  }
+
+  Future<void> _convertToInvoice(ZohoQuotesService svc) async {
+    await _runAction(() async {
+      await svc.convertToInvoice(widget.quoteId);
+      SnackService.showSuccess('Converted to invoice');
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -65,8 +121,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
         title: 'Quote',
         body: _ErrorState(title: 'Zoho service failed', message: '$e'),
       ),
-      data: (svc) => FutureBuilder<Map<String, dynamic>>(
-        future: svc.getQuote(widget.quoteId),
+      data: (svc) => FutureBuilder<ZohoQuote>(
+        future: svc.get(widget.quoteId), // ✅ typed now
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return _buildShell(
@@ -87,8 +143,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
             );
           }
 
-          final data = snap.data;
-          if (data == null) {
+          final q = snap.data;
+          if (q == null) {
             return _buildShell(
               context,
               title: 'Quote',
@@ -99,7 +155,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
             );
           }
 
-          return _buildDetail(context, data);
+          return _buildDetail(context, svc, q);
         },
       ),
     );
@@ -113,20 +169,10 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     BuildContext context, {
     required String title,
     required Widget body,
-    bool showEdit = false,
+    List<Widget> actions = const [],
   }) {
     return AppPageScaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          if (showEdit)
-            IconButton(
-              tooltip: 'Edit quote',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _editQuote(context),
-            ),
-        ],
-      ),
+      appBar: AppBar(title: Text(title), actions: actions),
       scrollable: false,
       body: body,
     );
@@ -136,41 +182,99 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   // Detail UI (SalesDoc widgets)
   // ─────────────────────────────────────────────
 
-  Widget _buildDetail(BuildContext context, Map<String, dynamic> q) {
-    final parsed = _parse(q);
-
+  Widget _buildDetail(
+    BuildContext context,
+    ZohoQuotesService svc,
+    ZohoQuote q,
+  ) {
     final meta = SalesDocMetaVm(
-      partyName: parsed.customer,
-      docNumberOrId: parsed.quoteNumberOrId,
-      status: parsed.status,
-      currencyCode: parsed.currency,
-      total: parsed.total,
-      date: parsed.date,
+      partyName: (q.customerName.trim().isEmpty ? 'Customer' : q.customerName),
+      docNumberOrId: q.referenceNumber?.trim().isNotEmpty == true
+          ? q.referenceNumber!.trim()
+          : q.quoteId,
+      status: q.status,
+      currencyCode: q.currencyCode ?? '',
+      total: q.total,
+      date: q.date,
     );
 
-    final lines = parsed.lineItems
-        .map(
-          (li) => SalesDocLineVm(
-            title: li.title, // may be '' (widgets can hide)
-            subtitle: li.subtitle,
-            qty: li.qty,
+    final lines = q.lineItems
+        .map((li) {
+          // Prefer description as title, fallback to name
+          final title =
+              _cleanZohoLineText(li.description) ??
+              _cleanZohoLineText(li.name) ??
+              '';
+
+          final subtitle =
+              (li.description != null &&
+                  _cleanZohoLineText(li.description) != null &&
+                  _cleanZohoLineText(li.name) != null &&
+                  _cleanZohoLineText(li.description) !=
+                      _cleanZohoLineText(li.name))
+              ? _cleanZohoLineText(li.name)
+              : null;
+
+          return SalesDocLineVm(
+            title: title,
+            subtitle: subtitle,
+            qty: li.quantity,
             rate: li.rate,
-          ),
-        )
+          );
+        })
         .toList(growable: false);
+
+    final actions = <Widget>[
+      IconButton(
+        tooltip: _acting ? 'Working…' : 'PDF',
+        icon: const Icon(Icons.picture_as_pdf_outlined),
+        onPressed: _acting ? null : () => _viewPdf(svc),
+      ),
+      PopupMenuButton<_QuoteAction>(
+        tooltip: 'Actions',
+        enabled: !_acting,
+        onSelected: (a) {
+          switch (a) {
+            case _QuoteAction.send:
+              _send(svc);
+              break;
+            case _QuoteAction.markSent:
+              _markSent(svc);
+              break;
+            case _QuoteAction.invoice:
+              _convertToInvoice(svc);
+              break;
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: _QuoteAction.send, child: Text('Send quote')),
+          PopupMenuItem(
+            value: _QuoteAction.markSent,
+            child: Text('Mark as sent'),
+          ),
+          PopupMenuDivider(),
+          PopupMenuItem(
+            value: _QuoteAction.invoice,
+            child: Text('Convert to invoice'),
+          ),
+        ],
+      ),
+      IconButton(
+        tooltip: 'Edit quote',
+        icon: const Icon(Icons.edit_outlined),
+        onPressed: _acting ? null : () => _editQuote(context),
+      ),
+    ];
 
     return _buildShell(
       context,
       title: 'Quote',
-      showEdit: true,
+      actions: actions,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header (customer, status, number, date)
           SalesDocHeader(title: 'Quote', meta: meta),
           const Divider(height: 1),
-
-          // Lines list
           Expanded(
             child: SalesDocLinesList(
               currencyCode: meta.currencyCode,
@@ -178,8 +282,6 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
               mode: SalesDocMode.view,
             ),
           ),
-
-          // Total bar
           SalesDocTotalBar(
             label: 'Total',
             total: meta.total,
@@ -190,106 +292,16 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Parsing helpers
-  // ─────────────────────────────────────────────
-
-  _QuoteParsed _parse(Map<String, dynamic> q) {
-    final customer = (q['customer_name'] ?? q['customerName'] ?? 'Customer')
-        .toString()
-        .trim();
-
-    final status = (q['status'] ?? '').toString().trim();
-
-    final currency = (q['currency_code'] ?? q['currencyCode'] ?? '')
-        .toString()
-        .trim();
-
-    final total = _asNum(q['total']) ?? 0;
-
-    final estimateNumber = (q['estimate_number'] ?? '').toString().trim();
-    final estimateId = (q['estimate_id'] ?? q['id'] ?? widget.quoteId)
-        .toString()
-        .trim();
-    final displayId = estimateNumber.isNotEmpty ? estimateNumber : estimateId;
-
-    final dt = _parseZohoDate(
-      q['date'] ?? q['estimate_date'] ?? q['quote_date'] ?? q['created_time'],
-    );
-
-    final items = <_LineItem>[];
-    final raw = q['line_items'];
-
-    if (raw is List) {
-      for (final it in raw) {
-        if (it is! Map) continue;
-        final m = it.cast<String, dynamic>();
-
-        final rawDesc = (m['description'] ?? '').toString();
-        final rawName = (m['name'] ?? '').toString();
-
-        final desc = _cleanZohoLineText(rawDesc);
-        final name = _cleanZohoLineText(rawName);
-
-        final title = desc.isNotEmpty ? desc : name;
-
-        String? subtitle;
-        if (desc.isNotEmpty && name.isNotEmpty && desc != name) {
-          subtitle = name;
-        }
-
-        final qty = _asNum(m['quantity']) ?? 0;
-        final rate = _asNum(m['rate']) ?? 0;
-
-        items.add(
-          _LineItem(title: title, subtitle: subtitle, qty: qty, rate: rate),
-        );
-      }
-    }
-
-    return _QuoteParsed(
-      quoteNumberOrId: (displayId.isEmpty ? widget.quoteId : displayId),
-      customer: (customer.isEmpty ? 'Customer' : customer),
-      status: status,
-      currency: currency,
-      total: total,
-      date: dt,
-      lineItems: items,
-    );
-  }
-
-  /// Treat Zoho placeholder "Item" as empty.
-  static String _cleanZohoLineText(String v) {
-    final t = v.trim();
-    if (t.isEmpty) return '';
-    if (t.toLowerCase() == 'item') return '';
+  /// Treat Zoho placeholder "Item" as empty; return null if empty.
+  static String? _cleanZohoLineText(Object? v) {
+    final t = (v ?? '').toString().trim();
+    if (t.isEmpty) return null;
+    if (t.toLowerCase() == 'item') return null;
     return t;
   }
-
-  static DateTime? _parseZohoDate(Object? v) {
-    if (v == null) return null;
-    final s0 = v.toString().trim();
-    if (s0.isEmpty) return null;
-
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s0)) {
-      final d = _zohoDate.parseStrict(s0);
-      return DateTime(d.year, d.month, d.day);
-    }
-
-    // Fix timezone like +0300 -> +03:00
-    final tzFix = RegExp(r'([+-]\d{2})(\d{2})$');
-    final s = s0.replaceFirstMapped(tzFix, (m) => '${m[1]}:${m[2]}');
-
-    final dt = DateTime.tryParse(s);
-    return dt?.toLocal();
-  }
-
-  static num? _asNum(Object? v) {
-    if (v is num) return v;
-    if (v is String) return num.tryParse(v.trim());
-    return num.tryParse(v.toString());
-  }
 }
+
+enum _QuoteAction { send, markSent, invoice }
 
 // ─────────────────────────────────────────────
 // Small UI helper
@@ -324,38 +336,4 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _QuoteParsed {
-  const _QuoteParsed({
-    required this.quoteNumberOrId,
-    required this.customer,
-    required this.status,
-    required this.currency,
-    required this.total,
-    required this.date,
-    required this.lineItems,
-  });
-
-  final String quoteNumberOrId;
-  final String customer;
-  final String status;
-  final String currency;
-  final num total;
-  final DateTime? date;
-  final List<_LineItem> lineItems;
-}
-
-class _LineItem {
-  const _LineItem({
-    required this.title,
-    this.subtitle,
-    required this.qty,
-    required this.rate,
-  });
-
-  final String title;
-  final String? subtitle;
-  final num qty;
-  final num rate;
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'sales_doc_header.dart';
 
 class SalesDocLinesList extends StatelessWidget {
@@ -8,18 +7,11 @@ class SalesDocLinesList extends StatelessWidget {
     required this.currencyCode,
     required this.lines,
     this.mode = SalesDocMode.view,
-
-    // Edit hooks (optional)
     this.onEditName,
-
-    // ✅ Edit qty+rate together (one dialog)
     this.onEditQtyRate,
-
-    // Back-compat (optional)
     this.onQtyChange,
     this.onEditRate,
     this.onRemoveLine,
-
     this.showWideHeader = true,
   });
 
@@ -27,19 +19,12 @@ class SalesDocLinesList extends StatelessWidget {
   final List<SalesDocLineVm> lines;
   final SalesDocMode mode;
 
-  /// Called with line index.
   final Future<void> Function(int index)? onEditName;
-
-  /// ✅ Called with line index. Expected to open ONE dialog that edits qty + rate.
   final Future<void> Function(int index)? onEditQtyRate;
 
-  /// Back-compat: called with line index and next qty.
   final void Function(int index, int nextQty)? onQtyChange;
-
-  /// Back-compat: called with line index.
   final Future<void> Function(int index)? onEditRate;
 
-  /// Optional "remove" action (e.g. set qty to 0 or remove).
   final void Function(int index)? onRemoveLine;
 
   final bool showWideHeader;
@@ -60,13 +45,19 @@ class SalesDocLinesList extends StatelessWidget {
       builder: (context, c) {
         final isWide = c.maxWidth >= kWideRowBreakpoint;
 
-        return Column(
-          children: [
-            if (isWide && showWideHeader)
-              _WideHeaderRow(currencyCode: currencyCode),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              sliver: SliverToBoxAdapter(
+                child: (isWide && showWideHeader)
+                    ? _WideHeaderRow(currencyCode: currencyCode)
+                    : const SizedBox.shrink(),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              sliver: SliverList.separated(
                 itemCount: lines.length,
                 separatorBuilder: (_, __) =>
                     const Divider(height: 1, thickness: 0.4),
@@ -98,7 +89,6 @@ class SalesDocLinesList extends StatelessWidget {
 
     final canEditQtyRate = _editable && onEditQtyRate != null;
 
-    // Back-compat:
     final canQtyLegacy =
         _editable && onQtyChange != null && onEditQtyRate == null;
     final canRateLegacy =
@@ -109,7 +99,6 @@ class SalesDocLinesList extends StatelessWidget {
 
     return Row(
       children: [
-        // Item column
         Expanded(
           child: Align(
             alignment: Alignment.centerLeft,
@@ -129,8 +118,6 @@ class SalesDocLinesList extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ),
-
-                // Icon hugs end of text
                 if (canEditName) ...[
                   const SizedBox(width: 4),
                   IconButton(
@@ -150,7 +137,6 @@ class SalesDocLinesList extends StatelessWidget {
           ),
         ),
 
-        // Qty column
         SizedBox(
           width: kQtyColW,
           child: canEditQtyRate
@@ -177,7 +163,6 @@ class SalesDocLinesList extends StatelessWidget {
 
         const SizedBox(width: 12),
 
-        // Rate column
         SizedBox(
           width: kRateColW,
           child: canEditQtyRate
@@ -203,7 +188,6 @@ class SalesDocLinesList extends StatelessWidget {
 
         const SizedBox(width: 12),
 
-        // Amount + remove at END
         SizedBox(
           width: kAmtColW + (canRemove ? 36 : 0),
           child: Row(
@@ -240,11 +224,9 @@ class SalesDocLinesList extends StatelessWidget {
 
   Widget _buildNarrowRow(BuildContext context, int index, SalesDocLineVm li) {
     final theme = Theme.of(context);
-
     final display = _lineDisplayText(li);
     final hasDisplay = display.trim().isNotEmpty;
 
-    // VIEW mode
     if (!_editable) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,7 +263,6 @@ class SalesDocLinesList extends StatelessWidget {
       );
     }
 
-    // EDIT mode
     final canEditName = onEditName != null;
     final canEditQtyRate = onEditQtyRate != null;
     final canRemove = onRemoveLine != null;
@@ -357,8 +338,6 @@ class SalesDocLinesList extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-
-        // Amount + remove at END
         SizedBox(
           width: 98 + (canRemove ? 36 : 0),
           child: Row(
@@ -392,8 +371,6 @@ class SalesDocLinesList extends StatelessWidget {
       ],
     );
   }
-
-  // ───────────────────────── helpers ─────────────────────────
 
   Widget _editCell(
     BuildContext context, {
@@ -457,17 +434,12 @@ class SalesDocLinesList extends StatelessWidget {
   String _lineDisplayText(SalesDocLineVm li) {
     final title = li.title.trim();
     final subtitle = (li.subtitle ?? '').trim();
-
     final isPlaceholderTitle = title.toLowerCase() == 'item';
 
-    // If title is empty or "Item", prefer subtitle (if present)
-    if ((title.isEmpty || isPlaceholderTitle) && subtitle.isNotEmpty) {
+    if ((title.isEmpty || isPlaceholderTitle) && subtitle.isNotEmpty)
       return subtitle;
-    }
-
     if (subtitle.isEmpty) return title;
     if (title.isEmpty) return subtitle;
-
     return '$title — $subtitle';
   }
 
@@ -477,7 +449,6 @@ class SalesDocLinesList extends StatelessWidget {
     required VoidCallback onDec,
     required VoidCallback onInc,
   }) {
-    // Must fit inside kQtyColW (90). Scale down if needed, never overflow.
     return Align(
       alignment: Alignment.centerRight,
       child: FittedBox(
@@ -517,7 +488,6 @@ class SalesDocLinesList extends StatelessWidget {
 
 class _WideHeaderRow extends StatelessWidget {
   const _WideHeaderRow({required this.currencyCode});
-
   final String currencyCode;
 
   @override
@@ -529,7 +499,7 @@ class _WideHeaderRow extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
       child: Row(
         children: [
           Expanded(child: Text('Item', style: style)),

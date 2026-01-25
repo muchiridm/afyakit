@@ -37,7 +37,6 @@ class QuoteTopBar extends StatelessWidget {
   final String title;
   final String? subtitle;
 
-  // ✅ now nullable
   final DateTime? date;
 
   final VoidCallback onPickDate;
@@ -49,9 +48,7 @@ class QuoteTopBar extends StatelessWidget {
     final theme = Theme.of(context);
     final t = theme.textTheme;
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = date ?? today;
+    final dateLabel = date == null ? 'Pick date' : _df.format(date!);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
@@ -97,7 +94,7 @@ class QuoteTopBar extends StatelessWidget {
               _pill(
                 context,
                 Icons.event_outlined,
-                _df.format(d),
+                dateLabel,
                 onTap: onPickDate,
               ),
             ],

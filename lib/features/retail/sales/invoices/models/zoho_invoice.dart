@@ -1,3 +1,7 @@
+// lib/features/retail/sales/invoices/models/zoho_invoice.dart
+
+import 'zoho_invoice_payment.dart';
+
 typedef JsonMap = Map<String, dynamic>;
 
 class ZohoInvoiceLineItem {
@@ -15,7 +19,8 @@ class ZohoInvoiceLineItem {
   final double quantity;
   final num rate;
 
-  /// ✅ Used for update. If present, send it back as line_item_id.
+  /// If present on getInvoice, it can be used for update flows.
+  /// (You’re not using invoice-line editing anymore, but safe to keep.)
   final String? lineItemId;
 
   final num? itemTotal;
@@ -23,6 +28,7 @@ class ZohoInvoiceLineItem {
   factory ZohoInvoiceLineItem.fromJson(JsonMap j) {
     final name = (j['name'] ?? '').toString().trim();
     final desc = (j['description'] ?? '').toString().trim();
+
     final qRaw = j['quantity'];
     final rRaw = j['rate'];
 
@@ -54,18 +60,19 @@ class ZohoInvoice {
     this.referenceNumber,
     this.currencyCode,
 
-    // ✅ Optional full invoice fields (present on getInvoice)
+    // Optional full invoice fields (present on getInvoice)
     this.customerId,
     this.notes,
     this.terms,
     this.dueDate,
     this.balance,
     this.lineItems = const <ZohoInvoiceLineItem>[],
+    this.payments = const <ZohoInvoicePayment>[],
   });
 
   final String invoiceId;
   final String customerName;
-  final String status; // keep open-ended
+  final String status;
   final DateTime? date;
   final num total;
 
@@ -73,35 +80,39 @@ class ZohoInvoice {
   final String? referenceNumber;
   final String? currencyCode;
 
-  /// ✅ Full invoice payload: customer_id (contact_id)
   final String? customerId;
 
-  /// ✅ Full invoice payload extras
   final String? notes;
   final String? terms;
 
   final DateTime? dueDate;
   final num? balance;
 
-  /// ✅ Full invoice payload line_items (needed for edit)
+  /// Present on getInvoice; keep for display.
   final List<ZohoInvoiceLineItem> lineItems;
+
+  /// ✅ Payments: depends on backend/Zoho payload. We parse best-effort.
+  final List<ZohoInvoicePayment> payments;
 
   factory ZohoInvoice.fromJson(JsonMap j) {
     final id = (j['invoice_id'] ?? j['id'] ?? '').toString().trim();
+
     final number = (j['invoice_number'] ?? '').toString().trim();
+
     final name = (j['customer_name'] ?? j['contact_name'] ?? '').toString();
+
     final status = (j['status'] ?? '').toString();
 
     DateTime? date;
-    final rawDate = j['date'];
-    if (rawDate is String && rawDate.trim().isNotEmpty) {
-      date = DateTime.tryParse(rawDate.trim());
+    final rawDate = (j['date'] ?? '').toString().trim();
+    if (rawDate.isNotEmpty) {
+      date = DateTime.tryParse(rawDate);
     }
 
     DateTime? dueDate;
-    final rawDue = j['due_date'];
-    if (rawDue is String && rawDue.trim().isNotEmpty) {
-      dueDate = DateTime.tryParse(rawDue.trim());
+    final rawDue = (j['due_date'] ?? '').toString().trim();
+    if (rawDue.isNotEmpty) {
+      dueDate = DateTime.tryParse(rawDue);
     }
 
     final totalRaw = j['total'];
@@ -125,12 +136,24 @@ class ZohoInvoice {
     final termsRaw = (j['terms'] ?? '').toString().trim();
     final terms = termsRaw.isEmpty ? null : termsRaw;
 
+    // Line items (display only)
     final rawLines = j['line_items'];
     final lines = <ZohoInvoiceLineItem>[];
     if (rawLines is List) {
       for (final e in rawLines) {
         if (e is Map) {
           lines.add(ZohoInvoiceLineItem.fromJson(e.cast<String, dynamic>()));
+        }
+      }
+    }
+
+    // Payments (best-effort)
+    final rawPays = j['payments'] ?? j['payment_details'];
+    final pays = <ZohoInvoicePayment>[];
+    if (rawPays is List) {
+      for (final e in rawPays) {
+        if (e is Map) {
+          pays.add(ZohoInvoicePayment.fromJson(e.cast<String, dynamic>()));
         }
       }
     }
@@ -150,6 +173,7 @@ class ZohoInvoice {
       notes: notes,
       terms: terms,
       lineItems: lines,
+      payments: pays,
     );
   }
 }

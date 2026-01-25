@@ -6,32 +6,87 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/retail/catalog/catalog_models.dart';
 
 @immutable
-class CartItem {
-  const CartItem({required this.tile, required this.qty});
+sealed class CartLine {
+  const CartLine();
+
+  String get key;
+  int get qty;
+
+  CartLine copyWithQty(int qty);
+}
+
+/// Normal catalog-backed line
+@immutable
+class CatalogCartLine extends CartLine {
+  const CatalogCartLine({required this.tile, required this.qty});
 
   final CatalogTile tile;
+  @override
   final int qty;
 
-  CartItem copyWith({CatalogTile? tile, int? qty}) {
-    return CartItem(tile: tile ?? this.tile, qty: qty ?? this.qty);
+  @override
+  String get key => 'tile:${tile.id}';
+
+  @override
+  CatalogCartLine copyWithQty(int qty) => CatalogCartLine(tile: tile, qty: qty);
+}
+
+/// Manual/custom line (not in catalog)
+@immutable
+class ManualCartLine extends CartLine {
+  const ManualCartLine({
+    required this.manualId,
+    required this.name,
+    this.description,
+    required this.rate,
+    required this.qty,
+  });
+
+  final String manualId; // stable id in cart
+  final String name;
+  final String? description;
+  final num rate;
+
+  @override
+  final int qty;
+
+  @override
+  String get key => 'manual:$manualId';
+
+  ManualCartLine copyWith({
+    String? name,
+    String? description,
+    bool clearDescription = false,
+    num? rate,
+    int? qty,
+  }) {
+    return ManualCartLine(
+      manualId: manualId,
+      name: (name ?? this.name).trim().isEmpty
+          ? this.name
+          : (name ?? this.name).trim(),
+      description: clearDescription ? null : (description ?? this.description),
+      rate: rate ?? this.rate,
+      qty: qty ?? this.qty,
+    );
   }
+
+  @override
+  ManualCartLine copyWithQty(int qty) => copyWith(qty: qty);
 }
 
 @immutable
 class CartState {
   const CartState({required this.lines});
+  final List<CartLine> lines;
 
-  final List<CartItem> lines;
-
-  const CartState.empty() : lines = const <CartItem>[];
+  const CartState.empty() : lines = const <CartLine>[];
 
   bool get isEmpty => lines.isEmpty;
   bool get isNotEmpty => lines.isNotEmpty;
 
-  /// Number of distinct lines (unique tiles).
   int get lineCount => lines.length;
 
-  /// Total quantity across all lines.
   int get itemCount {
     var n = 0;
     for (final l in lines) {
@@ -40,24 +95,28 @@ class CartState {
     return n;
   }
 
-  /// How many lines are missing a price.
   int get missingPriceLineCount {
     var n = 0;
     for (final l in lines) {
-      if (l.tile.bestSellPrice == null) n++;
+      if (l is CatalogCartLine) {
+        if (l.tile.bestSellPrice == null) n++;
+      } else if (l is ManualCartLine) {
+        if (l.rate <= 0) n++;
+      }
     }
     return n;
   }
 
-  /// True if every line has a price.
   bool get hasAllPrices => missingPriceLineCount == 0;
 
-  /// Estimated total using (price ?? 0).
-  /// This is UI-only; Zoho is the source of truth for totals.
   num get estimatedTotal {
     num total = 0;
     for (final line in lines) {
-      total += (line.tile.bestSellPrice ?? 0) * line.qty;
+      if (line is CatalogCartLine) {
+        total += (line.tile.bestSellPrice ?? 0) * line.qty;
+      } else if (line is ManualCartLine) {
+        total += (line.rate) * line.qty;
+      }
     }
     return total;
   }
@@ -71,60 +130,53 @@ class CartController extends StateNotifier<CartState> {
 
   int _clampQty(int qty) => qty.clamp(_minQty, _maxQty);
 
-  int _indexOf(String tileId) =>
-      state.lines.indexWhere((l) => l.tile.id == tileId);
+  int _indexOfKey(String key) => state.lines.indexWhere((l) => l.key == key);
 
-  CartItem? getLineByTileId(String tileId) {
-    final idx = _indexOf(tileId);
-    if (idx == -1) return null;
-    return state.lines[idx];
-  }
+  // ───────────────────────── Catalog lines ─────────────────────────
 
   int getQty(CatalogTile tile) {
-    final idx = _indexOf(tile.id);
+    final idx = _indexOfKey('tile:${tile.id}');
     if (idx == -1) return 0;
     return state.lines[idx].qty;
   }
 
-  bool contains(CatalogTile tile) => _indexOf(tile.id) != -1;
+  bool contains(CatalogTile tile) => _indexOfKey('tile:${tile.id}') != -1;
 
   void addOrIncrement(CatalogTile tile, {int delta = 1}) {
-    final idx = _indexOf(tile.id);
+    final key = 'tile:${tile.id}';
+    final idx = _indexOfKey(key);
 
-    // New line
     if (idx == -1) {
       final qty = _clampQty(delta < 1 ? 1 : delta);
       state = CartState(
-        lines: <CartItem>[
+        lines: <CartLine>[
           ...state.lines,
-          CartItem(tile: tile, qty: qty),
+          CatalogCartLine(tile: tile, qty: qty),
         ],
       );
       return;
     }
 
-    // Existing line
     final current = state.lines[idx];
     final nextQty = _clampQty(current.qty + delta);
-
-    // If delta is 0 (or clamps to same value), avoid pointless state updates
     if (nextQty == current.qty) return;
 
     final nextLines = [...state.lines];
-    nextLines[idx] = current.copyWith(qty: nextQty);
+    nextLines[idx] = current.copyWithQty(nextQty);
     state = CartState(lines: nextLines);
   }
 
-  void setQty(CatalogTile tile, int qty) {
-    final idx = _indexOf(tile.id);
+  void setQtyForCatalog(CatalogTile tile, int qty) {
+    final key = 'tile:${tile.id}';
+    final idx = _indexOfKey(key);
+
     if (idx == -1) {
-      // Optional: if someone sets qty > 0 for an item not yet in cart, add it.
       if (qty > 0) {
         final safe = _clampQty(qty);
         state = CartState(
-          lines: <CartItem>[
+          lines: <CartLine>[
             ...state.lines,
-            CartItem(tile: tile, qty: safe),
+            CatalogCartLine(tile: tile, qty: safe),
           ],
         );
       }
@@ -132,7 +184,7 @@ class CartController extends StateNotifier<CartState> {
     }
 
     if (qty <= 0) {
-      remove(tile);
+      removeByKey(key);
       return;
     }
 
@@ -141,35 +193,90 @@ class CartController extends StateNotifier<CartState> {
     if (safe == current.qty) return;
 
     final nextLines = [...state.lines];
-    nextLines[idx] = current.copyWith(qty: safe);
+    nextLines[idx] = current.copyWithQty(safe);
     state = CartState(lines: nextLines);
   }
 
-  void updateQty(CatalogTile tile, int qty) => setQty(tile, qty);
+  // ───────────────────────── Manual lines ─────────────────────────
 
-  void decrement(CatalogTile tile, {int delta = 1}) {
-    final idx = _indexOf(tile.id);
-    if (idx == -1) return;
+  String addManualLine({
+    required String name,
+    String? description,
+    required num rate,
+    int qty = 1,
+  }) {
+    final safeName = name.trim().isEmpty ? 'Item' : name.trim();
+    final safeRate = (rate.isNaN || rate.isInfinite || rate < 0) ? 0 : rate;
+    final safeQty = _clampQty(qty < 1 ? 1 : qty);
 
-    final current = state.lines[idx];
-    final nextQty = current.qty - (delta < 1 ? 1 : delta);
-
-    if (nextQty <= 0) {
-      remove(tile);
-      return;
-    }
-
-    setQty(tile, nextQty);
-  }
-
-  void remove(CatalogTile tile) {
-    final idx = _indexOf(tile.id);
-    if (idx == -1) return;
+    final id = 'm_${DateTime.now().microsecondsSinceEpoch}';
 
     state = CartState(
-      lines: state.lines
-          .where((l) => l.tile.id != tile.id)
-          .toList(growable: false),
+      lines: <CartLine>[
+        ...state.lines,
+        ManualCartLine(
+          manualId: id,
+          name: safeName,
+          description: (description ?? '').trim().isEmpty
+              ? null
+              : description!.trim(),
+          rate: safeRate,
+          qty: safeQty,
+        ),
+      ],
+    );
+
+    return id;
+  }
+
+  void updateManualLine(
+    String manualId, {
+    String? name,
+    String? description,
+    bool clearDescription = false,
+    num? rate,
+    int? qty,
+  }) {
+    final key = 'manual:${manualId.trim()}';
+    final idx = _indexOfKey(key);
+    if (idx == -1) return;
+
+    final cur = state.lines[idx];
+    if (cur is! ManualCartLine) return;
+
+    final nextQty = qty == null ? cur.qty : _clampQty(qty < 1 ? 1 : qty);
+    final nextRate = rate == null
+        ? cur.rate
+        : ((rate.isNaN || rate.isInfinite || rate < 0) ? 0 : rate);
+
+    final nextName = name == null
+        ? cur.name
+        : (name.trim().isEmpty ? cur.name : name.trim());
+
+    final nextDesc = clearDescription
+        ? null
+        : (description == null
+              ? cur.description
+              : (description.trim().isEmpty ? null : description.trim()));
+
+    final nextLines = [...state.lines];
+    nextLines[idx] = cur.copyWith(
+      name: nextName,
+      description: nextDesc,
+      rate: nextRate,
+      qty: nextQty,
+      clearDescription: clearDescription,
+    );
+
+    state = CartState(lines: nextLines);
+  }
+
+  // ───────────────────────── Common ─────────────────────────
+
+  void removeByKey(String key) {
+    if (key.trim().isEmpty) return;
+    state = CartState(
+      lines: state.lines.where((l) => l.key != key).toList(growable: false),
     );
   }
 

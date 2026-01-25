@@ -1,13 +1,19 @@
 // lib/features/retail/sales/quotes/controllers/quote_state.dart
 
-import 'package:afyakit/features/retail/sales/quotes/models/quote_draft.dart';
 import 'package:flutter/foundation.dart';
+import 'package:afyakit/features/retail/sales/quotes/models/quote_draft.dart';
 
 @immutable
 class QuoteState {
   const QuoteState({
     this.submitting = false,
     this.loadingEdit = false,
+
+    // ✅ New ops aligned to ZohoQuotesService
+    this.downloadingPdf = false,
+    this.sending = false,
+    this.converting = false,
+
     this.error,
     this.lastCreatedQuoteId,
     this.editingQuoteId,
@@ -19,6 +25,10 @@ class QuoteState {
   final bool submitting;
   final bool loadingEdit;
 
+  final bool downloadingPdf;
+  final bool sending;
+  final bool converting;
+
   final String? error;
   final String? lastCreatedQuoteId;
 
@@ -29,7 +39,9 @@ class QuoteState {
   final DateTime? quoteDate;
 
   bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
-  bool get busy => submitting || loadingEdit;
+
+  bool get busy =>
+      submitting || loadingEdit || downloadingPdf || sending || converting;
 
   bool get hasLines => draft.lines.isNotEmpty;
   num get total => draft.total;
@@ -38,6 +50,10 @@ class QuoteState {
   QuoteState copyWith({
     bool? submitting,
     bool? loadingEdit,
+    bool? downloadingPdf,
+    bool? sending,
+    bool? converting,
+
     String? error,
     bool clearError = false,
     String? lastCreatedQuoteId,
@@ -54,6 +70,10 @@ class QuoteState {
     return QuoteState(
       submitting: submitting ?? this.submitting,
       loadingEdit: loadingEdit ?? this.loadingEdit,
+      downloadingPdf: downloadingPdf ?? this.downloadingPdf,
+      sending: sending ?? this.sending,
+      converting: converting ?? this.converting,
+
       error: clearError ? null : (error ?? this.error),
       lastCreatedQuoteId: clearLastCreatedId
           ? null

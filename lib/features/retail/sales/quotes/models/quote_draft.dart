@@ -21,20 +21,20 @@ class QuoteLineDraft {
   final num rate;
 
   /// Optional line description (since you're not using Zoho Items).
+  /// In your payload builder this becomes Zoho 'name' (and tileDesc is 'description').
   final String? description;
 
   /// ✅ Zoho line_item_id (present when editing existing quotes)
-  /// - null for new lines (create)
-  /// - set for existing lines (edit)
   final String? lineItemId;
 
   /// Stable identity for update/remove operations.
-  /// Prefer canonKey; fall back to groupKey; fall back to title.
   String get key {
     final c = (tile.canonKey).trim();
     if (c.isNotEmpty) return c;
+
     final g = (tile.groupKey).trim();
     if (g.isNotEmpty) return g;
+
     final t = (tile.tileTitle).trim();
     return t.isNotEmpty ? t : 'line';
   }
@@ -45,6 +45,7 @@ class QuoteLineDraft {
   num get amount => safeRate * safeQty;
 
   QuoteLineDraft copyWith({
+    DiSalesTile? tile, // ✅ NEW: allow updating tile (manual line edits)
     int? quantity,
     num? rate,
     String? description,
@@ -53,7 +54,7 @@ class QuoteLineDraft {
     bool clearLineItemId = false,
   }) {
     return QuoteLineDraft(
-      tile: tile,
+      tile: tile ?? this.tile, // ✅ NEW
       quantity: quantity ?? this.quantity,
       rate: rate ?? this.rate,
       description: clearDescription ? null : (description ?? this.description),
@@ -74,7 +75,6 @@ class QuoteDraft {
     this.currencyCode,
   });
 
-  /// Full Zoho contact (create mode OR if you hydrate in edit/preview).
   final ZohoContact? contact;
 
   /// Lightweight fields from quote payload (edit/preview friendly).
@@ -84,7 +84,6 @@ class QuoteDraft {
   final String? customerNotes;
   final String? reference;
 
-  /// Optional: show currency nicely in UI (e.g. "KES", "USD").
   final String? currencyCode;
 
   final List<QuoteLineDraft> lines;
@@ -100,7 +99,6 @@ class QuoteDraft {
 
   num get total => lines.fold<num>(0, (s, l) => s + l.amount);
 
-  /// Best display label for header UI.
   String get displayContactName {
     final n1 = (contact?.displayName ?? '').trim();
     if (n1.isNotEmpty) return n1;
@@ -146,12 +144,10 @@ class QuoteDraft {
     );
   }
 
-  /// Upsert a line by key; removes it if nextQty == 0.
   QuoteDraft upsertLine(QuoteLineDraft next) {
     final nextKey = next.key;
     final idx = lines.indexWhere((l) => l.key == nextKey);
 
-    // remove if qty is 0
     if (next.safeQty == 0) {
       if (idx < 0) return this;
       final copy = List<QuoteLineDraft>.from(lines)..removeAt(idx);
@@ -189,29 +185,41 @@ class QuoteDraft {
   // ─────────────────────────────────────────────
 
   factory QuoteDraft.fromZohoQuote(ZohoQuote q) {
-    // If line items aren't present (list endpoint), this still works (empty lines).
     final hydratedLines = q.lineItems
         .map((li) {
-          // We keep your existing “name = description/title” behavior.
-          // For editing, we need a tile; best effort: use a fallback tile with keys derived from name.
-          final tile = DiSalesTile.fallbackFromName(
-            name: li.name,
-            description: li.description,
-          );
+          final stableKey = (li.lineItemId ?? '').trim().isNotEmpty
+              ? li.lineItemId!.trim()
+              : '';
+
+          final tile = stableKey.isNotEmpty
+              ? DiSalesTile.fallbackFromName(
+                  name: li.name,
+                  description: li.description,
+                  canonKey: stableKey,
+                  groupKey: stableKey,
+                )
+              : DiSalesTile.fallbackFromName(
+                  name: li.name,
+                  description: li.description,
+                );
+
+          final nameForDraft = li.name.trim().isEmpty ? null : li.name.trim();
 
           return QuoteLineDraft(
             tile: tile,
             quantity: li.quantity.round(),
             rate: li.rate,
-            description: li.name,
-            lineItemId: li.lineItemId,
+            description: nameForDraft,
+            lineItemId: (li.lineItemId ?? '').trim().isEmpty
+                ? null
+                : li.lineItemId,
           );
         })
         .toList(growable: false);
 
     return QuoteDraft(
       contactId: (q.customerId ?? '').trim().isEmpty ? null : q.customerId,
-      contactName: (q.customerName).trim().isEmpty ? null : q.customerName,
+      contactName: q.customerName.trim().isEmpty ? null : q.customerName.trim(),
       customerNotes: q.notes,
       reference: q.referenceNumber,
       currencyCode: q.currencyCode,

@@ -1,5 +1,6 @@
 // lib/app/afyakit_app.dart
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,8 +10,6 @@ import 'package:afyakit/core/branding/services/web_branding.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/auth/widgets/auth_gate.dart';
-
-// ✅ NEW
 import 'package:afyakit/shared/theme/app_theme_overrides.dart';
 
 class AfyaKitApp extends ConsumerWidget {
@@ -50,9 +49,42 @@ class AfyaKitApp extends ConsumerWidget {
           debugShowCheckedModeBanner: false,
           navigatorKey: appNavigatorKey,
           scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
+
           // ✅ Apply “Home curves” everywhere
           theme: applyHomeLook(baseTheme),
+
+          // ✅ Auth gate
           home: const AuthGate(),
+
+          // ✅ Web stabilization layer (fixes mouse_tracker assertion triggers)
+          builder: (context, child) {
+            Widget w = child ?? const SizedBox.shrink();
+
+            if (kIsWeb) {
+              // 1) Tooltips are implemented with overlays + mouse tracking on web.
+              //    When combined with frequent rebuilds (Riverpod) they can trigger:
+              //    mouse_tracker.dart assertion: !_debugDuringDeviceUpdate
+              w = TooltipTheme(
+                data: const TooltipThemeData(
+                  waitDuration: Duration(days: 365), // effectively disables
+                ),
+                child: w,
+              );
+
+              // 2) Hover/splash/highlight can contribute to hover-driven churn.
+              //    This is a safe, pragmatic web-only stability tweak.
+              w = Theme(
+                data: Theme.of(context).copyWith(
+                  hoverColor: Colors.transparent,
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                ),
+                child: w,
+              );
+            }
+
+            return w;
+          },
         );
       },
     );
