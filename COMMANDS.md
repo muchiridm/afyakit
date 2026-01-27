@@ -1,108 +1,161 @@
-# COMMANDS.md
+# AfyaKit — Developer Commands
 
-# ─────────────────────────────────────────────
+This project uses a multi-tenant Flutter web architecture driven by a single
+entry point (`lib/main.dart`) and controlled via `--dart-define`.
 
-# 0) One time per shell
+The Makefile standardizes development, release, and deployment flows for
+tenant apps and HQ.
 
-# ─────────────────────────────────────────────
+---
+
+ONE-TIME SETUP (per shell)
 
 export TENANTS="afyakit danabtmc dawapap"
 
-# Now `make deploy-all`, `make web-all`, `make run-web-all`, etc. know what to loop.
+This enables:
 
-# ─────────────────────────────────────────────
+- run-web-all
+- web-all
+- deploy-all
+- release-web-all
 
-# 1) Dev – Web (per tenant, Chrome)
+---
 
-# ─────────────────────────────────────────────
+DEVELOPMENT — WEB (CHROME)
 
+Run a single tenant (Chrome, fixed port :5000):
+
+make run-web dawapap
 make run-web afyakit
 make run-web danabtmc
-make run-web dawapap
-make run-web rpmoc
 
-# Or launch all (each on its own port, from WEB_PORT_BASE=5000)
+Run all tenants at once (each on its own port starting from 5000):
 
 make run-web-all
 
-# Uses $TENANTS
+Run HQ in Chrome:
 
-# ─────────────────────────────────────────────
+make run-hq-web
 
-# 2) Dev – Device / Android
+Notes:
 
-# ─────────────────────────────────────────────
+- Uses flutter run
+- No service worker caching
+- Fast reload
+- Icons always render correctly in dev mode
 
+---
+
+DEVELOPMENT — ANDROID / DEVICE
+
+Run a single tenant on Android/emulator:
+
+make run dawapap
 make run afyakit
 make run danabtmc
-make run dawapap
-make run rpmoc
 
-# Or run all tenants sequentially on the same device/emulator
+Run all tenants sequentially on the same device:
 
 make run-android-all
 
-# Uses $TENANTS
+---
 
-# ─────────────────────────────────────────────
+UTILITY COMMANDS
 
-# 3) Build web bundle (per tenant)
+List connected devices:
 
-# ─────────────────────────────────────────────
+make devices
 
-make web afyakit
-make web danabtmc
+Flutter diagnostics:
+
+make doctor
+
+Fetch dependencies:
+
+make pubget
+
+Inspect active environment and dart-defines:
+
+make env-check dawapap
+
+---
+
+RELEASE — WEB (TENANT)
+
+IMPORTANT:
+Release builds enforce settings required for Chrome production:
+
+- Material icon tree-shaking disabled
+- CanvasKit renderer forced
+- Deterministic asset output
+
+Build web bundle only:
+
 make web dawapap
 
-# Build all tenants (loops $TENANTS)
+Deploy existing build:
 
-make web-all
+make deploy dawapap
 
-# ─────────────────────────────────────────────
-
-# 4) Deploy web per tenant (site-specific firebase.<site>.json)
-
-# ─────────────────────────────────────────────
-
-make deploy afyakit # uses firebase.afyakit.json if present, else firebase.json
-make deploy danabtmc # uses firebase.danabtmc.json if present, else firebase.json
-make deploy dawapap # uses firebase.dawapap.json if present, else firebase.json
-
-# Deploy all tenants (loops $TENANTS)
-
-make deploy-all
-
-# Build + deploy single tenant
+Build + deploy (recommended):
 
 make release-web dawapap
 make release-web afyakit
 make release-web danabtmc
 
-# Build + deploy all tenants
+---
+
+RELEASE — WEB (ALL TENANTS)
+
+Build all tenants:
+
+make web-all
+
+Deploy all tenants:
+
+make deploy-all
+
+Build + deploy all tenants:
 
 make release-web-all
 
-# ─────────────────────────────────────────────
+---
 
-# 5) HQ app
+RELEASE — HQ
 
-# ─────────────────────────────────────────────
+HQ uses the same entrypoint, switched by:
 
-# HQ uses the SAME entrypoint, switched by APP=hq
+--dart-define=APP=hq
 
-# Run HQ on Chrome (fixed port :5000)
-
-make run-hq-web
-
-# Run HQ on device
-
-make run-hq
-
-# Build + deploy HQ
+Build HQ web:
 
 make web-hq
+
+Deploy HQ:
+
 make deploy-hq
 
-# One-liner
+Build + deploy HQ:
 
 make release-web-hq
+
+---
+
+CLEAN / RECOVERY
+
+If Chrome behaves badly (icons missing, fonts not loading, odd caching):
+
+make web-clean
+make release-web dawapap
+
+---
+
+MENTAL MODEL
+
+If it works in `run-web` but fails in production Chrome, it is ALWAYS a
+release build configuration issue — never your UI code.
+
+Firefox is forgiving.
+Chrome is not.
+
+This Makefile exists to keep Chrome honest.

@@ -22,7 +22,7 @@ import 'package:afyakit/features/inventory/records/deliveries/controllers/delive
 import 'package:afyakit/features/inventory/batches/screens/batch_editor_screen.dart';
 import 'package:afyakit/features/inventory/views/controllers/inventory_view_state.dart';
 
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/features/inventory/shared/sku_batch_matcher.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
 /// 🎯 ViewController family — scoped per ItemType

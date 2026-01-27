@@ -147,6 +147,11 @@ final class AfyaKitClient {
               'status=${e.response?.statusCode}',
             );
             debugPrint('💥 [api] msg=${e.message}');
+
+            final data = e.response?.data;
+            if (data != null) {
+              debugPrint('💥 [api] body=$data');
+            }
           }
           h.next(e);
         },

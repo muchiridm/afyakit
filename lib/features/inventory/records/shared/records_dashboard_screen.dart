@@ -1,22 +1,21 @@
+import 'package:flutter/material.dart';
+
 import 'package:afyakit/features/inventory/records/deliveries/screens/delivery_records_screen.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_records_screen.dart';
 import 'package:afyakit/features/inventory/records/reorder/screens/reorder_records_screen.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:flutter/material.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class RecordsDashboardScreen extends StatelessWidget {
   const RecordsDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BaseScreen(
+    return AppPage(
       scrollable: false,
-      maxContentWidth: 800,
-      header: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: ScreenHeader('Records Dashboard'),
-      ),
+      maxWidth: 800,
+      header: const AppHeader(title: 'Records Dashboard'),
       body: Center(
         child: Wrap(
           spacing: 20,

@@ -1,16 +1,18 @@
-import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_engine.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_controller.dart';
-
-import 'package:afyakit/features/inventory/records/deliveries/models/delivery_review_summary.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
-import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+
+import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
+import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
+import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_controller.dart';
+import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_engine.dart';
+import 'package:afyakit/features/inventory/records/deliveries/models/delivery_review_summary.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 
 class DeliverySessionReviewScreen extends ConsumerWidget {
   const DeliverySessionReviewScreen({super.key});
@@ -26,8 +28,9 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
     final dispensaries = ref.watch(allDispensariesProvider);
 
     if (!session.isActive || session.deliveryId == null) {
-      return const BaseScreen(
-        header: ScreenHeader('Delivery Preview'),
+      return const AppPage(
+        scrollable: false,
+        header: AppHeader(title: 'Delivery Preview'),
         body: Center(child: Text('⚠️ No active delivery session found.')),
       );
     }
@@ -35,12 +38,14 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
     // 1) Wait for the batches stream first (avoid false "empty")
     final batchesAsync = ref.watch(batchRecordsStreamProvider(tenantId));
     return batchesAsync.when(
-      loading: () => const BaseScreen(
-        header: ScreenHeader('Delivery Preview'),
+      loading: () => const AppPage(
+        scrollable: false,
+        header: AppHeader(title: 'Delivery Preview'),
         body: Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => BaseScreen(
-        header: const ScreenHeader('Delivery Preview'),
+      error: (e, _) => const AppPage(
+        scrollable: false,
+        header: AppHeader(title: 'Delivery Preview'),
         body: Center(child: Text('❌ Batches failed to load')),
       ),
       data: (batches) {
@@ -57,8 +62,9 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
         );
 
         if (linked.isEmpty) {
-          return BaseScreen(
-            header: const ScreenHeader('Delivery Preview'),
+          return AppPage(
+            scrollable: false,
+            header: const AppHeader(title: 'Delivery Preview'),
             body: Center(
               child: Text(
                 'No batches found in this delivery ($target).\n'
@@ -71,26 +77,31 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
 
         // 2) We have linked batches → build the proper summary via controller (actions)
         final ctrl = ref.read(deliverySessionControllerProvider);
+
         return FutureBuilder<DeliveryReviewSummary?>(
           future: ctrl.review(ref),
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const BaseScreen(
-                header: ScreenHeader('Delivery Preview'),
+              return const AppPage(
+                scrollable: false,
+                header: AppHeader(title: 'Delivery Preview'),
                 body: Center(child: CircularProgressIndicator()),
               );
             }
+
             if (snapshot.hasError) {
-              return BaseScreen(
-                header: const ScreenHeader('Delivery Preview'),
+              return const AppPage(
+                scrollable: false,
+                header: AppHeader(title: 'Delivery Preview'),
                 body: Center(child: Text('❌ Failed to build summary')),
               );
             }
 
             final summary = snapshot.data;
             if (summary == null) {
-              return BaseScreen(
-                header: const ScreenHeader('Delivery Preview'),
+              return const AppPage(
+                scrollable: false,
+                header: AppHeader(title: 'Delivery Preview'),
                 body: Center(
                   child: Text(
                     'No batches found after summary build. Try again.',
@@ -100,9 +111,11 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
               );
             }
 
-            return BaseScreen(
+            return AppPage(
               scrollable: true,
-              header: ScreenHeader('Preview: ${summary.summary.deliveryId}'),
+              header: AppHeader(
+                title: 'Preview: ${summary.summary.deliveryId}',
+              ),
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

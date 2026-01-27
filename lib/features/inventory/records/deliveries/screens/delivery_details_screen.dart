@@ -12,11 +12,13 @@ import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';
 
 import 'package:afyakit/features/inventory/records/shared/detail_record_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:afyakit/shared/services/sku_batch_matcher.dart';
+import 'package:afyakit/features/inventory/shared/sku_batch_matcher.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:afyakit/shared/utils/string_utils.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class DeliveryDetailScreen extends ConsumerWidget {
   final DeliveryRecord summary;
@@ -36,10 +38,17 @@ class DeliveryDetailScreen extends ConsumerWidget {
     final consAsync = ref.watch(consumableItemsStreamProvider(tenantId));
     final equipAsync = ref.watch(equipmentItemsStreamProvider(tenantId));
 
-    Widget loading() =>
-        const Scaffold(body: Center(child: CircularProgressIndicator()));
-    Widget error(Object e, StackTrace _) =>
-        Scaffold(body: Center(child: Text('Error loading data: $e')));
+    Widget loading() => const AppPage(
+      scrollable: false,
+      header: AppHeader(title: 'Delivery'),
+      body: Center(child: CircularProgressIndicator()),
+    );
+
+    Widget error(Object e, StackTrace _) => AppPage(
+      scrollable: false,
+      header: const AppHeader(title: 'Delivery'),
+      body: Center(child: Text('Error loading data: $e')),
+    );
 
     return medsAsync.when(
       loading: loading,
@@ -67,8 +76,8 @@ class DeliveryDetailScreen extends ConsumerWidget {
 
     return DetailRecordScreen(
       maxContentWidth: 900,
-      header: ScreenHeader(
-        'Delivery: ${summary.deliveryId}',
+      header: AppHeader(
+        title: 'Delivery: ${summary.deliveryId}',
         trailing: Text(
           'Total Qty: ${summary.totalQuantity}',
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -154,7 +163,7 @@ class DeliveryDetailScreen extends ConsumerWidget {
           DateTime.now().add(const Duration(days: 30)),
         );
 
-    final storeName = resolveLocationName(batch.storeId, stores, []);
+    final storeName = resolveLocationName(batch.storeId, stores, const []);
     final detailLine =
         'Qty: ${batch.quantity} • Store: $storeName • ${_formatEnum(batch.itemType.name)}$expiryText';
 

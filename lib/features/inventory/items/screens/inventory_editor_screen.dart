@@ -1,24 +1,29 @@
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/features/inventory/items/controllers/forms/consumable_controller.dart';
-import 'package:afyakit/features/inventory/items/controllers/forms/equipment_controller.dart';
-import 'package:afyakit/features/inventory/items/controllers/forms/medication_controller.dart';
-import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/consumable_form.dart';
-import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/equipment_form.dart';
-import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/medication_form.dart';
-import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
-import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
-import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+
+import 'package:afyakit/features/inventory/items/controllers/forms/consumable_controller.dart';
+import 'package:afyakit/features/inventory/items/controllers/forms/equipment_controller.dart';
+import 'package:afyakit/features/inventory/items/controllers/forms/medication_controller.dart';
+
+import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
+import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
+import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
+import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
+
+import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/consumable_form.dart';
+import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/equipment_form.dart';
+import 'package:afyakit/features/inventory/items/screens/inventory_editor_components/forms/medication_form.dart';
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:afyakit/shared/utils/resolvers/resolve_item_type.dart';
+
 class InventoryEditorScreen extends ConsumerStatefulWidget {
-  final dynamic item;
+  final Object? item;
   final ItemType? itemType;
 
   const InventoryEditorScreen({super.key, required this.item, this.itemType});
@@ -44,11 +49,21 @@ class _InventoryEditorScreenState extends ConsumerState<InventoryEditorScreen> {
     final sessionAsync = ref.watch(currentUserProvider);
 
     return sessionAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error loading user: $e')),
+      loading: () => const AppPage(
+        scrollable: false,
+        maxWidth: 800,
+        header: AppHeader(title: 'Inventory Manager'),
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => AppPage(
+        scrollable: false,
+        maxWidth: 800,
+        header: const AppHeader(title: 'Inventory Manager'),
+        body: Center(child: Text('Error loading user: $e')),
+      ),
       data: (user) {
-        return BaseScreen(
-          maxContentWidth: 800,
+        return AppPage(
+          maxWidth: 800,
           scrollable: false,
           header: _buildHeader(user),
           body: _buildForm(),
@@ -60,14 +75,14 @@ class _InventoryEditorScreenState extends ConsumerState<InventoryEditorScreen> {
   Widget _buildHeader(AuthUser? user) {
     final canDelete = widget.item != null;
 
-    return ScreenHeader(
-      'Inventory Manager',
+    return AppHeader(
+      title: 'Inventory Manager',
       trailing: canDelete ? _buildDeleteButton() : null,
     );
   }
 
   Widget _buildDeleteButton() {
-    final itemId = widget.item?.id;
+    final itemId = _extractItemId(widget.item);
     if (itemId == null) return const SizedBox.shrink();
 
     return IconButton(
@@ -92,23 +107,36 @@ class _InventoryEditorScreenState extends ConsumerState<InventoryEditorScreen> {
     );
   }
 
+  /// Avoids dynamic. If your base item type shares `id`, replace this with a
+  /// proper interface / base class cast.
+  String? _extractItemId(Object? item) {
+    if (item == null) return null;
+    // Common case: your item models have an `id` getter.
+    // This is still runtime-based but doesn't poison the whole widget with `dynamic`.
+    final obj = item;
+    try {
+      // ignore: avoid_dynamic_calls
+      final id = (obj as dynamic).id as Object?;
+      return id is String && id.trim().isNotEmpty ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _buildForm() {
     return switch (_resolvedType) {
       ItemType.medication =>
         widget.item != null
             ? MedicationForm(item: widget.item as MedicationItem)
             : const MedicationForm(),
-
       ItemType.consumable =>
         widget.item != null
             ? ConsumableForm(item: widget.item as ConsumableItem)
             : const ConsumableForm(),
-
       ItemType.equipment =>
         widget.item != null
             ? EquipmentForm(item: widget.item as EquipmentItem)
             : const EquipmentForm(),
-
       ItemType.unknown => const Center(
         child: Text('⚠️ Unknown item type. Cannot render form.'),
       ),

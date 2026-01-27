@@ -1,3 +1,7 @@
+import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
@@ -6,18 +10,15 @@ import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_user/utils/user_format.dart';
 import 'package:afyakit/core/auth_user/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/core/auth_user/widgets/user_profile_card.dart';
-import 'package:afyakit/features/hq/users/tenant_users_provider.dart';
+
+import 'package:afyakit/features/app_hq/users/tenant_users_provider.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class UserProfileManagerScreen extends ConsumerWidget {
   const UserProfileManagerScreen({super.key});
@@ -27,15 +28,24 @@ class UserProfileManagerScreen extends ConsumerWidget {
     final currentUserAsync = ref.watch(currentUserProvider);
 
     return currentUserAsync.when(
-      loading: () =>
-          const BaseScreen(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => BaseScreen(
+      loading: () => const AppPage(
+        maxWidth: 900,
+        scrollable: false,
+        header: AppHeader(title: 'Manage User Profiles'),
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => AppPage(
+        maxWidth: 900,
+        scrollable: false,
+        header: const AppHeader(title: 'Manage User Profiles'),
         body: Center(child: Text('❌ Failed to load current user: $err')),
       ),
       data: (currentUser) {
-        // Guard: only staff-like users with manage rights can see this page
         if (currentUser == null || !currentUser.canManageUsers) {
-          return const BaseScreen(
+          return const AppPage(
+            maxWidth: 900,
+            scrollable: false,
+            header: AppHeader(title: 'Manage User Profiles'),
             body: Center(
               child: Text('🚫 You do not have access to this page.'),
             ),
@@ -47,13 +57,10 @@ class UserProfileManagerScreen extends ConsumerWidget {
         );
         final usersAsync = ref.watch(tenantUsersProvider);
 
-        return BaseScreen(
-          maxContentWidth: 900,
+        return AppPage(
+          maxWidth: 900,
           scrollable: true,
-          header: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: ScreenHeader('Manage User Profiles'),
-          ),
+          header: const AppHeader(title: 'Manage User Profiles'),
           body: Padding(
             padding: const EdgeInsets.all(16),
             child: storesAsync.when(
@@ -76,7 +83,6 @@ class UserProfileManagerScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Optional: put current user first, then sort others by name
                     final sorted = [...users];
                     sorted.sort((a, b) {
                       if (a.uid == currentUser.uid) return -1;
@@ -111,17 +117,13 @@ class UserProfileManagerScreen extends ConsumerWidget {
                             phoneNumber: u.phoneNumber,
                             userTypeLabel: u.type.label,
                             roleLabel: staffRoleLabel(u),
-                            roleValue: null, // still read-only for now
+                            roleValue: null,
                             statusLabel: u.status.label,
                             staffRoleLabels: staffRoleLabels,
                             storeLabels: storeLabels,
-                            onAvatarTapped: () {
-                              _openEditor(context, u);
-                            },
-                            onTap: () {
-                              _openEditor(context, u);
-                            },
-                            onRoleChanged: null, // keep read-only
+                            onAvatarTapped: () => _openEditor(context, u),
+                            onTap: () => _openEditor(context, u),
+                            onRoleChanged: null,
                             onEditStoresTapped: null,
                             onRemoveStore: null,
                             onDeleteUser: null,

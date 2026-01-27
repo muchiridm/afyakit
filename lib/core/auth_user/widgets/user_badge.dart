@@ -1,7 +1,7 @@
 import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/shared/home/models/home_mode.dart';
-import 'package:afyakit/shared/home/providers/home_mode_provider.dart';
+import 'package:afyakit/features/home/models/home_mode.dart';
+import 'package:afyakit/features/home/providers/home_mode_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,6 +1,6 @@
 // lib/core/inventory/controllers/inventory_controller.dart
 
-import 'package:afyakit/app/app_navigator.dart';
+import 'package:afyakit/core/app/app_navigator.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/core/api/afyakit/routes.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';

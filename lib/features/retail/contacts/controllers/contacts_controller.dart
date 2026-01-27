@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/zoho_contact.dart';
+import '../../shared/models/zoho_contact.dart';
 import '../services/zoho_contacts_service.dart';
 import '../widgets/contact_editor_sheet.dart';
 import '../widgets/contact_sheet_models.dart';
@@ -30,11 +30,13 @@ class ContactsState {
 
   bool get busy => loadingList || loadingDetail || saving;
 
+  static const Object _unset = Object();
+
   ContactsState copyWith({
     bool? loadingList,
     bool? loadingDetail,
     bool? saving,
-    String? error,
+    Object? error = _unset,
     String? search,
     List<ZohoContact>? items,
   }) {
@@ -42,7 +44,7 @@ class ContactsState {
       loadingList: loadingList ?? this.loadingList,
       loadingDetail: loadingDetail ?? this.loadingDetail,
       saving: saving ?? this.saving,
-      error: error,
+      error: identical(error, _unset) ? this.error : error as String?,
       search: search ?? this.search,
       items: items ?? this.items,
     );
@@ -52,7 +54,12 @@ class ContactsState {
 final contactsControllerProvider =
     StateNotifierProvider.autoDispose<ContactsController, ContactsState>((ref) {
       final ctl = ContactsController(ref);
-      ctl.refresh(); // ok
+
+      // ✅ IMPORTANT:
+      // Don't call refresh() synchronously during provider creation.
+      // This can trigger build/layout assertions and leave the UI half-built.
+      Future.microtask(ctl.refresh);
+
       return ctl;
     });
 
@@ -86,6 +93,7 @@ class ContactsController extends StateNotifier<ContactsState> {
   void setSearch(String v) {
     if (!_alive) return;
 
+    // keep error sticky unless we explicitly clear it
     state = state.copyWith(search: v, error: null);
 
     _debounce?.cancel();
@@ -104,8 +112,7 @@ class ContactsController extends StateNotifier<ContactsState> {
     final seq = ++_refreshSeq;
     final myToken = _token;
 
-    // Don’t clobber a save with list loading UX.
-    // Still allow refresh, but keep saving true if it’s in progress.
+    // Don't clobber saving; still show list loading.
     state = state.copyWith(loadingList: true, error: null);
 
     try {
@@ -150,8 +157,7 @@ class ContactsController extends StateNotifier<ContactsState> {
         items: <ZohoContact>[created, ...state.items],
       );
 
-      // If search is active, the optimistic insert may not match server search results.
-      // Refresh silently to reconcile.
+      // If search is active, reconcile silently
       if (state.search.trim().isNotEmpty) {
         unawaited(refresh());
       }

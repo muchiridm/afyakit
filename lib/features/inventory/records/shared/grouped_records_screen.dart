@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/layout/app_layout.dart';
 
 class GroupedRecordsScreen<T> extends StatelessWidget {
   final AsyncValue<List<T>> recordsAsync;
   final String title;
   final DateTime Function(T record) dateExtractor;
   final Widget Function(T record) recordTileBuilder;
-  final double? maxContentWidth; // 👈 NEW
+  final double? maxContentWidth;
 
   const GroupedRecordsScreen({
     super.key,
@@ -18,27 +19,32 @@ class GroupedRecordsScreen<T> extends StatelessWidget {
     required this.title,
     required this.dateExtractor,
     required this.recordTileBuilder,
-    this.maxContentWidth, // 👈 Optional
+    this.maxContentWidth,
   });
 
   @override
   Widget build(BuildContext context) {
+    final maxW = maxContentWidth ?? AppLayout.pageMaxW;
+
     return recordsAsync.when(
-      loading: () => BaseScreen(
+      loading: () => AppPage(
         scrollable: false,
-        header: ScreenHeader(title),
+        maxWidth: maxW,
+        header: AppHeader(title: title),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (error, _) => BaseScreen(
+      error: (error, _) => AppPage(
         scrollable: false,
-        header: ScreenHeader(title),
+        maxWidth: maxW,
+        header: AppHeader(title: title),
         body: Center(child: Text('❌ Error loading records: $error')),
       ),
       data: (records) {
         if (records.isEmpty) {
-          return BaseScreen(
+          return AppPage(
             scrollable: false,
-            header: ScreenHeader(title),
+            maxWidth: maxW,
+            header: AppHeader(title: title),
             body: const Center(
               child: Text(
                 'No records found.',
@@ -54,10 +60,10 @@ class GroupedRecordsScreen<T> extends StatelessWidget {
         final sortedYears = grouped.entries.toList()
           ..sort((a, b) => b.key.compareTo(a.key)); // descending
 
-        return BaseScreen(
+        return AppPage(
           scrollable: true,
-          maxContentWidth: maxContentWidth, // 👈 Apply it
-          header: ScreenHeader(title),
+          maxWidth: maxW,
+          header: AppHeader(title: title),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: sortedYears.map((yearEntry) {

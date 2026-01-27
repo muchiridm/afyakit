@@ -1,9 +1,10 @@
 import 'package:afyakit/features/backup/backup_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/shared/widgets/base_screen.dart';
-import 'package:afyakit/shared/widgets/screen_header.dart';
-import 'package:flutter/foundation.dart'; // for kIsWeb
+import 'package:flutter/foundation.dart'; // kIsWeb
+
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class BackupScreen extends ConsumerStatefulWidget {
   const BackupScreen({super.key});
@@ -30,9 +31,10 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   Widget build(BuildContext context) {
     final isLoading = ref.watch(backupControllerProvider);
 
-    return BaseScreen(
-      maxContentWidth: 800,
-      header: const ScreenHeader('Backup Firestore'),
+    return AppPage(
+      maxWidth: 800,
+      scrollable: false,
+      header: const AppHeader(title: 'Backup Firestore'),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: isLoading

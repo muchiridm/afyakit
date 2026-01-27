@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../models/zoho_contact.dart';
+import '../../shared/models/zoho_contact.dart';
 import 'contact_sheet_models.dart';
 
 enum _ContactKind { person, companyOnly }
