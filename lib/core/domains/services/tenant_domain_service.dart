@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/domains/models/domain_binding.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:dio/dio.dart';

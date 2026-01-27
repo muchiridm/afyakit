@@ -45,23 +45,28 @@ class TenantProfile {
   }
 
   factory TenantProfile.fromFirestore(String id, Json d) {
-    // v2 shape: `profile` nested map (client-facing + SEO fields).
-    // v1 shape: those fields at the root.
+    // v2: profile nested map; v1: root fields
     final Json profileMap = _json(d['profile']).isNotEmpty
         ? _json(d['profile'])
         : d;
 
-    final displayName = _str(d['displayName'], fallback: id);
+    final displayName = _str(
+      profileMap['displayName'] ?? d['displayName'],
+      fallback: id,
+    );
 
     final primaryColorHex = _str(
-      d['primaryColorHex'] ?? d['primaryColor'],
+      profileMap['primaryColorHex'] ??
+          profileMap['primaryColor'] ??
+          d['primaryColorHex'] ??
+          d['primaryColor'],
       fallback: '#2196F3',
     );
 
     final featuresMap = _json(d['features']);
     final assetsMap = _json(d['assets']);
 
-    final statusStr = _strOrNull(d['status']); // tolerate non-string values
+    final statusStr = _strOrNull(d['status']);
     final status = TenantStatusX.parse(statusStr);
 
     return TenantProfile(
@@ -85,10 +90,6 @@ class TenantProfile {
 
   bool get isActive => status.isActive;
 
-  /// Title suitable for browser tab / SEO.
-  ///
-  /// Priority:
-  ///   details.seoTitle → displayName → id
   String get webTitle {
     final seo = details.seoTitle?.trim();
     if (seo != null && seo.isNotEmpty) return seo;
@@ -96,10 +97,6 @@ class TenantProfile {
     return id;
   }
 
-  /// Description suitable for <meta name="description">.
-  ///
-  /// Priority:
-  ///   details.seoDescription → tagline → supportNote → empty string
   String get webDescription {
     final seo = details.seoDescription?.trim();
     if (seo != null && seo.isNotEmpty) return seo;
@@ -114,17 +111,16 @@ class TenantProfile {
   }
 }
 
-/// Local, self-contained color parser
 Color _colorFromHex(String hex, {String fallback = '#2196F3'}) {
   String sanitize(String s) {
     var h = s.trim();
     if (h.startsWith('#')) h = h.substring(1);
     if (h.startsWith('0x') || h.startsWith('0X')) h = h.substring(2);
     if (h.length == 3) {
-      h = '${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}'; // #RGB → RRGGBB
+      h = '${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}';
     }
     if (h.length == 6) {
-      h = 'FF$h'; // add alpha
+      h = 'FF$h';
     }
     return h;
   }
@@ -140,10 +136,7 @@ Color _colorFromHex(String hex, {String fallback = '#2196F3'}) {
   return Color(value);
 }
 
-/// Web-specific asset helpers on top of TenantProfile.
 extension TenantProfileWebAssetsX on TenantProfile {
-  /// Where web assets live in Storage for this tenant.
-  /// public/{tenantSlug}/web/...
   String get _webAssetBasePath => 'public/$id/web';
 
   String get _webBucket => assets.bucket.isNotEmpty
@@ -152,15 +145,12 @@ extension TenantProfileWebAssetsX on TenantProfile {
 
   String get _versionSuffix => assets.version > 0 ? '?v=${assets.version}' : '';
 
-  /// favicon.png
   String get faviconUrl =>
       'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/favicon.png$_versionSuffix';
 
-  /// icon-192.png
   String get icon192Url =>
       'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/icon-192.png$_versionSuffix';
 
-  /// icon-512.png
   String get icon512Url =>
       'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/icon-512.png$_versionSuffix';
 }

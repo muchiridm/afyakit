@@ -1,7 +1,7 @@
 // lib/features/retail/payments/mpesa/services/mpesa_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';

@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';

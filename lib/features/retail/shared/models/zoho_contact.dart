@@ -66,6 +66,7 @@ class ZohoContact {
     this.personContact,
     this.status,
     this.contactType, // NEW
+    this.referenceNumber, // ✅ NEW
   });
 
   final String contactId;
@@ -76,6 +77,10 @@ class ZohoContact {
 
   /// "customer" | "vendor" | "customer_vendor" | null
   final String? contactType;
+
+  /// ✅ Deterministic linking key from backend (Zoho Books: reference_number).
+  /// We’ll use this for debugging and for your DP account number linking.
+  final String? referenceNumber;
 
   bool get isActive => (status ?? '').toLowerCase() != 'inactive';
 
@@ -142,6 +147,11 @@ class ZohoContact {
       j['contact_type'] ?? j['type'] ?? j['contactType'],
     );
 
+    // ✅ NEW: reference_number (snake) or referenceNumber (camel)
+    final referenceNumber = readStringOrNull(
+      j['reference_number'] ?? j['referenceNumber'],
+    );
+
     PersonContact? person;
 
     // New backend shape: person_contact is nested
@@ -183,6 +193,9 @@ class ZohoContact {
       personContact: person,
       status: status,
       contactType: contactType,
+      referenceNumber: (referenceNumber ?? '').trim().isNotEmpty
+          ? referenceNumber!.trim()
+          : null,
     );
   }
 
@@ -254,10 +267,13 @@ class ZohoContact {
     }
 
     final company = (companyName ?? '').trim();
+    final ref = (referenceNumber ?? '').trim();
 
     return <String, Object?>{
       'display_name': dn,
       if (company.isNotEmpty) 'company_name': company,
+      // ✅ NEW: only include if you actually have it (DP-xxxxxx or fallback)
+      if (ref.isNotEmpty) 'reference_number': ref,
       if (personContact != null)
         'person_contact': personContact!.toJsonForUpsert(),
     };
@@ -270,6 +286,7 @@ class ZohoContact {
     PersonContact? personContact,
     String? status,
     String? contactType,
+    String? referenceNumber,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
@@ -278,6 +295,7 @@ class ZohoContact {
       personContact: personContact ?? this.personContact,
       status: status ?? this.status,
       contactType: contactType ?? this.contactType,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
     );
   }
 }
@@ -288,11 +306,16 @@ class ContactUpdatePatch {
     this.displayName,
     this.companyName,
     this.personContact,
+    this.referenceNumber, // ✅ NEW
   });
 
   final String? displayName;
   final String? companyName;
   final PersonContactPatch? personContact;
+
+  /// ✅ Optional patch for backend reference_number
+  /// (you may or may not expose this in UI; useful for repair tooling)
+  final String? referenceNumber;
 
   Map<String, Object?> toJson() {
     final out = <String, Object?>{};
@@ -307,6 +330,11 @@ class ContactUpdatePatch {
       out['company_name'] = companyName!.trim().isEmpty
           ? ''
           : companyName!.trim();
+    }
+
+    if (referenceNumber != null) {
+      final rn = referenceNumber!.trim();
+      out['reference_number'] = rn.isEmpty ? '' : rn;
     }
 
     if (personContact != null) {

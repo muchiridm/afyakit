@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart' as dio;
 import 'package:http/http.dart' as http;
 
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/features/inventory/import/importer/models/import_type_x.dart';
 import 'package:afyakit/features/inventory/import/importer/models/inventory_import_result.dart';

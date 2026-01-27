@@ -1,8 +1,55 @@
-// lib/core/auth_users/models/auth_user_model.dart
-
 import 'package:afyakit/core/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth_user/extensions/user_type_x.dart';
+
+/// Backend-aligned Zoho mapping for this auth user (tenant-scoped).
+class AuthUserZohoLink {
+  final String contactId;
+  final String? contactPersonId;
+
+  /// ISO timestamp string (backend uses serverTimestamp; API returns ISO).
+  final String? linkedAt;
+
+  /// How the link was established.
+  /// Keep this permissive: backend may evolve strategies later.
+  final String? matchStrategy; // 'phone' | 'email' | 'manual' | 'created'
+
+  const AuthUserZohoLink({
+    required this.contactId,
+    this.contactPersonId,
+    this.linkedAt,
+    this.matchStrategy,
+  });
+
+  factory AuthUserZohoLink.fromMap(Map<String, dynamic> json) {
+    final contactId = (json['contactId'] ?? '').toString().trim();
+    if (contactId.isEmpty) {
+      throw ArgumentError('AuthUserZohoLink requires contactId');
+    }
+
+    final contactPersonId = (json['contactPersonId'] as String?)?.trim();
+    final linkedAt = (json['linkedAt'] as String?)?.trim();
+    final matchStrategy = (json['matchStrategy'] as String?)?.trim();
+
+    return AuthUserZohoLink(
+      contactId: contactId,
+      contactPersonId: (contactPersonId != null && contactPersonId.isNotEmpty)
+          ? contactPersonId
+          : null,
+      linkedAt: (linkedAt != null && linkedAt.isNotEmpty) ? linkedAt : null,
+      matchStrategy: (matchStrategy != null && matchStrategy.isNotEmpty)
+          ? matchStrategy
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'contactId': contactId,
+    if (contactPersonId != null) 'contactPersonId': contactPersonId,
+    if (linkedAt != null) 'linkedAt': linkedAt,
+    if (matchStrategy != null) 'matchStrategy': matchStrategy,
+  };
+}
 
 class AuthUser {
   // ────────────── Identity (immutable) ──────────────
@@ -28,6 +75,9 @@ class AuthUser {
   /// in sync with external systems (e.g. Zoho Books contact_number).
   final String? accountNumber;
 
+  /// Backend-owned mapping to Zoho Books contact/person (tenant-scoped).
+  final AuthUserZohoLink? zoho;
+
   /// Normalized Firebase custom claims for this session (optional).
   final Map<String, dynamic>? claims;
 
@@ -51,6 +101,7 @@ class AuthUser {
     this.avatarUrl,
     this.email,
     this.accountNumber,
+    this.zoho,
     this.claims,
     this.isSuperAdmin = false,
     this.staffRoles = const [],
@@ -100,6 +151,19 @@ class AuthUser {
       type = UserType.member;
     }
 
+    // Zoho mapping (optional)
+    AuthUserZohoLink? zoho;
+    final rawZoho = json['zoho'];
+    if (rawZoho is Map) {
+      final map = rawZoho.map((k, v) => MapEntry(k.toString(), v));
+      try {
+        zoho = AuthUserZohoLink.fromMap(Map<String, dynamic>.from(map));
+      } catch (_) {
+        // If malformed, treat as absent (backend should be canonical)
+        zoho = null;
+      }
+    }
+
     return AuthUser(
       uid: uid,
       phoneNumber: phone,
@@ -113,6 +177,7 @@ class AuthUser {
       avatarUrl: (json['avatarUrl'] as String?)?.trim(),
       email: (json['email'] as String?)?.trim(),
       accountNumber: (json['accountNumber'] as String?)?.trim(),
+      zoho: zoho,
       claims: parsedClaims,
       isSuperAdmin: isSuperAdmin,
       staffRoles: parsedStaffRoles,
@@ -132,6 +197,7 @@ class AuthUser {
     String? avatarUrl,
     String? email,
     String? accountNumber,
+    AuthUserZohoLink? zoho,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
@@ -147,6 +213,7 @@ class AuthUser {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       email: email ?? this.email,
       accountNumber: accountNumber ?? this.accountNumber,
+      zoho: zoho ?? this.zoho,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       staffRoles: staffRoles ?? this.staffRoles,
@@ -166,6 +233,7 @@ class AuthUser {
     if (email != null && email!.isNotEmpty) 'email': email,
     if (accountNumber != null && accountNumber!.isNotEmpty)
       'accountNumber': accountNumber,
+    if (zoho != null) 'zoho': zoho!.toMap(),
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
     if (staffRoles.isNotEmpty)

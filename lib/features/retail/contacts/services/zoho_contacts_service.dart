@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
@@ -162,6 +162,10 @@ class ZohoContactsService {
     final patch = ContactUpdatePatch(
       displayName: input.displayName,
       companyName: input.companyName,
+
+      // ✅ NEW: allow updating/repairing reference_number
+      referenceNumber: input.referenceNumber,
+
       personContact: input.personContact == null
           ? const PersonContactPatch(delete: true)
           : PersonContactPatch(

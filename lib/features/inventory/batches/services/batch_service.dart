@@ -1,6 +1,6 @@
 // lib/shared/providers/batch_service.dart
 import 'dart:convert';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/core/auth/providers/token_provider.dart';

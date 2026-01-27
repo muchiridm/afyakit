@@ -9,7 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/config.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/models/start_response.dart';

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
 import 'controllers/catalog_controller.dart';
 import 'catalog_models.dart';

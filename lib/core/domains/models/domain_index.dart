@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../features/app_hq/tenants/utils/tenant_util.dart';
+import '../../app_hq/tenants/utils/tenant_util.dart';
 
 @immutable
 class DomainIndex {
