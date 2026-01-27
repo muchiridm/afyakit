@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/config.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
 import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
 

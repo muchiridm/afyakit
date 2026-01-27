@@ -3,8 +3,8 @@
 import 'package:flutter/widgets.dart';
 
 import 'package:afyakit/core/app/app_mode.dart';
-import 'package:afyakit/core/app/afyakit_app.dart';
-import 'package:afyakit/core/app/hq_app.dart';
+import 'package:afyakit/core/app/app_afyakit.dart';
+import 'package:afyakit/core/app/app_hq.dart';
 
 class AppRoot extends StatelessWidget {
   const AppRoot({super.key, required this.mode});
@@ -15,9 +15,9 @@ class AppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (mode) {
       case AppMode.hq:
-        return const HqApp();
+        return const AppHq();
       case AppMode.tenant:
-        return const AfyaKitApp();
+        return const AppAfyaKit();
     }
   }
 }

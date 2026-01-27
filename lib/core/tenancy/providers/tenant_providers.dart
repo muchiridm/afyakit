@@ -7,8 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
-import 'package:afyakit/features/app_hq/tenants/dtos/team_member_dto.dart';
-import 'package:afyakit/features/app_hq/users/all_users/all_user_model.dart';
+import 'package:afyakit/core/app_hq/tenants/dtos/team_member_dto.dart';
+import 'package:afyakit/core/app_hq/users/all_users/all_user_model.dart';
 
 const _defaultTenant = 'afyakit';
 

@@ -9,7 +9,7 @@ import 'package:intl/intl.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import '../models/quote_draft.dart';

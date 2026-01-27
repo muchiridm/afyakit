@@ -2,7 +2,7 @@
 
 import 'package:afyakit/core/app/app_navigator.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';

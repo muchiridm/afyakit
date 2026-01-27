@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/api/afyakit/routes.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
 import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
