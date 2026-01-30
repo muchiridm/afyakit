@@ -1,6 +1,6 @@
 // lib/core/records/issues/controllers/form/issue_form_engine.dart
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';

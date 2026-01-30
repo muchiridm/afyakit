@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/home/models/home_mode.dart';
 
 import 'package:afyakit/features/home/widgets/common/home_header.dart';
@@ -112,7 +112,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   String _greetingName() {
-    final n = user.displayName.trim();
-    return n.isNotEmpty ? n : user.phoneNumber;
+    final n = user.displayName?.trim();
+    return (n != null && n.isNotEmpty) ? n : user.phoneNumber;
   }
 }

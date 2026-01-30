@@ -1,9 +1,9 @@
 // lib/features/records/issues/controllers/issue_action_controller.dart
 
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/lifecycle/issue_lifecycle_controller.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/action/issue_policy_engine.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +16,7 @@ import 'package:afyakit/features/inventory/records/issues/models/issue_record.da
 import 'package:afyakit/features/inventory/records/issues/models/view_models/issue_action_button.dart';
 import 'package:afyakit/features/inventory/records/issues/services/issue_batch_service.dart';
 
-import 'package:afyakit/core/auth_user/utils/user_format.dart';
+import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
   final tenantId = ref.watch(tenantSlugProvider);

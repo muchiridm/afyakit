@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
 typedef RoleGate = bool Function(AuthUser user);
 typedef ExtraGate = bool Function(WidgetRef ref, AuthUser user);

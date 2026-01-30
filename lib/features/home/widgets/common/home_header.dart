@@ -1,11 +1,11 @@
-import 'package:afyakit/core/auth/widgets/logout_button.dart';
+import 'package:afyakit/core/auth/auth_session/widgets/logout_button.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/features/home/widgets/common/catalog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth_user/widgets/user_badge.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
 import '../../models/home_mode.dart';
 
 // ✅ NEW

@@ -1,6 +1,6 @@
 // 📦 Dependencies
 
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -189,8 +189,8 @@ class StockReportController {
 
     await reportEngine.saveProposedOrders(
       exportedByUid: user.uid,
-      exportedByName: user.displayName.isNotEmpty
-          ? user.displayName
+      exportedByName: (user.displayName?.trim().isNotEmpty == true)
+          ? user.displayName!.trim()
           : 'Unknown',
     );
 

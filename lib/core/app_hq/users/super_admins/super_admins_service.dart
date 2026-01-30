@@ -7,7 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
 /// Network layer for HQ superadmin features + cross-tenant user ops.
 ///

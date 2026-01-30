@@ -18,16 +18,12 @@ class AfyaKitRoutes {
   /// Tenant slug/id used in API base: .../api/:tenantId
   final String tenantId;
 
-  // ─────────────────────────────────────────────
-  // Bases
-  // ─────────────────────────────────────────────
-
   /// Tenant base: https://host/api/:tenantId
   String get _tenantBase => apiBaseUrl(tenantId);
 
   /// Core base: https://host/api
   ///
-  /// We derive it by removing the final path segment if it equals [tenantId].
+  /// Derived by removing the final path segment if it equals [tenantId].
   String get _coreBase {
     final u = Uri.parse(_tenantBase);
 
@@ -39,7 +35,6 @@ class AfyaKitRoutes {
       return u.replace(pathSegments: coreSegs).toString();
     }
 
-    // Fallback: if config already points to core, keep it.
     return u.toString();
   }
 

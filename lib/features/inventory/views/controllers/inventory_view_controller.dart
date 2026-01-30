@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
@@ -205,8 +205,10 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
     final session = ds.readState();
 
     // Prefer displayName, fall back to WhatsApp number
-    final enteredByName = user.displayName.trim().isNotEmpty
-        ? user.displayName.trim()
+    final displayName = user.displayName?.trim();
+
+    final enteredByName = displayName?.isNotEmpty == true
+        ? displayName!
         : user.phoneNumber.trim();
 
     // Backwards-compat: param is still named enteredByEmail, but value is WA number

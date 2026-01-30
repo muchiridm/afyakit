@@ -14,7 +14,7 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/features/inventory/import/importer/models/import_type_x.dart';
 import 'package:afyakit/features/inventory/import/importer/models/inventory_import_result.dart';
-import 'package:afyakit/core/auth/providers/token_provider.dart';
+import 'package:afyakit/core/auth/auth_session/providers/token_provider.dart';
 
 /// Service provider
 final inventoryImportServiceProvider = Provider<InventoryImportService>((ref) {

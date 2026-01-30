@@ -11,7 +11,7 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/app_hq/users/super_admins/super_admins_service.dart';
 import 'package:afyakit/core/app_hq/users/super_admins/super_admin_model.dart';
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/core/app_hq/base/shell/hq_controller.dart';

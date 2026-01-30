@@ -13,11 +13,16 @@ bool _isPublicAuthRoute(Uri uri) {
 
   if (!p.contains('/auth_login/')) return false;
 
+  // IMPORTANT:
+  // - Do NOT treat /auth_login/email/start as always-public.
+  //   It is PUBLIC for login (when caller sets skipAuth),
+  //   but AUTH REQUIRED for purpose=verify_email.
+  //   Route-based skipping would strip Authorization and cause "missing-token".
   const allowed = <String>[
     '/auth_login/check-user-status',
     '/auth_login/wa/start',
     '/auth_login/sms/start',
-    '/auth_login/email/start',
+    // '/auth_login/email/start',  // ❌ REMOVE
     '/auth_login/otp/verify',
   ];
 
@@ -27,6 +32,8 @@ bool _isPublicAuthRoute(Uri uri) {
 bool _shouldSkipAuth(RequestOptions options) {
   final skipAuth = options.extra['skipAuth'] == true;
   if (skipAuth) return true;
+
+  // Keep a tiny allowlist for endpoints that are truly always public.
   return _isPublicAuthRoute(options.uri);
 }
 
@@ -66,7 +73,6 @@ final class AfyaKitClient {
   }) async {
     final http = createHttpClient(baseUrl);
 
-    // Keep these explicit (even if http_client.dart has defaults) to avoid drift.
     const connectT = Duration(seconds: 30);
     const receiveT = Duration(seconds: 30);
     const sendT = Duration(seconds: 30);
@@ -77,16 +83,9 @@ final class AfyaKitClient {
       sendTimeout: sendT,
     );
 
-    // ✅ Validate status:
-    // - default behavior: 200-299 are OK
-    // - if requestOptions.extra['allow404'] == true, then 404 is also OK
     http.options = http.options.copyWith(
       validateStatus: (code) {
         final c = code ?? 0;
-
-        // Note: validateStatus on BaseOptions has no access to RequestOptions.extra.
-        // So we ALSO set validateStatus on per-request Options in getUri/postUri/putUri/deleteUri.
-        // This remains as a safe default.
         return c >= 200 && c < 300;
       },
     );
@@ -100,12 +99,8 @@ final class AfyaKitClient {
       );
     }
 
-    // Existing request id + timing interceptor
     http.interceptors.add(requestIdAndTiming());
 
-    // ─────────────────────────────────────────────
-    // Debug: always log the exact URL and error type.
-    // ─────────────────────────────────────────────
     http.interceptors.add(
       InterceptorsWrapper(
         onRequest: (o, h) {
@@ -124,7 +119,6 @@ final class AfyaKitClient {
             final allow404 = extra[_ExtraKeys.allow404] == true;
             final silence404 = extra[_ExtraKeys.silence404] == true;
 
-            // ✅ If we intentionally allow 404, don't log it as ✅.
             if (status == 404 && allow404) {
               if (!silence404) {
                 debugPrint(
@@ -159,7 +153,7 @@ final class AfyaKitClient {
     );
 
     // ─────────────────────────────────────────────
-    // Auth header injector + auth-refresh retry (preserved)
+    // Auth header injector + auth-refresh retry
     // ─────────────────────────────────────────────
     http.interceptors.add(
       InterceptorsWrapper(
@@ -186,9 +180,6 @@ final class AfyaKitClient {
           final status = e.response?.statusCode ?? 0;
           final options = e.requestOptions;
 
-          // ─────────────────────────────────────────────
-          // (A) Retry once on connection timeout (idempotent only)
-          // ─────────────────────────────────────────────
           final wasConnRetried =
               options.extra[_ExtraKeys.retriedConnTimeout] == true;
           final isConnTimeout = e.type == DioExceptionType.connectionTimeout;
@@ -223,9 +214,6 @@ final class AfyaKitClient {
             }
           }
 
-          // ─────────────────────────────────────────────
-          // (B) Auth retry (your existing logic)
-          // ─────────────────────────────────────────────
           final isPublic = _shouldSkipAuth(options);
           final wasRetriedAuth = options.extra[_ExtraKeys.retriedAuth] == true;
 
@@ -283,7 +271,6 @@ final class AfyaKitClient {
 
     return (options ?? Options()).copyWith(
       extra: extra,
-      // ✅ Per-request validateStatus so we can allow 404 selectively.
       validateStatus: (code) {
         final c = code ?? 0;
         if (allow404 && c == 404) return true;

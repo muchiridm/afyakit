@@ -2,8 +2,8 @@
 
 import 'dart:ui' show lerpDouble;
 
-import 'package:afyakit/core/auth_user/guards/require_auth.dart';
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
 import 'package:afyakit/core/branding/providers/tenant_logo_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';

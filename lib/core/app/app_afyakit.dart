@@ -9,7 +9,7 @@ import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/branding/services/web_branding.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/core/auth/widgets/auth_gate.dart';
+import 'package:afyakit/core/auth/auth_session/widgets/auth_gate.dart';
 import 'package:afyakit/shared/theme/app_theme_overrides.dart';
 
 class AppAfyaKit extends ConsumerWidget {

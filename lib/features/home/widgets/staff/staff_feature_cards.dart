@@ -2,8 +2,8 @@ import 'package:afyakit/features/home/registry/staff_home_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/home/models/staff_feature_def.dart';
 import 'package:afyakit/shared/services/snack_service.dart';

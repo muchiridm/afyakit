@@ -1,6 +1,8 @@
-import 'package:afyakit/core/auth/widgets/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+
+import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
+import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 
 import '../shell/hq_shell.dart';
 
@@ -17,9 +19,10 @@ class HqGate extends StatelessWidget {
         }
 
         final user = snap.data;
+
+        // Not signed in → HQ OTP login (email OTP only)
         if (user == null) {
-          // Not signed in → use the shared OTP login (phone + email OTP).
-          return const LoginScreen();
+          return const LoginScreen(copy: OtpLoginCopy.hq);
         }
 
         // Signed in → verify superadmin with a fresh token
@@ -29,13 +32,16 @@ class HqGate extends StatelessWidget {
             if (authSnap.connectionState == ConnectionState.waiting) {
               return const _LoadingScreen();
             }
+
             if (authSnap.hasError) {
               return _ErrorScreen(
                 message: 'Failed to verify permissions.\n${authSnap.error}',
                 onSignOut: () => fb.FirebaseAuth.instance.signOut(),
               );
             }
+
             final allowed = authSnap.data == true;
+
             return AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
               child: allowed
@@ -55,21 +61,25 @@ class HqGate extends StatelessWidget {
   static String? _lastLogKey;
 
   static Future<bool> _hasSuperadmin(fb.User user) async {
-    final t = await user.getIdTokenResult(true); // fresh claims
+    // Fresh token to pull latest claims
+    final t = await user.getIdTokenResult(true);
     final claims = t.claims ?? const <String, dynamic>{};
 
-    // New canonical claim name from your backend / script
+    // Accept both claim names for backward compatibility
     final isSuper =
         claims['isSuperAdmin'] == true || claims['superadmin'] == true;
 
-    final key = '${user.uid}|$isSuper|${user.phoneNumber ?? ''}';
+    final key =
+        '${user.uid}|$isSuper|${user.phoneNumber ?? ''}|${user.email ?? ''}';
     if (_lastLogKey != key) {
       _lastLogKey = key;
       debugPrint(
-        '🔐 [HqGate] uid=${user.uid} phone=${user.phoneNumber} '
-        'email=${user.email} isSuperAdmin=$isSuper',
+        '🔐 [HqGate] uid=${user.uid} '
+        'phone=${user.phoneNumber} email=${user.email} '
+        'isSuperAdmin=$isSuper',
       );
     }
+
     return isSuper;
   }
 }
@@ -77,9 +87,11 @@ class HqGate extends StatelessWidget {
 // ── Simple screens ───────────────────────────────────────────────────────────
 class _LoadingScreen extends StatelessWidget {
   const _LoadingScreen();
+
   @override
-  Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
 }
 
 class _NoAccessScreen extends StatelessWidget {
@@ -91,17 +103,29 @@ class _NoAccessScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.block, color: Colors.red, size: 48),
-              const SizedBox(height: 12),
-              Text('Superadmin access required.', style: t.titleMedium),
-              const SizedBox(height: 8),
-              FilledButton(onPressed: onSignOut, child: const Text('Sign out')),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.block, color: Colors.red, size: 48),
+                const SizedBox(height: 12),
+                Text('Superadmin access required.', style: t.titleMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'This account is signed in, but it does not have HQ permissions.',
+                  style: t.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  onPressed: onSignOut,
+                  child: const Text('Sign out'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -119,19 +143,25 @@ class _ErrorScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.orange, size: 48),
-              const SizedBox(height: 12),
-              Text('Something went wrong', style: t.titleMedium),
-              const SizedBox(height: 6),
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: onSignOut, child: const Text('Sign out')),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.orange, size: 48),
+                const SizedBox(height: 12),
+                Text('Something went wrong', style: t.titleMedium),
+                const SizedBox(height: 6),
+                Text(message, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: onSignOut,
+                  child: const Text('Sign out'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

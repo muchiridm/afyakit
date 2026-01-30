@@ -1,6 +1,6 @@
 // lib/core/records/issues/controllers/form/issue_form_controller.dart
 
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_engine.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/features/inventory/records/issues/services/inventory_snapshot.dart';

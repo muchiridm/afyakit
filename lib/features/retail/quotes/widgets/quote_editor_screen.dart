@@ -1,6 +1,6 @@
 // lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
 
-import 'package:afyakit/core/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
 import 'package:afyakit/features/retail/catalog/controllers/cart_controller.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';

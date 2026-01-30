@@ -7,16 +7,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/tests/api_test_screen.dart';
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 
 import 'package:afyakit/features/backup/backup_screen.dart';
 import 'package:afyakit/features/inventory/import/importer/import_inventory_screen.dart';
 import 'package:afyakit/features/inventory/preferences/widgets/item_preferences_screen.dart';
 import 'package:afyakit/features/inventory/locations/screens/inventory_locations_screen.dart';
 
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_user/widgets/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/core/auth_user/guards/permission_guard.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/core/auth/auth_user/guards/permission_guard.dart';
 
 import 'package:afyakit/shared/layout/app_header.dart';
 import 'package:afyakit/shared/layout/app_page.dart';

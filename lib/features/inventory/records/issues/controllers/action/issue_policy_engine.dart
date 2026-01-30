@@ -2,8 +2,8 @@ import 'package:afyakit/features/inventory/records/issues/extensions/issue_actio
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issuePolicyEngineProvider = Provider<IssuePolicyEngine>(

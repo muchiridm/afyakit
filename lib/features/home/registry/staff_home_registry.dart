@@ -1,5 +1,5 @@
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/tenancy/models/feature_keys.dart';
 import 'package:afyakit/core/tenancy/models/feature_registry.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';

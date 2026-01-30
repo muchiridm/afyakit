@@ -12,7 +12,7 @@ import 'package:afyakit/features/inventory/items/models/items/medication_item.da
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
 class IssueSubmission {
   final IssueRecord record;
