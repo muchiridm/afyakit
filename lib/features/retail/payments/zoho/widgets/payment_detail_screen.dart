@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_feedback.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 
 import 'package:afyakit/features/retail/payments/zoho/controllers/payment_controller.dart';
 import 'package:afyakit/features/retail/payments/zoho/controllers/payment_state.dart';

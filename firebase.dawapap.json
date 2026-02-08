@@ -21,6 +21,7 @@
         "source": "/manifest.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
+
       {
         "source": "/**/*.{js,css,json}",
         "headers": [
@@ -57,6 +58,7 @@
           }
         ]
       },
+
       {
         "source": "/**",
         "headers": [
@@ -78,34 +80,25 @@
           },
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; img-src 'self' data: blob: https://storage.googleapis.com https://firebasestorage.googleapis.com https://www.google.com; connect-src 'self' https://api.afyakit.app https://dawaindex-api.onrender.com https://storage.googleapis.com https://firebasestorage.googleapis.com https://www.gstatic.com https://fonts.gstatic.com https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com wss://*.firebaseio.com wss://firestore.googleapis.com; script-src 'self' https://www.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; worker-src 'self' blob:; frame-ancestors 'self'; frame-src 'self' https://www.gstatic.com https://www.google.com;"
+            "value": "default-src 'self'; img-src 'self' data: https://storage.googleapis.com https://firebasestorage.googleapis.com; connect-src 'self' https://dawaindex-api.onrender.com https://api.afyakit.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://storage.googleapis.com https://firebasestorage.googleapis.com https://www.gstatic.com https://fonts.gstatic.com https://firestore.googleapis.com https://firebase.googleapis.com; script-src 'self' https://www.gstatic.com https://www.google.com https://www.recaptcha.net 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; frame-src 'self' https://www.google.com https://www.recaptcha.net; frame-ancestors 'self';"
           }
         ]
       }
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "function": { "functionId": "api", "region": "europe-west1" }
+      },
+      {
         "source": "/manifest.webmanifest",
-        "function": {
-          "functionId": "manifest",
-          "region": "europe-west1"
-        }
+        "function": { "functionId": "manifest", "region": "europe-west1" }
       },
       {
         "source": "/manifest.json",
-        "function": {
-          "functionId": "manifest",
-          "region": "europe-west1"
-        }
+        "function": { "functionId": "manifest", "region": "europe-west1" }
       },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "**", "destination": "/index.html" }
     ]
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
   }
 }

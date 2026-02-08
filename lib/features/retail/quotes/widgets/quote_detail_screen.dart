@@ -1,6 +1,6 @@
 // lib/features/retail/sales/quotes/widgets/quote_detail_screen.dart
 
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_total_bar.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 import 'package:afyakit/shared/widgets/pdf/pdf_preview_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,12 +13,12 @@ import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_dialogs.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_feedback.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_header.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_lines.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_models.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_status_chip.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 
 enum _QuoteAction { send, markSent, invoice }
 
@@ -103,7 +103,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
-      await svc.sendQuote(widget.quoteId);
+      // ✅ aligned to service: email()
+      await svc.email(widget.quoteId);
       SnackService.showSuccess('Quote sent');
     });
   }
@@ -120,7 +121,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
-      await svc.markQuoteSent(widget.quoteId);
+      // ✅ aligned to service: markSent()
+      await svc.markSent(widget.quoteId);
       SnackService.showSuccess('Marked as sent');
     });
   }
@@ -137,6 +139,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
+      // ✅ aligned to service: convertToInvoice()
       await svc.convertToInvoice(widget.quoteId);
       SnackService.showSuccess('Converted to invoice');
     });
@@ -255,11 +258,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       children: [
         if (_acting) const LinearProgressIndicator(minHeight: 2),
 
-        // ✅ Bring back the real header.
-        // ✅ Remove duplicate status by disabling header status pill.
-        // ✅ Keep ONE status chip in trailing (same vibe as invoice).
         SalesDocHeader(
-          title: '', // less repetition; app bar already says "Quote"
+          title: '',
           meta: meta,
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
@@ -294,22 +294,15 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }
 
   static String _lineTitle(ZohoQuoteLineItem li) {
-    final desc = _cleanZohoLineText(li.description);
     final name = _cleanZohoLineText(li.name);
-
-    final v = (desc ?? name ?? '').trim();
+    final v = (name ?? '').trim();
     return v.isEmpty ? 'Item' : v;
   }
 
   static String? _lineSubtitle(ZohoQuoteLineItem li) {
     final desc = _cleanZohoLineText(li.description);
-    final name = _cleanZohoLineText(li.name);
-
-    if (desc != null && name != null && name.trim() != desc.trim()) {
-      final v = name.trim();
-      return v.isEmpty ? null : v;
-    }
-    return null;
+    final v = (desc ?? '').trim();
+    return v.isEmpty ? null : v;
   }
 
   static String? _cleanZohoLineText(Object? v) {
@@ -336,7 +329,7 @@ class _QuoteLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<ZohoQuote>(
-      future: svc.get(quoteId),
+      future: svc.get(quoteId), // ✅ aligned: service has get()
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

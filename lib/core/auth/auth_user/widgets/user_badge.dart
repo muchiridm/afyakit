@@ -1,29 +1,22 @@
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/features/home/models/home_mode.dart';
-import 'package:afyakit/features/home/providers/home_mode_provider.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/providers/staff_view_mode_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart'; // staffRoleLabel
+import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-// ✅ NEW
-import 'package:afyakit/core/tenancy/models/feature_keys.dart';
-import 'package:afyakit/core/tenancy/widgets/feature_gate.dart';
+import 'package:afyakit/hq/tenants/models/feature_keys.dart';
+import 'package:afyakit/hq/tenants/widgets/feature_gate.dart';
 
-class UserBadge extends ConsumerStatefulWidget {
+class UserBadge extends ConsumerWidget {
   const UserBadge({super.key});
 
   @override
-  ConsumerState<UserBadge> createState() => _UserBadgeState();
-}
-
-class _UserBadgeState extends ConsumerState<UserBadge> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final meAsync = ref.watch(currentUserProvider);
-    final mode = ref.watch(homeModeProvider);
 
     return meAsync.when(
       loading: () => const SizedBox(
@@ -39,16 +32,10 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
         if (user == null) return const SizedBox.shrink();
 
         final displayName = user.displayLabel();
-
         final hasStaffWorkspace = user.type.hasStaffWorkspace;
 
-        // Canonical staff label (Owner/Admin/Manager/etc) with safe fallback
         final rawStaffLabel = staffRoleLabel(user).trim();
         final staffLabel = rawStaffLabel.isEmpty ? 'Staff' : rawStaffLabel;
-
-        debugPrint(
-          'UserBadge: mode=$mode user=${user.uid} type=${user.type} staffLabel="$staffLabel"',
-        );
 
         // Member-only users: no switching logic needed.
         if (!hasStaffWorkspace) {
@@ -58,35 +45,21 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
             displayName: displayName,
             roleLabel: roleLabel,
             showSwitcher: false,
-            isStaffView: false,
             onToggleView: null,
-            onTapProfile: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const UserProfileEditorScreen(),
-                ),
-              );
-            },
+            onTapProfile: () => _openProfile(context),
           );
         }
 
-        // ✅ Staff users: only allow Member toggle when retail is enabled.
+        // Staff users: can "view as member" (UI-only) when retail is enabled.
+        final viewMode = ref.watch(staffViewModeProvider);
+
         final badgeWithSwitch = _buildBadge(
           context,
           displayName: displayName,
-          roleLabel: mode == HomeMode.member ? 'Member' : staffLabel,
+          roleLabel: viewMode == EntryMode.member ? 'Member' : staffLabel,
           showSwitcher: true,
-          isStaffView: mode == HomeMode.staff,
-          onToggleView: () => _toggleMode(ref, mode),
-          onTapProfile: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const UserProfileEditorScreen(),
-              ),
-            );
-          },
+          onToggleView: () => _toggleStaffViewMode(ref, viewMode),
+          onTapProfile: () => _openProfile(context),
         );
 
         final badgeNoSwitch = _buildBadge(
@@ -94,16 +67,8 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
           displayName: displayName,
           roleLabel: staffLabel,
           showSwitcher: false,
-          isStaffView: true,
           onToggleView: null,
-          onTapProfile: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const UserProfileEditorScreen(),
-              ),
-            );
-          },
+          onTapProfile: () => _openProfile(context),
         );
 
         return FeatureGate(
@@ -115,26 +80,26 @@ class _UserBadgeState extends ConsumerState<UserBadge> {
     );
   }
 
-  // ────────────────── logic helpers ──────────────────
-
-  void _toggleMode(WidgetRef ref, HomeMode current) {
-    final next = current == HomeMode.staff ? HomeMode.member : HomeMode.staff;
-
-    debugPrint('UserBadge: toggleMode current=$current -> next=$next');
-
-    ref.read(homeModeProvider.notifier).state = next;
-
-    debugPrint('UserBadge: after write homeMode=${ref.read(homeModeProvider)}');
+  void _toggleStaffViewMode(WidgetRef ref, EntryMode current) {
+    // Only two meaningful states for this toggle.
+    final next = current == EntryMode.staff
+        ? EntryMode.member
+        : EntryMode.staff;
+    ref.read(staffViewModeProvider.notifier).state = next;
   }
 
-  // ────────────────── UI helpers ──────────────────
+  void _openProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UserProfileEditorScreen()),
+    );
+  }
 
   Widget _buildBadge(
     BuildContext context, {
     required String displayName,
     required String roleLabel,
     required bool showSwitcher,
-    required bool isStaffView,
     required VoidCallback? onToggleView,
     required VoidCallback onTapProfile,
   }) {

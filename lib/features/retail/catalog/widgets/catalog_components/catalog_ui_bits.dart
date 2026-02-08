@@ -17,12 +17,12 @@ import 'package:flutter/material.dart';
 // Search
 // ─────────────────────────────────────────────────────────────
 
+// lib/core/catalog/widgets/catalog_components/catalog_ui_bits.dart
 class SearchBarField extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode? focusNode; // ✅ NEW
   final ValueChanged<String> onSubmit;
   final ValueChanged<String> onChanged;
-
-  /// Optional number of results to show just under the bar (right side)
   final int? resultCount;
 
   const SearchBarField({
@@ -30,6 +30,7 @@ class SearchBarField extends StatelessWidget {
     required this.controller,
     required this.onSubmit,
     required this.onChanged,
+    this.focusNode, // ✅ NEW
     this.resultCount,
   });
 
@@ -50,6 +51,7 @@ class SearchBarField extends StatelessWidget {
           color: theme.colorScheme.surface,
           child: TextField(
             controller: controller,
+            focusNode: focusNode, // ✅ NEW
             textInputAction: TextInputAction.search,
             onSubmitted: onSubmit,
             onChanged: onChanged,

@@ -1,22 +1,25 @@
 // lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
-import 'package:afyakit/features/retail/catalog/controllers/cart_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_dialogs.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_feedback.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_header.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_lines.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_models.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_status_chip.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_total_bar.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -41,14 +44,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   final _refCtl = TextEditingController();
   final _notesCtl = TextEditingController();
 
-  ProviderSubscription<QuoteState>? _draftSub;
+  ProviderSubscription<QuoteMetaState>? _metaSub;
 
   bool get _isEdit => (widget.editingQuoteId ?? '').trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _bindDraftTextControllers();
+    _bindMetaTextControllers();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -65,23 +68,23 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   @override
   void dispose() {
-    _draftSub?.close();
+    _metaSub?.close();
     _refCtl.dispose();
     _notesCtl.dispose();
     super.dispose();
   }
 
-  void _bindDraftTextControllers() {
-    _draftSub = ref.listenManual<QuoteState>(quoteControllerProvider, (
+  void _bindMetaTextControllers() {
+    _metaSub = ref.listenManual<QuoteMetaState>(quoteMetaControllerProvider, (
       prev,
       next,
     ) {
-      final didLoadChange = prev?.loadedEditId != next.loadedEditId;
-      final didDraftChange = prev?.draft != next.draft;
-      if (!didLoadChange && !didDraftChange) return;
+      final didRefChange = prev?.reference != next.reference;
+      final didNotesChange = prev?.customerNotes != next.customerNotes;
+      if (!didRefChange && !didNotesChange) return;
 
-      final nextRef = next.draft.reference ?? '';
-      final nextNotes = next.draft.customerNotes ?? '';
+      final nextRef = next.reference ?? '';
+      final nextNotes = next.customerNotes ?? '';
 
       if (_refCtl.text != nextRef) _refCtl.text = nextRef;
       if (_notesCtl.text != nextNotes) _notesCtl.text = nextNotes;
@@ -90,6 +93,19 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   Future<void> _bootstrap() async {
     if (!mounted) return;
+
+    // 1) ensure meta is in the right mode (new vs edit)
+    final metaCtl = ref.read(quoteMetaControllerProvider.notifier);
+    final id = (widget.editingQuoteId ?? '').trim();
+
+    if (id.isEmpty) {
+      // New quote - keep whatever meta user already entered.
+      // If you WANT a hard reset when opening a new checkout screen, call metaCtl.clearAll() here.
+    } else {
+      metaCtl.beginEdit(id);
+    }
+
+    // 2) Let quote controller do its load work (it will populate quote lines, etc.)
     final ctl = ref.read(quoteControllerProvider.notifier);
     await ctl.ensureReady(
       editingQuoteId: widget.editingQuoteId,
@@ -97,41 +113,39 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  void _clearCatalogCart() => ref.read(cartControllerProvider.notifier).clear();
+  // Quote lines are the single truth
+  void _clearQuoteLines() =>
+      ref.read(quoteLinesControllerProvider.notifier).clear();
 
-  Future<void> _clearAll(QuoteController ctl) async {
-    _clearCatalogCart();
-    ctl.reset();
+  Future<void> _clearAll() async {
+    _clearQuoteLines();
+    ref.read(quoteMetaControllerProvider.notifier).clearAll();
+    ref.read(quoteControllerProvider.notifier).reset();
   }
 
   Future<bool> _ensureAuthed(BuildContext context) => requireAuth(context, ref);
 
-  void _toast(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 1)),
-    );
-  }
+  String _currencyCode() => 'KES';
 
-  String _currencyCodeFromState(QuoteState s) => 'KES';
-
-  Future<bool> _handleBack(
-    BuildContext context,
-    QuoteState s,
-    QuoteController ctl,
-  ) async {
+  Future<bool> _handleBack(BuildContext context, QuoteState s) async {
     if (s.busy) return false;
 
-    final hasDraftLines = s.draft.lines.isNotEmpty;
-    final hasCartLines = ref.read(cartControllerProvider).lines.isNotEmpty;
-    if (!hasDraftLines && !hasCartLines) return true;
+    final hasLines = ref.read(quoteLinesControllerProvider).lines.isNotEmpty;
+
+    final meta = ref.read(quoteMetaControllerProvider);
+    final hasMetaEdits =
+        (meta.reference ?? '').trim().isNotEmpty ||
+        (meta.customerNotes ?? '').trim().isNotEmpty ||
+        (meta.contact != null);
+
+    if (!hasLines && !hasMetaEdits) return true;
 
     final ok = _isEdit
         ? await SalesDocDialogs.confirmDiscardChanges(context)
         : await SalesDocDialogs.confirmDiscardCheckout(context);
     if (!ok) return false;
 
-    await _clearAll(ctl);
-    if (_isEdit) ctl.cancelEdit();
+    await _clearAll();
     return true;
   }
 
@@ -140,237 +154,291 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final s = ref.watch(quoteControllerProvider);
     final ctl = ref.read(quoteControllerProvider.notifier);
 
+    final meta = ref.watch(quoteMetaControllerProvider);
+    final metaCtl = ref.read(quoteMetaControllerProvider.notifier);
+
+    final linesState = ref.watch(quoteLinesControllerProvider);
+
     return WillPopScope(
-      onWillPop: () => _handleBack(context, s, ctl),
+      onWillPop: () => _handleBack(context, s),
       child: AppPage(
         title: _isEdit ? 'Edit quote' : 'Request a quote',
         showBack: true,
         maxWidth: _contentMaxW,
         scrollable: false,
-        actions: _buildTopActions(context, s, ctl),
-        body: _buildBody(context, s, ctl),
+        actions: const <Widget>[],
+        body: _buildBody(context, s, ctl, meta, metaCtl, linesState),
       ),
     );
   }
 
-  List<Widget> _buildTopActions(
-    BuildContext context,
-    QuoteState s,
-    QuoteController ctl,
-  ) {
-    final theme = Theme.of(context);
-
-    final hasDraftLines = s.draft.lines.isNotEmpty;
-    final hasCartLines = ref.watch(cartControllerProvider).lines.isNotEmpty;
-    final canClear = !s.busy && (hasDraftLines || hasCartLines);
-
-    return [
-      PopupMenuButton<_AddAction>(
-        tooltip: 'Add',
-        enabled: !s.busy,
-        onSelected: (a) => _handleAddAction(context, a, s, ctl),
-        itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: _AddAction.addCustomLine,
-            child: Text('Add custom item'),
-          ),
-          PopupMenuItem(
-            value: _AddAction.goToCatalog,
-            child: Text('Add from catalog'),
-          ),
-        ],
-        icon: const Icon(Icons.add),
-      ),
-
-      if (_isEdit)
-        TextButton(
-          style: TextButton.styleFrom(
-            foregroundColor: theme.colorScheme.onSurface,
-          ),
-          onPressed: s.busy
-              ? null
-              : () async {
-                  final ok = await SalesDocDialogs.confirmDiscardChanges(
-                    context,
-                  );
-                  if (!ok) return;
-
-                  _clearCatalogCart();
-                  ctl.cancelEdit();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pop(false);
-                },
-          child: const Text('Cancel'),
-        ),
-
-      IconButton(
-        tooltip: 'Clear',
-        icon: const Icon(Icons.delete_outline),
-        style: IconButton.styleFrom(
-          foregroundColor: theme.colorScheme.onSurface,
-          minimumSize: const Size(36, 36),
-          padding: EdgeInsets.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-        ),
-        onPressed: canClear
-            ? () async {
-                final ok = await SalesDocDialogs.confirmClearAll(context);
-                if (!ok) return;
-
-                await _clearAll(ctl);
-                if (!context.mounted) return;
-                _toast(context, 'Cleared');
-              }
-            : null,
-      ),
-    ];
-  }
-
-  Future<void> _handleAddAction(
-    BuildContext context,
-    _AddAction action,
-    QuoteState s,
-    QuoteController ctl,
-  ) async {
-    if (s.busy) return;
-
-    switch (action) {
-      case _AddAction.goToCatalog:
-        _toast(context, 'Open catalog from your existing flow.');
-        return;
-
-      case _AddAction.addCustomLine:
-        final ok = await _ensureAuthed(context);
-        if (!ok) return;
-
-        final name = await SalesDocDialogs.editText(
-          context,
-          title: 'Custom item name',
-          initial: '',
-        );
-        if (name == null) return;
-
-        ctl.addCustomLine(name: name);
-        return;
-    }
-  }
-
-  SalesDocMetaVm _metaVm(QuoteState s) {
-    final contactTitle = (s.draft.contact?.title ?? '').trim();
-    final partyName = contactTitle.isNotEmpty
-        ? contactTitle
-        : (s.draft.displayContactName.trim().isNotEmpty
-              ? s.draft.displayContactName.trim()
-              : 'Customer');
+  SalesDocMetaVm _metaVm(QuoteMetaState meta, QuoteLinesState linesState) {
+    final contactTitle = (meta.contact?.title ?? '').trim();
+    final partyName = contactTitle.isNotEmpty ? contactTitle : 'Customer';
 
     final docNo = _isEdit
-        ? ((s.editingQuoteId ?? '').trim().isEmpty
+        ? ((meta.editingQuoteId ?? '').trim().isEmpty
               ? '-'
-              : (s.editingQuoteId ?? '').trim())
+              : (meta.editingQuoteId ?? '').trim())
         : 'Draft';
 
     return SalesDocMetaVm(
       partyName: partyName,
       docNumberOrId: docNo,
       status: _isEdit ? 'editing' : 'draft',
-      currencyCode: _currencyCodeFromState(s),
-      total: widget.requirePrices ? s.total : 0,
-      date: s.quoteDate,
+      currencyCode: _currencyCode(),
+      total: widget.requirePrices ? linesState.estimatedTotal : 0,
+      date: meta.quoteDate,
     );
   }
 
-  List<SalesDocLineVm> _lineVms(QuoteState s) {
-    return s.draft.lines
+  List<_LineBinding> _lineBindings(QuoteLinesState linesState) {
+    return linesState.lines
+        .map((l) {
+          if (l is CatalogQuoteLine) {
+            return _LineBinding.catalog(tileId: l.tile.id, key: l.key);
+          }
+          if (l is ManualQuoteLine) {
+            return _LineBinding.manual(manualId: l.manualId, key: l.key);
+          }
+          return _LineBinding.unknown(key: l.key);
+        })
+        .toList(growable: false);
+  }
+
+  List<SalesDocLineVm> _lineVmsFromLines(QuoteLinesState linesState) {
+    return linesState.lines
         .map((line) {
-          final tile = line.tile;
+          if (line is CatalogQuoteLine) {
+            final title = line.effectiveName.trim().isEmpty
+                ? 'Item'
+                : line.effectiveName.trim();
+            final subtitle = (line.effectiveDescription ?? '').trim().isEmpty
+                ? null
+                : line.effectiveDescription;
 
-          final desc = (line.description ?? '').trim();
-          final tileTitle = tile.tileTitle.trim();
-          final tileDesc = (tile.tileDesc ?? '').trim();
+            return SalesDocLineVm(
+              title: title,
+              subtitle: subtitle,
+              qty: line.qty,
+              rate: widget.requirePrices ? line.effectiveRate : 0,
+            );
+          }
 
-          final isGeneric = desc.isEmpty || desc.toLowerCase() == 'item';
-          final title = (isGeneric ? tileTitle : desc).trim();
+          if (line is ManualQuoteLine) {
+            final title = line.name.trim().isEmpty ? 'Item' : line.name.trim();
+            final subtitle = (line.description ?? '').trim().isEmpty
+                ? null
+                : line.description;
 
-          final subtitle = (tileDesc.isEmpty || tileDesc == title)
-              ? null
-              : tileDesc;
+            return SalesDocLineVm(
+              title: title,
+              subtitle: subtitle,
+              qty: line.qty,
+              rate: widget.requirePrices ? line.rate : 0,
+            );
+          }
 
-          return SalesDocLineVm(
-            title: title.isEmpty ? 'Item' : title,
-            subtitle: subtitle,
-            qty: line.quantity,
-            rate: widget.requirePrices ? line.rate : 0,
+          return const SalesDocLineVm(
+            title: 'Item',
+            subtitle: null,
+            qty: 1,
+            rate: 0,
           );
         })
         .toList(growable: false);
   }
 
-  Widget _buildBody(BuildContext context, QuoteState s, QuoteController ctl) {
-    final meta = _metaVm(s);
-    final vmLines = _lineVms(s);
+  Widget _buildBody(
+    BuildContext context,
+    QuoteState s,
+    QuoteController ctl,
+    QuoteMetaState meta,
+    QuoteMetaController metaCtl,
+    QuoteLinesState linesState,
+  ) {
+    final vmMeta = _metaVm(meta, linesState);
+    final vmLines = _lineVmsFromLines(linesState);
+    final bindings = _lineBindings(linesState);
     final busy = s.busy;
+
+    QuoteLinesController linesCtl() =>
+        ref.read(quoteLinesControllerProvider.notifier);
+
+    bool _isManualAt(int index) {
+      final b = bindings[index];
+      final line = linesState.lines[index];
+      return b.kind == _LineKind.manual && line is ManualQuoteLine;
+    }
+
+    bool _isCatalogAt(int index) {
+      final b = bindings[index];
+      final line = linesState.lines[index];
+      return b.kind == _LineKind.catalog && line is CatalogQuoteLine;
+    }
+
+    num _safeRate(num v) => (v.isNaN || v.isInfinite || v < 0) ? 0 : v;
+
+    String _safeName(String s) {
+      final t = s.trim();
+      return t.isEmpty ? 'Item' : t;
+    }
+
+    Future<void> _editLineDialog(int index) async {
+      final b = bindings[index];
+      final line = linesState.lines[index];
+
+      final initialName = vmLines[index].title.trim();
+      final initialQty = vmLines[index].qty.toInt();
+      final initialDesc = vmLines[index].subtitle ?? '';
+
+      final initialRate = line is CatalogQuoteLine
+          ? line.effectiveRate
+          : (line is ManualQuoteLine ? line.rate : 0);
+
+      final res = await SalesDocDialogs.editLine(
+        context,
+        initialName: initialName,
+        initialDescription: initialDesc,
+        initialQty: initialQty,
+        initialRate: initialRate,
+        enableRate: widget.requirePrices,
+      );
+      if (res == null) return;
+
+      final lc = linesCtl();
+
+      // Catalog
+      if (b.kind == _LineKind.catalog && line is CatalogQuoteLine) {
+        lc.updateCatalogLine(
+          line.tile,
+          qty: res.qty,
+          name: res.name,
+          description: res.description,
+          rate: widget.requirePrices ? _safeRate(res.rate) : 0,
+        );
+        return;
+      }
+
+      // Manual
+      if (b.kind == _LineKind.manual && line is ManualQuoteLine) {
+        lc.updateManualLine(
+          b.manualId!,
+          name: _safeName(res.name),
+          description: res.description,
+          qty: res.qty,
+          rate: widget.requirePrices ? _safeRate(res.rate) : 0,
+        );
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
-
         ErrorBanner(s.error),
 
         SalesDocHeader(
           title: 'Quote',
-          meta: meta,
+          meta: vmMeta,
           compact: true,
           showStatus: false,
-          trailing: _buildHeaderTrailing(context, s, ctl, meta),
+          trailing: _buildHeaderTrailing(
+            context,
+            s,
+            ctl,
+            meta,
+            metaCtl,
+            vmMeta,
+          ),
         ),
 
-        _buildMetaFields(s, ctl),
+        _buildMetaFields(metaCtl, busy),
 
         const Divider(height: 1),
 
         Expanded(
-          child: s.draft.lines.isEmpty
-              ? const Center(child: Text('No items. Tap + to add.'))
+          child: linesState.lines.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No items yet. Add from Catalog or Custom below.',
+                  ),
+                )
               : SalesDocLinesList(
-                  currencyCode: meta.currencyCode,
+                  currencyCode: vmMeta.currencyCode,
                   lines: vmLines,
                   mode: SalesDocMode.edit,
 
-                  // ✅ unified edit (item + qty + rate)
-                  onEditLine: busy
+                  // Inline name edits:
+                  // - Manual: edits name
+                  // - Catalog: edits name override
+                  onEditName: busy
                       ? null
-                      : (index) async {
-                          final draftLine = s.draft.lines[index];
-                          final tile = draftLine.tile;
+                      : (int index, String nextName) async {
+                          final lc = linesCtl();
 
-                          final res = await SalesDocDialogs.editLine(
-                            context,
-                            initialName: vmLines[index].title.trim(),
-                            initialQty: draftLine.quantity,
-                            initialRate: draftLine.rate,
-                            enableRate: widget.requirePrices,
-                          );
-                          if (res == null) return;
+                          if (_isManualAt(index)) {
+                            final b = bindings[index];
+                            lc.updateManualLine(
+                              b.manualId!,
+                              name: _safeName(nextName),
+                            );
+                            return;
+                          }
 
-                          final name = res.name.trim();
-                          if (name.isNotEmpty) ctl.updateDraftName(tile, name);
-
-                          ctl.updateDraftQty(tile, res.qty);
-
-                          if (widget.requirePrices) {
-                            ctl.updateDraftRate(tile, res.rate);
+                          if (_isCatalogAt(index)) {
+                            final line =
+                                linesState.lines[index] as CatalogQuoteLine;
+                            lc.updateCatalogLine(
+                              line.tile,
+                              name: _safeName(nextName),
+                            );
                           }
                         },
 
-                  onEditName: null,
-                  onEditQtyRate: null,
+                  // Inline qty/rate edits:
+                  // - Manual: qty + rate
+                  // - Catalog: qty + rate override (so you can override prices too)
+                  onEditQtyRate: busy
+                      ? null
+                      : (int index, int nextQty, num nextRate) async {
+                          final lc = linesCtl();
+                          final qty = nextQty;
 
-                  // ✅ delete line confirm
+                          if (_isCatalogAt(index)) {
+                            final line =
+                                linesState.lines[index] as CatalogQuoteLine;
+
+                            lc.updateCatalogLine(
+                              line.tile,
+                              qty: qty,
+                              rate: widget.requirePrices
+                                  ? _safeRate(nextRate)
+                                  : 0,
+                            );
+                            return;
+                          }
+
+                          if (_isManualAt(index)) {
+                            final b = bindings[index];
+                            lc.updateManualLine(
+                              b.manualId!,
+                              qty: qty,
+                              rate: widget.requirePrices
+                                  ? _safeRate(nextRate)
+                                  : 0,
+                            );
+                          }
+                        },
+
+                  // Full edit dialog (name + desc + qty + rate)
+                  onEditLine: busy
+                      ? null
+                      : (int index) async => _editLineDialog(index),
+
                   onRemoveLine: busy
                       ? null
-                      : (index) async {
+                      : (int index) async {
                           final ok = await SalesDocDialogs.confirmDelete(
                             context,
                             thing: 'line item',
@@ -378,19 +446,21 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                           );
                           if (!ok) return;
 
-                          final tile = s.draft.lines[index].tile;
-                          ctl.updateDraftQty(tile, 0);
-
-                          if (s.draft.lines.length == 1) _clearCatalogCart();
+                          final key = bindings[index].key;
+                          linesCtl().removeByKey(key);
                         },
                 ),
         ),
 
+        const Divider(height: 1),
+
+        _buildAddBar(context, s),
+
         if (widget.requirePrices)
           SalesDocTotalBar(
             label: _isEdit ? 'Total' : 'Estimated total',
-            total: s.total,
-            currencyCode: meta.currencyCode,
+            total: linesState.estimatedTotal,
+            currencyCode: vmMeta.currencyCode,
           )
         else
           Padding(
@@ -403,7 +473,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             ),
           ),
 
-        _buildSubmitButton(context, s, ctl),
+        _buildSubmitButton(context, s, ctl, meta, linesState),
       ],
     );
   }
@@ -412,7 +482,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     BuildContext context,
     QuoteState s,
     QuoteController ctl,
-    SalesDocMetaVm meta,
+    QuoteMetaState meta,
+    QuoteMetaController metaCtl,
+    SalesDocMetaVm vmMeta,
   ) {
     final cs = Theme.of(context).colorScheme;
     final busy = s.busy;
@@ -431,6 +503,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 
+    final hasContact = meta.contact != null;
+
     return SizedBox(
       height: _kTrailH,
       child: Row(
@@ -438,16 +512,15 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SalesDocStatusChip(
-            status: meta.status,
+            status: vmMeta.status,
             visualDensity: VisualDensity.compact,
             forceLabel: _isEdit ? 'editing' : 'draft',
           ),
           const SizedBox(width: 8),
-
           OutlinedButton.icon(
             style: pickStyle,
             icon: const Icon(Icons.person_outline, size: 18),
-            label: Text(s.draft.contact == null ? 'Pick' : 'Change'),
+            label: Text(hasContact ? 'Change' : 'Pick'),
             onPressed: busy
                 ? null
                 : () async {
@@ -460,10 +533,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                     );
                     if (picked == null) return;
 
-                    ctl.patchDraft(contact: picked);
+                    metaCtl.setContact(picked);
                   },
           ),
-
           if (_isEdit) ...[
             const SizedBox(width: 8),
             IconButton(
@@ -480,14 +552,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       );
                       if (!ok) return;
 
-                      final id = (s.editingQuoteId ?? '').trim();
+                      final id = (meta.editingQuoteId ?? '').trim();
                       if (id.isEmpty) return;
 
                       final done = await ctl.deleteQuote(id);
                       if (!done) return;
                       if (!context.mounted) return;
 
-                      _clearCatalogCart();
+                      await _clearAll();
                       Navigator.of(context).pop(true);
                     },
             ),
@@ -497,9 +569,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  Widget _buildMetaFields(QuoteState s, QuoteController ctl) {
-    final busy = s.busy;
-
+  Widget _buildMetaFields(QuoteMetaController metaCtl, bool busy) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Column(
@@ -511,7 +581,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               labelText: 'Reference',
               hintText: 'e.g. PO number, request reference…',
             ),
-            onChanged: (v) => ctl.patchDraft(reference: v),
+            onChanged: metaCtl.setReference,
           ),
           const SizedBox(height: 10),
           TextField(
@@ -523,7 +593,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               labelText: 'Customer notes',
               hintText: 'Notes to appear on the quote…',
             ),
-            onChanged: (v) => ctl.patchDraft(customerNotes: v),
+            onChanged: metaCtl.setCustomerNotes,
           ),
         ],
       ),
@@ -534,8 +604,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     BuildContext context,
     QuoteState s,
     QuoteController ctl,
+    QuoteMetaState meta,
+    QuoteLinesState linesState,
   ) {
     final busy = s.busy;
+
+    final canSubmit =
+        linesState.lines.isNotEmpty &&
+        (!widget.requirePrices || linesState.hasAllPrices);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -550,7 +626,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         label: Text(
           busy ? 'Submitting…' : (_isEdit ? 'Save changes' : 'Request a quote'),
         ),
-        onPressed: busy
+        onPressed: (!canSubmit || busy)
             ? null
             : () async {
                 final ok = await _ensureAuthed(context);
@@ -562,12 +638,104 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                 if (id == null || id.trim().isEmpty) return;
                 if (!context.mounted) return;
 
-                _clearCatalogCart();
+                await _clearAll();
                 Navigator.of(context).pop(true);
               },
       ),
     );
   }
+
+  Widget _buildAddBar(BuildContext context, QuoteState s) {
+    final busy = s.busy;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.search),
+              label: const Text('Catalog'),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final ok = await _ensureAuthed(context);
+                      if (!ok) return;
+
+                      if (!context.mounted) return;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const CatalogScreen(),
+                        ),
+                      );
+                    },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Custom'),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final ok = await _ensureAuthed(context);
+                      if (!ok) return;
+
+                      // Use the full line editor so user can set name/desc/qty/rate.
+                      final res = await SalesDocDialogs.editLine(
+                        context,
+                        initialName: 'Item',
+                        initialDescription: '',
+                        initialQty: 1,
+                        initialRate: 0,
+                        enableRate: widget.requirePrices,
+                      );
+                      if (res == null) return;
+
+                      ref
+                          .read(quoteLinesControllerProvider.notifier)
+                          .addManualLine(
+                            name: res.name.trim().isEmpty
+                                ? 'Item'
+                                : res.name.trim(),
+                            description: res.description,
+                            rate: widget.requirePrices ? res.rate : 0,
+                            qty: res.qty,
+                          );
+                    },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-enum _AddAction { addCustomLine, goToCatalog }
+enum _LineKind { catalog, manual, unknown }
+
+@immutable
+class _LineBinding {
+  const _LineBinding._(
+    this.kind, {
+    required this.key,
+    this.manualId,
+    this.tileId,
+  });
+
+  final _LineKind kind;
+  final String key;
+  final String? manualId;
+  final String? tileId;
+
+  factory _LineBinding.catalog({required String tileId, required String key}) =>
+      _LineBinding._(_LineKind.catalog, tileId: tileId, key: key);
+
+  factory _LineBinding.manual({
+    required String manualId,
+    required String key,
+  }) => _LineBinding._(_LineKind.manual, manualId: manualId, key: key);
+
+  factory _LineBinding.unknown({required String key}) =>
+      _LineBinding._(_LineKind.unknown, key: key);
+}

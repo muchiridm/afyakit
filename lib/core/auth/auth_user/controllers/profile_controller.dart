@@ -6,7 +6,7 @@ import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
-import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -144,7 +144,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       final u = baseUser;
       if (u != null) {
         state.nameController.text = (u.displayName ?? '').trim();
-        state.phoneController.text = (u.phoneNumber).trim();
+        state.phoneController.text = (u.phoneNumber)!.trim();
       }
     });
   }
@@ -375,7 +375,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         ref.invalidate(currentUserValueProvider);
 
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TenantHomeShell()),
+          MaterialPageRoute(builder: (_) => const HomeShell()),
           (_) => false,
         );
       });

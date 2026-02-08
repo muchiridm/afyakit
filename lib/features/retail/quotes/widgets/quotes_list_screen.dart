@@ -9,14 +9,14 @@ import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 
-import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_list_card.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_status_chip.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 
 class QuotesListScreen extends ConsumerWidget {
   const QuotesListScreen({super.key});
@@ -38,7 +38,7 @@ class QuotesListScreen extends ConsumerWidget {
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TenantHomeShell()),
+          MaterialPageRoute(builder: (_) => const HomeShell()),
           (_) => false,
         );
       },

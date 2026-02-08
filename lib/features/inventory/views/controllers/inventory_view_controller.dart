@@ -1,7 +1,7 @@
 // lib/features/inventory_view/controllers/inventory_view_controller.dart
-import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_session_guard_provider.dart';
 import 'package:afyakit/features/inventory/batches/controllers/batch_args.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -209,10 +209,10 @@ class InventoryViewController extends StateNotifier<InventoryViewState> {
 
     final enteredByName = displayName?.isNotEmpty == true
         ? displayName!
-        : user.phoneNumber.trim();
+        : user.phoneNumber!.trim();
 
     // Backwards-compat: param is still named enteredByEmail, but value is WA number
-    final enteredByPhone = user.phoneNumber.trim();
+    final enteredByPhone = user.phoneNumber!.trim();
 
     // Ensure there’s an active session (engine will resume or start new).
     if (!session.isActive) {

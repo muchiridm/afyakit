@@ -1,6 +1,6 @@
 // lib/shared/services/dialog_service.dart
 
-import 'package:afyakit/core/app/app_navigator.dart';
+import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:flutter/material.dart';
 

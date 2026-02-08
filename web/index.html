@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <base href="$FLUTTER_BASE_HREF" />
@@ -31,7 +31,15 @@
     <!-- Dynamic, tenant-aware manifest (backend can serve per-tenant JSON here) -->
     <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
   </head>
+
   <body>
+    <!--
+      Firebase Phone Auth reCAPTCHA anchor (Web)
+      Keep this element stable during Flutter bootstrap to avoid DOM race issues
+      like: "Cannot read properties of null (reading 'style')"
+    -->
+    <div id="firebase-recaptcha-container"></div>
+
     <script src="flutter_bootstrap.js" async></script>
   </body>
 </html>

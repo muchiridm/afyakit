@@ -6,11 +6,13 @@ import 'package:afyakit/features/inventory/locations/inventory_location_type_enu
 
 part 'routes_auth.dart';
 part 'routes_users.dart';
-part 'routes_tenants.dart';
 part 'routes_inventory.dart';
 part 'routes_misc.dart';
 part 'routes_zoho.dart';
 part 'routes_mpesa.dart';
+
+part 'routes_domains.dart';
+part 'routes_tenants.dart';
 
 class AfyaKitRoutes {
   AfyaKitRoutes(String tenantId) : tenantId = tenantId.trim().toLowerCase();

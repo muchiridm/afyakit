@@ -2,7 +2,7 @@
 
 import 'dart:convert';
 
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +21,7 @@ import '../models/items/equipment_item.dart';
 /// Provider (awaits AfyaKit client so Dio is ready)
 final inventoryServiceProvider = FutureProvider<InventoryService>((ref) async {
   final tenantId = ref.watch(tenantSlugProvider);
-  final client = await ref.watch(afyakitClientProvider.future);
+  final client = await ref.watch(afyakitClientFutureProvider.future);
   final routes = AfyaKitRoutes(tenantId);
   return InventoryService(routes: routes, dio: client.dio);
 });

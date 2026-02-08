@@ -29,7 +29,7 @@ class DiSalesTile {
   final bool? priceRequestRequired;
 
   // ─────────────────────────────────────────────────────────────
-  // ✅ Edit-mode helper: build a safe tile from a Zoho line item
+  // Edit-mode helper: build a safe tile from a Zoho line item
   // ─────────────────────────────────────────────────────────────
 
   /// Creates a "best-effort" tile when editing a quote loaded from Zoho.
@@ -44,8 +44,6 @@ class DiSalesTile {
     String? bestSupplier,
     bool? priceRequestRequired,
     String? form,
-
-    // ✅ NEW (optional, backward compatible)
     String? canonKey,
     String? groupKey,
   }) {
@@ -84,7 +82,6 @@ class DiSalesTile {
     return cleaned.isEmpty ? 'line' : cleaned;
   }
 
-  // strict helpers
   static String? _s(Object? v) {
     if (v is String) {
       final t = v.trim();
@@ -100,9 +97,12 @@ class DiSalesTile {
   factory DiSalesTile.fromJson(Map<String, dynamic> json) {
     final j = json.cast<String, Object?>();
 
+    final canon = _s(j['canon_key']) ?? '';
+    final group = _s(j['group_key']) ?? canon;
+
     return DiSalesTile(
-      canonKey: _s(j['canon_key']) ?? '',
-      groupKey: _s(j['group_key']) ?? (_s(j['canon_key']) ?? ''),
+      canonKey: canon,
+      groupKey: group,
       tileTitle: _s(j['tile_title']) ?? '',
       tileDesc: _s(j['tile_desc']),
       form: _s(j['form']),

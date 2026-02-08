@@ -6,7 +6,7 @@ import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_com
 class UserProfileCard extends StatelessWidget {
   final String displayName;
   final String? email;
-  final String phoneNumber;
+  final String? phoneNumber;
 
   /// "Member" / "Staff" (from UserType.label)
   final String userTypeLabel;
@@ -44,7 +44,7 @@ class UserProfileCard extends StatelessWidget {
     super.key,
     required this.displayName,
     this.email,
-    required this.phoneNumber,
+    this.phoneNumber,
     required this.userTypeLabel,
     required this.roleLabel,
     this.roleValue,
@@ -113,7 +113,9 @@ class UserProfileCard extends StatelessWidget {
     final safeName = displayName.trim().isNotEmpty
         ? displayName.trim()
         : 'Unnamed User';
-    final safePhone = phoneNumber.trim().isNotEmpty ? phoneNumber.trim() : '—';
+    final safePhone = phoneNumber!.trim().isNotEmpty
+        ? phoneNumber?.trim()
+        : '—';
     final safeEmail = email != null && email!.trim().isNotEmpty
         ? email!.trim()
         : null;
@@ -131,7 +133,7 @@ class UserProfileCard extends StatelessWidget {
           ],
         ),
         if (safeEmail != null) _buildLine(safeEmail),
-        _buildLine(safePhone),
+        _buildLine(safePhone!),
         const SizedBox(height: 6),
 
         // Type + primary role + staff roles as chips

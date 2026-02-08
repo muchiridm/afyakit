@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import '../../../shared/models/zoho_payment_draft.dart';
 import '../../../shared/models/zoho_invoice_payment.dart';
@@ -17,7 +17,7 @@ final zohoPaymentsServiceProvider = FutureProvider<ZohoPaymentsService>((
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
   final routes = AfyaKitRoutes(tenantId);
-  final api = await ref.watch(afyakitClientProvider.future);
+  final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoPaymentsService(api: api, routes: routes);
 });
 

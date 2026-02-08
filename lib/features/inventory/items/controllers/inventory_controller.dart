@@ -1,9 +1,9 @@
 // lib/core/inventory/controllers/inventory_controller.dart
 
-import 'package:afyakit/core/app/app_navigator.dart';
+import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -36,7 +36,7 @@ class InventoryController extends StateNotifier<void> {
   Future<InventoryService> _makeService() async {
     final tenantId = ref.read(tenantSlugProvider);
     final client = await ref.read(
-      afyakitClientProvider.future,
+      afyakitClientFutureProvider.future,
     ); // await Dio client
     final routes = AfyaKitRoutes(tenantId);
     return InventoryService(routes: routes, dio: client.dio);

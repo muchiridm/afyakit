@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';

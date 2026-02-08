@@ -8,12 +8,12 @@ import 'package:afyakit/features/retail/invoices/controllers/invoice_state.dart'
 import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_feedback.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_header.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_lines.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_models.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_status_chip.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_total_bar.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';

@@ -1,20 +1,24 @@
-// lib/core/auth_user/models/auth_user_model.dart
+import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
-/// Backend-aligned Zoho mapping for this auth user (tenant-scoped).
-
+@immutable
 class AuthUser {
   // ────────────── Identity (immutable) ──────────────
   final String uid;
-  final String phoneNumber; // canonical Firebase identity (E.164)
-  final String tenantId; // membership scope
+
+  /// Canonical Firebase identity (E.164).
+  /// Nullable to tolerate legacy/dirty records coming from backend lists/admin tools.
+  final String? phoneNumber;
+
+  /// Membership scope.
+  final String tenantId;
 
   // ────────────── Status / type ──────────────
-  final UserStatus status; // active | disabled (BE); keep tolerant
+  final UserStatus status; // active | disabled (BE); tolerant parsing
   final UserType type; // member | staff
 
   // ────────────── Membership / access ──────────────
@@ -24,7 +28,7 @@ class AuthUser {
   final String? firstName;
   final String? lastName;
 
-  /// Backend may send displayName or omit it; keep nullable but provide a computed fallback.
+  /// Backend may send displayName or omit it; keep nullable but provide computed fallback.
   final String? displayName;
 
   final String? avatarUrl;
@@ -33,19 +37,34 @@ class AuthUser {
   final String? email;
   final String? emailLower;
 
+  // ────────────── Phone verification model ──────────────
+
+  /// Strong proof via Firebase Phone Auth / WA OTP / etc.
   final bool phoneVerified;
   final String? phoneVerifiedAt; // ISO string
 
+  /// Somalia (+252) fallback acceptance:
+  /// - phoneClaimed means we accept this phone as identity anchor even if OTP is bypassed.
+  /// - For non-+252, backend should mirror claimed==verified, but FE stays tolerant.
+  final bool phoneClaimed;
+  final String? phoneClaimedAt; // ISO string
+
+  /// Optional convenience flag (backend may send it).
+  /// If missing, FE computes it from phoneNumber + (phoneVerified/phoneClaimed) using +252 rule.
+  final bool? phoneSatisfied;
+
+  // ────────────── Email verification model ──────────────
   final bool emailVerified;
   final String? emailVerifiedAt; // ISO string
 
+  // ────────────── Organization ──────────────
   final bool isCompany;
   final String? companyName;
 
   /// Tenant-scoped human account number (e.g. DP-000123).
   final String? accountNumber;
 
-  /// Backend-owned mapping to Zoho Books contact/person (tenant-scoped).
+  /// Tenant-scoped Zoho Books contact/person mapping (optional, feature-gated).
   final AuthUserZohoLink? zoho;
 
   /// Normalized Firebase custom claims for this session (optional).
@@ -62,10 +81,10 @@ class AuthUser {
 
   const AuthUser({
     required this.uid,
-    required this.phoneNumber,
     required this.tenantId,
     required this.status,
     required this.type,
+    this.phoneNumber,
     this.stores = const [],
     this.firstName,
     this.lastName,
@@ -75,6 +94,9 @@ class AuthUser {
     this.emailLower,
     this.phoneVerified = false,
     this.phoneVerifiedAt,
+    this.phoneClaimed = false,
+    this.phoneClaimedAt,
+    this.phoneSatisfied,
     this.emailVerified = false,
     this.emailVerifiedAt,
     this.isCompany = false,
@@ -92,16 +114,16 @@ class AuthUser {
   // Helpers
   // ─────────────────────────────────────────────
 
-  static String _cleanStr(dynamic v) => (v ?? '').toString().trim();
+  static String _cleanStr(Object? v) => (v ?? '').toString().trim();
 
-  static String? _optStr(dynamic v) {
+  static String? _optStr(Object? v) {
     final s = _cleanStr(v);
     return s.isEmpty ? null : s;
   }
 
-  static bool _bool(dynamic v) => v == true;
+  static bool _bool(Object? v) => v == true;
 
-  static List<String> _normalizeStores(dynamic raw) {
+  static List<String> _normalizeStores(Object? raw) {
     final out = <String>[];
 
     if (raw is List) {
@@ -117,17 +139,17 @@ class AuthUser {
     }
 
     final seen = <String>{};
-    return out.where(seen.add).toList();
+    return out.where(seen.add).toList(growable: false);
   }
 
-  static Map<String, dynamic>? _normalizeClaims(dynamic raw) {
+  static Map<String, dynamic>? _normalizeClaims(Object? raw) {
     if (raw is Map) {
       return raw.map((k, v) => MapEntry(k.toString(), v));
     }
     return null;
   }
 
-  static List<StaffRole> _normalizeStaffRoles(dynamic raw) {
+  static List<StaffRole> _normalizeStaffRoles(Object? raw) {
     if (raw is! List) return const [];
     final out = <StaffRole>[];
     for (final v in raw) {
@@ -136,12 +158,11 @@ class AuthUser {
       if (parsed != null) out.add(parsed);
     }
     final seen = <String>{};
-    return out.where((r) => seen.add(r.name)).toList();
+    return out.where((r) => seen.add(r.name)).toList(growable: false);
   }
 
-  static UserStatus _parseStatus(dynamic raw) {
+  static UserStatus _parseStatus(Object? raw) {
     final s = _cleanStr(raw).toLowerCase();
-    // Backend: active|disabled. Keep tolerant if FE enum adds more later.
     try {
       return UserStatus.fromString(s.isEmpty ? 'active' : s);
     } catch (_) {
@@ -150,7 +171,7 @@ class AuthUser {
   }
 
   static UserType _parseType({
-    required dynamic rawType,
+    required Object? rawType,
     required List<StaffRole> staffRoles,
     required bool isSuperAdmin,
   }) {
@@ -166,6 +187,22 @@ class AuthUser {
     return UserType.member;
   }
 
+  static bool _isSomaliaPhone(String? phoneE164) =>
+      phoneE164 != null && phoneE164.trim().startsWith('+252');
+
+  static bool _computePhoneSatisfied({
+    required String? phoneNumber,
+    required bool phoneVerified,
+    required bool phoneClaimed,
+  }) {
+    if (phoneNumber == null || phoneNumber.trim().isEmpty) return false;
+    if (!_isSomaliaPhone(phoneNumber)) return phoneVerified == true;
+    return phoneVerified == true || phoneClaimed == true;
+  }
+
+  /// Preferred display value for UI labels.
+  /// Falls back in this order:
+  /// displayName → first+last → companyName (if isCompany) → phoneNumber → uid
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (dn.isNotEmpty) return dn;
@@ -180,19 +217,34 @@ class AuthUser {
       if (cn.isNotEmpty) return cn;
     }
 
-    return phoneNumber;
+    final pn = (phoneNumber ?? '').trim();
+    if (pn.isNotEmpty) return pn;
+
+    return uid;
+  }
+
+  /// Resolved “phone satisfied” state (Somalia rule).
+  bool get isPhoneSatisfiedResolved {
+    final explicit = phoneSatisfied;
+    if (explicit != null) return explicit;
+    return _computePhoneSatisfied(
+      phoneNumber: phoneNumber,
+      phoneVerified: phoneVerified,
+      phoneClaimed: phoneClaimed,
+    );
   }
 
   // ────────────── Parsing ──────────────
 
-  factory AuthUser.fromMap(Map<String, dynamic> json) {
+  factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
     final uid = _cleanStr(json['uid']);
-    final phone = _cleanStr(json['phoneNumber']);
     final tenant = _cleanStr(json['tenantId']);
 
     if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
-    if (phone.isEmpty) throw ArgumentError('AuthUser requires phoneNumber');
     if (tenant.isEmpty) throw ArgumentError('AuthUser requires tenantId');
+
+    // phoneNumber is optional now (legacy tolerant)
+    final phone = _optStr(json['phoneNumber']);
 
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
@@ -204,21 +256,8 @@ class AuthUser {
       isSuperAdmin: isSuperAdmin,
     );
 
-    AuthUserZohoLink? zoho;
-    final rawZoho = json['zoho'];
-    if (rawZoho is Map) {
-      try {
-        zoho = AuthUserZohoLink.fromMap(
-          Map<String, dynamic>.from(
-            rawZoho.map((k, v) => MapEntry(k.toString(), v)),
-          ),
-        );
-      } catch (_) {
-        zoho = null;
-      }
-    }
-
     final phoneVerified = _bool(json['phoneVerified']);
+    final phoneClaimed = _bool(json['phoneClaimed']);
     final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
 
@@ -228,6 +267,28 @@ class AuthUser {
 
     final safeEmail = emailVerified ? email : null;
     final safeEmailLower = emailVerified ? (emailLower ?? email) : null;
+
+    // Optional convenience: phoneSatisfied from backend (if you add it later)
+    final phoneSatisfiedRaw = json['phoneSatisfied'];
+    final bool? phoneSatisfied = phoneSatisfiedRaw == null
+        ? null
+        : _bool(phoneSatisfiedRaw);
+
+    AuthUserZohoLink? zoho;
+    if (allowZoho) {
+      final rawZoho = json['zoho'];
+      if (rawZoho is Map) {
+        try {
+          zoho = AuthUserZohoLink.fromMap(
+            Map<String, dynamic>.from(
+              rawZoho.map((k, v) => MapEntry(k.toString(), v)),
+            ),
+          );
+        } catch (_) {
+          zoho = null;
+        }
+      }
+    }
 
     return AuthUser(
       uid: uid,
@@ -242,9 +303,11 @@ class AuthUser {
       avatarUrl: _optStr(json['avatarUrl']),
       email: safeEmail,
       emailLower: safeEmailLower,
-
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
+      phoneClaimed: phoneClaimed,
+      phoneClaimedAt: _optStr(json['phoneClaimedAt']),
+      phoneSatisfied: phoneSatisfied,
       emailVerified: emailVerified,
       emailVerifiedAt: _optStr(json['emailVerifiedAt']),
       isCompany: isCompany,
@@ -259,8 +322,12 @@ class AuthUser {
     );
   }
 
-  factory AuthUser.fromJson(Map<String, dynamic> json) =>
-      AuthUser.fromMap(json);
+  factory AuthUser.fromJson(
+    Map<String, dynamic> json, {
+    bool allowZoho = true,
+  }) => AuthUser.fromMap(json, allowZoho: allowZoho);
+
+  // ────────────── Copy ──────────────
 
   AuthUser copyWith({
     UserStatus? status,
@@ -274,6 +341,9 @@ class AuthUser {
     String? emailLower,
     bool? phoneVerified,
     String? phoneVerifiedAt,
+    bool? phoneClaimed,
+    String? phoneClaimedAt,
+    bool? phoneSatisfied,
     bool? emailVerified,
     String? emailVerifiedAt,
     bool? isCompany,
@@ -301,6 +371,9 @@ class AuthUser {
       emailLower: emailLower ?? this.emailLower,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
+      phoneClaimed: phoneClaimed ?? this.phoneClaimed,
+      phoneClaimedAt: phoneClaimedAt ?? this.phoneClaimedAt,
+      phoneSatisfied: phoneSatisfied ?? this.phoneSatisfied,
       emailVerified: emailVerified ?? this.emailVerified,
       emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
       isCompany: isCompany ?? this.isCompany,
@@ -315,10 +388,12 @@ class AuthUser {
     );
   }
 
+  // ────────────── Serialize ──────────────
+
   Map<String, dynamic> toMap() => {
     'uid': uid,
-    'phoneNumber': phoneNumber,
     'tenantId': tenantId,
+    if (phoneNumber != null) 'phoneNumber': phoneNumber,
     'status': status.wire,
     'type': type.wire,
     'stores': stores,
@@ -330,6 +405,9 @@ class AuthUser {
     if (emailLower != null) 'emailLower': emailLower,
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
+    if (phoneClaimed) 'phoneClaimed': true,
+    if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
+    if (phoneSatisfied != null) 'phoneSatisfied': phoneSatisfied,
     if (emailVerified) 'emailVerified': true,
     if (emailVerifiedAt != null) 'emailVerifiedAt': emailVerifiedAt,
     if (isCompany) 'isCompany': true,
@@ -339,7 +417,7 @@ class AuthUser {
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
     if (staffRoles.isNotEmpty)
-      'staffRoles': staffRoles.map((r) => r.name).toList(),
+      'staffRoles': staffRoles.map((r) => r.name).toList(growable: false),
     if (createdAt != null) 'createdAt': createdAt,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };

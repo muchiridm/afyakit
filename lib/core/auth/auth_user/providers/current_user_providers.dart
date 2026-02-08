@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 /// Keep a per-tenant inflight lock so multiple widgets don't spam /me.
 final Map<String, Future<AuthUser>> _meInflightByTenant =
@@ -43,7 +43,7 @@ final currentUserProvider = FutureProvider.autoDispose<AuthUser?>((ref) async {
   }
 
   // IMPORTANT: afyakitClientProvider already awaits tenantSessionGuardProvider.future
-  final client = await ref.watch(afyakitClientProvider.future);
+  final client = await ref.watch(afyakitClientFutureProvider.future);
   final baseUrl = client.dio.options.baseUrl;
 
   final key = '$tenantId@$baseUrl';
@@ -104,6 +104,6 @@ final userDisplayNameProvider = Provider<String?>((ref) {
   final name = u.displayName?.trim();
   if (name!.isNotEmpty) return name;
 
-  final phone = u.phoneNumber.trim();
+  final phone = u.phoneNumber!.trim();
   return phone.isNotEmpty ? phone : null;
 });

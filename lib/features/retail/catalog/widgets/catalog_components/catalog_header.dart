@@ -4,10 +4,10 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
-import 'package:afyakit/core/branding/providers/tenant_logo_providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
-import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
+import 'package:afyakit/hq/branding/providers/tenant_logo_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -321,7 +321,7 @@ class _HeaderButtons extends ConsumerWidget {
             label: const Text('Home'),
             onPressed: () {
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const TenantHomeShell()),
+                MaterialPageRoute(builder: (_) => const HomeShell()),
               );
             },
           )

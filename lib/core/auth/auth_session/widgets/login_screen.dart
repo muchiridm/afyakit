@@ -1,4 +1,5 @@
 // lib/core/auth/widgets/login_screen.dart
+
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:flutter/material.dart';
@@ -28,16 +29,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
+  final _displayNameCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
 
   ProviderSubscription<LoginState>? _sub;
+
+  LoginController get _ctrl => ref.read(loginControllerProvider.notifier);
 
   @override
   void initState() {
     super.initState();
 
     _sub = ref.listenManual<LoginState>(loginControllerProvider, (prev, next) {
-      // ✅ UX polish: clear irrelevant fields when step changes
       final prevStep = prev?.step;
       final nextStep = next.step;
 
@@ -47,26 +50,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _otpCtrl.clear();
             _emailOtpCtrl.clear();
             break;
-
           case LoginStep.otp:
             _otpCtrl.clear();
             break;
-
           case LoginStep.emailEntry:
             _emailOtpCtrl.clear();
             break;
-
           case LoginStep.emailOtp:
             _emailOtpCtrl.clear();
             break;
-
           case LoginStep.nameEntry:
-            // don’t clear name fields here; user may be returning / partially complete
+            // keep user input; do not auto-mutate here (UI stays dumb)
             break;
         }
       }
 
-      // ✅ Close screen when controller says done
       if (next.closeScreen) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -89,21 +87,82 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
+    _displayNameCtrl.dispose();
     _companyCtrl.dispose();
 
     super.dispose();
   }
-
-  LoginController get _ctrl => ref.read(loginControllerProvider.notifier);
 
   void _close() {
     _ctrl.reset();
     Navigator.of(context).maybePop(false);
   }
 
+  String _modeLabel(LoginState state) {
+    final ch = (state.channel ?? '').trim().toLowerCase();
+    if (ch == 'sms') return 'SMS';
+    if (ch == 'email') return 'email';
+    return 'code';
+  }
+
+  bool _looksLikeEmail(String v) {
+    final s = v.trim();
+    return s.isNotEmpty && s.contains('@') && s.contains('.');
+  }
+
+  // ─────────────────────────────────────────────
+  // Small UI helpers (keep screen clean)
+  // ─────────────────────────────────────────────
+
+  Widget _primaryButton({
+    required bool enabled,
+    required VoidCallback? onPressed,
+    required bool busy,
+    required String label,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        child: busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(label),
+      ),
+    );
+  }
+
+  TextField _textField({
+    required TextEditingController controller,
+    required bool enabled,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    bool autofocus = false,
+    List<TextInputFormatter>? inputFormatters,
+    required InputDecoration decoration,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofocus: autofocus,
+      inputFormatters: inputFormatters,
+      onSubmitted: onSubmitted,
+      autocorrect: false,
+      enableSuggestions: false,
+      decoration: decoration,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(loginControllerProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: widget.backgroundColor,
@@ -122,10 +181,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildHeader(context),
-                      const SizedBox(height: 24),
-
-                      // ✅ Dumb UI: render purely based on step
+                      _buildHeader(theme),
+                      const SizedBox(height: 20),
+                      _StepHint(text: state.stepHint),
+                      const SizedBox(height: 16),
                       switch (state.step) {
                         LoginStep.phone => _phoneStep(state),
                         LoginStep.otp => _otpStep(state),
@@ -133,6 +192,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         LoginStep.emailOtp => _emailOtpStep(state),
                         LoginStep.nameEntry => _nameStep(state),
                       },
+                      const SizedBox(height: 18),
+                      if (state.busy) ...[
+                        const SizedBox(height: 6),
+                        Center(
+                          child: Text(
+                            'Please wait…',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.6,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -156,8 +229,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget _buildHeader(ThemeData theme) {
     final primary = theme.colorScheme.primary;
 
     return Column(
@@ -192,59 +264,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Step UIs
+  // ─────────────────────────────────────────────
+
   Widget _phoneStep(LoginState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          state.stepHint ?? 'Enter your phone number to continue.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        TextField(
+        _textField(
           controller: _phoneCtrl,
           enabled: !state.busy,
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.done,
-          autocorrect: false,
-          enableSuggestions: false,
           decoration: const InputDecoration(
             labelText: 'Phone number',
             hintText: '+2547...',
             border: OutlineInputBorder(),
             isDense: true,
           ),
-          onSubmitted: (_) => _ctrl.sendCode(phoneE164: _phoneCtrl.text),
+          onSubmitted: (_) {
+            final phone = _phoneCtrl.text.trim();
+            final can = phone.isNotEmpty && !state.busy;
+            if (can) _ctrl.sendCode(phoneE164: phone);
+          },
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: state.busy
-                ? null
-                : () => _ctrl.sendCode(phoneE164: _phoneCtrl.text),
-            child: state.sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Continue'),
-          ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _phoneCtrl,
+          builder: (context, value, _) {
+            final phone = value.text.trim();
+            final canContinue = phone.isNotEmpty && !state.busy;
+
+            return _primaryButton(
+              enabled: canContinue,
+              onPressed: () => _ctrl.sendCode(phoneE164: _phoneCtrl.text),
+              busy: state.sending,
+              label: 'Continue',
+            );
+          },
         ),
       ],
     );
   }
 
   Widget _otpStep(LoginState state) {
+    final modeLabel = _modeLabel(state);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          state.stepHint ?? 'Enter the 6-digit code.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
         TextButton(
           onPressed: state.busy
               ? null
@@ -255,48 +324,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: const Text('Change phone number'),
         ),
         const SizedBox(height: 8),
-        TextField(
+        _textField(
           controller: _otpCtrl,
           enabled: !state.busy,
+          autofocus: true,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           inputFormatters: <TextInputFormatter>[
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(6),
           ],
-          decoration: const InputDecoration(
-            labelText: 'Enter 6-digit code',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: 'Enter 6-digit $modeLabel code',
+            border: const OutlineInputBorder(),
             isDense: true,
             counterText: '',
           ),
-          onSubmitted: (_) => _ctrl.verifyCode(code: _otpCtrl.text),
+          onSubmitted: (_) {
+            final code = _otpCtrl.text.trim();
+            final can = code.length == 6 && !state.busy;
+            if (can) _ctrl.verifyCode(code: code);
+          },
         ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: state.busy
-                ? null
-                : () => _ctrl.verifyCode(code: _otpCtrl.text),
-            child: state.verifying
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Verify'),
-          ),
+        const SizedBox(height: 14),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _otpCtrl,
+          builder: (context, value, _) {
+            final code = value.text.trim();
+            final canVerify = code.length == 6 && !state.busy;
+
+            return _primaryButton(
+              enabled: canVerify,
+              onPressed: () => _ctrl.verifyCode(code: _otpCtrl.text),
+              busy: state.verifying,
+              label: 'Verify',
+            );
+          },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         TextButton(
-          onPressed: state.busy
-              ? null
-              : () async {
-                  _otpCtrl.clear();
-                  await _ctrl.resendLoginOtp();
-                  await _ctrl.sendCode(phoneE164: _phoneCtrl.text);
-                },
+          onPressed: state.busy ? null : () => _ctrl.resendLoginOtp(),
           child: const Text('Resend code'),
         ),
       ],
@@ -307,53 +374,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          state.stepHint ??
-              'Add your email to finish setup.\nWe’ll send a 6-digit code to confirm it.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
         TextButton(
           onPressed: state.busy
               ? null
               : () {
-                  _emailCtrl.clear();
                   _emailOtpCtrl.clear();
                   _ctrl.backToPhone();
                 },
           child: const Text('Back'),
         ),
         const SizedBox(height: 8),
-        TextField(
+        _textField(
           controller: _emailCtrl,
           enabled: !state.busy,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
-          autocorrect: false,
-          enableSuggestions: false,
           decoration: const InputDecoration(
             labelText: 'Email address',
             hintText: 'name@company.com',
             border: OutlineInputBorder(),
             isDense: true,
           ),
-          onSubmitted: (_) => _ctrl.startEmailVerify(email: _emailCtrl.text),
+          onSubmitted: (_) {
+            final email = _emailCtrl.text.trim();
+            final can = _looksLikeEmail(email) && !state.busy;
+            if (can) _ctrl.startEmailVerify(email: email);
+          },
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: state.busy
-                ? null
-                : () => _ctrl.startEmailVerify(email: _emailCtrl.text),
-            child: state.sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Send email code'),
-          ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _emailCtrl,
+          builder: (context, value, _) {
+            final email = value.text.trim();
+            final canSend = _looksLikeEmail(email) && !state.busy;
+
+            return _primaryButton(
+              enabled: canSend,
+              onPressed: () {
+                // optional: keep controller state consistent with UI
+                _ctrl.setPhoneNumber(_phoneCtrl.text);
+                _ctrl.startEmailVerify(email: _emailCtrl.text);
+              },
+
+              busy: state.sending,
+              label: 'Send email code',
+            );
+          },
         ),
       ],
     );
@@ -363,11 +429,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          state.stepHint ?? 'Enter the email code.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
         TextButton(
           onPressed: state.busy
               ? null
@@ -378,9 +439,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: const Text('Back'),
         ),
         const SizedBox(height: 8),
-        TextField(
+        _textField(
           controller: _emailOtpCtrl,
           enabled: !state.busy,
+          autofocus: true,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           inputFormatters: <TextInputFormatter>[
@@ -393,23 +455,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             isDense: true,
             counterText: '',
           ),
-          onSubmitted: (_) => _ctrl.verifyEmailCode(code: _emailOtpCtrl.text),
+          onSubmitted: (_) {
+            final code = _emailOtpCtrl.text.trim();
+            final can = code.length == 6 && !state.busy;
+            if (can) _ctrl.verifyEmailCode(code: code);
+          },
         ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: state.busy
-                ? null
-                : () => _ctrl.verifyEmailCode(code: _emailOtpCtrl.text),
-            child: state.verifying
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Verify email'),
-          ),
+        const SizedBox(height: 14),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _emailOtpCtrl,
+          builder: (context, value, _) {
+            final code = value.text.trim();
+            final canVerify = code.length == 6 && !state.busy;
+
+            return _primaryButton(
+              enabled: canVerify,
+              onPressed: () => _ctrl.verifyEmailCode(code: _emailOtpCtrl.text),
+              busy: state.verifying,
+              label: 'Verify email',
+            );
+          },
         ),
       ],
     );
@@ -419,78 +484,125 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          state.stepHint ?? 'Add your name to finish setup.',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
         TextButton(
-          onPressed: state.busy
-              ? null
-              : () {
-                  _ctrl.backToPhone();
-                },
+          onPressed: state.busy ? null : () => _ctrl.backToPhone(),
           child: const Text('Back'),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _firstNameCtrl,
-          enabled: !state.busy,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'First name',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _textField(
+                controller: _firstNameCtrl,
+                enabled: !state.busy,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'First name (optional)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _textField(
+                controller: _lastNameCtrl,
+                enabled: !state.busy,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Last name (optional)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
-        TextField(
-          controller: _lastNameCtrl,
-          enabled: !state.busy,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Last name',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
+
+        // Display name is required. We show the error when empty.
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _displayNameCtrl,
+          builder: (context, value, _) {
+            final displayName = value.text.trim();
+            final hasDisplayName = displayName.isNotEmpty;
+
+            return _textField(
+              controller: _displayNameCtrl,
+              enabled: !state.busy,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Display name *',
+                hintText: 'e.g. Dr. John Doe / Pharmacy Mpya',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                helperText: 'This is what others will see.',
+                errorText: hasDisplayName ? null : 'Display name is required',
+              ),
+            );
+          },
         ),
+
         const SizedBox(height: 10),
-        TextField(
+        _textField(
           controller: _companyCtrl,
           enabled: !state.busy,
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
-            labelText: 'Company (optional)',
+            labelText: 'Company (required for companies)',
             border: OutlineInputBorder(),
             isDense: true,
           ),
-          onSubmitted: (_) => _ctrl.finishOnboardingAfterName(
-            firstName: _firstNameCtrl.text,
-            lastName: _lastNameCtrl.text,
-            companyName: _companyCtrl.text,
-          ),
+          onSubmitted: (_) => _tryFinish(state),
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: state.busy
-                ? null
-                : () => _ctrl.finishOnboardingAfterName(
-                    firstName: _firstNameCtrl.text,
-                    lastName: _lastNameCtrl.text,
-                    companyName: _companyCtrl.text,
-                  ),
-            child: state.savingProfile
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Finish'),
-          ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _displayNameCtrl,
+          builder: (context, value, _) {
+            final displayName = value.text.trim();
+            final canFinish = displayName.isNotEmpty && !state.busy;
+
+            return _primaryButton(
+              enabled: canFinish,
+              onPressed: () => _tryFinish(state),
+              busy: state.savingProfile,
+              label: 'Finish',
+            );
+          },
         ),
       ],
+    );
+  }
+
+  void _tryFinish(LoginState state) {
+    if (state.busy) return;
+
+    final displayName = _displayNameCtrl.text.trim();
+    if (displayName.isEmpty) return;
+
+    _ctrl.finishOnboardingAfterName(
+      firstName: _firstNameCtrl.text,
+      lastName: _lastNameCtrl.text,
+      displayName: _displayNameCtrl.text,
+      companyName: _companyCtrl.text,
+    );
+  }
+}
+
+class _StepHint extends StatelessWidget {
+  const _StepHint({required this.text});
+  final String? text;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = (text ?? '').trim();
+    if (t.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Text(
+      t,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodyMedium?.copyWith(height: 1.25),
     );
   }
 }

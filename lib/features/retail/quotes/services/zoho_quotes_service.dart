@@ -1,8 +1,9 @@
-// lib/features/retail/sales/quotes/services/zoho_quotes_service.dart
+// lib/features/retail/quotes/services/zoho_quotes_service.dart
 
 import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
+import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -10,19 +11,17 @@ import 'package:intl/intl.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import '../models/quote_draft.dart';
 import '../models/zoho_quote.dart';
-
-typedef JsonMap = Map<String, dynamic>;
 
 final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
   final routes = AfyaKitRoutes(tenantId);
-  final api = await ref.watch(afyakitClientProvider.future);
+  final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoQuotesService(api: api, routes: routes);
 });
 
@@ -41,7 +40,7 @@ class ZohoQuotesService {
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
-    final raw = data['quotes'] ?? data['estimates'] ?? data['items'];
+    final raw = data['quotes'];
 
     if (raw is List) {
       return raw
@@ -54,26 +53,27 @@ class ZohoQuotesService {
   }
 
   Future<ZohoQuote> get(String quoteId) async {
-    final raw = await getQuote(quoteId);
-    return ZohoQuote.fromJson(raw);
-  }
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
 
-  Future<JsonMap> getQuote(String quoteId) async {
-    final uri = routes.zohoGetQuote(quoteId);
+    final uri = routes.zohoGetQuote(id);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
-    final raw = data['quote'] ?? data['estimate'] ?? data;
+    final raw = data['quote'];
+    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
-    if (raw is Map<String, dynamic>) return raw;
-    if (raw is Map) return raw.cast<String, dynamic>();
-
-    throw StateError('Unexpected response shape: missing quote object');
+    throw StateError('Unexpected response: missing "quote"');
   }
 
   // ───────────────────────── Create / Update / Delete ─────────────────────────
+  //
+  // Backend contract:
+  // - POST uses CreateQuoteInput (customer_id required, line_items required)
+  // - PUT is full replace (UpdateQuoteInput): line_items required, customer_id optional
+  // ──────────────────────────────────────────────────────────────────────────
 
-  Future<JsonMap> createQuoteFromDraft(
+  Future<ZohoQuote> createFromDraft(
     QuoteDraft draft, {
     DateTime? quoteDate,
   }) async {
@@ -81,64 +81,57 @@ class ZohoQuotesService {
       draft,
       requireCustomer: true,
       quoteDate: quoteDate,
-      includeLineItemIds: false,
     );
 
     final uri = routes.zohoCreateQuote();
     final res = await api.postUri(uri, data: body);
-    return _asJsonMap(res.data);
+
+    final data = _asJsonMap(res.data);
+    final raw = data['quote'];
+    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+
+    throw StateError('Unexpected response: missing "quote"');
   }
 
-  Future<String?> createQuoteIdFromDraft(
-    QuoteDraft draft, {
-    DateTime? quoteDate,
-  }) async {
-    final res = await createQuoteFromDraft(draft, quoteDate: quoteDate);
-    final raw = res['quote'] ?? res['estimate'] ?? res;
-
-    if (raw is Map) {
-      final m = raw.cast<String, dynamic>();
-      final id = (m['quote_id'] ?? m['estimate_id'] ?? m['id'])
-          ?.toString()
-          .trim();
-      return (id == null || id.isEmpty) ? null : id;
-    }
-
-    return null;
-  }
-
-  Future<JsonMap> updateQuoteFromDraft(
+  Future<ZohoQuote> updateFromDraft(
     String quoteId,
     QuoteDraft draft, {
     DateTime? quoteDate,
   }) async {
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
+
     final body = _buildDraftPayload(
       draft,
       requireCustomer: false,
       quoteDate: quoteDate,
-      includeLineItemIds: true,
     );
 
-    final uri = routes.zohoUpdateQuote(quoteId);
+    final uri = routes.zohoUpdateQuote(id);
     final res = await api.putUri(uri, data: body);
-    return _asJsonMap(res.data);
-  }
 
-  Future<JsonMap> updateQuote(String quoteId, JsonMap patch) async {
-    final uri = routes.zohoUpdateQuote(quoteId);
-    final res = await api.putUri(uri, data: patch);
-    return _asJsonMap(res.data);
+    final data = _asJsonMap(res.data);
+    final raw = data['quote'];
+    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+
+    throw StateError('Unexpected response: missing "quote"');
   }
 
   Future<void> delete(String quoteId) async {
-    final uri = routes.zohoDeleteQuote(quoteId);
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
+
+    final uri = routes.zohoDeleteQuote(id);
     await api.deleteUri(uri);
   }
 
   // ───────────────────────── PDF ─────────────────────────
 
   Future<Uint8List> getPdf(String quoteId) async {
-    final uri = routes.zohoQuotePdf(quoteId);
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
+
+    final uri = routes.zohoQuotePdf(id);
 
     final res = await api.getUri(
       uri,
@@ -155,25 +148,37 @@ class ZohoQuotesService {
     throw StateError('Expected PDF bytes but got ${data.runtimeType}');
   }
 
-  // ───────────────────────── Send / Mark Sent ─────────────────────────
+  // ───────────────────────── Email / Mark sent ─────────────────────────
+  //
+  // Backend now owns the email flow (contact-person attach, retries, etc).
+  // So FE just triggers it.
+  // ───────────────────────────────────────────────────────────────────
 
-  Future<void> sendQuote(String quoteId, {ZohoEmailDraft? email}) async {
-    final uri = routes.zohoSendQuote(quoteId);
+  Future<void> email(String quoteId, {ZohoEmailDraft? email}) async {
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
 
+    final uri = routes.zohoSendQuote(id);
+
+    // If your BE ignores body for "noBody" send mode, pass null.
+    // If later you support optional email payload, we keep this ready.
     final payload = _pruneEmailJson(
       email?.toJson() ?? const <String, Object?>{},
     );
     await api.postUri(uri, data: payload.isEmpty ? null : payload);
   }
 
-  Future<void> markQuoteSent(String quoteId) async {
-    final uri = routes.zohoMarkQuoteSent(quoteId);
+  Future<void> markSent(String quoteId) async {
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
+
+    final uri = routes.zohoMarkQuoteSent(id);
     await api.postUri(uri);
   }
 
-  Future<void> sendAndMarkSent(String quoteId) async {
-    await sendQuote(quoteId);
-    await markQuoteSent(quoteId);
+  Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? email}) async {
+    await this.email(quoteId, email: email);
+    await markSent(quoteId);
   }
 
   // ───────────────────────── Convert to Invoice ─────────────────────────
@@ -183,7 +188,10 @@ class ZohoQuotesService {
     DateTime? invoiceDate,
     DateTime? dueDate,
   }) async {
-    final uri = routes.zohoConvertQuoteToInvoice(quoteId);
+    final id = quoteId.trim();
+    if (id.isEmpty) throw StateError('quoteId is empty');
+
+    final uri = routes.zohoConvertQuoteToInvoice(id);
 
     final body = <String, Object?>{
       if (invoiceDate != null) 'invoice_date': _zohoDateFmt.format(invoiceDate),
@@ -195,50 +203,53 @@ class ZohoQuotesService {
   }
 
   // ───────────────────────── Payload builder ─────────────────────────
+  //
+  // Matches backend QuoteDraftInput:
+  // - customer_id optional on update, required on create (controlled by requireCustomer)
+  // - line_items always required (min 1)
+  // - line_item_id included when present (important on update to avoid duplication)
+  // ─────────────────────────────────────────────────────────────────
 
   JsonMap _buildDraftPayload(
     QuoteDraft draft, {
     required bool requireCustomer,
-    required bool includeLineItemIds,
     DateTime? quoteDate,
   }) {
-    final customerId = (draft.contactId ?? draft.contact?.contactId ?? '')
-        .trim();
+    final customerId = draft.customerIdResolved.trim();
 
     if (requireCustomer && customerId.isEmpty) {
-      throw StateError('customer is required (missing contactId)');
+      throw StateError('customer_id is required');
     }
 
     if (draft.lines.isEmpty) {
       throw StateError('quote must have at least one line');
     }
 
-    final reference = _cleanOrNull(draft.reference);
-    final notes = _cleanOrNull(draft.customerNotes);
     final dateStr = quoteDate == null ? null : _zohoDateFmt.format(quoteDate);
 
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
       if (dateStr != null) 'date': dateStr,
-      if (reference != null) 'reference_number': reference,
-      if (notes != null) 'notes': notes,
+      if (_cleanOrNull(draft.reference) != null)
+        'reference_number': _cleanOrNull(draft.reference),
+      if (_cleanOrNull(draft.customerNotes) != null)
+        'notes': _cleanOrNull(draft.customerNotes),
+
+      // If you later support 'terms', 'expiry_date', 'contact_person_id' on FE,
+      // add them here too and keep this service as the single mapper.
       'line_items': draft.lines
           .map((l) {
-            final qty = _safeQty(l.quantity);
-            final rate = _safeRate(l.rate);
-
+            final lineItemId = _cleanOrNull(l.lineItemId);
             final name = _safeLineName(l);
             final description = _safeLineDescription(l);
 
-            final lineItemId = (l.lineItemId ?? '').trim();
-
             return <String, Object?>{
-              if (includeLineItemIds && lineItemId.isNotEmpty)
-                'line_item_id': lineItemId,
+              if (lineItemId != null) 'line_item_id': lineItemId,
               'name': name,
               if (description != null) 'description': description,
-              'quantity': qty,
-              'rate': rate,
+              'quantity': _safeQty(l.quantity),
+              'rate': _safeRate(l.rate),
+              // unit: optional; add when you have it in draft
             };
           })
           .toList(growable: false),
@@ -248,7 +259,6 @@ class ZohoQuotesService {
   // ───────────────────────── Tiny utils ─────────────────────────
 
   static Map<String, Object?> _pruneEmailJson(Map<String, Object?> input) {
-    // Drop known recipient arrays if empty. This prevents Zoho errors.
     final out = <String, Object?>{...input};
 
     void dropEmptyList(String key) {
@@ -261,7 +271,6 @@ class ZohoQuotesService {
     dropEmptyList('bcc_mail_ids');
     dropEmptyList('contact_person_ids');
 
-    // Drop empty strings
     out.removeWhere((k, v) => v is String && v.trim().isEmpty);
 
     return out;
@@ -281,15 +290,13 @@ class ZohoQuotesService {
   }
 
   static String _safeLineName(QuoteLineDraft line) {
-    final tile = line.tile;
-
     final d = (line.description ?? '').trim();
     if (d.isNotEmpty) return _truncate(d, 120);
 
-    final title = tile.tileTitle.trim();
+    final title = line.tile.tileTitle.trim();
     if (title.isNotEmpty) return _truncate(title, 120);
 
-    final fallback = (tile.tileDesc ?? '').trim();
+    final fallback = (line.tile.tileDesc ?? '').trim();
     return _truncate(fallback.isNotEmpty ? fallback : 'Item', 120);
   }
 
@@ -305,7 +312,7 @@ class ZohoQuotesService {
     return s.substring(0, max - 1).trimRight();
   }
 
-  JsonMap _asJsonMap(Object? v) {
+  static JsonMap _asJsonMap(Object? v) {
     if (v is Map<String, dynamic>) return v;
     if (v is Map) return v.cast<String, dynamic>();
     throw StateError('Expected JSON object but got ${v.runtimeType}');

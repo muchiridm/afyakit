@@ -13,17 +13,16 @@ bool _isPublicAuthRoute(Uri uri) {
 
   if (!p.contains('/auth_login/')) return false;
 
-  // IMPORTANT:
-  // - Do NOT treat /auth_login/email/start as always-public.
-  //   It is PUBLIC for login (when caller sets skipAuth),
-  //   but AUTH REQUIRED for purpose=verify_email.
-  //   Route-based skipping would strip Authorization and cause "missing-token".
+  // Only endpoints that are ALWAYS public should live here.
+  // Anything "token-gated after login" must NOT be here, otherwise we strip Authorization.
   const allowed = <String>[
-    '/auth_login/check-user-status',
-    '/auth_login/wa/start',
-    '/auth_login/sms/start',
-    // '/auth_login/email/start',  // ❌ REMOVE
+    '/auth_login/otp/start',
     '/auth_login/otp/verify',
+    '/auth_login/whatsapp/start',
+    // '/auth_login/email/start' is DUAL USE:
+    // - PUBLIC for login (caller sets skipAuth)
+    // - AUTH REQUIRED for purpose=verify_email
+    // So it must NEVER be "always public".
   ];
 
   return allowed.any(p.contains);
@@ -33,7 +32,6 @@ bool _shouldSkipAuth(RequestOptions options) {
   final skipAuth = options.extra['skipAuth'] == true;
   if (skipAuth) return true;
 
-  // Keep a tiny allowlist for endpoints that are truly always public.
   return _isPublicAuthRoute(options.uri);
 }
 
@@ -55,10 +53,7 @@ final class _ExtraKeys {
   static const retriedAuth = 'retried';
   static const retriedConnTimeout = 'retriedConnTimeout';
 
-  /// ✅ Optional: allow 404 without throwing (validateStatus).
   static const allow404 = 'allow404';
-
-  /// ✅ Optional: when allow404 is on, suppress the response log for 404.
   static const silence404 = 'silence404';
 }
 
@@ -81,9 +76,6 @@ final class AfyaKitClient {
       connectTimeout: connectT,
       receiveTimeout: receiveT,
       sendTimeout: sendT,
-    );
-
-    http.options = http.options.copyWith(
       validateStatus: (code) {
         final c = code ?? 0;
         return c >= 200 && c < 300;
@@ -260,7 +252,7 @@ final class AfyaKitClient {
   }
 
   // ─────────────────────────────────────────────
-  // ✅ Convenience wrappers (Uri-based)
+  // Convenience wrappers
   // ─────────────────────────────────────────────
 
   Options _mergeOptions(Options? options, {required bool allow404}) {

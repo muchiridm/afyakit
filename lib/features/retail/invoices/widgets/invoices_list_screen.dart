@@ -1,4 +1,4 @@
-import 'package:afyakit/features/retail/shared/widgets/sales_doc_status_chip.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,13 +8,13 @@ import 'package:afyakit/features/retail/invoices/controllers/invoices_list_contr
 import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 
-import 'package:afyakit/features/home/widgets/tenant_home_shell.dart';
+import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_list_card.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
 
 class InvoicesListScreen extends ConsumerWidget {
   const InvoicesListScreen({super.key});
@@ -36,7 +36,7 @@ class InvoicesListScreen extends ConsumerWidget {
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const TenantHomeShell()),
+          MaterialPageRoute(builder: (_) => const HomeShell()),
           (_) => false,
         );
       },

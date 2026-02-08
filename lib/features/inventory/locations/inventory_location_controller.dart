@@ -1,7 +1,7 @@
 // lib/core/inventory_locations/providers/inventory_location_provider.dart
 
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_session_guard_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -41,7 +41,7 @@ class InventoryLocationController
 
   Future<InventoryLocationService> _makeService() async {
     final tenantId = ref.read(tenantSlugProvider);
-    final client = await ref.read(afyakitClientProvider.future);
+    final client = await ref.read(afyakitClientFutureProvider.future);
     // 👇 Positional ctor: InventoryLocationService(AfyaKitRoutes, Dio)
     return InventoryLocationService(AfyaKitRoutes(tenantId), client.dio);
   }
