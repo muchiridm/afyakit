@@ -334,11 +334,15 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
   /// Update existing catalog lines (name/desc/rate/qty) via overrides.
   ///
   /// IMPORTANT:
-  /// - We update the “base bucket” line by default (tile.id + lineId == null).
-  /// - Once overrides exist, we PROMOTE it to unique (lineId != null) so it stops merging
-  ///   with future adds of the same tile.
+  /// - Default behavior (cart): targets base bucket (tile.id + lineId == null)
+  /// - Editor behavior: pass [lineKey] (or [lineId]) to update the exact line.
+  /// - If a base bucket gets overrides, we PROMOTE it to unique (lineId != null).
   void updateCatalogLine(
     CatalogTile tile, {
+    // ✅ NEW: target a specific catalog line when editing in the quote editor
+    String? lineKey,
+    String? lineId,
+
     String? name,
     String? description,
     num? rate,
@@ -347,11 +351,26 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     bool clearDescription = false,
     bool clearRate = false,
   }) {
-    // Find base bucket line
-    final idx = state.lines.indexWhere((l) {
-      if (l is! CatalogQuoteLine) return false;
-      return l.tile.id == tile.id && l.lineId == null;
-    });
+    // 1) Resolve target index
+    int idx = -1;
+
+    final k = (lineKey ?? '').trim();
+    final lid = (lineId ?? '').trim();
+
+    if (k.isNotEmpty) {
+      idx = _indexOfKey(k);
+    } else if (lid.isNotEmpty) {
+      idx = state.lines.indexWhere((l) {
+        if (l is! CatalogQuoteLine) return false;
+        return l.tile.id == tile.id && (l.lineId ?? '') == lid;
+      });
+    } else {
+      // Default: base bucket
+      idx = state.lines.indexWhere((l) {
+        if (l is! CatalogQuoteLine) return false;
+        return l.tile.id == tile.id && l.lineId == null;
+      });
+    }
 
     String? cleanStr(String? v) {
       final t = (v ?? '').trim();
@@ -364,8 +383,14 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     final nextName = name == null ? null : cleanStr(name);
     final nextDesc = description == null ? null : cleanStr(description);
 
-    // Create if missing
+    // 2) Create if missing (only sensible for base-bucket usage)
     if (idx == -1) {
+      // If caller gave lineKey/lineId but we couldn't find it, DO NOT silently create,
+      // because that's how duplicates sneak in.
+      if (k.isNotEmpty || lid.isNotEmpty) {
+        return;
+      }
+
       final q = nextQty ?? 1;
       if (q <= 0) return;
 
@@ -405,7 +430,8 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
       clearRateOverride: clearRate,
     );
 
-    // ✅ Promote base bucket to unique if it now has overrides
+    // ✅ Promote ONLY when updating the base bucket line
+    // (so cart behavior changes identity exactly once).
     if (updated.lineId == null && updated.hasOverrides) {
       updated = updated.copyWith(lineId: _newCatalogLineId());
     }
