@@ -1,5 +1,5 @@
 // lib/core/item_preferences/providers/item_preferences_providers.dart
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider

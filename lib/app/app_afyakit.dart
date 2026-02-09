@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/app_navigator.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/hq/branding/services/web_branding.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/hq/branding/services/web_branding.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:afyakit/core/auth/auth_session/widgets/auth_gate.dart';
+import 'package:afyakit/core/auth/shared/widgets/auth_gate.dart';
 import 'package:afyakit/shared/theme/app_theme_overrides.dart';
 
 class AppAfyaKit extends ConsumerWidget {

@@ -8,8 +8,8 @@ import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart'; // staffRoleLabel
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-import 'package:afyakit/hq/tenants/models/feature_keys.dart';
-import 'package:afyakit/hq/tenants/widgets/feature_gate.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
+import 'package:afyakit/core/hq/tenants/widgets/feature_gate.dart';
 
 class UserBadge extends ConsumerWidget {
   const UserBadge({super.key});

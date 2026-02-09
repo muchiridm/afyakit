@@ -12,12 +12,8 @@ class AppRoot extends StatelessWidget {
   final AppMode mode;
 
   @override
-  Widget build(BuildContext context) {
-    switch (mode) {
-      case AppMode.hq:
-        return const AppHq();
-      case AppMode.tenant:
-        return const AppAfyaKit();
-    }
-  }
+  Widget build(BuildContext context) => switch (mode) {
+    AppMode.hq => const AppHq(),
+    AppMode.tenant => const AppAfyaKit(),
+  };
 }

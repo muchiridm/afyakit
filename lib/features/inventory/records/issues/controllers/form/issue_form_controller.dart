@@ -4,7 +4,7 @@ import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dar
 import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_engine.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/features/inventory/records/issues/services/inventory_snapshot.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,4 +1,4 @@
-// lib/core/auth/widgets/login_screen.dart
+// lib/core/auth/auth_session/widgets/login_screen.dart
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';

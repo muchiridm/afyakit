@@ -1,5 +1,5 @@
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_feature_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';

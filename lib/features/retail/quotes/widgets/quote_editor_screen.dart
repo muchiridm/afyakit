@@ -19,7 +19,6 @@ import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -265,26 +264,26 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteLinesController linesCtl() =>
         ref.read(quoteLinesControllerProvider.notifier);
 
-    bool _isManualAt(int index) {
+    bool isManualAt(int index) {
       final b = bindings[index];
       final line = linesState.lines[index];
       return b.kind == _LineKind.manual && line is ManualQuoteLine;
     }
 
-    bool _isCatalogAt(int index) {
+    bool isCatalogAt(int index) {
       final b = bindings[index];
       final line = linesState.lines[index];
       return b.kind == _LineKind.catalog && line is CatalogQuoteLine;
     }
 
-    num _safeRate(num v) => (v.isNaN || v.isInfinite || v < 0) ? 0 : v;
+    num safeRate(num v) => (v.isNaN || v.isInfinite || v < 0) ? 0 : v;
 
-    String _safeName(String s) {
+    String safeName(String s) {
       final t = s.trim();
       return t.isEmpty ? 'Item' : t;
     }
 
-    Future<void> _editLineDialog(int index) async {
+    Future<void> editLineDialog(int index) async {
       final b = bindings[index];
       final line = linesState.lines[index];
 
@@ -315,7 +314,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
           qty: res.qty,
           name: res.name,
           description: res.description,
-          rate: widget.requirePrices ? _safeRate(res.rate) : 0,
+          rate: widget.requirePrices ? safeRate(res.rate) : 0,
         );
         return;
       }
@@ -324,10 +323,10 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       if (b.kind == _LineKind.manual && line is ManualQuoteLine) {
         lc.updateManualLine(
           b.manualId!,
-          name: _safeName(res.name),
+          name: safeName(res.name),
           description: res.description,
           qty: res.qty,
-          rate: widget.requirePrices ? _safeRate(res.rate) : 0,
+          rate: widget.requirePrices ? safeRate(res.rate) : 0,
         );
       }
     }
@@ -377,21 +376,21 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       : (int index, String nextName) async {
                           final lc = linesCtl();
 
-                          if (_isManualAt(index)) {
+                          if (isManualAt(index)) {
                             final b = bindings[index];
                             lc.updateManualLine(
                               b.manualId!,
-                              name: _safeName(nextName),
+                              name: safeName(nextName),
                             );
                             return;
                           }
 
-                          if (_isCatalogAt(index)) {
+                          if (isCatalogAt(index)) {
                             final line =
                                 linesState.lines[index] as CatalogQuoteLine;
                             lc.updateCatalogLine(
                               line.tile,
-                              name: _safeName(nextName),
+                              name: safeName(nextName),
                             );
                           }
                         },
@@ -405,7 +404,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                           final lc = linesCtl();
                           final qty = nextQty;
 
-                          if (_isCatalogAt(index)) {
+                          if (isCatalogAt(index)) {
                             final line =
                                 linesState.lines[index] as CatalogQuoteLine;
 
@@ -413,19 +412,19 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                               line.tile,
                               qty: qty,
                               rate: widget.requirePrices
-                                  ? _safeRate(nextRate)
+                                  ? safeRate(nextRate)
                                   : 0,
                             );
                             return;
                           }
 
-                          if (_isManualAt(index)) {
+                          if (isManualAt(index)) {
                             final b = bindings[index];
                             lc.updateManualLine(
                               b.manualId!,
                               qty: qty,
                               rate: widget.requirePrices
-                                  ? _safeRate(nextRate)
+                                  ? safeRate(nextRate)
                                   : 0,
                             );
                           }
@@ -434,7 +433,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                   // Full edit dialog (name + desc + qty + rate)
                   onEditLine: busy
                       ? null
-                      : (int index) async => _editLineDialog(index),
+                      : (int index) async => editLineDialog(index),
 
                   onRemoveLine: busy
                       ? null

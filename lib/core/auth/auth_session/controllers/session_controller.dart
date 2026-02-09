@@ -1,3 +1,5 @@
+// lib/core/auth/auth_session/controllers/session_controller.dart
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -32,6 +34,12 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   /// Prevent duplicate concurrent loadSession calls
   Future<void>? _inflight;
 
+  /// Track last successful backend session fetch (per controller/tenant)
+  DateTime? _lastNetworkFetchAt;
+
+  /// Cache TTL: allow fast refreshes without spamming backend, but never indefinitely
+  static const Duration _sessionCacheTtl = Duration(seconds: 30);
+
   Future<AuthService> _svc() async =>
       ref.read(authServiceProvider(tenantId).future);
 
@@ -41,7 +49,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     _sub = fb.FirebaseAuth.instance.idTokenChanges().listen(
       (fbUser) async {
         // Background refresh (no loading flicker).
-        // NOTE: this is not forced network, but we now use a "safe cache" check.
         await _syncFromFirebaseUser(
           fbUser,
           forceNetwork: false,
@@ -82,8 +89,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   }
 
   bool _shouldTreatAsGuestError(Object err) {
-    // Backend session endpoint should return 401/403 when not signed in.
-    // Some deployments incorrectly throw 500 on missing/invalid token.
     if (err is DioException) {
       final code = err.response?.statusCode;
       return code == 401 || code == 403 || code == 500;
@@ -111,21 +116,19 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     debugPrint(
       '🧾 [session][$where] uid=${u?.uid} '
       'phoneVerified=${u?.phoneVerified} '
+      'phoneClaimed=${u?.phoneClaimed} '
+      'phoneSatisfied=${u?.phoneSatisfied} '
       'emailVerified=${u?.emailVerified} '
+      'emailLower="${u?.emailLower}" '
       'isCompany=${u?.isCompany} '
       'firstName="${u?.firstName}" lastName="${u?.lastName}" company="${u?.companyName}"',
     );
   }
 
-  bool _sameCriticalFlags(AuthUser? a, AuthUser? b) {
-    if (a == null && b == null) return true;
-    if (a == null || b == null) return false;
-    if (a.uid != b.uid) return false;
-
-    // These are the gating fields that decide whether you see the email screen.
-    return a.phoneVerified == b.phoneVerified &&
-        a.phoneClaimed == b.phoneClaimed &&
-        a.emailVerified == b.emailVerified;
+  bool _cacheStillFresh() {
+    final t = _lastNetworkFetchAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) <= _sessionCacheTtl;
   }
 
   Future<void> _syncFromFirebaseUser(
@@ -156,7 +159,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
     _setLoadingIfNeeded(showLoadingIfNeeded: showLoadingIfNeeded);
 
-    // If Firebase has no user, we are a guest.
     if (fbUser == null) {
       if (_disposed) return;
       state = const AsyncValue.data(null);
@@ -177,23 +179,25 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
         }
       }
 
-      // ✅ SAFE cache fast-path:
-      // Only reuse cached user if it matches the CURRENT state's critical flags.
-      // Otherwise fetch from backend to avoid hiding updates to phoneVerified/emailVerified.
+      // ✅ Cache fast-path, but ONLY if:
+      // - not forcing network
+      // - cached matches uid
+      // - AND last backend fetch is still within TTL
       final cached = svc.currentUser;
-      if (!forceNetwork && cached != null && cached.uid == fbUser.uid) {
-        if (_sameCriticalFlags(cached, previousUser)) {
-          if (_disposed) return;
-          state = AsyncValue.data(cached);
-          _logSessionUser(cached, where: 'cache');
-          return;
-        }
-        // Cached exists but looks stale relative to current gating flags.
-        // Fall through to backend loadSession().
+      if (!forceNetwork &&
+          _cacheStillFresh() &&
+          cached != null &&
+          cached.uid == fbUser.uid) {
+        if (_disposed) return;
+        state = AsyncValue.data(cached);
+        _logSessionUser(cached, where: 'cache');
+        return;
       }
 
       // Source of truth: backend session (AUTH REQUIRED)
       final fresh = await svc.loadSession();
+      _lastNetworkFetchAt = DateTime.now();
+
       if (_disposed) return;
       state = AsyncValue.data(fresh);
       _logSessionUser(fresh, where: 'network');
@@ -201,7 +205,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       if (_shouldTreatAsGuestError(err)) {
         _logSessionError(err, st, where: 'loadSession');
 
-        // Keep previous user to reduce flicker on transient failures.
         if (_disposed) return;
         state = previousUser != null
             ? AsyncValue.data(previousUser)
@@ -231,7 +234,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     );
   }
 
-  /// Centralised OTP sign-in (tenant-scoped).
   Future<void> signInWithOtp({
     required String attemptId,
     required String code,
@@ -256,6 +258,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       );
 
       // After auth event, force network session reload
+      _lastNetworkFetchAt = null;
       await refresh(forceNetwork: true);
     } catch (err, st) {
       if (_disposed) return;
@@ -275,7 +278,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       await svc.signInWithCustomToken(customToken);
 
-      // Force fresh idToken immediately
       final fbUser = fb.FirebaseAuth.instance.currentUser;
       if (fbUser != null) {
         try {
@@ -287,6 +289,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
         }
       }
 
+      _lastNetworkFetchAt = null;
       await refresh(forceNetwork: true);
     } catch (err, st) {
       if (_disposed) return;
@@ -301,6 +304,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       await svc.logOut();
     } finally {
       if (_disposed) return;
+      _lastNetworkFetchAt = null;
       state = const AsyncValue.data(null);
     }
   }

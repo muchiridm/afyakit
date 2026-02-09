@@ -1,7 +1,7 @@
 // lib/shared/home/widgets/common/catalog_button.dart
 
-import 'package:afyakit/hq/tenants/models/feature_keys.dart';
-import 'package:afyakit/hq/tenants/widgets/feature_gate.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
+import 'package:afyakit/core/hq/tenants/widgets/feature_gate.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:flutter/material.dart';
 

@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/features/inventory/items/controllers/inventory_editable_base.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

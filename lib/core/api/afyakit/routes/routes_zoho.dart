@@ -13,6 +13,7 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
   // 💼 Zoho Books (tenant-scoped; authenticated)
   // ─────────────────────────────────────────────
 
+  /// NOTE: Zoho Books uses `search_text` (not `search`) for list filters.
   Uri zohoListContacts({
     String? search,
     String? type,
@@ -21,17 +22,20 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
   }) => _uri(
     'zoho/v1/contacts',
     query: {
-      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (search != null && search.trim().isNotEmpty)
+        'search_text': search.trim(),
       if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
       'limit': '$limit',
       'page': '$page',
     },
   );
 
+  /// NOTE: keep consistent with Zoho param naming.
   Uri zohoListCustomers({String? search, int limit = 50, int page = 1}) => _uri(
     'zoho/v1/contacts/customers',
     query: {
-      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (search != null && search.trim().isNotEmpty)
+        'search_text': search.trim(),
       'limit': '$limit',
       'page': '$page',
     },
@@ -135,11 +139,12 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
 
   /// Chart of Accounts
-  /// GET /zoho/v1/meta/accounts?search=&type=&active=
+  /// GET /zoho/v1/meta/accounts?search_text=&type=&active=
   Uri zohoMetaAccounts({String? search, String? type, bool? active}) => _uri(
     'zoho/v1/meta/accounts',
     query: {
-      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (search != null && search.trim().isNotEmpty)
+        'search_text': search.trim(),
       if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
       if (active != null) 'active': active ? 'true' : 'false',
     },

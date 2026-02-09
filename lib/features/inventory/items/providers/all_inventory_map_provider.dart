@@ -1,6 +1,6 @@
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
 import 'package:afyakit/features/inventory/items/services/inventory_repo_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final allInventoryMapProvider = FutureProvider<Map<String, BaseInventoryItem>>((

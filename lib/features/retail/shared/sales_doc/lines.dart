@@ -12,6 +12,9 @@ class SalesDocLinesList extends StatelessWidget {
     required this.lines,
     this.mode = SalesDocMode.view,
 
+    /// ✅ NEW: stable identity per row (must match lines.length if provided)
+    this.rowKeys,
+
     // unified dialog edit
     this.onEditLine,
 
@@ -27,6 +30,10 @@ class SalesDocLinesList extends StatelessWidget {
   final String currencyCode;
   final List<SalesDocLineVm> lines;
   final SalesDocMode mode;
+
+  /// If provided, must be same length as [lines].
+  /// Values should be unique + stable (e.g. "tile:abc" / "manual:xyz").
+  final List<String>? rowKeys;
 
   final Future<void> Function(int index)? onEditLine;
 
@@ -60,6 +67,19 @@ class SalesDocLinesList extends StatelessWidget {
     await fn(index);
   }
 
+  String _keyForRow(int index) {
+    final keys = rowKeys;
+    if (keys == null) return 'idx:$index';
+    if (index < 0 || index >= keys.length) return 'idx:$index';
+
+    final s = keys[index].trim();
+    return s.isEmpty ? 'idx:$index' : s;
+  }
+
+  Widget _keyedRow(int index, Widget child) {
+    return KeyedSubtree(key: ValueKey<String>(_keyForRow(index)), child: child);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (lines.isEmpty) return const Center(child: Text('No line items.'));
@@ -73,7 +93,8 @@ class SalesDocLinesList extends StatelessWidget {
 
     Widget buildRow(BuildContext context, bool isWide, int i) {
       final li = lines[i];
-      return Padding(
+
+      final row = Padding(
         padding: kSalesDocRowPad,
         child: isWide
             ? _WideLineRow(
@@ -95,6 +116,9 @@ class SalesDocLinesList extends StatelessWidget {
                 onRemoveLine: onRemoveLine,
               ),
       );
+
+      // ✅ Critical: stabilize row identity so Flutter doesn’t reuse widgets across rows.
+      return _keyedRow(i, row);
     }
 
     return LayoutBuilder(

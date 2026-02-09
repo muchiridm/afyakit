@@ -1,11 +1,10 @@
-// lib/features/retail/contacts/screens/contacts_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
+import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
 import '../controllers/contacts_controller.dart';
@@ -125,7 +124,8 @@ class ContactsScreen extends ConsumerWidget {
 
       return SliverFillRemaining(
         hasScrollBody: false,
-        child: _EmptyState(
+        child: AppEmptyState(
+          icon: Icons.people_alt_outlined,
           title: hasQuery ? 'No results' : 'No contacts yet',
           subtitle: hasQuery
               ? 'Try a different search.'
@@ -247,46 +247,6 @@ class _ErrorBanner extends StatelessWidget {
             icon: Icon(Icons.refresh, color: scheme.error),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.people_alt_outlined, size: 44),
-              const SizedBox(height: AppShape.gap12),
-              Text(title, style: t.titleLarge, textAlign: TextAlign.center),
-              const SizedBox(height: AppShape.gap6),
-              Text(subtitle, style: t.bodyMedium, textAlign: TextAlign.center),
-              const SizedBox(height: AppShape.gap16),
-              FilledButton(onPressed: onAction, child: Text(actionLabel)),
-            ],
-          ),
-        ),
       ),
     );
   }

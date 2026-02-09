@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AfyaKit multi-tenant Makefile (Tenant + HQ via APP mode)
 #   - Tenant mode: lib/main.dart + --dart-define=TENANT=<slug>
-#   - HQ mode:     lib/main.dart + --dart-define=APP=hq
+#   - HQ mode:     lib/main.dart + --dart-define=APP=hq + --dart-define=TENANT=hq
 # ─────────────────────────────────────────────────────────────────────────────
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -34,6 +34,7 @@ HQ_SITE     ?= afyakit-hq
 EXTRA         ?=
 USE_FLAVOR    ?= 1
 WEB_PORT_BASE ?= 5000
+WEB_PORT      ?= $(WEB_PORT_BASE)
 TENANTS       ?=
 
 # ✅ Web release icon fix (Material Icons tree-shaking)
@@ -53,24 +54,36 @@ WEB_RENDERER_RUN_FLAG := $(if $(filter 1,$(HAS_WEB_RENDERER_RUN)),--web-renderer
 # Flavor is only meaningful for device builds; web ignores flavors in your workflow.
 FLAVOR_FLAG  := $(if $(filter 1 yes true,$(USE_FLAVOR)),$(if $(TENANT),--flavor $(TENANT),),)
 TENANT_DEF   := $(if $(TENANT),--dart-define=TENANT=$(TENANT),)
-APP_DEF_HQ   := --dart-define=APP=hq
+
+# HQ must be explicit (your Dart boot now requires TENANT in HQ mode)
+HQ_TENANT     ?= hq
+TENANT_DEF_HQ := --dart-define=TENANT=$(HQ_TENANT)
+APP_DEF_HQ    := --dart-define=APP=hq
+HQ_DEFINES    := $(APP_DEF_HQ) $(TENANT_DEF_HQ)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # .env loader (optional; safe when absent)
 #  - looks for .env.<tenant>.web, .env.<tenant>, .env
 #  - if none exist → DART_DEFINES becomes empty (no-op)
+#
+# NOTE:
+#  - HQ targets set LOAD_ENV=0 to avoid leaking tenant/dev defines into HQ.
 # ─────────────────────────────────────────────────────────────────────────────
+LOAD_ENV ?= 1
+
 ENV_FILE :=
-ifneq ($(TENANT),)
-  ifeq ($(shell test -f .env.$(TENANT).web && echo 1),1)
-    ENV_FILE := .env.$(TENANT).web
-  else ifeq ($(shell test -f .env.$(TENANT) && echo 1),1)
-    ENV_FILE := .env.$(TENANT)
+ifeq ($(filter 1 yes true,$(LOAD_ENV)),1)
+  ifneq ($(TENANT),)
+    ifeq ($(shell test -f .env.$(TENANT).web && echo 1),1)
+      ENV_FILE := .env.$(TENANT).web
+    else ifeq ($(shell test -f .env.$(TENANT) && echo 1),1)
+      ENV_FILE := .env.$(TENANT)
+    endif
   endif
-endif
-ifeq ($(ENV_FILE),)
-  ifeq ($(shell test -f .env && echo 1),1)
-    ENV_FILE := .env
+  ifeq ($(ENV_FILE),)
+    ifeq ($(shell test -f .env && echo 1),1)
+      ENV_FILE := .env
+    endif
   endif
 endif
 
@@ -88,9 +101,13 @@ DART_DEFINES := $(shell \
 .PHONY: env-check
 env-check:
 	@echo "ENV_FILE=$(ENV_FILE)"
+	@echo "LOAD_ENV=$(LOAD_ENV)"
 	@echo "DART_DEFINES=$(DART_DEFINES)"
 	@echo "TENANT=$(TENANT)"
 	@echo "TENANTS=$(TENANTS)"
+	@echo "HQ_TENANT=$(HQ_TENANT)"
+	@echo "HQ_DEFINES=$(HQ_DEFINES)"
+	@echo "WEB_PORT=$(WEB_PORT)"
 	@echo "WEB_ICON_FLAGS=$(WEB_ICON_FLAGS)"
 	@echo "HAS_WEB_RENDERER_BUILD=$(HAS_WEB_RENDERER_BUILD)"
 	@echo "WEB_RENDERER_BUILD_FLAG=$(WEB_RENDERER_BUILD_FLAG)"
@@ -124,11 +141,11 @@ help:
 	@echo "  run-web-all / run-android-all         — run MANY tenants"
 	@echo "  web / deploy / release-web            — build & deploy ONE tenant"
 	@echo "  web-all / deploy-all / release-web-all— build/deploy MANY tenants"
-	@echo "  run-hq / run-hq-web / web-hq / deploy-hq"
+	@echo "  run-hq / run-web-hq / web-hq / deploy-hq"
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Tenant mode uses:  --dart-define=TENANT=<slug>"
-	@echo "  - HQ mode uses:      --dart-define=APP=hq"
+	@echo "  - HQ mode uses:      --dart-define=APP=hq --dart-define=TENANT=$(HQ_TENANT)"
 	@echo "  - Web release uses:  $(WEB_ICON_FLAGS)"
 	@echo "  - Web renderer flag is conditional based on your Flutter SDK."
 devices:;  flutter devices
@@ -150,8 +167,8 @@ run:
 
 run-web:
 	@$(call assert_tenant)
-	@echo "🌐 Running (web) $(TENANT) on Chrome :5000 …"
-	flutter run -d chrome --web-port=5000 $(WEB_RENDERER_RUN_FLAG) -t $(ENTRY) $(TENANT_DEF) $(EXTRA) $(DART_DEFINES)
+	@echo "🌐 Running (web) $(TENANT) on Chrome :$(WEB_PORT) …"
+	flutter run -d chrome --web-port=$(WEB_PORT) $(WEB_RENDERER_RUN_FLAG) -t $(ENTRY) $(TENANT_DEF) $(EXTRA) $(DART_DEFINES)
 
 run-android:
 	@$(call assert_tenant)
@@ -254,35 +271,41 @@ release-web-all:
 	done
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HQ app (same entry, APP=hq)
+# HQ app (same entry, APP=hq + TENANT=hq)
 # ─────────────────────────────────────────────────────────────────────────────
-.PHONY: run-hq run-hq-web web-hq deploy-hq release-web-hq
+.PHONY: run-hq run-web-hq web-hq deploy-hq release-web-hq
 
+run-hq: LOAD_ENV=0
 run-hq:
 	@echo "🏢 Running HQ on '$(DEVICE)'…"
-	flutter run -d $(DEVICE) -t $(ENTRY) $(APP_DEF_HQ) $(EXTRA) $(DART_DEFINES)
+	flutter run -d $(DEVICE) -t $(ENTRY) $(HQ_DEFINES) $(EXTRA)
 
-run-hq-web:
-	@echo "🏢🌐 Running HQ on Chrome :5000 …"
-	flutter run -d chrome --web-port=5000 $(WEB_RENDERER_RUN_FLAG) -t $(ENTRY) $(APP_DEF_HQ) $(EXTRA) $(DART_DEFINES)
+run-web-hq: LOAD_ENV=0
+run-web-hq:
+	@echo "🏢🌐 Running HQ on Chrome :$(WEB_PORT) …"
+	flutter run -d chrome --web-port=$(WEB_PORT) $(WEB_RENDERER_RUN_FLAG) -t $(ENTRY) $(HQ_DEFINES) $(EXTRA)
 
+web-hq: LOAD_ENV=0
 web-hq:
 	@echo "🏢🌐 Release build HQ → $(WEB_OUT_HQ)…"
 	flutter build web --release $(WEB_ICON_FLAGS) $(WEB_RENDERER_BUILD_FLAG) \
 	  -t $(ENTRY) \
 	  -o $(WEB_OUT_HQ) \
-	  $(APP_DEF_HQ) \
-	  $(EXTRA) \
-	  $(DART_DEFINES)
+	  $(HQ_DEFINES) \
+	  $(EXTRA)
 
 deploy-hq:
 	@test -d "$(WEB_OUT_HQ)" || (echo "❌ Missing $(WEB_OUT_HQ) — run 'make web-hq' first." && exit 2)
 	@echo "🚀 Deploy HQ hosting:$(HQ_SITE) from $(WEB_OUT_HQ)…"
-	@cfg="firebase.$(HQ_SITE).json"; \
-	if [ ! -f "$$cfg" ]; then cfg="firebase.json"; fi; \
+	@cfg="firebase.hq.json"; \
+	if [ ! -f "$$cfg" ]; then \
+	  echo "❌ Missing $$cfg (expected in repo root)."; \
+	  exit 2; \
+	fi; \
 	echo "   → using $$cfg"; \
 	firebase deploy --config "$$cfg" --only hosting:$(HQ_SITE)
 
+release-web-hq: LOAD_ENV=0
 release-web-hq:
-	@$(MAKE) web-hq EXTRA="$(EXTRA)" DART_DEFINES="$(DART_DEFINES)"
+	@$(MAKE) web-hq EXTRA="$(EXTRA)"
 	@$(MAKE) deploy-hq
