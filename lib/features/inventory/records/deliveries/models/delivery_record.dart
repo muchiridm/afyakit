@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
-import 'package:afyakit/shared/utils/parsers/parse_date.dart';
+import 'package:afyakit/shared/utils/parse/dates.dart';
 
 class DeliveryRecord {
   final String deliveryId;

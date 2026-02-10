@@ -3,7 +3,7 @@
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
-import 'package:afyakit/shared/utils/parsers/parse_date.dart';
+import 'package:afyakit/shared/utils/parse/dates.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 class IssueRecord {

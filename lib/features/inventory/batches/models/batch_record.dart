@@ -1,7 +1,7 @@
+import 'package:afyakit/shared/utils/parse/dates.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/shared/utils/parsers/parse_date.dart';
-import 'package:afyakit/shared/utils/parsers/parse_item_type.dart';
+import 'package:afyakit/shared/utils/parse/item_type.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable

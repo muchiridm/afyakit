@@ -1,5 +1,3 @@
-// lib/features/retail/sales/shared/sales_doc/models.dart
-
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -28,6 +26,9 @@ class SalesDocMetaVm {
     required this.currencyCode,
     required this.total,
     required this.date,
+
+    // ✅ NEW
+    this.expiryDate,
   });
 
   final String partyName;
@@ -35,7 +36,12 @@ class SalesDocMetaVm {
   final String status;
   final String currencyCode;
   final num total;
+
+  /// Document date (quote date / invoice date)
   final DateTime? date;
+
+  /// ✅ NEW: Quote expiry date (Zoho: expiry_date)
+  final DateTime? expiryDate;
 }
 
 enum SalesDocMode { view, edit }

@@ -7,7 +7,6 @@ import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
@@ -16,6 +15,7 @@ import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 
@@ -126,6 +126,26 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   String _currencyCode() => 'KES';
 
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  Future<DateTime?> _pickDate(
+    BuildContext context, {
+    required DateTime initial,
+    DateTime? firstDate,
+    DateTime? lastDate,
+    required String helpText,
+  }) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: firstDate ?? DateTime(now.year - 5, 1, 1),
+      lastDate: lastDate ?? DateTime(now.year + 10, 12, 31),
+      helpText: helpText,
+    );
+    return picked == null ? null : _dateOnly(picked);
+  }
+
   Future<bool> _handleBack(BuildContext context, QuoteState s) async {
     if (s.busy) return false;
 
@@ -135,7 +155,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final hasMetaEdits =
         (meta.reference ?? '').trim().isNotEmpty ||
         (meta.customerNotes ?? '').trim().isNotEmpty ||
-        (meta.contact != null);
+        (meta.contact != null) ||
+        (meta.quoteDate != null) ||
+        (meta.expiryDate != null);
 
     if (!hasLines && !hasMetaEdits) return true;
 
@@ -188,6 +210,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       currencyCode: _currencyCode(),
       total: widget.requirePrices ? linesState.estimatedTotal : 0,
       date: meta.quoteDate,
+      // ✅ important: wire it through (even if header doesn't show it today)
+      expiryDate: meta.expiryDate,
     );
   }
 
@@ -352,7 +376,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
           ),
         ),
 
-        _buildMetaFields(metaCtl, busy),
+        _buildMetaFields(context, meta, metaCtl, busy),
 
         const Divider(height: 1),
 
@@ -367,10 +391,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                   currencyCode: vmMeta.currencyCode,
                   lines: vmLines,
                   mode: SalesDocMode.edit,
-
-                  // Inline name edits:
-                  // - Manual: edits name
-                  // - Catalog: edits name override
                   onEditName: busy
                       ? null
                       : (int index, String nextName) async {
@@ -394,10 +414,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                             );
                           }
                         },
-
-                  // Inline qty/rate edits:
-                  // - Manual: qty + rate
-                  // - Catalog: qty + rate override (so you can override prices too)
                   onEditQtyRate: busy
                       ? null
                       : (int index, int nextQty, num nextRate) async {
@@ -429,12 +445,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                             );
                           }
                         },
-
-                  // Full edit dialog (name + desc + qty + rate)
                   onEditLine: busy
                       ? null
                       : (int index) async => editLineDialog(index),
-
                   onRemoveLine: busy
                       ? null
                       : (int index) async {
@@ -568,11 +581,82 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  Widget _buildMetaFields(QuoteMetaController metaCtl, bool busy) {
+  Widget _buildMetaFields(
+    BuildContext context,
+    QuoteMetaState meta,
+    QuoteMetaController metaCtl,
+    bool busy,
+  ) {
+    final qd = meta.quoteDate;
+    final ed = meta.expiryDate;
+
+    final now = DateTime.now();
+    final initialQuoteDate = qd ?? _dateOnly(now);
+    final initialExpiryDate =
+        ed ??
+        (qd == null
+            ? _dateOnly(now.add(const Duration(days: 30)))
+            : _dateOnly(qd.add(const Duration(days: 30))));
+
+    Future<void> pickQuoteDate() async {
+      final picked = await _pickDate(
+        context,
+        initial: initialQuoteDate,
+        helpText: 'Select quote date',
+      );
+      if (picked == null) return;
+
+      metaCtl.setQuoteDate(picked);
+
+      // Optional nice UX: if expiry is empty, auto-suggest quote+30d
+      final currentExpiry = meta.expiryDate;
+      if (currentExpiry == null) {
+        metaCtl.setExpiryDate(_dateOnly(picked.add(const Duration(days: 30))));
+      }
+    }
+
+    Future<void> pickExpiryDate() async {
+      final base = meta.quoteDate ?? _dateOnly(DateTime.now());
+      final picked = await _pickDate(
+        context,
+        initial: initialExpiryDate,
+        firstDate: base,
+        helpText: 'Select expiry date',
+      );
+      if (picked == null) return;
+      metaCtl.setExpiryDate(picked);
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Column(
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: SalesDocDatePill(
+                  label: 'Date',
+                  icon: Icons.event_outlined,
+                  date: qd,
+                  enabled: !busy,
+                  onPick: busy ? null : pickQuoteDate,
+                  onClear: busy ? null : () => metaCtl.clearQuoteDate(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SalesDocDatePill(
+                  label: 'Expiry',
+                  icon: Icons.timelapse_outlined,
+                  date: ed,
+                  enabled: !busy,
+                  onPick: busy ? null : pickExpiryDate,
+                  onClear: busy ? null : () => metaCtl.clearExpiryDate(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _refCtl,
             enabled: !busy,
@@ -681,7 +765,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       final ok = await _ensureAuthed(context);
                       if (!ok) return;
 
-                      // Use the full line editor so user can set name/desc/qty/rate.
                       final res = await SalesDocDialogs.editLine(
                         context,
                         initialName: 'Item',
