@@ -191,56 +191,62 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     showModalBottomSheet(
       context: context,
       useRootNavigator: false,
-      isScrollControlled: true,
+      isScrollControlled: false, // ✅ keep it compact
+      backgroundColor: Colors.transparent, // ✅ let our card shape show
       builder: (ctx) => SafeArea(
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SheetHeader(
-                  tile: t,
-                  priceFormatter: _formatPriceCeil,
-                  priceColor: _priceGreen,
-                ),
-                const Divider(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.info_outline),
-                        label: const Text('Details'),
-                        onPressed: () {
-                          // TODO: implement details sheet / screen
-                        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+          child: Material(
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            color: Theme.of(ctx).colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SheetHeader(
+                    tile: t,
+                    priceFormatter: _formatPriceCeil,
+                    priceColor: _priceGreen,
+                  ),
+                  const Divider(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.info_outline),
+                          label: const Text('Details'),
+                          onPressed: () {
+                            // TODO: implement details sheet / screen
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.add_shopping_cart),
-                        label: const Text('Add to quote'),
-                        onPressed: () {
-                          ref
-                              .read(quoteLinesControllerProvider.notifier)
-                              .addOrIncrement(t);
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          icon: const Icon(Icons.add_shopping_cart),
+                          label: const Text('Add to quote'),
+                          onPressed: () {
+                            ref
+                                .read(quoteLinesControllerProvider.notifier)
+                                .addOrIncrement(t);
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Added to quote'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Added to quote'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
 
-                          Navigator.of(ctx, rootNavigator: false).maybePop();
-                        },
+                            Navigator.of(ctx).maybePop();
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

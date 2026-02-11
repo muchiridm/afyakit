@@ -1,5 +1,3 @@
-// lib/features/retail/catalog/catalog_models.dart
-
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -14,7 +12,7 @@ class CatalogTile {
   final String brand;
   final String strengthSig;
 
-  /// normalized formulation from BE: tablet|capsule|liquid|injection|other
+  /// formulation from BE can be anything now (tablet, syrup, ointment, ...)
   final String form;
 
   final num? bestSellPrice;
@@ -30,6 +28,10 @@ class CatalogTile {
   final String? packsFmt;
   final String? volumeSig;
   final String? concentrationSig;
+
+  /// ✅ NEW: decorated manufacturer for the tile (aggregated from variants)
+  /// BE field: supplier_manufacturer
+  final String? supplierManufacturer;
 
   /// If true, BE is telling us "do not merge this tile purely by canon_key".
   /// We use this to salt the id so cart/quote lines don't collapse.
@@ -49,6 +51,7 @@ class CatalogTile {
     this.packsFmt,
     this.volumeSig,
     this.concentrationSig,
+    this.supplierManufacturer,
     this.hasMergeOverride,
   });
 
@@ -118,8 +121,10 @@ class CatalogTile {
     final brand = _asString(j['brand']);
     final strengthSig = _asString(j['strength_sig']);
     final form = _asString(j['form']);
+
     final title = _asString(j['tile_title']).trim();
     final desc = _asString(j['tile_desc']).trim();
+
     final price = _asNum(j['best_sell_price']);
     final hasMergeOverride = _asBool(j['has_merge_override']);
 
@@ -164,6 +169,14 @@ class CatalogTile {
       baseId = '$baseId||$salt';
     }
 
+    final bestSupplier = _asString(j['best_supplier']).trim();
+    final packsFmt = _asString(j['packs_fmt']).trim();
+    final volumeSig = _asString(j['volume_sig']).trim();
+    final concentrationSig = _asString(j['concentration_sig']).trim();
+
+    // ✅ NEW: supplier_manufacturer
+    final supplierMfg = _asString(j['supplier_manufacturer']).trim();
+
     return CatalogTile(
       id: baseId,
       brand: brand,
@@ -172,20 +185,13 @@ class CatalogTile {
       bestSellPrice: price,
       offerCount: _asInt(j['offer_count']),
       bestPackCount: _asInt(j['best_pack_count']),
-      tileDesc: _asString(j['tile_desc']).trim().isEmpty ? null : desc,
+      tileDesc: desc.isEmpty ? null : desc,
       tileTitle: title.isEmpty ? null : title,
-      bestSupplier: _asString(j['best_supplier']).trim().isEmpty
-          ? null
-          : _asString(j['best_supplier']).trim(),
-      packsFmt: _asString(j['packs_fmt']).trim().isEmpty
-          ? null
-          : _asString(j['packs_fmt']).trim(),
-      volumeSig: _asString(j['volume_sig']).trim().isEmpty
-          ? null
-          : _asString(j['volume_sig']).trim(),
-      concentrationSig: _asString(j['concentration_sig']).trim().isEmpty
-          ? null
-          : _asString(j['concentration_sig']).trim(),
+      bestSupplier: bestSupplier.isEmpty ? null : bestSupplier,
+      packsFmt: packsFmt.isEmpty ? null : packsFmt,
+      volumeSig: volumeSig.isEmpty ? null : volumeSig,
+      concentrationSig: concentrationSig.isEmpty ? null : concentrationSig,
+      supplierManufacturer: supplierMfg.isEmpty ? null : supplierMfg,
       hasMergeOverride: hasMergeOverride,
     );
   }
@@ -195,7 +201,7 @@ class CatalogTile {
 class CatalogQuery {
   final String q; // search
 
-  /// '', 'tablet', 'capsule', 'liquid', 'injection', 'other'
+  /// '', 'tablet', 'capsule', 'liquid', 'injection', 'other', ...
   final String form;
 
   final String sort; // reserved
