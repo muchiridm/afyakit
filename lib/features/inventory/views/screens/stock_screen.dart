@@ -26,6 +26,9 @@ class _StockScreenState extends ConsumerState<StockScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  // ✅ Ensures the header cart button opens the correct endDrawer
+  final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
+
   final List<ItemType> _types = ItemType.values
       .where((t) => t != ItemType.unknown)
       .toList(growable: false);
@@ -58,6 +61,7 @@ class _StockScreenState extends ConsumerState<StockScreen>
       // keep drawer behavior exactly as before (StockOut -> cart drawer)
       // AppPage doesn't have an endDrawer slot, so we wrap it with a Scaffold.
       body: _ScaffoldShell(
+        scaffoldKey: _shellScaffoldKey,
         endDrawer: isStockOut ? const CartDrawer(action: 'dispense') : null,
         fab: widget.mode.isStockIn
             ? InventorySpeedDial(
@@ -87,12 +91,11 @@ class _StockScreenState extends ConsumerState<StockScreen>
               ? Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Builder(
-                      builder: (ctx) => IconButton(
-                        icon: const Icon(Icons.shopping_cart),
-                        tooltip: 'View Cart',
-                        onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart),
+                      tooltip: 'View Cart',
+                      onPressed: () =>
+                          _shellScaffoldKey.currentState?.openEndDrawer(),
                     ),
                     if (total > 0)
                       Positioned(
@@ -192,8 +195,14 @@ class _StockScreenState extends ConsumerState<StockScreen>
 /// Tiny wrapper so we can keep `endDrawer` + FAB behavior even though AppPage
 /// returns its own Scaffold.
 class _ScaffoldShell extends StatelessWidget {
-  const _ScaffoldShell({required this.child, this.endDrawer, this.fab});
+  const _ScaffoldShell({
+    required this.child,
+    required this.scaffoldKey,
+    this.endDrawer,
+    this.fab,
+  });
 
+  final GlobalKey<ScaffoldState> scaffoldKey;
   final Widget child;
   final Widget? endDrawer;
   final Widget? fab;
@@ -201,6 +210,7 @@ class _ScaffoldShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: scaffoldKey,
       backgroundColor: Colors.transparent, // let AppPage own page background
       endDrawer: endDrawer,
       floatingActionButton: fab,

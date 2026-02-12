@@ -1,10 +1,12 @@
+// lib/features/retail/catalog/catalog_controller.dart
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../catalog_models.dart';
-import '../catalog_service.dart';
+import 'catalog_models.dart';
+import 'catalog_service.dart';
 
 @immutable
 class CatalogState {
@@ -13,30 +15,37 @@ class CatalogState {
   final bool hasMore;
   final int offset;
 
+  /// UI can reflect export in progress without owning export logic.
+  final bool exporting;
+
   const CatalogState({
     required this.items,
     required this.query,
     required this.hasMore,
     required this.offset,
+    required this.exporting,
   });
 
   const CatalogState.initial()
     : items = const AsyncLoading(),
       query = const CatalogQuery(),
       hasMore = true,
-      offset = 0;
+      offset = 0,
+      exporting = false;
 
   CatalogState copyWith({
     AsyncValue<List<CatalogTile>>? items,
     CatalogQuery? query,
     bool? hasMore,
     int? offset,
+    bool? exporting,
   }) {
     return CatalogState(
       items: items ?? this.items,
       query: query ?? this.query,
       hasMore: hasMore ?? this.hasMore,
       offset: offset ?? this.offset,
+      exporting: exporting ?? this.exporting,
     );
   }
 }
@@ -59,6 +68,8 @@ class CatalogController extends StateNotifier<CatalogState> {
 
   bool get hasMore => state.hasMore;
   CatalogQuery get query => state.query;
+  bool get exporting => state.exporting;
+
   bool get _ready => _service != null;
 
   /// Called when AfyaKitClient becomes ready later
@@ -107,6 +118,7 @@ class CatalogController extends StateNotifier<CatalogState> {
   void refreshDebounced({CatalogQuery? query, Duration? delay}) {
     _debounce?.cancel();
     _debounce = Timer(delay ?? const Duration(milliseconds: 420), () {
+      // ignore: discarded_futures
       refresh(query: query);
     });
   }
@@ -138,10 +150,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         query: query,
       );
 
-      // Controller disposed while waiting
       if (!mounted) return;
-
-      // Ignore stale generation
       if (gen != _generation) return;
 
       if (append) {

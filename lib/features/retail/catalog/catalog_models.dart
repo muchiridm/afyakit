@@ -1,12 +1,11 @@
+// lib/features/retail/catalog/catalog_models.dart
+
 import 'package:flutter/foundation.dart';
 
 @immutable
 class CatalogTile {
   /// Stable identity for cart + quote lines.
-  ///
-  /// IMPORTANT:
-  /// - Prefer canon_key (tiles engine identity).
-  /// - Do NOT prefer generic "id" if BE sends it but it isn't globally unique.
+  /// Prefer canon_key/cluster_key; avoid generic "id".
   final String id;
 
   final String brand;
@@ -29,7 +28,7 @@ class CatalogTile {
   final String? volumeSig;
   final String? concentrationSig;
 
-  /// ✅ NEW: decorated manufacturer for the tile (aggregated from variants)
+  /// Decorated manufacturer for the tile (aggregated from variants)
   /// BE field: supplier_manufacturer
   final String? supplierManufacturer;
 
@@ -54,6 +53,11 @@ class CatalogTile {
     this.supplierManufacturer,
     this.hasMergeOverride,
   });
+
+  // Useful for UI
+  String get titleLine => '${brand.trim()} ${strengthSig.trim()}'.trim();
+  bool get hasSupplierManufacturer =>
+      supplierManufacturer != null && supplierManufacturer!.trim().isNotEmpty;
 
   static String _asString(Object? v) {
     if (v == null) return '';
@@ -89,8 +93,6 @@ class CatalogTile {
     return null;
   }
 
-  /// Generates a fallback id if the BE payload is missing keys.
-  /// This is "good enough" to avoid catastrophic merging.
   static String _fingerprint({
     required String brand,
     required String strengthSig,
@@ -128,8 +130,6 @@ class CatalogTile {
     final price = _asNum(j['best_sell_price']);
     final hasMergeOverride = _asBool(j['has_merge_override']);
 
-    // ✅ Prefer canon_key over id (canon_key is the tiles engine identity).
-    // Keep other fallbacks for backwards compatibility.
     final canonKey = _asString(j['canon_key']).trim();
     final clusterKey = _asString(j['cluster_key']).trim();
     final sku = _asString(j['sku']).trim();
@@ -152,7 +152,6 @@ class CatalogTile {
                               price: price,
                             ))));
 
-    // ✅ If BE says "merge override", salt the id so cart/quote lines don’t collapse.
     if (hasMergeOverride == true) {
       final salt = [
         title.isEmpty ? '_' : title,
@@ -174,7 +173,6 @@ class CatalogTile {
     final volumeSig = _asString(j['volume_sig']).trim();
     final concentrationSig = _asString(j['concentration_sig']).trim();
 
-    // ✅ NEW: supplier_manufacturer
     final supplierMfg = _asString(j['supplier_manufacturer']).trim();
 
     return CatalogTile(
@@ -200,10 +198,7 @@ class CatalogTile {
 @immutable
 class CatalogQuery {
   final String q; // search
-
-  /// '', 'tablet', 'capsule', 'liquid', 'injection', 'other', ...
-  final String form;
-
+  final String form; // '', 'tablet', 'syrup', ...
   final String sort; // reserved
 
   const CatalogQuery({this.q = '', this.form = '', this.sort = ''});

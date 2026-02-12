@@ -38,6 +38,11 @@ class AppHeader extends StatelessWidget {
 
   static const double _narrowBp = 540;
 
+  /// How much width we allow for the trailing cluster on narrow screens.
+  /// Must be large enough to always show the primary action (e.g. cart),
+  /// but small enough to avoid pushing title off-screen.
+  static const double _narrowTrailingMaxWidth = 180;
+
   bool get _hasTitle => title.trim().isNotEmpty;
 
   @override
@@ -48,7 +53,7 @@ class AppHeader extends StatelessWidget {
       constraints: BoxConstraints(minHeight: minHeight),
       child: Padding(
         padding: padding,
-        child: narrow ? _buildRow(context, tight: true) : _buildRow(context),
+        child: _buildRow(context, narrow: narrow),
       ),
     );
 
@@ -82,13 +87,22 @@ class AppHeader extends StatelessWidget {
     }
   }
 
-  Widget _buildRow(BuildContext context, {bool tight = false}) {
+  Widget _buildRow(BuildContext context, {required bool narrow}) {
+    final gap = narrow ? 6.0 : 10.0;
+
     return Row(
       children: [
         _leadingSlot(context),
-        SizedBox(width: tight ? 6 : 10),
+        SizedBox(width: gap),
+
+        // Title takes remaining space
         Expanded(child: _title(context)),
-        _trailingSlot(),
+
+        SizedBox(width: gap),
+
+        // Trailing is always visible; on narrow we keep primary action visible
+        // by prioritizing trailing and optionally dropping the badge.
+        _trailingSlot(narrow: narrow),
       ],
     );
   }
@@ -103,18 +117,41 @@ class AppHeader extends StatelessWidget {
     );
   }
 
-  Widget _trailingSlot() {
-    if (trailing == null && !showUserBadge) return const SizedBox(width: 48);
+  Widget _trailingSlot({required bool narrow}) {
+    final empty = (trailing == null && !showUserBadge);
+    if (empty) return const SizedBox(width: 48);
 
-    return Row(
+    // ✅ Key behavior change:
+    // On narrow screens, if there's an explicit trailing action (e.g. cart),
+    // we prioritize it by hiding the (often wide) UserBadge.
+    final bool effectiveShowBadge =
+        showUserBadge && !(narrow && trailing != null);
+
+    final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showUserBadge) const UserBadge(),
+        if (effectiveShowBadge) const UserBadge(),
         if (trailing != null) ...[
-          if (showUserBadge) const SizedBox(width: 12),
+          if (effectiveShowBadge) const SizedBox(width: 12),
           trailing!,
         ],
       ],
+    );
+
+    if (!narrow) return content;
+
+    // Narrow: cap width and allow horizontal scroll as a safety valve.
+    // Even if something is too wide, it won't overflow the header row.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _narrowTrailingMaxWidth),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: content,
+        ),
+      ),
     );
   }
 
