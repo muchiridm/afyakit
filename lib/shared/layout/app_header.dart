@@ -1,6 +1,6 @@
 // lib/shared/layout/app_header.dart
 import 'package:flutter/material.dart';
-import 'package:afyakit/core/auth_user/widgets/user_badge.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 enum AppHeaderVariant { bar, card, plain }

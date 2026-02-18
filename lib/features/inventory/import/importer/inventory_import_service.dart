@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,7 +14,7 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/features/inventory/import/importer/models/import_type_x.dart';
 import 'package:afyakit/features/inventory/import/importer/models/inventory_import_result.dart';
-import 'package:afyakit/core/auth/providers/token_provider.dart';
+import 'package:afyakit/core/auth/auth_session/providers/token_provider.dart';
 
 /// Service provider
 final inventoryImportServiceProvider = Provider<InventoryImportService>((ref) {
@@ -74,7 +74,7 @@ class InventoryImportService {
   Future<Uint8List> downloadTemplate({required ImportType type}) async {
     // Resolve tenant + client + routes
     final tenantId = _ref.read(tenantSlugProvider);
-    final client = await _ref.read(afyakitClientProvider.future);
+    final client = await _ref.read(afyakitClientFutureProvider.future);
     final routes = AfyaKitRoutes(tenantId);
 
     final uri = routes.importTemplate(type.name);
@@ -117,7 +117,7 @@ class InventoryImportService {
 
     // Resolve tenant + client + routes
     final tenantId = _ref.read(tenantSlugProvider);
-    final client = await _ref.read(afyakitClientProvider.future);
+    final client = await _ref.read(afyakitClientFutureProvider.future);
     final routes = AfyaKitRoutes(tenantId);
 
     // ── Web: send raw bytes (manual Authorization header)

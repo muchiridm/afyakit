@@ -3,7 +3,7 @@
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
-import 'package:afyakit/features/retail/catalog/controllers/cart_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,7 +25,17 @@ String _formatPriceCeil(num? v) {
 }
 
 class CatalogScreen extends ConsumerStatefulWidget {
-  const CatalogScreen({super.key});
+  const CatalogScreen({
+    super.key,
+    this.initialQuery,
+    this.autofocusSearch = false,
+  });
+
+  /// Optional initial query (e.g. from guest home search)
+  final String? initialQuery;
+
+  /// If true, focus the search field on open.
+  final bool autofocusSearch;
 
   @override
   ConsumerState<CatalogScreen> createState() => _CatalogScreenState();
@@ -34,11 +44,39 @@ class CatalogScreen extends ConsumerStatefulWidget {
 class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   final _scroll = ScrollController();
   final _searchC = TextEditingController();
+  final _searchFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+
+    // Seed search box immediately (UI), then refresh provider query after first frame.
+    final seed = (widget.initialQuery ?? '').trim();
+    if (seed.isNotEmpty) {
+      _searchC.text = seed;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      // Apply initial query to provider/controller (data)
+      final q = (widget.initialQuery ?? '').trim();
+      if (q.isNotEmpty) {
+        final state = ref.read(catalogControllerProvider);
+        final ctrl = ref.read(catalogControllerProvider.notifier);
+
+        // Only refresh if different (avoid redundant reload)
+        if (state.query.q.trim() != q) {
+          ctrl.refresh(query: state.query.copyWith(q: q));
+        }
+      }
+
+      // Focus search if requested
+      if (widget.autofocusSearch) {
+        _searchFocus.requestFocus();
+      }
+    });
   }
 
   @override
@@ -46,6 +84,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _searchC.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -65,16 +104,15 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final state = ref.watch(catalogControllerProvider);
     final ctrl = ref.read(catalogControllerProvider.notifier);
 
-    // cart (quote) state
-    final quoteState = ref.watch(cartControllerProvider);
-    final quoteLineCount = quoteState.lines.length;
+    // ✅ quote lines state (replaces cart)
+    final quoteLinesState = ref.watch(quoteLinesControllerProvider);
+    final quoteLineCount = quoteLinesState.lines.length;
 
     final String? quoteTotalLabel = quoteLineCount == 0
         ? null
-        : 'KES ${_formatPriceCeil(quoteState.estimatedTotal)}';
+        : 'KES ${_formatPriceCeil(quoteLinesState.estimatedTotal)}';
 
     return AppPage(
-      // Catalog is one scrolling document: header + search + grid
       scrollable: true,
       maxWidth: 1100,
       header: CatalogHeader(
@@ -86,10 +124,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         onClearQuote: quoteLineCount == 0
             ? null
             : () {
-                ref.read(cartControllerProvider.notifier).clear();
+                ref.read(quoteLinesControllerProvider.notifier).clear();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Cart cleared'),
+                    content: Text('Quote cleared'),
                     duration: Duration(seconds: 1),
                   ),
                 );
@@ -125,6 +163,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         const SizedBox(height: 12),
         SearchBarField(
           controller: _searchC,
+          focusNode: _searchFocus, // ✅ new (see tiny change below)
           resultCount: resultCount,
           onSubmit: (q) => ctrl.refresh(query: state.query.copyWith(q: q)),
           onChanged: (q) =>
@@ -182,15 +221,15 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     Expanded(
                       child: FilledButton.icon(
                         icon: const Icon(Icons.add_shopping_cart),
-                        label: const Text('Add to cart'),
+                        label: const Text('Add to quote'),
                         onPressed: () {
                           ref
-                              .read(cartControllerProvider.notifier)
+                              .read(quoteLinesControllerProvider.notifier)
                               .addOrIncrement(t);
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Added to cart'),
+                              content: Text('Added to quote'),
                               duration: Duration(seconds: 1),
                             ),
                           );

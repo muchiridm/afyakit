@@ -1,28 +1,28 @@
 // lib/features/retail/sales/quotes/models/zoho_quote.dart
 
-typedef JsonMap = Map<String, dynamic>;
+import 'package:afyakit/shared/utils/utils.dart';
 
-String _s(dynamic v) => (v ?? '').toString().trim();
+String _s(Object? v) => (v ?? '').toString().trim();
 
-DateTime? _parseDate(dynamic v) {
+DateTime? _parseDate(Object? v) {
   final s = _s(v);
   if (s.isEmpty) return null;
   return DateTime.tryParse(s);
 }
 
-num _parseNum(dynamic v, {num fallback = 0}) {
+num _parseNum(Object? v, {num fallback = 0}) {
   if (v is num) return v;
   final s = _s(v);
   return num.tryParse(s) ?? fallback;
 }
 
-double _parseDouble(dynamic v, {double fallback = 0}) {
+double _parseDouble(Object? v, {double fallback = 0}) {
   if (v is num) return v.toDouble();
   final s = _s(v);
   return double.tryParse(s) ?? fallback;
 }
 
-String? _cleanOrNull(dynamic v) {
+String? _cleanOrNull(Object? v) {
   final s = _s(v);
   return s.isEmpty ? null : s;
 }
@@ -42,7 +42,7 @@ class ZohoQuoteLineItem {
   final double quantity;
   final num rate;
 
-  /// ✅ Used for update. If present, send it back as line_item_id.
+  /// Used for update. If present, send it back as line_item_id.
   final String? lineItemId;
 
   final num? itemTotal;

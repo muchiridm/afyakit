@@ -1,5 +1,3 @@
-// lib/features/retail/catalog/catalog_service.dart
-
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
@@ -14,10 +12,6 @@ class CatalogService {
 
   CatalogService({required this.api, required this.routes});
 
-  /// Returns (items, hasMore)
-  ///
-  /// Uses AfyaKit BE as the only gateway.
-  /// BE proxies DawaIndex.
   Future<(List<CatalogTile>, bool)> fetchTiles({
     required int offset,
     required int limit,
@@ -40,7 +34,6 @@ class CatalogService {
       _ => throw StateError('Unexpected tiles payload'),
     };
 
-    // Expected BE response: { items, total, offset, nextOffset }
     final items = (body['items'] as List)
         .cast<Map<String, Object?>>()
         .map(CatalogTile.fromJson)

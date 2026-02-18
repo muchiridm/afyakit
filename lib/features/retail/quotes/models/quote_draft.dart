@@ -20,15 +20,18 @@ class QuoteLineDraft {
   final int quantity;
   final num rate;
 
-  /// Optional line description (since you're not using Zoho Items).
-  /// In your payload builder this becomes Zoho 'name' (and tileDesc is 'description').
+  /// Line description (Zoho: `description`)
   final String? description;
 
-  /// ✅ Zoho line_item_id (present when editing existing quotes)
+  /// Zoho `line_item_id` (present when editing existing quotes)
   final String? lineItemId;
 
-  /// Stable identity for update/remove operations.
+  /// Stable identity for upsert/remove.
+  /// If Zoho line_item_id exists, it MUST win.
   String get key {
+    final id = (lineItemId ?? '').trim();
+    if (id.isNotEmpty) return id;
+
     final c = (tile.canonKey).trim();
     if (c.isNotEmpty) return c;
 
@@ -45,7 +48,7 @@ class QuoteLineDraft {
   num get amount => safeRate * safeQty;
 
   QuoteLineDraft copyWith({
-    DiSalesTile? tile, // ✅ NEW: allow updating tile (manual line edits)
+    DiSalesTile? tile,
     int? quantity,
     num? rate,
     String? description,
@@ -54,7 +57,7 @@ class QuoteLineDraft {
     bool clearLineItemId = false,
   }) {
     return QuoteLineDraft(
-      tile: tile ?? this.tile, // ✅ NEW
+      tile: tile ?? this.tile,
       quantity: quantity ?? this.quantity,
       rate: rate ?? this.rate,
       description: clearDescription ? null : (description ?? this.description),
@@ -181,38 +184,34 @@ class QuoteDraft {
   }
 
   // ─────────────────────────────────────────────
-  // ✅ Hydration helper for EDIT mode
+  // Hydration helper for EDIT mode (Zoho → Draft)
   // ─────────────────────────────────────────────
 
   factory QuoteDraft.fromZohoQuote(ZohoQuote q) {
     final hydratedLines = q.lineItems
         .map((li) {
-          final stableKey = (li.lineItemId ?? '').trim().isNotEmpty
-              ? li.lineItemId!.trim()
-              : '';
+          final stableKey = (li.lineItemId ?? '').trim();
 
           final tile = stableKey.isNotEmpty
               ? DiSalesTile.fallbackFromName(
                   name: li.name,
-                  description: li.description,
+                  description: li.description, // ✅ correct mapping
                   canonKey: stableKey,
                   groupKey: stableKey,
                 )
               : DiSalesTile.fallbackFromName(
                   name: li.name,
-                  description: li.description,
+                  description: li.description, // ✅ correct mapping
                 );
-
-          final nameForDraft = li.name.trim().isEmpty ? null : li.name.trim();
 
           return QuoteLineDraft(
             tile: tile,
             quantity: li.quantity.round(),
             rate: li.rate,
-            description: nameForDraft,
-            lineItemId: (li.lineItemId ?? '').trim().isEmpty
+            description: (li.description ?? '').trim().isEmpty
                 ? null
-                : li.lineItemId,
+                : li.description,
+            lineItemId: stableKey.isEmpty ? null : stableKey,
           );
         })
         .toList(growable: false);

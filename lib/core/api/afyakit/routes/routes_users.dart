@@ -16,6 +16,7 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
   // 🧑‍💼 HQ / Global (core; superadmin-gated on server)
   // ─────────────────────────────────────────────
 
+  /// GET /api/users?tenantId=&search=&limit=
   Uri listGlobalUsers({
     String? tenant,
     String? search,
@@ -29,16 +30,19 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
     },
   );
 
-  Uri createGlobalUser() => _uriCore('users');
-  Uri updateGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
-  Uri deleteGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
-
+  /// GET /api/users/:uid/memberships
   Uri fetchUserMemberships(String uid) =>
       _uriCore('users/${_seg(uid)}/memberships');
 
+  // Superadmins (global)
   Uri listSuperAdmins() => _uriCore('superadmins');
   Uri setSuperAdmin(String uid) => _uriCore('superadmins/${_seg(uid)}');
 
+  // ─────────────────────────────────────────────
+  // 🧑‍💼 HQ / Tenant user management (tenant auth_users)
+  // ─────────────────────────────────────────────
+
+  /// GET /api/tenants/:slug/auth_users
   Uri hqListTenantUsers(
     String targetTenantId, {
     String? search,
@@ -51,9 +55,20 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
     },
   );
 
-  Uri hqUpsertUserMembership(String targetTenantId, String uid) =>
+  /// ✅ POST /api/tenants/:slug/auth_users
+  /// body: { phoneNumber, displayName? }
+  Uri hqCreateTenantUser(String targetTenantId) =>
+      _uriCore('tenants/${_seg(targetTenantId)}/auth_users');
+
+  /// GET /api/tenants/:slug/auth_users/:uid
+  Uri hqGetTenantUserById(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
-  Uri hqDeleteUser(String targetTenantId, String uid) =>
+  /// PATCH /api/tenants/:slug/auth_users/:uid
+  Uri hqPatchTenantUser(String targetTenantId, String uid) =>
+      _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
+
+  /// DELETE /api/tenants/:slug/auth_users/:uid
+  Uri hqDeleteTenantUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 }

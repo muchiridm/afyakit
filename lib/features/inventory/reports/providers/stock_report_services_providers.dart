@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/reports/providers/stock_report_provider.dart';
 import 'package:afyakit/features/inventory/reports/services/sku_field_updater.dart';

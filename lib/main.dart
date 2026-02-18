@@ -1,6 +1,6 @@
 // lib/main.dart
 
-import 'package:afyakit/core/app/app_mode.dart';
+import 'package:afyakit/app/app_mode.dart';
 import 'main_common.dart';
 
 const kTenantSlug = String.fromEnvironment('TENANT', defaultValue: 'afyakit');

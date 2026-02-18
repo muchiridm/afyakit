@@ -1,9 +1,9 @@
+import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
-import 'package:afyakit/features/retail/shared/widgets/sales_formatters.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 
 class PaymentReceiptSummaryCard extends StatelessWidget {

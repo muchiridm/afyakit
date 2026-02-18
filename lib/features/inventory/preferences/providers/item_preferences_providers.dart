@@ -1,5 +1,5 @@
 // lib/core/item_preferences/providers/item_preferences_providers.dart
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart'; // afyakitClientProvider
@@ -16,7 +16,7 @@ final itemPreferenceServiceProvider = FutureProvider<ItemPreferenceService>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
-  final client = await ref.watch(afyakitClientProvider.future);
+  final client = await ref.watch(afyakitClientFutureProvider.future);
   return ItemPreferenceService(
     routes: AfyaKitRoutes(tenantId),
     dio: client.dio,

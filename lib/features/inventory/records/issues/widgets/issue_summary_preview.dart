@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';

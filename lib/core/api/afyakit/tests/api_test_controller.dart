@@ -34,7 +34,7 @@ class ApiTestState {
 
 /// PROVIDERS
 final apiTestServiceProvider = Provider<ApiTestService>((ref) {
-  final client = ref.watch(afyakitClientProvider).requireValue;
+  final client = ref.watch(afyakitClientFutureProvider).requireValue;
   return ApiTestService(client);
 });
 

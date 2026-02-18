@@ -1,5 +1,6 @@
 // lib/features/retail/contacts/services/zoho_contacts_service.dart
 
+import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
@@ -7,16 +8,14 @@ import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-
-typedef JsonMap = Map<String, dynamic>;
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
   final routes = AfyaKitRoutes(tenantId);
-  final api = await ref.watch(afyakitClientProvider.future);
+  final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoContactsService(api: api, routes: routes);
 });
 

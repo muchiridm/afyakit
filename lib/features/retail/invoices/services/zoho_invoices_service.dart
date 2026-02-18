@@ -3,24 +3,23 @@
 import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
+import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import '../../shared/models/zoho_invoice.dart';
-
-typedef JsonMap = Map<String, dynamic>;
 
 final zohoInvoicesServiceProvider = FutureProvider<ZohoInvoicesService>((
   ref,
 ) async {
   final tenantId = ref.watch(tenantSlugProvider);
   final routes = AfyaKitRoutes(tenantId);
-  final api = await ref.watch(afyakitClientProvider.future);
+  final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoInvoicesService(api: api, routes: routes);
 });
 

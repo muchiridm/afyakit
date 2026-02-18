@@ -1,5 +1,3 @@
-// lib/features/retail/catalog/controllers/catalog_controller.dart
-
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -46,33 +44,39 @@ class CatalogState {
 class CatalogController extends StateNotifier<CatalogState> {
   CatalogController(CatalogService? service)
     : _service = service,
-      super(const CatalogState.initial());
+      super(const CatalogState.initial()) {
+    if (_service != null) {
+      // ignore: discarded_futures
+      refresh();
+    }
+  }
 
-  CatalogController.empty()
-    : _service = null,
-      super(const CatalogState.initial());
-
-  final CatalogService? _service;
+  CatalogService? _service;
 
   final List<CatalogTile> _acc = <CatalogTile>[];
   Timer? _debounce;
-
-  // 👇 this identifies "the latest search"
   int _generation = 0;
 
   bool get hasMore => state.hasMore;
   CatalogQuery get query => state.query;
   bool get _ready => _service != null;
 
-  /// Hard refresh (enter / form change)
+  /// Called when AfyaKitClient becomes ready later
+  void setService(CatalogService service) {
+    if (_service != null) return;
+    _service = service;
+
+    // ignore: discarded_futures
+    refresh();
+  }
+
+  /// Hard refresh
   Future<void> refresh({CatalogQuery? query}) async {
     _debounce?.cancel();
 
-    // every explicit refresh = new generation
     _generation++;
     final currentGen = _generation;
 
-    // if not ready, just update local state
     if (!_ready) {
       state = state.copyWith(
         query: query ?? state.query,
@@ -99,16 +103,14 @@ class CatalogController extends StateNotifier<CatalogState> {
     );
   }
 
-  /// Debounced refresh (keystrokes)
+  /// Debounced search
   void refreshDebounced({CatalogQuery? query, Duration? delay}) {
     _debounce?.cancel();
-    // we increment generation *when* we actually refresh, not here
     _debounce = Timer(delay ?? const Duration(milliseconds: 420), () {
       refresh(query: query);
     });
   }
 
-  /// Scroll to load more
   Future<void> loadMore() async {
     if (!_ready) return;
     if (!state.hasMore) return;
@@ -123,7 +125,6 @@ class CatalogController extends StateNotifier<CatalogState> {
     );
   }
 
-  /// actual fetch, guarded by generation
   Future<void> _loadPage({
     required int gen,
     required CatalogQuery query,
@@ -137,10 +138,11 @@ class CatalogController extends StateNotifier<CatalogState> {
         query: query,
       );
 
-      // 👇 if a newer search started while we were waiting, ignore this result
-      if (gen != _generation) {
-        return;
-      }
+      // Controller disposed while waiting
+      if (!mounted) return;
+
+      // Ignore stale generation
+      if (gen != _generation) return;
 
       if (append) {
         _acc.addAll(items);
@@ -150,21 +152,18 @@ class CatalogController extends StateNotifier<CatalogState> {
           ..addAll(items);
       }
 
+      if (!mounted) return;
+
       state = state.copyWith(
         items: AsyncData(List.unmodifiable(_acc)),
         hasMore: hasMore,
         offset: _acc.length,
       );
     } catch (e, st) {
-      // also guard errors – don't overwrite a newer search with an error
+      if (!mounted) return;
       if (gen != _generation) return;
+
       state = state.copyWith(items: AsyncError(e, st));
     }
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    super.dispose();
   }
 }

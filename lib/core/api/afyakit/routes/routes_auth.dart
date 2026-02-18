@@ -3,19 +3,18 @@
 part of 'routes.dart';
 
 extension AfyaKitAuthRoutes on AfyaKitRoutes {
-  // ─────────────────────────────────────────────
-  // 🔐 Public auth (tenant-scoped; no auth header)
-  // ─────────────────────────────────────────────
-
   Uri checkUserStatus() => _uri('auth_login/check-user-status');
-  Uri waStart() => _uri('auth_login/wa/start');
-  Uri smsStart() => _uri('auth_login/sms/start');
-  Uri emailStart() => _uri('auth_login/email/start');
-  Uri otpVerify() => _uri('auth_login/otp/verify');
 
-  // ─────────────────────────────────────────────
-  // 👤 Auth Session (tenant-scoped; authenticated)
-  // ─────────────────────────────────────────────
+  /// Phone-only entry. Backend returns either:
+  /// - email attempt (attemptId), OR
+  /// - next=firebase_phone
+  Uri autoStart() => _uri('auth_login/otp/start');
+
+  /// Email start (login or verify_email)
+  Uri emailStart() => _uri('auth_login/email/start');
+
+  /// Verify BACKEND attempt (email-only now)
+  Uri otpVerify() => _uri('auth_login/otp/verify');
 
   Uri getCurrentUser() => _uri('auth/session/me');
   Uri syncClaims() => _uri('auth/session/sync-claims');

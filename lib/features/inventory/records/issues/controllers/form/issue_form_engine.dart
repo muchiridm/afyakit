@@ -1,6 +1,6 @@
 // lib/core/records/issues/controllers/form/issue_form_engine.dart
 
-import 'package:afyakit/core/auth_user/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
@@ -10,7 +10,7 @@ import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_
 import 'package:afyakit/features/inventory/records/issues/services/issue_submission.dart';
 import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
 import 'package:afyakit/features/inventory/records/issues/services/issue_validator.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

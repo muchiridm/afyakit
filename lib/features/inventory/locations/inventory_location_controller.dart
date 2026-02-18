@@ -1,15 +1,15 @@
 // lib/core/inventory_locations/providers/inventory_location_provider.dart
 
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_session_guard_provider.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/hq/tenants/providers/tenant_session_guard_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
-import 'package:afyakit/core/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/core/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
@@ -41,7 +41,7 @@ class InventoryLocationController
 
   Future<InventoryLocationService> _makeService() async {
     final tenantId = ref.read(tenantSlugProvider);
-    final client = await ref.read(afyakitClientProvider.future);
+    final client = await ref.read(afyakitClientFutureProvider.future);
     // 👇 Positional ctor: InventoryLocationService(AfyaKitRoutes, Dio)
     return InventoryLocationService(AfyaKitRoutes(tenantId), client.dio);
   }

@@ -1,12 +1,12 @@
 // lib/features/retail/sales/payments/widgets/payment_history_section.dart
 
 import 'package:afyakit/features/retail/shared/providers/payment_receipt_providers.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
-import 'package:afyakit/features/retail/shared/widgets/sales_formatters.dart';
 
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 
