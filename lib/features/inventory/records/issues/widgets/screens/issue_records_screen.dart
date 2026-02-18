@@ -16,7 +16,7 @@ class IssueRecordsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final asyncIssues = ref.watch(issuesStreamProvider(tenantId));
 
     final stores = ref

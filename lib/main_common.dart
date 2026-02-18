@@ -26,7 +26,7 @@ final class BootLog {
 }
 
 Future<void> bootstrapAndRun({
-  required String defaultTenantSlug,
+  required String defaultTenantId,
   AppMode appMode = AppMode.tenant,
 }) async {
   runZonedGuarded(
@@ -44,17 +44,15 @@ Future<void> bootstrapAndRun({
 
       await _configureFirestoreForPlatform();
 
-      // ── Decide FINAL tenant slug exactly once ──────────────────────────
-      final String resolvedSlug;
+      // ── Decide FINAL tenant ID exactly once ──────────────────────────
+      final String resolvedId;
       if (appMode == AppMode.tenant) {
-        resolvedSlug = await resolveTenantSlugAsync(
-          defaultSlug: defaultTenantSlug,
-        );
-        BootLog.d('Using tenant: $resolvedSlug');
+        resolvedId = await resolveTenantIdAsync(defaultId: defaultTenantId);
+        BootLog.d('Using tenant: $resolvedId');
       } else {
         // HQ must never resolve by domain — it is explicit.
-        resolvedSlug = defaultTenantSlug;
-        BootLog.d('Running in HQ mode (tenantSlug=$resolvedSlug)');
+        resolvedId = defaultTenantId;
+        BootLog.d('Running in HQ mode (tenantId=$resolvedId)');
       }
 
       runApp(
@@ -62,7 +60,7 @@ Future<void> bootstrapAndRun({
           observers: const [RiverpodLogger()],
           overrides: [
             authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
-            tenantSlugProvider.overrideWithValue(resolvedSlug),
+            tenantIdProvider.overrideWithValue(resolvedId),
           ],
           child: AppRoot(mode: appMode),
         ),

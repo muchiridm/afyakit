@@ -14,9 +14,9 @@ class TenantDomainsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final slug = initial.id.trim().toLowerCase();
-    final state = ref.watch(tenantDomainsControllerProvider(slug));
-    final ctrl = ref.read(tenantDomainsControllerProvider(slug).notifier);
+    final tenantId = initial.id.trim().toLowerCase();
+    final state = ref.watch(tenantDomainsControllerProvider(tenantId));
+    final ctrl = ref.read(tenantDomainsControllerProvider(tenantId).notifier);
 
     return Scaffold(
       appBar: AppBar(

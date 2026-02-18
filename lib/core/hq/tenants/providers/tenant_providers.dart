@@ -7,9 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Why:
 /// - Prevents accidental fallback to "afyakit"
 /// - Avoids domain resolution being triggered from arbitrary provider reads
-final tenantSlugProvider = Provider<String>((ref) {
+final tenantIdProvider = Provider<String>((ref) {
   throw StateError(
-    'tenantSlugProvider was read before being overridden.\n'
+    'tenantIdProvider was read before being overridden.\n'
     'Fix: override it in bootstrapAndRun() ProviderScope.overrides.',
   );
 });

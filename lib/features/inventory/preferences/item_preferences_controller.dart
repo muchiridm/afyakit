@@ -51,7 +51,7 @@ class ItemPreferenceController extends StateNotifier<AsyncValue<List<String>>> {
   late final Future<ItemPreferenceService> _svc = _makeService();
 
   Future<ItemPreferenceService> _makeService() async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final client = await ref.read(afyakitClientFutureProvider.future);
     // Ensure ItemPreferenceService has ctor: {required AfyaKitRoutes routes, required Dio dio}
     return ItemPreferenceService(

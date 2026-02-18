@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 final deliveryBannerVisibleProvider = StreamProvider.autoDispose<bool>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final active$ = ref.watch(activeDeliverySessionProvider.stream);
 
   return active$.asyncMap((active) async {

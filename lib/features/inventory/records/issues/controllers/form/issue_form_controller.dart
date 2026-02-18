@@ -117,7 +117,7 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
   Future<void> loadIssuedRecords() async {
     if (!mounted) return;
 
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final service = IssueService(tenantId);
 
     try {

@@ -11,7 +11,7 @@ import 'catalog_models.dart';
 import 'catalog_service.dart';
 
 final catalogServiceProvider = Provider<CatalogService?>((ref) {
-  final tenantIdRaw = ref.watch(tenantSlugProvider);
+  final tenantIdRaw = ref.watch(tenantIdProvider);
   final tenantId = tenantIdRaw.trim().toLowerCase();
 
   final apiAsync = ref.watch(afyakitClientFutureProvider);

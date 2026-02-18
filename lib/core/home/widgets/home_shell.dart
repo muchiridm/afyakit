@@ -23,7 +23,7 @@ class HomeShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final tenantName = ref.watch(tenantDisplayNameProvider);
 
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));

@@ -19,7 +19,7 @@ import 'package:afyakit/features/inventory/records/issues/services/issue_batch_s
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 
 final issueActionControllerProvider = Provider<IssueActionController?>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final user = ref.watch(currentUserProvider).asData?.value;
   if (user == null) {
     if (kDebugMode) {

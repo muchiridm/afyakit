@@ -74,7 +74,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
   TextEditingController? _accountPad;
 
   bool _controllersReady = false;
-  String? _loadedSlug; // prevents pointless re-load loops
+  String? _loadedTenantId; // prevents pointless re-load loops
 
   TextEditingController get displayName => _displayName!;
   TextEditingController get website => _website!;
@@ -179,13 +179,13 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
 
   // ───────────────────────── Public init / reset ─────────────────────────
 
-  /// Safe to call multiple times. No-ops on same slug.
+  /// Safe to call multiple times. No-ops on same tenantId.
   void loadInitial(TenantProfile? initial) {
-    final slug = initial?.id;
+    final tenantId = initial?.id;
 
     // If we already loaded this exact tenant into the form, no-op.
-    if (_loadedSlug == slug && state.initial?.id == slug) return;
-    _loadedSlug = slug;
+    if (_loadedTenantId == tenantId && state.initial?.id == tenantId) return;
+    _loadedTenantId = tenantId;
 
     _fillControllersFrom(initial);
 
@@ -215,7 +215,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
 
   /// Convenience: reset the editor back to create-mode defaults.
   void resetToCreate() {
-    _loadedSlug = null;
+    _loadedTenantId = null;
     loadInitial(null);
   }
 
@@ -256,7 +256,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
 
     state = state.copyWith(busy: true, error: null);
     try {
-      final slug = state.initial?.id;
+      final tenantId = state.initial?.id;
       final name = displayName.text.trim();
 
       if (name.isEmpty) {
@@ -267,7 +267,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
       final profile = buildProfilePayload();
       final features = buildFeaturesPayload();
 
-      if (slug == null || slug.trim().isEmpty) {
+      if (tenantId == null || tenantId.trim().isEmpty) {
         await svc.createTenantProfile(
           displayName: name,
           primaryColorHex: state.primaryColorHex,
@@ -278,7 +278,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
         );
       } else {
         await svc.updateTenantProfile(
-          slug: slug,
+          tenantId: tenantId,
           displayName: name,
           primaryColorHex: state.primaryColorHex,
           features: features,
@@ -302,15 +302,15 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
   Future<bool> delete({bool hard = true}) async {
     final svc = await ref.read(tenantServiceProvider.future);
 
-    final slug = state.initial?.id;
-    if (slug == null || slug.trim().isEmpty) {
+    final tenantId = state.initial?.id;
+    if (tenantId == null || tenantId.trim().isEmpty) {
       state = state.copyWith(error: 'Cannot delete: missing tenant id');
       return false;
     }
 
     state = state.copyWith(busy: true, error: null);
     try {
-      await svc.deleteTenantProfile(slug, hard: hard);
+      await svc.deleteTenantProfile(tenantId, hard: hard);
 
       // ✅ New invalidation target (no streams)
       ref.invalidate(hqTenantsProvider);

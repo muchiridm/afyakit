@@ -20,7 +20,7 @@ final batchRepoProvider = Provider.autoDispose<BatchRepo>((_) => BatchRepo());
 final stockReportProvider = FutureProvider.autoDispose<StockReportService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final inventoryRepo = ref.watch(inventoryRepoProvider);
   final batchRepo = ref.watch(batchRepoProvider);
 

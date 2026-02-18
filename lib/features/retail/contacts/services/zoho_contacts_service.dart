@@ -14,7 +14,7 @@ import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoContactsService(api: api, routes: routes);

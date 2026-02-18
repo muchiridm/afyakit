@@ -20,7 +20,7 @@ class AllUsersState {
   /// Directory search (global user directory)
   final String search;
 
-  /// HQ target tenant slug for tenant access edits.
+  /// HQ target tenant ID for tenant access edits.
   /// When null => only directory list is active.
   final String? targetTenantId;
 
@@ -226,7 +226,7 @@ class AllUsersController extends StateNotifier<AllUsersState> {
   // HQ Tenant auth_users: CREATE via HQ
   // ─────────────────────────────────────────────
 
-  /// POST /api/tenants/:slug/auth_users
+  /// POST /api/tenants/:tenantId/auth_users
   /// Returns created/ensured uid (global identity).
   Future<String?> hqCreateTenantUser({
     required String targetTenantId,

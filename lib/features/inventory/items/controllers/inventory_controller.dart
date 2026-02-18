@@ -34,7 +34,7 @@ class InventoryController extends StateNotifier<void> {
   InventoryController(this.ref) : super(null);
 
   Future<InventoryService> _makeService() async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final client = await ref.read(
       afyakitClientFutureProvider.future,
     ); // await Dio client
@@ -67,7 +67,7 @@ class InventoryController extends StateNotifier<void> {
   }
 
   Future<void> delete(String id, ItemType type) async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
 
     try {
       final linked = await BatchService.hasLinkedBatches(

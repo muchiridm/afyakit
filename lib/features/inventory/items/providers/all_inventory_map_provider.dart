@@ -7,5 +7,5 @@ final allInventoryMapProvider = FutureProvider<Map<String, BaseInventoryItem>>((
   ref,
 ) async {
   final repo = ref.read(inventoryRepoProvider);
-  return await repo.fetchAllItemsAsMap(ref.read(tenantSlugProvider));
+  return await repo.fetchAllItemsAsMap(ref.read(tenantIdProvider));
 });

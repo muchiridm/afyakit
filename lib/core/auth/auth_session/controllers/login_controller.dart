@@ -120,7 +120,7 @@ class LoginState {
 
 final loginControllerProvider =
     StateNotifierProvider<LoginController, LoginState>((ref) {
-      final tenantId = ref.watch(tenantSlugProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       return LoginController(ref, tenantId);
     });
 

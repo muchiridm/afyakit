@@ -21,7 +21,7 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // STATE comes from the engine
     final session = ref.watch(deliverySessionEngineProvider);
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
 
     // Stores & dispensaries (plain lists)
     final stores = ref.watch(allStoresProvider);

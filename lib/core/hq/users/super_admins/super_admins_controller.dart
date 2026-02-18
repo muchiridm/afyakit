@@ -72,7 +72,7 @@ class SuperAdminsController extends StateNotifier<SuperAdminsState> {
 
   Future<void> _ensureSvc() async {
     if (_svc != null) return;
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final client = await ref.read(afyakitClientFutureProvider.future);
     _svc = SuperAdminsService(dio: client.dio, routes: AfyaKitRoutes(tenantId));
   }

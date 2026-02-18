@@ -25,16 +25,16 @@ final _tenantProfileLoaderProvider = Provider.autoDispose<TenantProfileLoader>((
 final tenantProfileProvider = FutureProvider.autoDispose<TenantProfile>((
   ref,
 ) async {
-  final slug = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final loader = ref.watch(_tenantProfileLoaderProvider);
 
   try {
-    return await loader.load(slug);
+    return await loader.load(tenantId);
   } catch (_) {
     // ✅ Hard failsafe: let UI render login/guest even if profile load fails.
     return TenantProfile(
-      id: slug,
-      displayName: slug,
+      id: tenantId,
+      displayName: tenantId,
       primaryColorHex: '#2196F3',
       features: TenantFeatures.fromMap(null),
       assets: TenantAssets.fromMap(null),
@@ -44,14 +44,14 @@ final tenantProfileProvider = FutureProvider.autoDispose<TenantProfile>((
 });
 
 final tenantDisplayNameProvider = Provider.autoDispose<String>((ref) {
-  final slug = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final asyncProfile = ref.watch(tenantProfileProvider);
 
   return asyncProfile.maybeWhen(
     data: (p) {
       final name = p.displayName.trim();
-      return name.isNotEmpty ? name : slug;
+      return name.isNotEmpty ? name : tenantId;
     },
-    orElse: () => slug,
+    orElse: () => tenantId,
   );
 });

@@ -73,7 +73,7 @@ class InventoryImportService {
 
   Future<Uint8List> downloadTemplate({required ImportType type}) async {
     // Resolve tenant + client + routes
-    final tenantId = _ref.read(tenantSlugProvider);
+    final tenantId = _ref.read(tenantIdProvider);
     final client = await _ref.read(afyakitClientFutureProvider.future);
     final routes = AfyaKitRoutes(tenantId);
 
@@ -116,7 +116,7 @@ class InventoryImportService {
     });
 
     // Resolve tenant + client + routes
-    final tenantId = _ref.read(tenantSlugProvider);
+    final tenantId = _ref.read(tenantIdProvider);
     final client = await _ref.read(afyakitClientFutureProvider.future);
     final routes = AfyaKitRoutes(tenantId);
 

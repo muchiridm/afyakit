@@ -9,7 +9,7 @@ String _requireTenant(String label) {
   final t = _envTenant.trim().toLowerCase();
   if (t.isEmpty) {
     throw StateError(
-      'Missing TENANT for $label. Run with --dart-define=TENANT=<slug>',
+      'Missing TENANT for $label. Run with --dart-define=TENANT=<tenantId>',
     );
   }
   return t;
@@ -18,7 +18,7 @@ String _requireTenant(String label) {
 Future<void> main() async {
   final mode = AppModeX.fromEnv();
 
-  final defaultTenantSlug = switch (mode) {
+  final defaultTenantId = switch (mode) {
     AppMode.hq => _requireTenant('HQ'), // usually "hq"
     AppMode.tenant =>
       _envTenant.trim().isNotEmpty
@@ -26,5 +26,5 @@ Future<void> main() async {
           : 'afyakit',
   };
 
-  await bootstrapAndRun(defaultTenantSlug: defaultTenantSlug, appMode: mode);
+  await bootstrapAndRun(defaultTenantId: defaultTenantId, appMode: mode);
 }

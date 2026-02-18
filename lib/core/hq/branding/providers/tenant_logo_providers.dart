@@ -12,7 +12,7 @@ String _gcsUrl(String path) => 'https://storage.googleapis.com/$_bucket/$path';
 ///
 /// public/<tenantId>/branding/logos/logo-primary.png
 final tenantPrimaryLogoUrlProvider = Provider.autoDispose<String>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final path = 'public/$tenantId/branding/logos/logo-primary.png';
   return _gcsUrl(path);
 });
@@ -21,7 +21,7 @@ final tenantPrimaryLogoUrlProvider = Provider.autoDispose<String>((ref) {
 ///
 /// public/<tenantId>/branding/logos/logo-secondary.png
 final tenantSecondaryLogoUrlProvider = Provider.autoDispose<String>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final path = 'public/$tenantId/branding/logos/logo-secondary.png';
   return _gcsUrl(path);
 });

@@ -6,7 +6,7 @@ import '../../tenants/utils/tenant_util.dart';
 @immutable
 class DomainIndex {
   final String domain; // doc id (lowercased fqdn)
-  final String tenantSlug; // owner (immutable after create)
+  final String tenantId; // owner (immutable after create)
 
   /// allowlist toggle (missing => true)
   final bool active;
@@ -22,7 +22,7 @@ class DomainIndex {
 
   const DomainIndex({
     required this.domain,
-    required this.tenantSlug,
+    required this.tenantId,
     this.active = true,
     this.verified = false,
     this.isPrimary = false,
@@ -35,7 +35,7 @@ class DomainIndex {
     final token = (m['dnsToken'] as String?)?.trim();
     return DomainIndex(
       domain: id.trim().toLowerCase(),
-      tenantSlug: (m['tenantSlug'] ?? '').toString().trim(),
+      tenantId: (m['tenantId'] ?? '').toString().trim(),
       active: m['active'] != false, // ✅ default true
       verified: m['verified'] == true,
       isPrimary: m['isPrimary'] == true,
@@ -48,7 +48,7 @@ class DomainIndex {
   bool get corsEligible => active && verified;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'tenantSlug': tenantSlug,
+    'tenantId': tenantId,
     'active': active,
     'verified': verified,
     'isPrimary': isPrimary,

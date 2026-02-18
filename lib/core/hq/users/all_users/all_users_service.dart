@@ -14,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final allUsersServiceProvider = FutureProvider.autoDispose<AllUsersService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final client = await ref.watch(afyakitClientFutureProvider.future);
   final routes = AfyaKitRoutes(tenantId);
   return AllUsersService(dio: client.dio, routes: routes);
@@ -204,7 +204,7 @@ class AllUsersService {
   // HQ Tenant auth_users (cross-tenant management)
   // ─────────────────────────────────────────────────────────────
 
-  /// GET /api/tenants/:slug/auth_users
+  /// GET /api/tenants/:tenantId/auth_users
   Future<List<AllUser>> hqFetchTenantUsers(
     String targetTenantId, {
     String search = '',
@@ -226,7 +226,7 @@ class AllUsersService {
     return items.map(_userFromMap).toList();
   }
 
-  /// ✅ POST /api/tenants/:slug/auth_users
+  /// ✅ POST /api/tenants/:tenantId/auth_users
   /// body: { phoneNumber, displayName? }
   ///
   /// Returns raw PatchAuthUserResult: { user, zoho? }
@@ -259,7 +259,7 @@ class AllUsersService {
     return Map<String, Object?>.from(_asMap(r.data));
   }
 
-  /// GET /api/tenants/:slug/auth_users/:uid
+  /// GET /api/tenants/:tenantId/auth_users/:uid
   Future<AllUser> hqGetTenantUserById(String targetTenantId, String uid) async {
     final uri = routes.hqGetTenantUserById(targetTenantId, uid);
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
@@ -270,7 +270,7 @@ class AllUsersService {
     return _userFromResponse(r);
   }
 
-  /// PATCH /api/tenants/:slug/auth_users/:uid
+  /// PATCH /api/tenants/:tenantId/auth_users/:uid
   ///
   /// IMPORTANT:
   /// - Backend PatchAuthUserSchema supports:
@@ -299,7 +299,7 @@ class AllUsersService {
     return Map<String, Object?>.from(_asMap(r.data));
   }
 
-  /// DELETE /api/tenants/:slug/auth_users/:uid
+  /// DELETE /api/tenants/:tenantId/auth_users/:uid
   Future<void> hqDeleteTenantUser({
     required String targetTenantId,
     required String uid,

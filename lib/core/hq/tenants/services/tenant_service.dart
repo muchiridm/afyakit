@@ -16,18 +16,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// ✅ Stable HQ service instance.
 /// - Uses a ready `Dio` from the AfyaKit client provider.
 /// - No nullable Dio.
-/// - No tenantSlug coupling (HQ is "core").
+/// - No tenantId coupling (HQ is "core").
 final tenantServiceProvider = FutureProvider<TenantService>((ref) async {
   final client = await ref.watch(afyakitClientFutureProvider.future);
 
-  // HQ routes are core-scoped; any tenantSlug you pass here should not affect
+  // HQ routes are core-scoped; any tenantId you pass here should not affect
   // the core endpoints used in this service (listTenants(), createTenant(), etc.).
   //
   // Using a harmless placeholder keeps AfyaKitRoutes happy without coupling
-  // this provider to tenantSlugProvider rebuilds.
-  const hqSlug = 'afyakit';
+  // this provider to tenantIdProvider rebuilds.
+  const hqId = 'afyakit';
 
-  return TenantService(dio: client.dio, routes: AfyaKitRoutes(hqSlug));
+  return TenantService(dio: client.dio, routes: AfyaKitRoutes(hqId));
 });
 
 class TenantService {
@@ -136,8 +136,8 @@ class TenantService {
     if (!_is2xx(r.statusCode)) _bad(r, 'List tenants');
 
     final list = _asList(r.data).mapIndexed((i, m) {
-      final slug = (m['slug'] ?? m['id'] ?? '').toString();
-      return TenantProfile.fromFirestore(slug, m);
+      final tenantId = (m['tenantId'] ?? m['id'] ?? '').toString();
+      return TenantProfile.fromFirestore(tenantId, m);
     }).toList();
 
     _cachedList = list;
@@ -152,11 +152,11 @@ class TenantService {
   /// Backwards-compatible alias.
   Future<List<TenantProfile>> listTenantProfiles() => fetchTenantProfiles();
 
-  Future<TenantProfile> getTenantProfile(String slug) async {
-    final r = await _dio.getUri(routes.getTenant(slug));
+  Future<TenantProfile> getTenantProfile(String tenantId) async {
+    final r = await _dio.getUri(routes.getTenant(tenantId));
     if (!_is2xx(r.statusCode)) _bad(r, 'Get tenant profile');
     final m = _asMap(r.data);
-    return TenantProfile.fromFirestore(slug, m);
+    return TenantProfile.fromFirestore(tenantId, m);
   }
 
   // ─────────────────────────────────────────────
@@ -165,7 +165,7 @@ class TenantService {
 
   Future<String> createTenantProfile({
     required String displayName,
-    String? slug,
+    String? tenantId,
     String primaryColorHex = '#1565C0',
     Map<String, bool> features = const {},
     JsonObj assets = const {},
@@ -174,7 +174,8 @@ class TenantService {
   }) async {
     final payload = <String, dynamic>{
       'displayName': displayName,
-      if (slug != null && slug.trim().isNotEmpty) 'slug': _slugify(slug),
+      if (tenantId != null && tenantId.trim().isNotEmpty)
+        'tenantId': _sanitizeId(tenantId),
       'primaryColorHex': primaryColorHex,
       if (features.isNotEmpty) 'features': features,
       if (assets.isNotEmpty) 'assets': assets,
@@ -192,15 +193,16 @@ class TenantService {
     invalidateCache();
 
     final m = _asMap(r.data);
-    final createdSlug = (m['slug'] ?? payload['slug'] ?? '').toString();
+    final createdTenantId = (m['tenantId'] ?? payload['tenantId'] ?? '')
+        .toString();
     if (kDebugMode) {
-      debugPrint('✅ $_tag Tenant created: $createdSlug');
+      debugPrint('✅ $_tag Tenant created: $createdTenantId');
     }
-    return createdSlug;
+    return createdTenantId;
   }
 
   Future<void> updateTenantProfile({
-    required String slug,
+    required String tenantId,
     String? displayName,
     String? primaryColorHex,
     Map<String, bool>? features,
@@ -219,7 +221,7 @@ class TenantService {
     if (payload.isEmpty) return;
 
     final r = await _dio.patchUri(
-      routes.updateTenant(slug),
+      routes.updateTenant(tenantId),
       data: payload,
       options: Options(contentType: _json),
     );
@@ -228,14 +230,14 @@ class TenantService {
     invalidateCache();
 
     if (kDebugMode) {
-      debugPrint('✅ $_tag Tenant $slug updated');
+      debugPrint('✅ $_tag Tenant $tenantId updated');
     }
   }
 
-  Future<void> deleteTenantProfile(String slug, {bool hard = false}) async {
+  Future<void> deleteTenantProfile(String tenantId, {bool hard = false}) async {
     final uri = hard
-        ? routes.deleteTenant(slug).replace(queryParameters: {'hard': '1'})
-        : routes.deleteTenant(slug);
+        ? routes.deleteTenant(tenantId).replace(queryParameters: {'hard': '1'})
+        : routes.deleteTenant(tenantId);
 
     final r = await _dio.deleteUri(uri);
     final ok = (r.statusCode == 204) || _is2xx(r.statusCode);
@@ -244,7 +246,7 @@ class TenantService {
     invalidateCache();
 
     if (kDebugMode) {
-      debugPrint('🗑️ $_tag Tenant deleted: $slug (hard=$hard)');
+      debugPrint('🗑️ $_tag Tenant deleted: $tenantId (hard=$hard)');
     }
   }
 
@@ -252,9 +254,9 @@ class TenantService {
   // owner / status helpers
   // ─────────────────────────────────────────────
 
-  Future<void> setStatus(String slug, TenantStatus status) async {
+  Future<void> setStatus(String tenantId, TenantStatus status) async {
     final r = await _dio.postUri(
-      routes.setTenantStatus(slug),
+      routes.setTenantStatus(tenantId),
       data: {'status': status.value},
       options: Options(contentType: _json),
     );
@@ -263,35 +265,35 @@ class TenantService {
   }
 
   Future<void> setOwnerByEmail({
-    required String slug,
+    required String tenantId,
     required String email,
   }) async {
     final target = email.trim();
     if (target.isEmpty) {
       throw ArgumentError.value(email, 'email', 'must not be empty');
     }
-    await _transferOwner(slug: slug, payload: {'email': target});
+    await _transferOwner(tenantId: tenantId, payload: {'email': target});
     invalidateCache();
   }
 
   Future<void> setOwnerByUid({
-    required String slug,
+    required String tenantId,
     required String uid,
   }) async {
     final target = uid.trim();
     if (target.isEmpty) {
       throw ArgumentError.value(uid, 'uid', 'must not be empty');
     }
-    await _transferOwner(slug: slug, payload: {'uid': target});
+    await _transferOwner(tenantId: tenantId, payload: {'uid': target});
     invalidateCache();
   }
 
   Future<void> _transferOwner({
-    required String slug,
+    required String tenantId,
     required Map<String, dynamic> payload,
   }) async {
     final r = await _dio.postUri(
-      routes.setTenantOwner(slug),
+      routes.setTenantOwner(tenantId),
       data: payload,
       options: Options(
         contentType: Headers.jsonContentType,
@@ -317,7 +319,7 @@ class TenantService {
   // utils
   // ─────────────────────────────────────────────
 
-  String _slugify(String input) {
+  String _sanitizeId(String input) {
     final s = input
         .toLowerCase()
         .trim()
@@ -333,7 +335,7 @@ class TenantService {
   /// This is the ONLY supported way to update favicon / PWA icons.
   /// The URL MUST be a web-safe https:// URL (Firebase download URL).
   Future<void> updateTenantWebAsset({
-    required String slug,
+    required String tenantId,
     required String assetKey, // 'favicon' | 'icon192' | 'icon512'
     required String downloadUrl,
   }) async {
@@ -345,7 +347,7 @@ class TenantService {
     }
 
     // Fetch current profile (cached or network)
-    final profile = await getTenantProfile(slug);
+    final profile = await getTenantProfile(tenantId);
 
     final currentAssets = profile.assets;
 
@@ -357,11 +359,11 @@ class TenantService {
       'logos': newLogos,
     };
 
-    await updateTenantProfile(slug: slug, assets: updatedAssets);
+    await updateTenantProfile(tenantId: tenantId, assets: updatedAssets);
 
     if (kDebugMode) {
       debugPrint(
-        '✅ $_tag Web asset updated: $slug → $assetKey (v${currentAssets.version + 1})',
+        '✅ $_tag Web asset updated: $tenantId → $assetKey (v${currentAssets.version + 1})',
       );
     }
   }

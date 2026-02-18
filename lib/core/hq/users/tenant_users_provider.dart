@@ -10,7 +10,7 @@ import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
 final tenantUsersProvider = FutureProvider.autoDispose<List<AuthUser>>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final svc = await ref.watch(userProfileServiceProvider(tenantId).future);
   return svc.listTenantUsers();
 });

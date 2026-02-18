@@ -40,9 +40,9 @@ class DomainIndexService {
   }
 
   /// List all domains for a tenant
-  Stream<List<DomainIndex>> watchByTenant(String tenantSlug) {
+  Stream<List<DomainIndex>> watchByTenant(String tenantId) {
     return _col
-        .where('tenantSlug', isEqualTo: tenantSlug)
+        .where('tenantId', isEqualTo: tenantId)
         .snapshots()
         .map(
           (q) =>

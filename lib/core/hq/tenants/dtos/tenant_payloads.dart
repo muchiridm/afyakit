@@ -34,14 +34,14 @@ class DomainOp {
 /// Body accepted by POST /tenants
 class CreateTenantRequest {
   final String displayName;
-  final String? slug; // optional; service may slugify
+  final String? tenantId;
   final String? primaryColor; // e.g. "#1565C0"
   final String? logoPath;
   final Map<String, dynamic>? flags;
 
   const CreateTenantRequest({
     required this.displayName,
-    this.slug,
+    this.tenantId,
     this.primaryColor,
     this.logoPath,
     this.flags,
@@ -49,14 +49,14 @@ class CreateTenantRequest {
 
   Map<String, dynamic> toJson() => _omitNulls({
     'displayName': displayName.trim(),
-    'slug': _trimOrNull(slug),
+    'tenantId': _trimOrNull(tenantId),
     'primaryColor': _trimOrNull(primaryColor),
     'logoPath': _trimOrNull(logoPath),
     if (flags != null && flags!.isNotEmpty) 'flags': flags,
   });
 }
 
-/// PATCH /tenants/:slug
+/// PATCH /tenants/:tenantId
 class EditTenantPayload {
   final String? displayName;
   final String? primaryColor;
@@ -80,7 +80,7 @@ class EditTenantPayload {
   });
 }
 
-/// POST /tenants/:slug/owner
+/// POST /tenants/:tenantId/owner
 /// Exactly one of {email, uid} must be provided.
 class TransferOwnerPayload {
   final String? email; // exactly one non-null
@@ -124,7 +124,7 @@ class TransferOwnerPayload {
   }
 }
 
-/// POST /tenants/:slug/auth_users/invite (HQ)
+/// POST /tenants/:tenantId/auth_users/invite (HQ)
 class InviteTenantAdminPayload {
   final String email;
   final String role; // 'admin' | 'manager' | 'staff'
@@ -173,13 +173,13 @@ class GrantTenantAdminPayload {
 /// Convert to wire body via [toRequest].
 class CreateTenantPayload {
   final String displayName;
-  final String? slug;
+  final String? tenantId;
   final String primaryColor; // default handled in dialog/controller
   final String? logoPath;
   final Map<String, dynamic> flags;
 
   /// Follow-ups (not part of POST /tenants):
-  /// - POST /tenants/:slug/owner (email or uid)
+  /// - POST /tenants/:tenantId/owner (email or uid)
   /// - invite admins
   final String? ownerUid;
   final String? ownerEmail;
@@ -188,7 +188,7 @@ class CreateTenantPayload {
   const CreateTenantPayload({
     required this.displayName,
     required this.primaryColor,
-    this.slug,
+    this.tenantId,
     this.logoPath,
     this.flags = const {},
     this.ownerUid,
@@ -198,7 +198,7 @@ class CreateTenantPayload {
 
   CreateTenantRequest toRequest() => CreateTenantRequest(
     displayName: displayName,
-    slug: slug,
+    tenantId: tenantId,
     primaryColor: primaryColor,
     logoPath: logoPath,
     flags: flags.isEmpty ? null : flags,
@@ -221,7 +221,7 @@ class AddAdminPayload {
 /// Result object from the all-in-one Configure dialog.
 /// The controller applies these pieces in order.
 class ConfigureTenantResult {
-  final EditTenantPayload? edit; // PATCH /tenants/:slug
+  final EditTenantPayload? edit; // PATCH /tenants/:tenantId
   final TenantStatus? setStatus; // POST .../status
   final String? transferOwnerTarget; // POST .../owner (email or uid)
   final List<DomainOp> domainOps; // domain mutations to perform

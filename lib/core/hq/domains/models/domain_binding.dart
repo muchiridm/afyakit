@@ -3,14 +3,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/core/hq/tenants/utils/tenant_util.dart';
 
-/// Domain binding returned by GET /tenants/:slug/domains
+/// Domain binding returned by GET /tenants/:tenantId/domains
 @immutable
 class DomainBinding {
   /// e.g. "www.dawapap.com" (doc id)
   final String domain;
 
   /// owner tenant (server always sends it; useful for debugging)
-  final String tenantSlug;
+  final String tenantId;
 
   /// allowlist toggle (must be true for CORS)
   final bool active;
@@ -29,7 +29,7 @@ class DomainBinding {
 
   const DomainBinding({
     required this.domain,
-    required this.tenantSlug,
+    required this.tenantId,
     this.active = true,
     this.verified = false,
     this.isPrimary = false,
@@ -50,12 +50,12 @@ class DomainBinding {
 
   factory DomainBinding.fromMap(Map<String, dynamic> m) {
     final rawDomain = (m['domain'] ?? '').toString().trim();
-    final rawTenant = (m['tenantSlug'] ?? '').toString().trim();
+    final rawTenant = (m['tenantId'] ?? '').toString().trim();
 
     final token = (m['dnsToken'] as String?)?.trim();
     return DomainBinding(
       domain: rawDomain,
-      tenantSlug: rawTenant,
+      tenantId: rawTenant,
       // ✅ backend defaults active=true, but be defensive
       active: m['active'] != false,
       verified: m['verified'] == true,
@@ -69,7 +69,7 @@ class DomainBinding {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'domain': domain,
-    'tenantSlug': tenantSlug,
+    'tenantId': tenantId,
     'active': active,
     'verified': verified,
     'isPrimary': isPrimary,
@@ -80,7 +80,7 @@ class DomainBinding {
 
   DomainBinding copyWith({
     String? domain,
-    String? tenantSlug,
+    String? tenantId,
     bool? active,
     bool? verified,
     bool? isPrimary,
@@ -90,7 +90,7 @@ class DomainBinding {
   }) {
     return DomainBinding(
       domain: domain ?? this.domain,
-      tenantSlug: tenantSlug ?? this.tenantSlug,
+      tenantId: tenantId ?? this.tenantId,
       active: active ?? this.active,
       verified: verified ?? this.verified,
       isPrimary: isPrimary ?? this.isPrimary,
@@ -106,7 +106,7 @@ class DomainBinding {
       other is DomainBinding &&
           runtimeType == other.runtimeType &&
           domain == other.domain &&
-          tenantSlug == other.tenantSlug &&
+          tenantId == other.tenantId &&
           active == other.active &&
           verified == other.verified &&
           isPrimary == other.isPrimary &&
@@ -117,7 +117,7 @@ class DomainBinding {
   @override
   int get hashCode => Object.hash(
     domain,
-    tenantSlug,
+    tenantId,
     active,
     verified,
     isPrimary,
@@ -128,6 +128,6 @@ class DomainBinding {
 
   @override
   String toString() =>
-      'DomainBinding($domain, tenant=$tenantSlug, '
+      'DomainBinding($domain, tenant=$tenantId, '
       'active=$active, verified=$verified, primary=$isPrimary)';
 }

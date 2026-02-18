@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 
 /// Types of web assets we manage per tenant.
-/// Paths follow: public/{tenantSlug}/web/{filename}.png
+/// Paths follow: public/{tenantId}/web/{filename}.png
 enum TenantWebAssetType {
   favicon, // favicon.png
   icon192, // icon-192.png
@@ -25,13 +25,13 @@ String tenantWebAssetFilename(TenantWebAssetType type) {
 }
 
 /// Helper: storage path under the app bucket.
-String tenantWebAssetPath(String tenantSlug, TenantWebAssetType type) {
-  return 'public/$tenantSlug/web/${tenantWebAssetFilename(type)}';
+String tenantWebAssetPath(String tenantId, TenantWebAssetType type) {
+  return 'public/$tenantId/web/${tenantWebAssetFilename(type)}';
 }
 
 /// If you ever want per-tenant buckets, you can change this.
 /// For now, all tenants share the app's default bucket.
-FirebaseStorage storageForTenant(String tenantSlug) {
+FirebaseStorage storageForTenant(String tenantId) {
   return FirebaseStorage.instance;
 }
 
@@ -42,8 +42,8 @@ class TenantStorageService {
 
   final FirebaseStorage _storage;
 
-  Reference _refForWebAsset(String tenantSlug, TenantWebAssetType type) {
-    final path = tenantWebAssetPath(tenantSlug, type);
+  Reference _refForWebAsset(String tenantId, TenantWebAssetType type) {
+    final path = tenantWebAssetPath(tenantId, type);
     return _storage.ref().child(path);
   }
 
@@ -51,21 +51,21 @@ class TenantStorageService {
   ///
   /// On web you’ll typically use `FilePicker` / `<input>` to get the bytes.
   Future<void> uploadWebAssetBytes({
-    required String tenantSlug,
+    required String tenantId,
     required TenantWebAssetType type,
     required Uint8List bytes,
     String contentType = 'image/png',
   }) async {
-    final ref = _refForWebAsset(tenantSlug, type);
+    final ref = _refForWebAsset(tenantId, type);
     await ref.putData(bytes, SettableMetadata(contentType: contentType));
   }
 
   /// Delete a specific tenant web asset. No-op if it doesn't exist.
   Future<void> deleteWebAsset({
-    required String tenantSlug,
+    required String tenantId,
     required TenantWebAssetType type,
   }) async {
-    final ref = _refForWebAsset(tenantSlug, type);
+    final ref = _refForWebAsset(tenantId, type);
     try {
       await ref.delete();
     } on FirebaseException catch (e) {
@@ -79,10 +79,10 @@ class TenantStorageService {
 
   /// Check if a tenant web asset currently exists.
   Future<bool> webAssetExists({
-    required String tenantSlug,
+    required String tenantId,
     required TenantWebAssetType type,
   }) async {
-    final ref = _refForWebAsset(tenantSlug, type);
+    final ref = _refForWebAsset(tenantId, type);
     try {
       await ref.getDownloadURL();
       return true;
@@ -94,10 +94,10 @@ class TenantStorageService {
 
   /// Get a download URL (useful for previews in the HQ editor).
   Future<String?> getWebAssetDownloadUrl({
-    required String tenantSlug,
+    required String tenantId,
     required TenantWebAssetType type,
   }) async {
-    final ref = _refForWebAsset(tenantSlug, type);
+    final ref = _refForWebAsset(tenantId, type);
     try {
       return await ref.getDownloadURL();
     } on FirebaseException catch (e) {

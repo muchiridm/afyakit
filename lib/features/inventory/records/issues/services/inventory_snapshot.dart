@@ -24,7 +24,7 @@ class InventorySnapshot {
 }
 
 InventorySnapshot readInventorySnapshot(Ref ref) {
-  final tenantId = ref.read(tenantSlugProvider);
+  final tenantId = ref.read(tenantIdProvider);
 
   List<T> read<T>(AsyncValue<List<T>> v) =>
       v.maybeWhen(data: (d) => d, orElse: () => const []);

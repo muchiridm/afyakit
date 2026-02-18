@@ -5,9 +5,9 @@ import 'package:afyakit/core/hq/domains/models/domain_binding.dart';
 import 'package:afyakit/core/hq/domains/services/tenant_domain_service.dart';
 
 /// Fetch-once list of domains for a tenant (HQ/admin).
-/// Refresh by `ref.invalidate(hqTenantDomainsProvider(slug))`.
+/// Refresh by `ref.invalidate(hqTenantDomainsProvider(tenantId))`.
 final hqTenantDomainsProvider = FutureProvider.autoDispose
-    .family<List<DomainBinding>, String>((ref, slug) async {
+    .family<List<DomainBinding>, String>((ref, tenantId) async {
       final svc = await ref.watch(tenantDomainServiceProvider.future);
-      return svc.listTenantDomains(slug.trim().toLowerCase());
+      return svc.listTenantDomains(tenantId.trim().toLowerCase());
     });

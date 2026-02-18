@@ -264,13 +264,13 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
                           child: Text('— Select tenant —'),
                         ),
                         ...options.map((t) {
-                          final slug = t.id.trim().toLowerCase();
+                          final tenantId = t.id.trim().toLowerCase();
                           final name = t.displayName.trim().isEmpty
-                              ? slug
+                              ? tenantId
                               : t.displayName.trim();
                           return DropdownMenuItem<String>(
-                            value: slug,
-                            child: Text('$name  ($slug)'),
+                            value: tenantId,
+                            child: Text('$name  ($tenantId)'),
                           );
                         }),
                       ],

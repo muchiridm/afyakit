@@ -16,7 +16,7 @@ class DeliveryRecordsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final deliveriesAsync = ref.watch(deliveryRecordsStreamProvider(tenantId));
     final stores = ref
         .watch(inventoryLocationProvider(InventoryLocationType.store))

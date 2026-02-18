@@ -11,9 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final tenantDomainServiceProvider =
     FutureProvider.autoDispose<TenantDomainService>((ref) async {
-      final tenantSlug = ref.watch(tenantSlugProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       final client = await ref.watch(afyakitClientFutureProvider.future);
-      final routes = AfyaKitRoutes(tenantSlug);
+      final routes = AfyaKitRoutes(tenantId);
       return TenantDomainService(dio: client.dio, routes: routes);
     });
 
@@ -70,9 +70,9 @@ class TenantDomainService {
   // API
   // ─────────────────────────────────────────────
 
-  Future<List<DomainBinding>> listTenantDomains(String slug) async {
+  Future<List<DomainBinding>> listTenantDomains(String tenantId) async {
     final r = await dio.getUri(
-      routes.listDomains(slug),
+      routes.listDomains(tenantId),
       options: Options(
         validateStatus: _okOrClientError,
         receiveDataWhenStatusError: true,
@@ -88,9 +88,9 @@ class TenantDomainService {
   ///
   /// Returns dnsToken when CREATED.
   /// If already exists (409 domain-exists), returns '' (idempotent).
-  Future<String> addTenantDomain(String slug, String domain) async {
+  Future<String> addTenantDomain(String tenantId, String domain) async {
     final r = await dio.postUri(
-      routes.addDomain(slug),
+      routes.addDomain(tenantId),
       data: <String, dynamic>{'domain': domain.trim()},
       options: Options(
         contentType: _json,
@@ -111,7 +111,9 @@ class TenantDomainService {
       final err = (m['error'] ?? '').toString();
       if (err == 'domain-exists') {
         if (kDebugMode) {
-          debugPrint('ℹ️ $_tag add domain: already exists ($domain) for $slug');
+          debugPrint(
+            'ℹ️ $_tag add domain: already exists ($domain) for $tenantId',
+          );
         }
         return '';
       }
@@ -120,9 +122,9 @@ class TenantDomainService {
     _bad(r, 'Add domain');
   }
 
-  Future<void> verifyTenantDomain(String slug, String domain) async {
+  Future<void> verifyTenantDomain(String tenantId, String domain) async {
     final r = await dio.postUri(
-      routes.verifyDomain(slug, domain),
+      routes.verifyDomain(tenantId, domain),
       options: Options(
         contentType: _json,
         validateStatus: _okOrClientError,
@@ -134,9 +136,9 @@ class TenantDomainService {
     if (!ok) _bad(r, 'Verify domain');
   }
 
-  Future<void> setPrimaryTenantDomain(String slug, String domain) async {
+  Future<void> setPrimaryTenantDomain(String tenantId, String domain) async {
     final r = await dio.postUri(
-      routes.makePrimaryDomain(slug, domain),
+      routes.makePrimaryDomain(tenantId, domain),
       options: Options(
         contentType: _json,
         validateStatus: _okOrClientError,
@@ -148,9 +150,9 @@ class TenantDomainService {
     if (!ok) _bad(r, 'Make primary domain');
   }
 
-  Future<void> removeTenantDomain(String slug, String domain) async {
+  Future<void> removeTenantDomain(String tenantId, String domain) async {
     final r = await dio.deleteUri(
-      routes.removeDomain(slug, domain),
+      routes.removeDomain(tenantId, domain),
       options: Options(
         validateStatus: _okOrClientError,
         receiveDataWhenStatusError: true,
@@ -161,19 +163,19 @@ class TenantDomainService {
     if (!ok) _bad(r, 'Remove domain');
 
     if (kDebugMode) {
-      debugPrint('🗑️ $_tag removed domain $domain from $slug');
+      debugPrint('🗑️ $_tag removed domain $domain from $tenantId');
     }
   }
 
   /// Toggle allowlist active flag:
-  /// PATCH /tenants/:slug/domains/:domain { active: true/false }
+  /// PATCH /tenants/:tenantId/domains/:domain { active: true/false }
   Future<void> setTenantDomainActive(
-    String slug,
+    String tenantId,
     String domain,
     bool active,
   ) async {
     final r = await dio.patchUri(
-      routes.updateDomain(slug, domain),
+      routes.updateDomain(tenantId, domain),
       data: <String, dynamic>{'active': active},
       options: Options(
         contentType: _json,
@@ -186,7 +188,9 @@ class TenantDomainService {
     if (!ok) _bad(r, 'Set domain active');
 
     if (kDebugMode) {
-      debugPrint('✅ $_tag setDomainActive $domain → $active (tenant=$slug)');
+      debugPrint(
+        '✅ $_tag setDomainActive $domain → $active (tenant=$tenantId)',
+      );
     }
   }
 }

@@ -24,7 +24,7 @@ class EquipmentController extends InventoryEditableBase {
       _ref.read(inventoryControllerProvider.notifier);
 
   List<EquipmentItem> get all {
-    final tenantId = _ref.read(tenantSlugProvider);
+    final tenantId = _ref.read(tenantIdProvider);
     final asyncValue = _ref.watch(equipmentItemsStreamProvider(tenantId));
     return asyncValue.maybeWhen(data: (items) => items, orElse: () => []);
   }

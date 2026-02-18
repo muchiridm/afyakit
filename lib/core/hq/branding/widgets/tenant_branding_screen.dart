@@ -106,7 +106,7 @@ class _IdentitySectionState extends ConsumerState<_IdentitySection> {
                 onPressed: state.savingProfile
                     ? null
                     : () => ctrl.saveProfileBranding(
-                        slug: widget.profile.id,
+                        tenantId: widget.profile.id,
                         seoTitle:
                             widget.profile.details.seoTitle ??
                             widget.profile.displayName,
@@ -197,7 +197,7 @@ class _SeoSectionState extends ConsumerState<_SeoSection> {
                 onPressed: state.savingProfile
                     ? null
                     : () => ctrl.saveProfileBranding(
-                        slug: widget.profile.id,
+                        tenantId: widget.profile.id,
                         seoTitle: _title.text.trim(),
                         seoDescription: _description.text.trim(),
                         tagline: widget.profile.details.tagline ?? '',
@@ -233,11 +233,11 @@ class _AssetsSection extends ConsumerWidget {
     Future<void> handleUpload(TenantWebAssetType type) async {
       final bytes = await _pickImageBytes(); // TODO: implement per-platform
       if (bytes == null) return;
-      await ctrl.uploadWebAsset(slug: profile.id, type: type, bytes: bytes);
+      await ctrl.uploadWebAsset(tenantId: profile.id, type: type, bytes: bytes);
     }
 
     Future<void> handleDelete(TenantWebAssetType type) async {
-      await ctrl.deleteWebAsset(slug: profile.id, type: type);
+      await ctrl.deleteWebAsset(tenantId: profile.id, type: type);
     }
 
     return Card(

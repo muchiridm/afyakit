@@ -20,7 +20,7 @@ import '../models/items/equipment_item.dart';
 
 /// Provider (awaits AfyaKit client so Dio is ready)
 final inventoryServiceProvider = FutureProvider<InventoryService>((ref) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final client = await ref.watch(afyakitClientFutureProvider.future);
   final routes = AfyaKitRoutes(tenantId);
   return InventoryService(routes: routes, dio: client.dio);

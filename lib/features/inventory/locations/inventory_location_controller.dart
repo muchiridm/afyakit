@@ -40,7 +40,7 @@ class InventoryLocationController
   late final Future<InventoryLocationService> _service = _makeService();
 
   Future<InventoryLocationService> _makeService() async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final client = await ref.read(afyakitClientFutureProvider.future);
     // 👇 Positional ctor: InventoryLocationService(AfyaKitRoutes, Dio)
     return InventoryLocationService(AfyaKitRoutes(tenantId), client.dio);
@@ -53,7 +53,7 @@ class InventoryLocationController
 
   Future<void> _load() async {
     try {
-      // 🔐 Make sure claimTenant == tenantSlug before calling API
+      // 🔐 Make sure claimTenant == tenantId before calling API
       await _ensureTenantReady();
 
       final svc = await _service;

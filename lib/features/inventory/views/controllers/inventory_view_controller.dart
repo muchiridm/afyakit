@@ -33,7 +33,7 @@ final inventoryViewControllerFamily =
       InventoryViewState,
       ItemType
     >((ref, type) {
-      final tenantId = ref.watch(tenantSlugProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       return InventoryViewController(ref, tenantId, type);
     });
 

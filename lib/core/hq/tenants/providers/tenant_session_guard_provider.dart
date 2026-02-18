@@ -40,7 +40,7 @@ class TenantSessionCheckResult {
 }
 
 Future<TenantSessionCheckResult> _checkSessionForTenant({
-  required String tenantSlug,
+  required String tenantId,
   required fb.User fbUser,
 }) async {
   final token = await fbUser.getIdToken();
@@ -57,7 +57,7 @@ Future<TenantSessionCheckResult> _checkSessionForTenant({
   );
 
   final resp = await dio.get(
-    '/$tenantSlug/auth/session/me',
+    '/$tenantId/auth/session/me',
     options: Options(
       headers: <String, String>{
         if (token != null && token.trim().isNotEmpty)
@@ -77,7 +77,7 @@ Future<TenantSessionCheckResult> _checkSessionForTenant({
 final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
   ref,
 ) async {
-  final tenantSlug = _normTenant(ref.watch(tenantSlugProvider));
+  final tenantId = _normTenant(ref.watch(tenantIdProvider));
 
   final link = ref.keepAlive();
   Timer? purge;
@@ -91,7 +91,7 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
   }
 
   final uid = fbUser.uid;
-  final key = '$uid@$tenantSlug';
+  final key = '$uid@$tenantId';
 
   final inflight = _inflightByKey[key];
   if (inflight != null) {
@@ -102,13 +102,11 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
   final future = () async {
     try {
       if (kDebugMode) {
-        debugPrint(
-          '🧭 [tenant-guard] check session tenant=$tenantSlug uid=$uid',
-        );
+        debugPrint('🧭 [tenant-guard] check session tenant=$tenantId uid=$uid');
       }
 
       final r = await _checkSessionForTenant(
-        tenantSlug: tenantSlug,
+        tenantId: tenantId,
         fbUser: fbUser,
       );
 
@@ -121,7 +119,7 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
 
       if (r.ok) {
         if (kDebugMode) {
-          debugPrint('✅ [tenant-guard] OK tenant=$tenantSlug uid=$uid');
+          debugPrint('✅ [tenant-guard] OK tenant=$tenantId uid=$uid');
         }
         return;
       }
@@ -130,7 +128,7 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
       // Do NOT throw: throwing bricks providers that await this (and creates trap states).
       if (kDebugMode) {
         debugPrint(
-          '🚪 [tenant-guard] invalid session; signing out uid=$uid tenant=$tenantSlug',
+          '🚪 [tenant-guard] invalid session; signing out uid=$uid tenant=$tenantId',
         );
       }
 

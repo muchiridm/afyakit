@@ -32,7 +32,7 @@ class DeliveryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
 
     final medsAsync = ref.watch(medicationItemsStreamProvider(tenantId));
     final consAsync = ref.watch(consumableItemsStreamProvider(tenantId));

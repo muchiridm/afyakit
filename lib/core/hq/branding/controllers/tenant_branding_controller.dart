@@ -51,7 +51,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
   // ─────────────────────────────────────────────
 
   Future<bool> saveProfileBranding({
-    required String slug,
+    required String tenantId,
     required String seoTitle,
     required String seoDescription,
     required String tagline,
@@ -62,7 +62,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
       final svc = await _svc();
 
       // Load existing profile so we can merge safely without nuking fields.
-      final current = await svc.getTenantProfile(slug);
+      final current = await svc.getTenantProfile(tenantId);
 
       final profile = <String, dynamic>{
         // preserve existing values unless we're explicitly overwriting
@@ -84,7 +84,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
 
       final color = primaryColorHex.trim();
       await svc.updateTenantProfile(
-        slug: slug,
+        tenantId: tenantId,
         primaryColorHex: color.isEmpty ? current.primaryColorHex : color,
         profile: profile,
       );
@@ -107,7 +107,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
   /// Upload favicon/icons and persist a web-safe HTTPS download URL into assets.logos.
   /// Also bumps assets.version for cache busting.
   Future<bool> uploadWebAsset({
-    required String slug,
+    required String tenantId,
     required TenantWebAssetType type,
     required Uint8List bytes,
   }) async {
@@ -115,16 +115,16 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
     try {
       final storage = TenantStorageService();
 
-      // 1) Upload bytes to storage path: public/{slug}/web/{file}.png
+      // 1) Upload bytes to storage path: public/{tenantId}/web/{file}.png
       await storage.uploadWebAssetBytes(
-        tenantSlug: slug,
+        tenantId: tenantId,
         type: type,
         bytes: bytes,
       );
 
       // 2) Get a web-safe download URL (firebasestorage.googleapis.com/...token...)
       final url = await storage.getWebAssetDownloadUrl(
-        tenantSlug: slug,
+        tenantId: tenantId,
         type: type,
       );
 
@@ -135,7 +135,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
       // 3) Persist into tenant assets.logos + bump version (via service helper)
       final svc = await _svc();
       await svc.updateTenantWebAsset(
-        slug: slug,
+        tenantId: tenantId,
         assetKey: _assetKeyFor(type),
         downloadUrl: url,
       );
@@ -152,16 +152,16 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
 
   /// Delete storage object and remove it from assets.logos. Also bumps version.
   Future<bool> deleteWebAsset({
-    required String slug,
+    required String tenantId,
     required TenantWebAssetType type,
   }) async {
     state = state.copyWith(uploadingAsset: true, error: null);
     try {
       final storage = TenantStorageService();
-      await storage.deleteWebAsset(tenantSlug: slug, type: type);
+      await storage.deleteWebAsset(tenantId: tenantId, type: type);
 
       final svc = await _svc();
-      final current = await svc.getTenantProfile(slug);
+      final current = await svc.getTenantProfile(tenantId);
 
       final key = _assetKeyFor(type);
 
@@ -170,7 +170,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
       newLogos.remove(key);
 
       await svc.updateTenantProfile(
-        slug: slug,
+        tenantId: tenantId,
         assets: <String, dynamic>{
           'bucket': current.assets.bucket,
           'version': current.assets.version + 1,

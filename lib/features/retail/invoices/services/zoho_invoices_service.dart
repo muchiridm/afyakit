@@ -17,7 +17,7 @@ import '../../shared/models/zoho_invoice.dart';
 final zohoInvoicesServiceProvider = FutureProvider<ZohoInvoicesService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoInvoicesService(api: api, routes: routes);

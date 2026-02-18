@@ -26,7 +26,7 @@ final afyakitClientFutureProvider = FutureProvider<AfyaKitClient>((ref) async {
     }
   }
 
-  final tenantId = ref.watch(tenantSlugProvider).trim().toLowerCase();
+  final tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
   final base = apiBaseUrl(tenantId);
 
   return AfyaKitClient.create(

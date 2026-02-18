@@ -18,55 +18,57 @@ class TenantProfileLoader {
   static const _cachePrefix = 'tenant_profile_v2:';
 
   /// Fetch once from Firestore, fall back to cache (same behaviour as v1).
-  Future<TenantProfile> load(String slug, {bool useCache = true}) async {
+  Future<TenantProfile> load(String tenantId, {bool useCache = true}) async {
     final sw = Stopwatch()..start();
 
     // 1) try live
     try {
-      final snap = await _db.collection('tenants').doc(slug).get();
+      final snap = await _db.collection('tenants').doc(tenantId).get();
       if (!snap.exists) {
-        throw StateError('Tenant "$slug" not found');
+        throw StateError('Tenant "$tenantId" not found');
       }
 
       final raw = snap.data() ?? const <String, dynamic>{};
       // in v2 we might not even have a "status", but let's tolerate it
       final status = (raw['status'] ?? 'active').toString();
       if (status != 'active') {
-        throw StateError('Tenant "$slug" is $status');
+        throw StateError('Tenant "$tenantId" is $status');
       }
 
-      final profile = TenantProfile.fromFirestore(slug, raw);
+      final profile = TenantProfile.fromFirestore(tenantId, raw);
 
-      await _saveCache(slug, profile);
+      await _saveCache(tenantId, profile);
       sw.stop();
       debugPrint(
         '✅ TenantProfileLoader(Firestore) ${sw.elapsedMilliseconds}ms → ${profile.displayName}',
       );
       return profile;
     } catch (e) {
-      debugPrint('⚠️ TenantProfileLoader live fetch failed for "$slug": $e');
+      debugPrint(
+        '⚠️ TenantProfileLoader live fetch failed for "$tenantId": $e',
+      );
       if (!useCache) rethrow;
     }
 
     // 2) try cache
-    final cached = await _readCache(slug);
+    final cached = await _readCache(tenantId);
     if (cached != null) {
       debugPrint('🛟 TenantProfileLoader(cache) → ${cached.displayName}');
       return cached;
     }
 
     throw StateError(
-      'Unable to load tenant profile "$slug" (no live data, no cache).',
+      'Unable to load tenant profile "$tenantId" (no live data, no cache).',
     );
   }
 
   /// Live stream of tenant profile, and we update cache on change.
-  Stream<TenantProfile> stream(String slug) {
-    return _db.collection('tenants').doc(slug).snapshots().map((s) {
+  Stream<TenantProfile> stream(String tenantId) {
+    return _db.collection('tenants').doc(tenantId).snapshots().map((s) {
       final raw = s.data() ?? const <String, dynamic>{};
-      final profile = TenantProfile.fromFirestore(slug, raw);
+      final profile = TenantProfile.fromFirestore(tenantId, raw);
       // fire-and-forget
-      _saveCache(slug, profile);
+      _saveCache(tenantId, profile);
       return profile;
     });
   }
@@ -75,7 +77,7 @@ class TenantProfileLoader {
   // internals
   // ────────────────────────────────────────────────────────────
 
-  Future<void> _saveCache(String slug, TenantProfile profile) async {
+  Future<void> _saveCache(String tenantId, TenantProfile profile) async {
     final prefs = await SharedPreferences.getInstance();
 
     final raw = {
@@ -108,16 +110,16 @@ class TenantProfileLoader {
       'status': profile.status.value,
     };
 
-    await prefs.setString('$_cachePrefix$slug', jsonEncode(raw));
+    await prefs.setString('$_cachePrefix$tenantId', jsonEncode(raw));
   }
 
-  Future<TenantProfile?> _readCache(String slug) async {
+  Future<TenantProfile?> _readCache(String tenantId) async {
     final prefs = await SharedPreferences.getInstance();
-    final s = prefs.getString('$_cachePrefix$slug');
+    final s = prefs.getString('$_cachePrefix$tenantId');
     if (s == null || s.isEmpty) return null;
     try {
       final m = jsonDecode(s) as JsonObj;
-      return TenantProfile.fromFirestore(slug, m);
+      return TenantProfile.fromFirestore(tenantId, m);
     } catch (_) {
       return null;
     }

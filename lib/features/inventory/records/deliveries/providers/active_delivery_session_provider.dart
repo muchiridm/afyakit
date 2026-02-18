@@ -12,7 +12,7 @@ import 'package:afyakit/shared/utils/firestore_instance.dart';
 /// NOTE: `enteredByEmail` in Firestore now stores the user's WhatsApp number.
 final activeDeliverySessionProvider =
     StreamProvider.autoDispose<ActiveTempSession?>((ref) {
-      final tenantId = ref.watch(tenantSlugProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       final userAsync = ref.watch(currentUserProvider); // AsyncValue<AuthUser?>
 
       return userAsync.when(

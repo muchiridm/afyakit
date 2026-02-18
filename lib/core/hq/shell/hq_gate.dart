@@ -30,7 +30,7 @@ class HqGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider); // HQ => "hq"
+    final tenantId = ref.watch(tenantIdProvider); // HQ => "hq"
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(

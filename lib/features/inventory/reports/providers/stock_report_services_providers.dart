@@ -66,7 +66,7 @@ final stockFilterServiceProvider = Provider<StockTableFilter>((ref) {
 /// ReorderService requires tenantId
 /// ─────────────────────────────────────────────────────────────
 final reorderServiceProvider = Provider<ReorderService>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   return ReorderService(tenantId: tenantId);
 });
 

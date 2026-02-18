@@ -27,7 +27,7 @@ class AuthButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     final user = sessionAsync.maybeWhen(data: (u) => u, orElse: () => null);

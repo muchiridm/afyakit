@@ -53,7 +53,7 @@ class DiSalesTile {
     final ck = (canonKey ?? '').trim();
     final gk = (groupKey ?? '').trim();
 
-    final derived = _slugKey(title);
+    final derived = _tenantIdKey(title);
     final resolvedCanonKey = ck.isNotEmpty ? ck : derived;
     final resolvedGroupKey = gk.isNotEmpty ? gk : resolvedCanonKey;
 
@@ -73,7 +73,7 @@ class DiSalesTile {
     );
   }
 
-  static String _slugKey(String s) {
+  static String _tenantIdKey(String s) {
     final t = s.trim().toLowerCase();
     final cleaned = t
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')

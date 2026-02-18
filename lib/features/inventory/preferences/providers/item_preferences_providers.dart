@@ -15,7 +15,7 @@ import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 final itemPreferenceServiceProvider = FutureProvider<ItemPreferenceService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final client = await ref.watch(afyakitClientFutureProvider.future);
   return ItemPreferenceService(
     routes: AfyaKitRoutes(tenantId),

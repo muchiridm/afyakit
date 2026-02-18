@@ -14,7 +14,7 @@ final hqTenantsProvider = FutureProvider.autoDispose<List<TenantProfile>>((
 });
 
 final hqTenantProvider = FutureProvider.autoDispose
-    .family<TenantProfile, String>((ref, slug) async {
+    .family<TenantProfile, String>((ref, tenantId) async {
       final svc = await ref.watch(tenantServiceProvider.future);
-      return svc.getTenantProfile(slug.trim().toLowerCase());
+      return svc.getTenantProfile(tenantId.trim().toLowerCase());
     });

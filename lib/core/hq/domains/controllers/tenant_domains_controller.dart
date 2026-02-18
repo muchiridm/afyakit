@@ -38,18 +38,18 @@ class TenantDomainsState {
   }
 }
 
-/// Family controller: one instance per tenant slug.
+/// Family controller: one instance per tenant tenantId.
 final tenantDomainsControllerProvider =
     AutoDisposeStateNotifierProviderFamily<
       TenantDomainsController,
       TenantDomainsState,
       String
-    >((ref, slug) {
-      return TenantDomainsController(ref, slug);
+    >((ref, tenantId) {
+      return TenantDomainsController(ref, tenantId);
     });
 
 class TenantDomainsController extends StateNotifier<TenantDomainsState> {
-  TenantDomainsController(this._ref, this.slug)
+  TenantDomainsController(this._ref, this.tenantId)
     : super(const TenantDomainsState()) {
     // Load immediately
     unawaited(reload());
@@ -61,7 +61,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
   >
   _ref;
 
-  final String slug;
+  final String tenantId;
 
   Future<TenantDomainService> _svc() {
     // tenantDomainServiceProvider is a FutureProvider
@@ -72,7 +72,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
     state = state.copyWith(loading: true, error: null);
     try {
       final svc = await _svc();
-      final list = await svc.listTenantDomains(slug);
+      final list = await svc.listTenantDomains(tenantId);
 
       // (optional) ensure deterministic ordering
       list.sort((a, b) {
@@ -100,7 +100,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
       final svc = await _svc();
 
       // add is idempotent: returns '' on domain-exists
-      await svc.addTenantDomain(slug, d);
+      await svc.addTenantDomain(tenantId, d);
 
       // Always reload so UI sees current server truth
       await reload();
@@ -118,7 +118,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
     state = state.copyWith(busy: true, error: null);
     try {
       final svc = await _svc();
-      await svc.verifyTenantDomain(slug, d);
+      await svc.verifyTenantDomain(tenantId, d);
       await reload();
     } catch (e) {
       state = state.copyWith(error: '$e');
@@ -134,7 +134,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
     state = state.copyWith(busy: true, error: null);
     try {
       final svc = await _svc();
-      await svc.setPrimaryTenantDomain(slug, d);
+      await svc.setPrimaryTenantDomain(tenantId, d);
       await reload();
     } catch (e) {
       state = state.copyWith(error: '$e');
@@ -156,7 +156,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
 
     try {
       final svc = await _svc();
-      await svc.setTenantDomainActive(slug, d, active);
+      await svc.setTenantDomainActive(tenantId, d, active);
       await reload();
     } catch (e) {
       // rollback if server rejected
@@ -173,7 +173,7 @@ class TenantDomainsController extends StateNotifier<TenantDomainsState> {
     state = state.copyWith(busy: true, error: null);
     try {
       final svc = await _svc();
-      await svc.removeTenantDomain(slug, d);
+      await svc.removeTenantDomain(tenantId, d);
       await reload();
     } catch (e) {
       state = state.copyWith(error: '$e');

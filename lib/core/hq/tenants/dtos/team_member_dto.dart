@@ -13,7 +13,7 @@ class TenantMemberDTO {
   /// Whether membership is active (server: status === 'active')
   final bool active;
 
-  /// Tenant slug this membership belongs to (optional when deduced upstream)
+  /// Tenant ID this membership belongs to (optional when deduced upstream)
   final String? tenantId;
 
   /// Server-updated timestamp of the membership record (optional)

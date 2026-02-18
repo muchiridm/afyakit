@@ -15,7 +15,7 @@ import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   return IssueFormEngine(IssueService(tenantId));
 });
 

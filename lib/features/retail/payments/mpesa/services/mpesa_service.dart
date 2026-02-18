@@ -39,7 +39,7 @@ class MpesaService {
 
 /// ✅ Provider (matches your existing pattern)
 final mpesaServiceProvider = FutureProvider<MpesaService>((ref) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
 
   final client = await ref.watch(afyakitClientFutureProvider.future);

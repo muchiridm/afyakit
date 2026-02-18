@@ -24,7 +24,7 @@ class ConsumableController extends InventoryEditableBase {
       _ref.read(inventoryControllerProvider.notifier);
 
   List<ConsumableItem> get all {
-    final tenantId = _ref.read(tenantSlugProvider);
+    final tenantId = _ref.read(tenantIdProvider);
     final asyncValue = _ref.watch(consumableItemsStreamProvider(tenantId));
     return asyncValue.maybeWhen(data: (items) => items, orElse: () => []);
   }

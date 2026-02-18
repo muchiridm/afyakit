@@ -35,7 +35,7 @@ make run-web-all
 
 Run HQ in Chrome:
 
-make run-hq-web
+make run-web-hq
 
 Notes:
 

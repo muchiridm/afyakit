@@ -19,7 +19,7 @@ import '../models/zoho_quote.dart';
 final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoQuotesService(api: api, routes: routes);

@@ -42,7 +42,7 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
   // 🧑‍💼 HQ / Tenant user management (tenant auth_users)
   // ─────────────────────────────────────────────
 
-  /// GET /api/tenants/:slug/auth_users
+  /// GET /api/tenants/:tenantId/auth_users
   Uri hqListTenantUsers(
     String targetTenantId, {
     String? search,
@@ -55,20 +55,20 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
     },
   );
 
-  /// ✅ POST /api/tenants/:slug/auth_users
+  /// ✅ POST /api/tenants/:tenantId/auth_users
   /// body: { phoneNumber, displayName? }
   Uri hqCreateTenantUser(String targetTenantId) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users');
 
-  /// GET /api/tenants/:slug/auth_users/:uid
+  /// GET /api/tenants/:tenantId/auth_users/:uid
   Uri hqGetTenantUserById(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
-  /// PATCH /api/tenants/:slug/auth_users/:uid
+  /// PATCH /api/tenants/:tenantId/auth_users/:uid
   Uri hqPatchTenantUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 
-  /// DELETE /api/tenants/:slug/auth_users/:uid
+  /// DELETE /api/tenants/:tenantId/auth_users/:uid
   Uri hqDeleteTenantUser(String targetTenantId, String uid) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users/${_seg(uid)}');
 }

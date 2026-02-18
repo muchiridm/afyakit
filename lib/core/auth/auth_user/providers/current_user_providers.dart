@@ -32,7 +32,7 @@ final currentUserProvider = FutureProvider.autoDispose<AuthUser?>((ref) async {
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
   ref.onResume(() => purge?.cancel());
 
-  final tenantId = _normTenant(ref.watch(tenantSlugProvider));
+  final tenantId = _normTenant(ref.watch(tenantIdProvider));
 
   final fbUserAsync = ref.watch(firebaseUserProvider);
   final fbUser = fbUserAsync.valueOrNull;
