@@ -1,9 +1,10 @@
 // lib/core/app_hq/tenants/widgets/tenant_profile_editor.dart
 
-import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
-import 'package:afyakit/core/hq/tenants/controllers/tenant_profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/hq/tenants/controllers/tenant_profile_controller.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
 
 import 'tenant_profile_editor_sections.dart';
 
@@ -23,7 +24,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
     final state = ref.watch(tenantProfileControllerProvider);
     final ctrl = ref.read(tenantProfileControllerProvider.notifier);
 
-    final initial = state.initial; // controller source of truth
+    final initial = state.initial;
 
     return AbsorbPointer(
       absorbing: state.busy,
@@ -50,6 +51,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
               ),
 
               const SizedBox(height: 12),
+
               CurrencyPicker(
                 value: state.currency,
                 onChanged: ctrl.setCurrency,
@@ -67,9 +69,10 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
               const SizedBox(height: 16),
 
               // ───────────────────────── Account numbering policy ─────────────────────────
+              // ✅ New model: single format string.
+              // Default: "yymm_seq4" -> 26020001 (YYMM + 4-digit seq)
               TenantProfileAccountNumberingSection(
-                accountPrefix: ctrl.accountPrefix,
-                accountPad: ctrl.accountPad,
+                accountFormat: ctrl.accountFormat,
               ),
 
               const SizedBox(height: 16),
@@ -113,7 +116,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
               const SizedBox(height: 16),
 
               // ───────────────────────── Error ─────────────────────────
-              if (state.error != null)
+              if (state.error != null) ...[
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
@@ -121,6 +124,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
+              ],
 
               // ───────────────────────── Save / Delete ─────────────────────────
               TenantProfileSaveBar(
@@ -145,7 +149,7 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final ok = await ref.read(tenantProfileControllerProvider.notifier).save();
     if (ok && mounted) {

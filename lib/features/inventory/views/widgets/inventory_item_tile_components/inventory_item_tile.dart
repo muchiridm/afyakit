@@ -1,4 +1,4 @@
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/inventory_tile_header.dart';

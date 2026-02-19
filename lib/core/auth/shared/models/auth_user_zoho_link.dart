@@ -1,3 +1,5 @@
+// lib/core/auth/shared/models/auth_user_zoho_link.dart
+
 import 'package:flutter/foundation.dart';
 
 /// How the Zoho link was established (backend-aligned).

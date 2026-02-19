@@ -1,3 +1,5 @@
+// lib/core/auth/shared/models/auth_user_model.dart
+
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
@@ -35,11 +37,16 @@ class AuthUser {
 
   /// Tenant-scoped email (NOT Firebase Auth email).
   ///
-  /// IMPORTANT:
-  /// - Backend may choose to hide unverified emails for privacy.
-  /// - FE must NOT erase it if backend does send it (we need it to drive verification UX).
+  /// Backend behavior (Option A):
+  /// - Verified email: comes as emailLower/email (+ emailVerified=true)
+  /// - Unverified email: SHOULD NOT be returned as email/emailLower (privacy),
+  ///   instead it should appear in emailPendingLower.
   final String? email;
   final String? emailLower;
+
+  /// ✅ Option A: pending email (unverified; verification in progress)
+  final String? emailPendingLower;
+  final String? emailPendingAt; // ISO string (optional)
 
   // ────────────── Phone verification model ──────────────
 
@@ -96,6 +103,8 @@ class AuthUser {
     this.avatarUrl,
     this.email,
     this.emailLower,
+    this.emailPendingLower,
+    this.emailPendingAt,
     this.phoneVerified = false,
     this.phoneVerifiedAt,
     this.phoneClaimed = false,
@@ -239,23 +248,58 @@ class AuthUser {
   }
 
   // ─────────────────────────────────────────────
-  // Email helpers (THIS is what your login flow should use)
+  // Email helpers (Option A aligned)
   // ─────────────────────────────────────────────
 
-  bool get hasEmail {
+  /// Verified email presence (what BE is willing to expose).
+  bool get hasVerifiedEmail {
     final el = (emailLower ?? '').trim();
     final e = (email ?? '').trim();
-    return el.isNotEmpty || e.isNotEmpty;
+    return emailVerified == true && (el.isNotEmpty || e.isNotEmpty);
   }
 
-  /// If user has an email but it’s not verified, we should show verify flow (not re-collect).
-  bool get needsEmailVerification => hasEmail && emailVerified != true;
+  /// Pending email presence (verification in progress).
+  bool get hasPendingEmail => (emailPendingLower ?? '').trim().isNotEmpty;
 
-  String? get bestEmailLower {
+  /// Best verified email to display/use.
+  String? get bestVerifiedEmailLower {
     final el = (emailLower ?? '').trim().toLowerCase();
     if (el.isNotEmpty) return el;
     final e = (email ?? '').trim().toLowerCase();
     return e.isNotEmpty ? e : null;
+  }
+
+  /// Best email to *show* in UI:
+  /// - verified email if present
+  /// - otherwise pending email (Option A)
+  String? get bestEmailForDisplay {
+    final verified = bestVerifiedEmailLower;
+    if (verified != null) return verified;
+    final pending = (emailPendingLower ?? '').trim().toLowerCase();
+    return pending.isNotEmpty ? pending : null;
+  }
+
+  /// If we have a pending email, the UI should show “verify” (or “waiting for verify”).
+  bool get needsEmailVerificationResolved => hasPendingEmail;
+
+  // ─────────────────────────────────────────────
+  // Backwards-compatible aliases (so old UI compiles)
+  // ─────────────────────────────────────────────
+
+  /// Legacy name used across older UI code.
+  /// Option A meaning: "has *any* email context" (verified OR pending).
+  bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
+
+  /// Legacy: If an email exists but is not verified yet, we should show verification step.
+  /// Option A: pending email implies verification still required.
+  bool get needsEmailVerification => needsEmailVerificationResolved;
+
+  /// Legacy: emailLower best-effort (verified preferred, else pending)
+  String? get bestEmailLower {
+    final v = bestVerifiedEmailLower;
+    if (v != null) return v;
+    final p = (emailPendingLower ?? '').trim().toLowerCase();
+    return p.isNotEmpty ? p : null;
   }
 
   // ────────────── Parsing ──────────────
@@ -283,19 +327,21 @@ class AuthUser {
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
 
-    // ✅ DO NOT default this to true anywhere.
     final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
 
-    // ✅ Keep whatever backend sends. Don’t “safeguard” by erasing;
-    // the login UX needs to know an email exists even if unverified.
+    // Verified email (backend may hide if not verified)
     final emailRaw = _optStr(json['email']);
     final emailLowerRaw = _optStr(json['emailLower']);
-
     final email = emailRaw?.toLowerCase();
     final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
 
-    // Optional convenience: phoneSatisfied from backend (if you add it later)
+    // ✅ Option A pending email
+    final pendingRaw = _optStr(json['emailPendingLower']);
+    final emailPendingLower = pendingRaw?.toLowerCase();
+    final emailPendingAt = _optStr(json['emailPendingAt']);
+
+    // Optional convenience: phoneSatisfied from backend
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
         ? null
@@ -330,6 +376,8 @@ class AuthUser {
       avatarUrl: _optStr(json['avatarUrl']),
       email: email,
       emailLower: emailLower,
+      emailPendingLower: emailPendingLower,
+      emailPendingAt: emailPendingAt,
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,
@@ -366,6 +414,8 @@ class AuthUser {
     String? avatarUrl,
     String? email,
     String? emailLower,
+    String? emailPendingLower,
+    String? emailPendingAt,
     bool? phoneVerified,
     String? phoneVerifiedAt,
     bool? phoneClaimed,
@@ -396,6 +446,8 @@ class AuthUser {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       email: email ?? this.email,
       emailLower: emailLower ?? this.emailLower,
+      emailPendingLower: emailPendingLower ?? this.emailPendingLower,
+      emailPendingAt: emailPendingAt ?? this.emailPendingAt,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
       phoneClaimed: phoneClaimed ?? this.phoneClaimed,
@@ -428,8 +480,15 @@ class AuthUser {
     if (lastName != null) 'lastName': lastName,
     if (displayName != null) 'displayName': displayName,
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
+
+    // Verified email only (by convention)
     if (email != null) 'email': email,
     if (emailLower != null) 'emailLower': emailLower,
+
+    // Option A: pending email
+    if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
+    if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
+
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,

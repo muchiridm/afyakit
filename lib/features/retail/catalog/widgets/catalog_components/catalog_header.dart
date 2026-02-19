@@ -3,7 +3,7 @@
 import 'dart:ui' show lerpDouble;
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/hq/branding/providers/tenant_logo_providers.dart';
 import 'package:afyakit/core/hq/tenants/models/tenant_profile.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';

@@ -3,8 +3,8 @@
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
 import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -125,9 +125,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     final sessionUser = ref.read(currentUserValueProvider);
     final baseUser = targetUser ?? sessionUser;
 
-    // Admin editing path:
-    // - you must pass targetUser
-    // - and the current user must be allowed to manage that target
     final isAdminEditing =
         (sessionUser != null &&
         targetUser != null &&
@@ -140,11 +137,10 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         isAdminEditing: isAdminEditing,
       );
 
-      // Fill controllers safely.
       final u = baseUser;
       if (u != null) {
         state.nameController.text = (u.displayName ?? '').trim();
-        state.phoneController.text = (u.phoneNumber)!.trim();
+        state.phoneController.text = (u.phoneNumber ?? '').trim();
       }
     });
   }
@@ -173,8 +169,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     if (target == null || current == null) return;
     if (!current.canChangeStatusFor(target)) return;
 
-    // Extra guard: admin/owner cannot disable themselves,
-    // and admins cannot disable owners.
     if (status.isDisabled && !current.canDisableUser(target)) {
       SnackService.showError("You can't disable this account.");
       return;
@@ -198,7 +192,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     final removing = idx >= 0;
 
     if (removing) {
-      // ── SAFETY 1: owner cannot remove OWNER from self ───────────────
       if (current.uid == target.uid && role.isOwner) {
         SnackService.showError(
           "You can't remove the Owner role from yourself.",
@@ -206,7 +199,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         return;
       }
 
-      // ── SAFETY 2: don't let anyone remove their last governance role ─
       if (current.uid == target.uid && role.isAdmin) {
         final remaining = currentRoles.where((r) => r != role).toList();
         final stillGovernance = remaining.any((r) => r.isOwner || r.isAdmin);
@@ -279,16 +271,8 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       fields['displayName'] = name;
     }
 
-    // NOTE:
-    // Phone editing is intentionally NOT persisted here.
-    // If you want it, we must:
-    // - normalize E.164
-    // - restrict to self only OR to privileged admins
-    // - likely require re-verification
-    // Keeping it read-only is safest.
-
     if (state.isAdminEditing && sessionUser != null) {
-      // ── STATUS ────────────────────────────────
+      // STATUS
       if (sessionUser.canChangeStatusFor(user)) {
         final newStatus = state.statusOverride ?? user.status;
         if (newStatus != user.status) {
@@ -300,11 +284,10 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         }
       }
 
-      // ── STAFF ROLES ──────────────────────────
+      // STAFF ROLES
       if (sessionUser.canEditUserRolesFor(user)) {
         final newRoles = state.staffRoleOverrides ?? user.staffRoles;
 
-        // Filter out any roles current user isn't allowed to assign.
         final filteredRoles = newRoles
             .where((role) {
               final canAssign =
@@ -315,7 +298,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
             })
             .toList(growable: false);
 
-        // Extra safety for self: don't persist a self-demotion removing governance.
         if (sessionUser.uid == user.uid) {
           final hasGovernance = filteredRoles.any(
             (r) => r.isOwner || r.isAdmin,
@@ -334,7 +316,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         }
       }
 
-      // ── STORES ───────────────────────────────
+      // STORES
       if (sessionUser.canEditUserStoresFor(user)) {
         final newStores = state.storeOverrides ?? user.stores;
         if (!listEquals(newStores, user.stores)) {
@@ -343,7 +325,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       }
     }
 
-    // Nothing changed → no-op
     if (fields.isEmpty) {
       SnackService.showSuccess('No changes to save.');
       return;
@@ -352,7 +333,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     state = state.copyWith(loading: true);
 
     try {
-      // Resolve tenantId for the service. Prefer session user if available.
       final tenantId = (sessionUser ?? user).tenantId;
 
       final svc = await ref.read(userProfileServiceProvider(tenantId).future);
@@ -364,13 +344,10 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         if (!mounted) return;
 
         if (state.isAdminEditing) {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
+          if (Navigator.of(context).canPop()) Navigator.of(context).pop();
           return;
         }
 
-        // ✅ Self-profile: refresh session user + go back to canonical home shell.
         ref.invalidate(currentUserProvider);
         ref.invalidate(currentUserValueProvider);
 
@@ -391,7 +368,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
   @override
   void dispose() {
-    // ✅ critical: controllers must be disposed.
     state.nameController.dispose();
     state.phoneController.dispose();
     super.dispose();

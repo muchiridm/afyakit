@@ -1,3 +1,4 @@
+// lib/core/hq/tenants/models/tenant_details.dart
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 
@@ -15,10 +16,14 @@ class TenantDetails {
   final String? seoTitle;
   final String? seoDescription;
 
-  /// ✅ Tenant-scoped human account numbering policy
-  /// Example: prefix="DP", pad=6 => DP-000123
-  final String accountPrefix;
-  final int accountPad;
+  /// Tenant-scoped human account numbering format.
+  ///
+  /// Default: "yymm_seq4" → YYMM + 4-digit sequence (e.g. 26020001).
+  ///
+  /// Notes:
+  /// - Backend is the source of truth for allocation.
+  /// - Flutter should only display.
+  final String accountFormat;
 
   final Map<String, String> social;
   final Map<String, String> hours;
@@ -36,8 +41,7 @@ class TenantDetails {
     this.supportNote,
     this.seoTitle,
     this.seoDescription,
-    this.accountPrefix = 'DP',
-    this.accountPad = 6,
+    this.accountFormat = 'yymm_seq4',
     required this.social,
     required this.hours,
     required this.address,
@@ -45,30 +49,23 @@ class TenantDetails {
     required this.payments,
   });
 
-  static String? _s(dynamic v) {
+  static String? _s(Object? v) {
     final t = v?.toString().trim();
     return (t == null || t.isEmpty) ? null : t;
   }
 
-  static int? _i(dynamic v) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    final s = _s(v);
-    if (s == null) return null;
-    return int.tryParse(s);
-  }
-
-  static Map<String, String> _toStrMap(dynamic src) {
+  static Map<String, String> _toStrMap(Object? src) {
     if (src is! Map) return const <String, String>{};
     return {for (final e in src.entries) '${e.key}': '${e.value}'};
   }
 
-  static JsonObj _toJsonMap(dynamic v) {
+  static JsonObj _toJsonMap(Object? v) {
     if (v is Map) return Map<String, dynamic>.from(v);
     return const <String, dynamic>{};
   }
 
-  /// Pull a nested map if present (tolerant of legacy shapes)
+  /// Pull a nested map if present.
+  /// We keep this because some payloads still nest under "details".
   static JsonObj _nestedMap(JsonObj root, String key) {
     final v = root[key];
     if (v is Map) return Map<String, dynamic>.from(v);
@@ -78,27 +75,14 @@ class TenantDetails {
   factory TenantDetails.fromMap(JsonObj? m) {
     final x = (m ?? const <String, dynamic>{});
 
-    // Some older/alternate payloads may put these under "details"
+    // Optional nesting used by some payload shapes.
     final details = _nestedMap(x, 'details');
 
-    final rawPrefix =
-        _s(x['accountPrefix']) ??
-        _s(details['accountPrefix']) ??
-        _s(x['account_prefix']) ?? // ultra-legacy tolerance
-        _s(details['account_prefix']);
+    // Account numbering format (no legacy aliases, no prefix/pad anymore).
+    final format =
+        _s(x['accountFormat']) ?? _s(details['accountFormat']) ?? 'yymm_seq4';
 
-    final rawPad =
-        _i(x['accountPad']) ??
-        _i(details['accountPad']) ??
-        _i(x['account_pad']) ??
-        _i(details['account_pad']);
-
-    final prefix = (rawPrefix ?? 'DP').toUpperCase();
-    final pad = rawPad ?? 6;
-
-    final safePad = pad.clamp(3, 10);
-
-    // payments/compliance sometimes also appear under details
+    // payments/compliance sometimes appear under details (keep this tolerance).
     final paymentsMap = _toJsonMap(x['payments']).isNotEmpty
         ? _toJsonMap(x['payments'])
         : _toJsonMap(details['payments']);
@@ -117,8 +101,7 @@ class TenantDetails {
       supportNote: _s(x['supportNote']) ?? _s(details['supportNote']),
       seoTitle: _s(x['seoTitle']) ?? _s(details['seoTitle']),
       seoDescription: _s(x['seoDescription']) ?? _s(details['seoDescription']),
-      accountPrefix: prefix.isEmpty ? 'DP' : prefix,
-      accountPad: safePad,
+      accountFormat: format,
       social: _toStrMap(x['social']).isNotEmpty
           ? _toStrMap(x['social'])
           : _toStrMap(details['social']),

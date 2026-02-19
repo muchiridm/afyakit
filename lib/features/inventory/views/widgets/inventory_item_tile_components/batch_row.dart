@@ -1,6 +1,6 @@
 // lib/features/inventory_view/widgets/batch_row.dart (or wherever it lives)
 
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';

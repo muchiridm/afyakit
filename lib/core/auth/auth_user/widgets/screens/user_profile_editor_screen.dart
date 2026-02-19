@@ -44,7 +44,6 @@ class _UserProfileEditorScreenState
     final state = ref.watch(profileControllerProvider(widget.user));
     final ctrl = ref.read(profileControllerProvider(widget.user).notifier);
 
-    // Still loading and no user yet → spinner
     if (state.loading && state.user == null) {
       return const AppPage(
         maxWidth: 720,
@@ -54,7 +53,6 @@ class _UserProfileEditorScreenState
       );
     }
 
-    // Finished loading but no user → error
     if (state.user == null) {
       return AppPage(
         maxWidth: 720,
@@ -104,8 +102,6 @@ class _UserProfileEditorScreenState
     );
   }
 
-  // ── UI blocks ───────────────────────────────────────────────
-
   Widget _buildHeaderBlock(BuildContext context, AuthUser user) {
     final display = user.displayLabel();
     final roleLabelText = staffRoleLabel(user);
@@ -127,9 +123,12 @@ class _UserProfileEditorScreenState
   }
 
   Widget _buildIdentitySection(AuthUser user, ProfileFormState state) {
-    final safeEmail = (user.email != null && user.email!.trim().isNotEmpty)
-        ? user.email
-        : null;
+    final phone = (user.phoneNumber ?? '').trim();
+    final bestEmail = user.bestEmailForDisplay;
+    final showPending = user.hasPendingEmail && !user.hasVerifiedEmail;
+
+    final account = (user.accountNumber ?? '').trim();
+    final hasAccount = account.isNotEmpty;
 
     return Card(
       elevation: 0,
@@ -147,17 +146,21 @@ class _UserProfileEditorScreenState
               ),
             ),
             const SizedBox(height: 12),
-            if (safeEmail != null) ...[
+
+            if (bestEmail != null && bestEmail.trim().isNotEmpty) ...[
               TextFormField(
-                initialValue: safeEmail,
+                initialValue: bestEmail,
                 readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Email (tenant-scoped)',
+                decoration: InputDecoration(
+                  labelText: showPending
+                      ? 'Email (pending verification)'
+                      : 'Email (verified)',
                   filled: true,
                 ),
               ),
               const SizedBox(height: 12),
             ],
+
             TextFormField(
               initialValue: user.tenantId,
               readOnly: true,
@@ -167,14 +170,36 @@ class _UserProfileEditorScreenState
               ),
             ),
             const SizedBox(height: 12),
+
+            // ✅ Prefer tenant-scoped account number
             TextFormField(
-              initialValue: user.uid,
+              initialValue: hasAccount ? account : '—',
               readOnly: true,
               decoration: const InputDecoration(
-                labelText: 'User ID',
+                labelText: 'Account Number',
                 filled: true,
               ),
             ),
+
+            // Optional: keep UID as fallback only for legacy users (no account number)
+            if (!hasAccount) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: user.uid,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'User ID (legacy)',
+                  filled: true,
+                ),
+              ),
+            ],
+
+            if (phone.isEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                '⚠️ Missing phoneNumber (legacy/dirty record). Admin should fix identity anchor.',
+              ),
+            ],
           ],
         ),
       ),
@@ -290,7 +315,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
                 decoration: const InputDecoration(filled: true),
               ),
             const SizedBox(height: 16),
-
             Text('Roles', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             if (isAdminEditing)
@@ -315,7 +339,6 @@ class _RoleAndStoreSection extends ConsumerWidget {
                 decoration: const InputDecoration(filled: true),
               ),
             const SizedBox(height: 16),
-
             Text(
               'Assigned Stores',
               style: Theme.of(context).textTheme.titleSmall,
