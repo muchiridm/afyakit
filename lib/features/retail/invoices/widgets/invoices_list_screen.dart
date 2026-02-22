@@ -1,3 +1,6 @@
+// lib/features/retail/invoices/widgets/invoices_list_screen.dart
+
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,22 +20,30 @@ import 'package:afyakit/shared/widgets/app_tile.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
 
 class InvoicesListScreen extends ConsumerWidget {
-  const InvoicesListScreen({super.key});
+  const InvoicesListScreen({super.key, this.scope = RetailDocScope.all});
+
+  final RetailDocScope scope;
 
   static const double _loadMoreThresholdPx = 240;
 
   /// Keep consistent with Quotes list.
   static const double _contentMaxW = 720;
 
+  bool get _isMine => scope == RetailDocScope.mine;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(invoicesListControllerProvider);
-    final ctl = ref.read(invoicesListControllerProvider.notifier);
+    final prov = invoicesListControllerProvider(scope);
+
+    final state = ref.watch(prov);
+    final ctl = ref.read(prov.notifier);
+
+    final title = _isMine ? 'My Invoices' : 'Invoices';
 
     return AppPage(
       scrollable: false,
       maxWidth: _contentMaxW,
-      title: 'Invoices',
+      title: title,
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
@@ -47,11 +58,13 @@ class InvoicesListScreen extends ConsumerWidget {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      fab: FloatingActionButton.extended(
-        onPressed: () => _openCatalogToStartNewInvoice(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New invoice'),
-      ),
+      fab: _isMine
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openCatalogToStartNewInvoice(context),
+              icon: const Icon(Icons.add),
+              label: const Text('New invoice'),
+            ),
       body: Stack(
         children: [
           Column(
@@ -119,9 +132,13 @@ class InvoicesListScreen extends ConsumerWidget {
       return _EmptyState(
         icon: Icons.receipt_outlined,
         title: 'No invoices yet',
-        subtitle: 'Tap “New invoice” to build one from the catalog.',
-        actionLabel: 'New invoice',
-        onAction: () => _openCatalogToStartNewInvoice(context),
+        subtitle: _isMine
+            ? 'Your invoices will appear here once they are issued.'
+            : 'Tap “New invoice” to build one from the catalog.',
+        actionLabel: _isMine ? 'Refresh' : 'New invoice',
+        onAction: _isMine
+            ? () => ctl.refresh(reset: true)
+            : () => _openCatalogToStartNewInvoice(context),
       );
     }
 
@@ -143,7 +160,7 @@ class InvoicesListScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(top: 0, bottom: 96),
           children: [
             SalesListCard(
-              title: 'Recent invoices',
+              title: _isMine ? 'Your recent invoices' : 'Recent invoices',
               icon: Icons.receipt_outlined,
               children: [
                 for (final inv in state.items)
@@ -164,10 +181,6 @@ class InvoicesListScreen extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Row UI (sits inside AppTile via SalesListCard)
-// ─────────────────────────────────────────────
-
 class _InvoiceRow extends StatelessWidget {
   const _InvoiceRow({required this.inv, required this.onOpen});
 
@@ -183,7 +196,7 @@ class _InvoiceRow extends StatelessWidget {
         : inv.customerName.trim();
 
     final dateText = _formatDate(inv.date);
-    final ref = (inv.referenceNumber ?? '').trim();
+    final ref = (inv.accountNumber ?? '').trim();
 
     final currency = (inv.currencyCode ?? '').trim();
     final amount = _formatMoney(inv.total, currencyCode: currency);
@@ -196,9 +209,7 @@ class _InvoiceRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ was _LeadingIcon
             SalesDocLeadingIcon(status: inv.status),
-
             const SizedBox(width: AppShape.gap12),
 
             Expanded(
@@ -218,8 +229,6 @@ class _InvoiceRow extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: AppShape.gap10),
-
-                      // ✅ was _StatusChip
                       SalesDocStatusChip(status: inv.status),
                     ],
                   ),
@@ -359,7 +368,9 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: AppShape.gap16),
               FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.add),
+                icon: Icon(
+                  actionLabel == 'Refresh' ? Icons.refresh : Icons.add,
+                ),
                 label: Text(actionLabel),
               ),
             ],

@@ -1,28 +1,33 @@
-// lib/features/retail/sales/payments/controllers/payments_list_controller.dart
+// lib/features/retail/payments/zoho/controllers/payments_list_controller.dart
 
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/state/paged_query_controller.dart';
-
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 import 'package:afyakit/features/retail/payments/zoho/services/zoho_payments_service.dart';
 import 'package:afyakit/features/retail/payments/zoho/widgets/payment_detail_screen.dart';
 
-final paymentsListControllerProvider =
-    StateNotifierProvider.autoDispose<
+final paymentsListControllerProvider = StateNotifierProvider.autoDispose
+    .family<
       PaymentsListController,
-      PagedQueryState<ZohoInvoicePayment>
-    >((ref) {
-      final ctl = PaymentsListController(ref);
+      PagedQueryState<ZohoInvoicePayment>,
+      RetailDocScope
+    >((ref, scope) {
+      final ctl = PaymentsListController(ref, scope: scope);
       ctl.refresh(reset: true);
       return ctl;
     });
 
 class PaymentsListController extends PagedQueryController<ZohoInvoicePayment> {
-  PaymentsListController(this._ref);
+  PaymentsListController(this._ref, {required this.scope});
 
   final Ref _ref;
+  final RetailDocScope scope;
+
+  bool get _isMine => scope == RetailDocScope.mine;
 
   @override
   Future<PageResult<ZohoInvoicePayment>> fetchPage({
@@ -32,7 +37,21 @@ class PaymentsListController extends PagedQueryController<ZohoInvoicePayment> {
   }) async {
     final svc = await _ref.read(zohoPaymentsServiceProvider.future);
 
-    final items = await svc.list(perPage: limit, page: page);
+    // Member scope must be hard-filtered by accountNumber.
+    // If missing: fail closed (return empty).
+    final me = _ref.read(currentUserValueProvider);
+    final acct = (me?.accountNumber ?? '').trim();
+
+    if (_isMine && acct.isEmpty) {
+      return const PageResult(items: <ZohoInvoicePayment>[], hasMore: false);
+    }
+
+    final items = await svc.list(
+      perPage: limit,
+      page: page,
+      q: (q ?? '').trim().isEmpty ? null : q!.trim(),
+      accountNumber: _isMine ? acct : null,
+    );
 
     final hasMore = items.length == limit;
     return PageResult(items: items, hasMore: hasMore);
@@ -75,10 +94,8 @@ class PaymentsListController extends PagedQueryController<ZohoInvoicePayment> {
         builder: (_) => PaymentDetailScreen(
           invoiceId: invoiceId,
           paymentId: paymentId,
-
-          // Optional context if your list model carries them later.
-          // Safe defaults for now:
-          currencyCode: 'KES',
+          currencyCode:
+              'KES', // safe default; override later if your model carries it
         ),
       ),
     );

@@ -74,15 +74,12 @@ class ZohoContactsService {
   }
 
   /// Ensures we use Zoho's expected search parameter: `search_text`
-  /// even if routes accidentally uses `search` or something else.
   Uri _withSearchText(Uri uri, String? search) {
     final q = (search ?? '').trim();
     if (q.isEmpty) return uri;
 
     final qp = Map<String, String>.from(uri.queryParameters);
 
-    // Zoho Books uses `search_text`.
-    // If routes used `search`, replace it.
     if (qp.containsKey('search')) {
       qp.remove('search');
     }
@@ -92,25 +89,38 @@ class ZohoContactsService {
     return uri.replace(queryParameters: qp);
   }
 
+  // lib/features/retail/contacts/services/zoho_contacts_service.dart
+
   Future<List<ZohoContact>> list({
     String? search,
-    int limit = 50,
+    int perPage = 50,
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
+
+    /// ✅ If present, backend will return ONLY matching contact(s)
+    /// (member hard-scope)
+    String? accountNumber,
   }) async {
     final cleanSearch = (search ?? '').trim();
+
     final uri0 = routes.zohoListContacts(
       search: cleanSearch.isEmpty ? null : cleanSearch,
-      limit: limit,
+      perPage: perPage,
       page: page,
       type: _toZohoType(type),
+
+      // ✅ pass through to BE as account_number
+      accountNumber: accountNumber,
     );
 
-    // ✅ Force correct Zoho search param
+    // Your routes already emit search_text, so this is mostly harmless.
+    // Keeping it preserves backward compat if any caller ever used `search`.
     final uri = _withSearchText(uri0, cleanSearch);
 
     if (_debug) {
-      debugPrint('[ZohoContactsService.list] q="$cleanSearch" uri=$uri');
+      debugPrint(
+        '[ZohoContactsService.list] q="$cleanSearch" account="$accountNumber" uri=$uri',
+      );
     }
 
     final res = await api.getUri(uri);
@@ -193,8 +203,8 @@ class ZohoContactsService {
       displayName: input.displayName,
       companyName: input.companyName,
 
-      // ✅ NEW: allow updating/repairing reference_number
-      referenceNumber: input.referenceNumber,
+      // ✅ NEW: account number (custom field cf_account_number)
+      accountNumber: input.accountNumber,
 
       personContact: input.personContact == null
           ? const PersonContactPatch(delete: true)

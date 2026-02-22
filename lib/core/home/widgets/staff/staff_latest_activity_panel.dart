@@ -1,7 +1,9 @@
+// lib/core/home/widgets/staff/staff_latest_activity_panel.dart
+
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/home/models/activity_entry.dart';
-import 'package:collection/collection.dart';
+import 'package:afyakit/core/home/widgets/latest_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,10 +15,6 @@ import 'package:afyakit/features/inventory/records/issues/providers/issue_stream
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_record_tile.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/issue_record_tile.dart';
 
-// ✅ NEW
-import 'package:afyakit/shared/widgets/app_card.dart';
-import 'package:afyakit/shared/theme/app_shape.dart';
-
 class StaffLatestActivityPanel extends ConsumerWidget {
   const StaffLatestActivityPanel({super.key});
 
@@ -26,13 +24,14 @@ class StaffLatestActivityPanel extends ConsumerWidget {
     final inventoryEnabled = ref.watch(tenantInventoryEnabledProvider);
 
     if (!inventoryEnabled) {
-      return const AppCard(
+      return const LatestActivityPanel(
         title: 'Latest Activity',
         icon: Icons.notifications_none,
-        child: Text(
-          'No staff activity to show (Inventory is disabled for this tenant).',
-          style: TextStyle(fontSize: 12),
-        ),
+        loading: false,
+        hasError: false,
+        entries: [],
+        emptyText:
+            'No staff activity to show (Inventory is disabled for this tenant).',
       );
     }
 
@@ -46,7 +45,7 @@ class StaffLatestActivityPanel extends ConsumerWidget {
       inventoryLocationProvider(InventoryLocationType.dispensary),
     );
 
-    final isLoading =
+    final loading =
         issuesAsync.isLoading ||
         deliveriesAsync.isLoading ||
         storesAsync.isLoading ||
@@ -57,31 +56,6 @@ class StaffLatestActivityPanel extends ConsumerWidget {
         deliveriesAsync.hasError ||
         storesAsync.hasError ||
         dispensariesAsync.hasError;
-
-    if (isLoading) {
-      return const AppCard(
-        title: 'Latest Activity',
-        icon: Icons.notifications_none,
-        child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    if (hasError) {
-      return const AppCard(
-        title: 'Latest Activity',
-        icon: Icons.notifications_none,
-        child: Text(
-          'Could not load staff activity for this tenant.',
-          style: TextStyle(fontSize: 12, color: Colors.redAccent),
-        ),
-      );
-    }
 
     final issues = issuesAsync.valueOrNull ?? [];
     final deliveries = deliveriesAsync.valueOrNull ?? [];
@@ -107,44 +81,14 @@ class StaffLatestActivityPanel extends ConsumerWidget {
       ),
     ];
 
-    final latest = entries
-        .sorted((a, b) => b.date.compareTo(a.date))
-        .take(5)
-        .toList(growable: false);
-
-    if (latest.isEmpty) {
-      return const AppCard(
-        title: 'Latest Activity',
-        icon: Icons.notifications_none,
-        child: Text(
-          'No recent staff activity yet.',
-          style: TextStyle(fontSize: 12),
-        ),
-      );
-    }
-
-    return AppCard(
+    return LatestActivityPanel(
       title: 'Latest Activity',
       icon: Icons.notifications_none,
-      child: Column(
-        children: [
-          for (int i = 0; i < latest.length; i++) ...[
-            latest[i].widget,
-            if (i != latest.length - 1)
-              Padding(
-                padding: const EdgeInsets.only(top: AppShape.gap8),
-                child: Divider(
-                  height: AppShape.gap16,
-                  thickness: 1,
-                  color: AppShape.hairline(
-                    Theme.of(context),
-                    opacity: 0.20,
-                  ).color,
-                ),
-              ),
-          ],
-        ],
-      ),
+      loading: loading,
+      hasError: hasError,
+      entries: entries,
+      emptyText: 'No recent staff activity yet.',
+      maxItems: 5,
     );
   }
 }

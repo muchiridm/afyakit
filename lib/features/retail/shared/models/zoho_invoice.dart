@@ -1,3 +1,5 @@
+// lib/features/retail/shared/models/zoho_invoice.dart
+
 import 'package:afyakit/shared/utils/utils.dart';
 
 import 'zoho_invoice_payment.dart';
@@ -22,23 +24,23 @@ class ZohoInvoiceLineItem {
   factory ZohoInvoiceLineItem.fromJson(JsonMap json) {
     final j = json.cast<String, Object?>();
 
-    final name = readString(j['name']);
-    final desc = readStringOrNull(j['description']);
+    final name = readString(j['name']).trim();
+    final desc = readStringOrNull(j['description'])?.trim();
 
     final qty = _readDouble(j['quantity']);
     final rate = readNum(j['rate']);
 
-    final id = readStringOrNull(j['line_item_id']);
+    final id = readStringOrNull(j['line_item_id'])?.trim();
     final itemTotal = j.containsKey('item_total')
         ? readNum(j['item_total'])
         : null;
 
     return ZohoInvoiceLineItem(
       name: name.isEmpty ? 'Item' : name,
-      description: desc,
+      description: (desc == null || desc.isEmpty) ? null : desc,
       quantity: qty,
       rate: rate,
-      lineItemId: id,
+      lineItemId: (id == null || id.isEmpty) ? null : id,
       itemTotal: itemTotal,
     );
   }
@@ -52,7 +54,7 @@ class ZohoInvoice {
     required this.date,
     required this.total,
     this.invoiceNumber,
-    this.referenceNumber,
+    this.accountNumber, // ✅ NEW (replaces referenceNumber)
     this.currencyCode,
     this.customerId,
     this.customerEmail,
@@ -72,7 +74,11 @@ class ZohoInvoice {
   final num total;
 
   final String? invoiceNumber;
-  final String? referenceNumber;
+
+  /// ✅ Your app identity key. Used for "mine" filtering & display.
+  /// Comes from BE as `account_number` (preferred).
+  final String? accountNumber;
+
   final String? currencyCode;
 
   final String? customerId;
@@ -97,11 +103,11 @@ class ZohoInvoice {
   factory ZohoInvoice.fromJson(JsonMap json) {
     final j = json.cast<String, Object?>();
 
-    final id = readString(j['invoice_id'] ?? j['id']);
-    final number = readStringOrNull(j['invoice_number']);
+    final id = readString(j['invoice_id'] ?? j['id']).trim();
+    final number = readStringOrNull(j['invoice_number'])?.trim();
 
-    final name = readString(j['customer_name'] ?? j['contact_name']);
-    final status = readString(j['status']);
+    final name = readString(j['customer_name'] ?? j['contact_name']).trim();
+    final status = readString(j['status']).trim();
 
     final date = readDateTime(j['date']);
     final dueDate = readDateTime(j['due_date']);
@@ -109,12 +115,20 @@ class ZohoInvoice {
     final total = readNum(j['total']);
     final balance = j.containsKey('balance') ? readNum(j['balance']) : null;
 
-    final ref = readStringOrNull(j['reference_number'] ?? j['reference']);
-    final currency = readStringOrNull(j['currency_code']);
+    // ✅ NEW: prefer BE-provided account_number, fallback to older keys
+    final account = _cleanStringOrNull(
+      j['account_number'] ??
+          j['accountNumber'] ??
+          // fallback for older payloads (not preferred)
+          j['reference_number'] ??
+          j['reference'],
+    );
 
-    final customerId = readStringOrNull(j['customer_id']);
-    final notes = readStringOrNull(j['notes']);
-    final terms = readStringOrNull(j['terms']);
+    final currency = _cleanStringOrNull(j['currency_code']);
+
+    final customerId = _cleanStringOrNull(j['customer_id']);
+    final notes = _cleanStringOrNull(j['notes']);
+    final terms = _cleanStringOrNull(j['terms']);
 
     // ───────────────────────── Line items ─────────────────────────
     final lines = _parseLineItems(j['line_items']);
@@ -123,30 +137,28 @@ class ZohoInvoice {
     final pays = _parsePayments(j['payments'] ?? j['payment_details']);
 
     // ───────────────────────── Recipients (best-effort) ─────────────────────────
-    final cpIds = <String>[];
-    cpIds.addAll(_extractContactPersonIds(j['contact_persons']));
-    cpIds.addAll(
-      _extractContactPersonIds(
+    final cpIds = <String>[
+      ..._extractContactPersonIds(j['contact_persons']),
+      ..._extractContactPersonIds(
         j['contact_person_details'] ?? j['contact_persons_details'],
       ),
-    );
-
+    ];
     final dedupedCpIds = _dedupePreserveOrder(cpIds);
 
-    final email = readStringOrNull(
+    final email = _cleanStringOrNull(
       j['email'] ?? j['customer_email'] ?? j['contact_email'],
     );
 
     return ZohoInvoice(
       invoiceId: id,
       invoiceNumber: number,
-      customerName: name,
-      status: status,
+      customerName: name.isEmpty ? 'Customer' : name,
+      status: status.isEmpty ? 'unknown' : status,
       date: date,
       dueDate: dueDate,
       total: total,
       balance: balance,
-      referenceNumber: ref,
+      accountNumber: account, // ✅ NEW
       currencyCode: currency,
       customerId: customerId,
       customerEmail: email,
@@ -164,9 +176,14 @@ class ZohoInvoice {
 // Keep here unless you add them to utils.dart.
 // ─────────────────────────────────────────────
 
+String? _cleanStringOrNull(Object? v) {
+  final s = readStringOrNull(v)?.trim();
+  return (s == null || s.isEmpty) ? null : s;
+}
+
 double _readDouble(Object? v, {double fallback = 0}) {
   if (v is num) return v.toDouble();
-  final s = readString(v);
+  final s = readString(v).trim();
   if (s.isEmpty) return fallback;
   return double.tryParse(s) ?? fallback;
 }
@@ -200,22 +217,21 @@ List<ZohoInvoicePayment> _parsePayments(Object? raw) {
 List<String> _extractContactPersonIds(Object? cps) {
   final out = <String>[];
 
-  // 1) ["id1","id2"]
-  if (cps is List) {
-    for (final e in cps) {
-      final id = readStringOrNull(e);
-      if (id != null) out.add(id);
-    }
-  }
+  if (cps is! List) return out;
 
-  // 2) [{contact_person_id:"..."}, ...]
-  if (cps is List) {
-    for (final e in cps) {
-      if (!isRecord(e)) continue;
-      final m = (e as Map).cast<String, Object?>();
-      final id = readStringOrNull(m['contact_person_id'] ?? m['id']);
-      if (id != null) out.add(id);
+  for (final e in cps) {
+    // 1) "id"
+    final id1 = readStringOrNull(e)?.trim();
+    if (id1 != null && id1.isNotEmpty) {
+      out.add(id1);
+      continue;
     }
+
+    // 2) {contact_person_id:"..."} or {id:"..."}
+    if (!isRecord(e)) continue;
+    final m = (e as Map).cast<String, Object?>();
+    final id2 = readStringOrNull(m['contact_person_id'] ?? m['id'])?.trim();
+    if (id2 != null && id2.isNotEmpty) out.add(id2);
   }
 
   return out;
@@ -225,7 +241,9 @@ List<String> _dedupePreserveOrder(List<String> xs) {
   final seen = <String>{};
   final out = <String>[];
   for (final x in xs) {
-    if (seen.add(x)) out.add(x);
+    final t = x.trim();
+    if (t.isEmpty) continue;
+    if (seen.add(t)) out.add(t);
   }
   return out;
 }

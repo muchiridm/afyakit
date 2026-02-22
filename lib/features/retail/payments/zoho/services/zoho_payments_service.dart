@@ -1,4 +1,4 @@
-// lib/features/retail/sales/payments/services/zoho_payments_service.dart
+// lib/features/retail/payments/zoho/services/zoho_payments_service.dart
 
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,8 +28,11 @@ class ZohoPaymentsService {
   final AfyaKitRoutes routes;
 
   // ─────────────────────────────────────────────
-  // Invoice-scoped convenience (via payments router + invoice_id query)
-  // GET /zoho/v1/payments?invoice_id=...&per_page=...&page=...
+  // Invoice-scoped convenience
+  // GET /zoho/v1/payments/invoice/:invoiceId?per_page=&page=
+  //
+  // Backend currently returns: { payments: [...] }
+  // It may NOT return invoice summary; we tolerate that and synthesize a default.
   // ─────────────────────────────────────────────
 
   Future<ListInvoicePaymentsResult> listInvoicePaymentsWithBalance(
@@ -41,7 +44,6 @@ class ZohoPaymentsService {
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
     final uri = routes.zohoInvoicePayments(id, perPage: perPage, page: page);
-
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -54,8 +56,9 @@ class ZohoPaymentsService {
 
     final pays = _parsePaymentsList(rawPays);
 
+    // Backend may not include invoice summary yet.
     final rawInv = data['invoice'];
-    final invSummary = rawInv is Map
+    final invSummary = (rawInv is Map)
         ? InvoiceBalanceSummary.fromJson(rawInv.cast<String, dynamic>())
         : InvoiceBalanceSummary(invoiceId: id);
 
@@ -76,19 +79,25 @@ class ZohoPaymentsService {
   }
 
   // ─────────────────────────────────────────────
-  // Payments list (optionally invoice-filtered)
-  // GET /zoho/v1/payments?invoice_id=&per_page=&page=
+  // Payments list (optionally invoice-filtered + account_number scoped)
+  // GET /zoho/v1/payments?invoice_id=&per_page=&page=&q=&account_number=
   // ─────────────────────────────────────────────
 
   Future<List<ZohoInvoicePayment>> list({
     int perPage = 200,
     int page = 1,
     String? invoiceId,
+    String? q,
+    String? accountNumber,
   }) async {
     final uri = routes.zohoPaymentsList(
       perPage: perPage,
       page: page,
       invoiceId: invoiceId,
+      q: (q ?? '').trim().isEmpty ? null : q!.trim(),
+      accountNumber: (accountNumber ?? '').trim().isEmpty
+          ? null
+          : accountNumber!.trim(),
     );
 
     final res = await api.getUri(uri);
@@ -100,7 +109,7 @@ class ZohoPaymentsService {
   }
 
   // ─────────────────────────────────────────────
-  // ✅ NEW: Get payment details (by paymentId)
+  // Get payment details (by paymentId)
   // GET /zoho/v1/payments/:paymentId
   // ─────────────────────────────────────────────
 
@@ -113,7 +122,6 @@ class ZohoPaymentsService {
     return _asJsonMap(res.data);
   }
 
-  /// Optional convenience: parse a payment object if backend returns one.
   Future<ZohoInvoicePayment?> get(String paymentId) async {
     final data = await getRaw(paymentId);
 
@@ -127,8 +135,7 @@ class ZohoPaymentsService {
     return ZohoInvoicePayment.fromJson(rawPayment.cast<String, dynamic>());
   }
 
-  /// ✅ KEY FIX for PaymentsListScreen:
-  /// list() rows often lack invoice_id. Resolve it from payment details.
+  /// list() rows can lack invoice_id. Resolve it from payment details.
   Future<String?> resolveInvoiceIdForPayment(String paymentId) async {
     final data = await getRaw(paymentId);
 
@@ -148,11 +155,10 @@ class ZohoPaymentsService {
         .trim();
     if (direct.isNotEmpty) return direct;
 
-    // Most common: invoices allocations
+    // allocations
     final fromInvoices = _firstInvoiceIdFromList(root['invoices']);
     if (fromInvoices != null) return fromInvoices;
 
-    // Some payloads: invoice_payments allocations
     final fromInvoicePayments = _firstInvoiceIdFromList(
       root['invoice_payments'],
     );
@@ -175,16 +181,19 @@ class ZohoPaymentsService {
   }
 
   // ─────────────────────────────────────────────
-  // Create / Update / Delete
+  // Create / Update / Delete (staff-only on backend)
   // ─────────────────────────────────────────────
 
   Future<ZohoInvoicePayment> create(ZohoPaymentDraft draft) async {
-    final uri = routes.zohoPaymentsCreate();
+    draft.assertValidCreate();
 
-    final res = await api.postUri(uri, data: draft.withDateOnly().toJson());
+    final uri = routes.zohoPaymentsCreate();
+    final res = await api.postUri(
+      uri,
+      data: draft.withDateOnly().toCreateJson(),
+    );
 
     final data = _asJsonMap(res.data);
-
     final rawPayment =
         data['payment'] ?? data['customerpayment'] ?? data['data'];
 
@@ -202,12 +211,15 @@ class ZohoPaymentsService {
     final id = paymentId.trim();
     if (id.isEmpty) throw ArgumentError('paymentId is empty');
 
-    final uri = routes.zohoPaymentsUpdate(id);
+    draft.assertValidUpdate();
 
-    final res = await api.putUri(uri, data: draft.withDateOnly().toJson());
+    final uri = routes.zohoPaymentsUpdate(id);
+    final res = await api.putUri(
+      uri,
+      data: draft.withDateOnly().toUpdateJson(),
+    );
 
     final data = _asJsonMap(res.data);
-
     final rawPayment =
         data['payment'] ?? data['customerpayment'] ?? data['data'];
 

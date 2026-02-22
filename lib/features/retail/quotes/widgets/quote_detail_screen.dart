@@ -254,8 +254,8 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   Widget _buildDetail(BuildContext context, ZohoQuote q) {
     final meta = SalesDocMetaVm(
       partyName: q.customerName.trim().isEmpty ? 'Customer' : q.customerName,
-      docNumberOrId: (q.referenceNumber ?? '').trim().isNotEmpty
-          ? q.referenceNumber!.trim()
+      docNumberOrId: (q.accountNumber ?? '').trim().isNotEmpty
+          ? q.accountNumber!.trim()
           : q.quoteId,
       status: q.status,
       currencyCode: (q.currencyCode ?? '').trim(),

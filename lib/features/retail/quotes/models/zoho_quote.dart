@@ -1,9 +1,8 @@
-// lib/features/retail/sales/quotes/models/zoho_quote.dart
+// lib/features/retail/quotes/models/zoho_quote.dart
 
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/shared/utils/parse/dates.dart';
 import 'package:afyakit/shared/utils/parse/primitives.dart';
-
 import 'package:afyakit/shared/utils/utils.dart';
 
 class ZohoQuote {
@@ -13,8 +12,8 @@ class ZohoQuote {
     required this.status,
     required this.date,
     required this.total,
-    this.expiryDate, // ✅ NEW
-    this.referenceNumber,
+    this.expiryDate,
+    this.accountNumber, // ✅ renamed
     this.currencyCode,
     this.customerId,
     this.notes,
@@ -29,12 +28,16 @@ class ZohoQuote {
   /// Zoho: `date` (estimate_date)
   final DateTime? date;
 
-  /// ✅ NEW: Zoho `expiry_date`
+  /// Zoho: `expiry_date`
   final DateTime? expiryDate;
 
   final num total;
 
-  final String? referenceNumber;
+  /// ✅ Deterministic member scope key (your app)
+  /// Prefer backend-provided `account_number`.
+  /// Fallback to `reference_number` temporarily for backward compatibility.
+  final String? accountNumber;
+
   final String? currencyCode;
   final String? customerId;
   final String? notes;
@@ -43,22 +46,24 @@ class ZohoQuote {
   final List<ZohoQuoteLineItem> lineItems;
 
   factory ZohoQuote.fromJson(JsonMap j) {
-    final id = asTrimmedString(j['estimate_id'] ?? j['quote_id'] ?? j['id']);
-    final name = asTrimmedString(j['customer_name'] ?? j['contact_name']);
-    final status = asTrimmedString(j['status']);
+    final id = _asTrimmed(j['estimate_id'] ?? j['quote_id'] ?? j['id']);
+    final name = _asTrimmed(j['customer_name'] ?? j['contact_name']);
+    final status = _asTrimmed(j['status']);
 
     final date = parseDate(j['date'] ?? j['estimate_date']);
-    final expiryDate = parseDate(j['expiry_date']); // ✅ NEW
+    final expiryDate = parseDate(j['expiry_date']);
 
     final total = asNum(j['total']);
 
-    final reference = asCleanStringOrNull(
-      j['reference_number'] ?? j['reference'],
+    // ✅ account number (preferred)
+    final accountNumber = _asCleanOrNull(
+      j['account_number'] ?? j['accountNumber'] ?? j['reference_number'],
     );
-    final currency = asCleanStringOrNull(j['currency_code']);
-    final customerId = asCleanStringOrNull(j['customer_id']);
-    final notes = asCleanStringOrNull(j['notes']);
-    final terms = asCleanStringOrNull(j['terms']);
+
+    final currency = _asCleanOrNull(j['currency_code']);
+    final customerId = _asCleanOrNull(j['customer_id']);
+    final notes = _asCleanOrNull(j['notes']);
+    final terms = _asCleanOrNull(j['terms']);
 
     final rawLines = j['line_items'];
     final lines = <ZohoQuoteLineItem>[];
@@ -75,14 +80,24 @@ class ZohoQuote {
       customerName: name,
       status: status,
       date: date,
-      expiryDate: expiryDate, // ✅ NEW
+      expiryDate: expiryDate,
       total: total,
-      referenceNumber: reference,
+      accountNumber: accountNumber,
       currencyCode: currency,
       customerId: customerId,
       notes: notes,
       terms: terms,
       lineItems: lines,
     );
+  }
+
+  static String _asTrimmed(Object? v) {
+    final s = asTrimmedString(v);
+    return s.isEmpty ? '' : s;
+  }
+
+  static String? _asCleanOrNull(Object? v) {
+    final s = (v ?? '').toString().trim();
+    return s.isEmpty ? null : s;
   }
 }

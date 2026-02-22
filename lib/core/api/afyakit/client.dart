@@ -324,6 +324,52 @@ final class AfyaKitClient {
     );
   }
 
+  Future<Response<T>> requestUri<T>(
+    Uri uri, {
+    required String method,
+    Object? data,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+    bool allow404 = false,
+  }) {
+    final m = method.trim().toUpperCase();
+    if (m.isEmpty) {
+      throw ArgumentError.value(method, 'method', 'HTTP method is required');
+    }
+
+    return dio.requestUri<T>(
+      uri,
+      data: data,
+      options: _mergeOptions(options, allow404: allow404).copyWith(method: m),
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<Response<T>> patchUri<T>(
+    Uri uri, {
+    Object? data,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+    bool allow404 = false,
+  }) {
+    return requestUri<T>(
+      uri,
+      method: 'PATCH',
+      data: data,
+      options: options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+      allow404: allow404,
+    );
+  }
+
   Future<Response<T>> deleteUri<T>(
     Uri uri, {
     Object? data,

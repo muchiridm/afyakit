@@ -1,3 +1,5 @@
+// lib/core/hq/tenants/models/tenant_assets.dart
+
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 

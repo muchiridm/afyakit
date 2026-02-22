@@ -17,7 +17,7 @@ final hqSuperadminProvider = FutureProvider.autoDispose<bool>((ref) async {
   final u = fb.FirebaseAuth.instance.currentUser;
   if (u == null) return false;
 
-  final t = await u.getIdTokenResult(true); // force fresh => latest claims
+  final t = await u.getIdTokenResult(true);
   final claims = t.claims ?? const <String, dynamic>{};
 
   return claims['isSuperAdmin'] == true;
@@ -43,12 +43,10 @@ class HqGate extends ConsumerWidget {
         },
       ),
       data: (user) {
-        // Guest => shared login
         if (user == null) {
           return const LoginScreen(copy: OtpLoginCopy.hq);
         }
 
-        // HQ must also pass onboarding
         if (!_isActive(user)) {
           return _ErrorScreen(
             message:
@@ -61,7 +59,6 @@ class HqGate extends ConsumerWidget {
           );
         }
 
-        // ✅ STRICT ONBOARDING ORDER (shared policy)
         final need = OnboardingGate.need(user);
 
         if (need == OnboardingNeed.phone) {
@@ -95,7 +92,6 @@ class HqGate extends ConsumerWidget {
           return const LoginScreen(copy: OtpLoginCopy.hq);
         }
 
-        // Onboarding done => superadmin guard (claims)
         final allowed = ref.watch(hqSuperadminProvider);
 
         return allowed.when(

@@ -1,6 +1,5 @@
-// lib/features/retail/sales/payments/widgets/payment_history_section.dart
+// lib/features/retail/payments/zoho/widgets/payment_history_section.dart
 
-import 'package:afyakit/features/retail/shared/providers/payment_receipt_providers.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
+import 'package:afyakit/features/retail/payments/zoho/controllers/payment_controller.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 
 typedef PaymentTap = void Function(ZohoInvoicePayment p);
@@ -60,13 +60,15 @@ class PaymentHistorySection extends ConsumerWidget {
     final code = _currency(currencyCode);
     final invId = invoiceId.trim();
 
-    final asyncPays = ref.watch(invoicePaymentsProvider(invId));
+    // ✅ single source of truth: controller (already invoice-scoped)
+    final s = ref.watch(paymentControllerProvider(invId));
 
-    return asyncPays.when(
-      loading: () => _buildLoading(),
-      error: (e, _) => _buildError(e),
-      data: (pays) => _buildData(context: context, code: code, pays: pays),
-    );
+    if (s.loadingPayments) return _buildLoading();
+    if ((s.error ?? '').trim().isNotEmpty) return _buildError(s.error!);
+
+    final pays = s.payments;
+
+    return _buildData(context: context, code: code, pays: pays);
   }
 
   // ─────────────────────────────
@@ -141,6 +143,7 @@ class PaymentHistorySection extends ConsumerWidget {
   List<ZohoInvoicePayment> _prepareRows(List<ZohoInvoicePayment> pays) {
     final exclude = (excludePaymentId ?? '').trim();
     if (exclude.isEmpty) return pays;
+
     return <ZohoInvoicePayment>[
       for (final p in pays)
         if (p.paymentId.trim() != exclude) p,
@@ -236,7 +239,6 @@ class PaymentHistoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = p.date == null ? '—' : ymd.format(p.date!);
     final mode = (p.mode ?? '').trim().isEmpty ? 'Payment' : p.mode!.trim();
-    final ref = (p.referenceNumber ?? '').trim();
     final amount = money(p.amount, currencyCode);
 
     final scheme = Theme.of(context).colorScheme;
@@ -253,8 +255,7 @@ class PaymentHistoryTile extends StatelessWidget {
         : const EdgeInsets.fromLTRB(12, 10, 8, 10);
 
     final line2 = (secondaryText ?? '').trim();
-    final fallback2 = ref.isEmpty ? date : '$date • $ref';
-    final subtitle = line2.isNotEmpty ? line2 : fallback2;
+    final subtitle = line2.isNotEmpty ? line2 : date;
 
     return Material(
       borderRadius: BorderRadius.circular(12),

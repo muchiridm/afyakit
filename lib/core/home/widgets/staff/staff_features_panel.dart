@@ -1,14 +1,14 @@
-import 'package:afyakit/core/home/registry/staff_home_registry.dart';
+// lib/core/home/widgets/staff/staff_features_panel.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
+import 'package:afyakit/core/home/registry/home_registry.dart'; // ✅ use unified registry
 import 'package:afyakit/shared/services/snack_service.dart';
 
-// ✅ NEW
 import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -23,12 +23,11 @@ class StaffFeaturesPanel extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
     if (user == null) return const SizedBox.shrink();
 
-    final profileAsync = ref.watch(tenantProfileProvider);
-    if (profileAsync.isLoading || profileAsync.hasError) {
-      return const SizedBox.shrink();
-    }
-
-    final features = StaffHomeRegistry.featureTiles(ref, user);
+    final features = HomeRegistry.featureTiles(
+      ref,
+      user,
+      scope: HomeScope.staff,
+    );
     if (features.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
@@ -44,7 +43,6 @@ class StaffFeaturesPanel extends ConsumerWidget {
             style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           ),
           const SizedBox(height: AppShape.gap12),
-
           LayoutBuilder(
             builder: (context, c) {
               final twoCol = c.maxWidth >= _twoColBreakpoint;
@@ -54,7 +52,11 @@ class StaffFeaturesPanel extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (int i = 0; i < features.length; i++) ...[
-                      _FeatureTile(feature: features[i], user: user),
+                      _FeatureTile(
+                        feature: features[i],
+                        user: user,
+                        scope: HomeScope.staff,
+                      ),
                       if (i != features.length - 1)
                         const SizedBox(height: AppShape.gap12),
                     ],
@@ -71,7 +73,11 @@ class StaffFeaturesPanel extends ConsumerWidget {
                   for (final f in features)
                     SizedBox(
                       width: tileW,
-                      child: _FeatureTile(feature: f, user: user),
+                      child: _FeatureTile(
+                        feature: f,
+                        user: user,
+                        scope: HomeScope.staff,
+                      ),
                     ),
                 ],
               );
@@ -84,14 +90,24 @@ class StaffFeaturesPanel extends ConsumerWidget {
 }
 
 class _FeatureTile extends ConsumerWidget {
-  const _FeatureTile({required this.feature, required this.user});
+  const _FeatureTile({
+    required this.feature,
+    required this.user,
+    required this.scope,
+  });
 
   final StaffFeatureDef feature;
   final AuthUser user;
+  final HomeScope scope;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final actions = StaffHomeRegistry.actionsFor(ref, user, feature.featureKey);
+    final actions = HomeRegistry.actionsFor(
+      ref,
+      user,
+      feature.featureKey,
+      scope: scope,
+    );
 
     return SizedBox(
       width: double.infinity,
@@ -173,7 +189,6 @@ class _ActionChip extends StatelessWidget {
       child: OutlinedButton.icon(
         icon: Icon(action.icon, size: 18),
         label: Text(action.label),
-        // ✅ Theme controls shape + padding
         onPressed: () {
           final dest = action.destination;
           if (dest == null) {

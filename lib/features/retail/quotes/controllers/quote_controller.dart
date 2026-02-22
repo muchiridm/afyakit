@@ -1,3 +1,7 @@
+// lib/features/retail/quotes/controllers/quote_controller.dart
+
+import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
+import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -125,81 +129,92 @@ class QuoteController extends StateNotifier<QuoteState> {
   }) async {
     if (_busy) return;
 
+    // ✅ bind member contact ASAP (prevents “Customer → Name” lag where possible)
+    await _ensureMemberContactBound();
+
     final nextId = (editingQuoteId ?? '').trim();
     final prevEditingId = (state.editingQuoteId ?? '').trim();
     final prevLoadedId = (state.loadedEditId ?? '').trim();
 
-    // Decide if the *lines* must be cleared when switching context
     final shouldClearLines = _engine.shouldClearLinesOnSwitch(
       prevEditingId: prevEditingId.isEmpty ? null : prevEditingId,
       prevLoadedId: prevLoadedId.isEmpty ? null : prevLoadedId,
       nextEditingId: nextId,
     );
 
-    // NEW MODE
+    // ───────────────────────── NEW MODE ─────────────────────────
     if (nextId.isEmpty) {
-      // Keep meta + lines as they are (persistence you want).
-      // Only mark meta as "new", to avoid stale editingQuoteId.
       _metaCtl.beginNew();
-
-      // Clear QuoteState (ops-only)
       state = const QuoteState();
 
-      // Optional: warn about missing prices
+      // (member contact already attempted above)
       await ensureDraftFromLines(requirePrices: requirePrices);
       return;
     }
 
-    // EDIT MODE
+    // ───────────────────────── EDIT MODE ─────────────────────────
     final switchingTarget = prevEditingId != nextId || prevLoadedId != nextId;
 
-    // If switching edit targets: clear everything (avoid mixing documents).
     if (switchingTarget) {
       _linesCtl.clear();
       _metaCtl.clearAll();
       _metaCtl.beginEdit(nextId);
       state = const QuoteState().copyWith(editingQuoteId: nextId);
     } else {
-      // Same target, ensure edit id is set
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
       }
       _metaCtl.beginEdit(nextId);
     }
 
-    // If engine told us to clear lines (usually switching from edit↔new), do it,
-    // but do NOT wipe meta for the "navigate to catalog and back" use case.
     if (shouldClearLines) _linesCtl.clear();
 
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
-  // Legacy compatibility, routed to meta controller
-  void patchDraft({
-    dynamic contact,
-    String? reference,
-    String? customerNotes,
-    DateTime? quoteDate,
-    DateTime? expiryDate, // ✅ NEW
-  }) {
-    if (_busy) return;
-
-    // Strongly typed path is preferred:
-    // Your UI calls ctl.patchDraft(contact: picked) where picked is ZohoContact.
-    try {
-      _metaCtl.setContact(contact as dynamic);
-    } catch (_) {}
-
-    if (reference != null) _metaCtl.setReference(reference);
-    if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
-    if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
-    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate); // ✅ NEW
+  bool get _isMemberMode {
+    final acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+    return acct.isNotEmpty;
   }
 
-  // ───────────────────────── Submit / Delete ─────────────────────────
+  Future<void> _ensureMemberContactBound({bool showError = false}) async {
+    if (!_isMemberMode) return;
+
+    final meta = _meta;
+    if (meta.contact != null) return;
+
+    final acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+
+    try {
+      final svc = await _ref.read(zohoContactsServiceProvider.future);
+
+      final items = await svc.list(
+        accountNumber: acct,
+        type: ZohoContactTypeFilter.customerOnly,
+        perPage: 5,
+        page: 1,
+      );
+
+      if (items.isEmpty) {
+        if (showError) {
+          SnackService.showError('Your customer profile is missing.');
+        }
+        return;
+      }
+
+      _metaCtl.setContact(items.first);
+    } catch (_) {
+      if (showError) {
+        SnackService.showError('Failed to resolve customer profile.');
+      }
+    }
+  }
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
+
+    // ✅ Hard rule: member must always resolve contact automatically
+    await _ensureMemberContactBound(showError: true);
 
     final meta = _meta;
 
@@ -242,7 +257,7 @@ class QuoteController extends StateNotifier<QuoteState> {
           id,
           payload,
           quoteDate: meta.quoteDate,
-          expiryDate: meta.expiryDate, // ✅ NEW
+          expiryDate: meta.expiryDate,
         );
 
         state = state.copyWith(submitting: false);
@@ -253,12 +268,11 @@ class QuoteController extends StateNotifier<QuoteState> {
       final created = await _engine.create(
         payload,
         quoteDate: meta.quoteDate,
-        expiryDate: meta.expiryDate, // ✅ NEW
+        expiryDate: meta.expiryDate,
       );
 
       final createdId = created.quoteId.trim();
 
-      // Reset editor after create
       _linesCtl.clear();
       _metaCtl.clearAll();
 
@@ -278,6 +292,26 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
+  // Legacy compatibility
+  void patchDraft({
+    dynamic contact,
+    String? reference,
+    String? customerNotes,
+    DateTime? quoteDate,
+    DateTime? expiryDate,
+  }) {
+    if (_busy) return;
+
+    try {
+      _metaCtl.setContact(contact as dynamic);
+    } catch (_) {}
+
+    if (reference != null) _metaCtl.setReference(reference);
+    if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
+    if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
+    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
+  }
+
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
 
@@ -289,7 +323,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     try {
       await _engine.delete(id);
 
-      // If we deleted what we were editing, reset editor
       if ((state.editingQuoteId ?? '').trim() == id) {
         _linesCtl.clear();
         _metaCtl.clearAll();
@@ -306,8 +339,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       return false;
     }
   }
-
-  // ───────────────────────── PDF / SEND / CONVERT ─────────────────────────
 
   Future<Uint8List?> getPdfBytes(String quoteId) async {
     if (_busy) return null;
@@ -390,8 +421,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  // ───────────────────────── UX helper ─────────────────────────
-
   Future<void> ensureDraftFromLines({required bool requirePrices}) async {
     if (_busy) return;
     if (!requirePrices) return;
@@ -403,8 +432,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       );
     }
   }
-
-  // ───────────────────────── Edit load (Zoho → Lines + Meta) ─────────────────────────
 
   Future<void> ensureLoadedForEdit(
     String quoteId, {
@@ -433,7 +460,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         reference: meta.reference,
         customerNotes: meta.customerNotes,
         quoteDate: meta.quoteDate,
-        expiryDate: meta.expiryDate, // ✅ NEW
+        expiryDate: meta.expiryDate,
       );
 
       state = state.copyWith(loadingEdit: false, loadedEditId: id);

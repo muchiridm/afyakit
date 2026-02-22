@@ -1,4 +1,4 @@
-// lib/core/tenancy/models/tenant_profile.dart
+// lib/core/hq/tenants/models/tenant_profile.dart
 
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter/material.dart';

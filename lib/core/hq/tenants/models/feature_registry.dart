@@ -1,3 +1,5 @@
+// lib/core/hq/tenants/models/feature_registry.dart
+
 import 'package:flutter/material.dart';
 
 import 'feature_keys.dart';

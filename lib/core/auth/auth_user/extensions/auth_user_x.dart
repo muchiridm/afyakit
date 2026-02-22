@@ -13,7 +13,7 @@ import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
   // ────────────────────────────────────────────
-  // Claims / type / roles
+  // Claims / roles
   // ────────────────────────────────────────────
 
   /// Merge token claims into your AuthUser model.
@@ -24,16 +24,16 @@ extension AuthUserX on AuthUser {
   bool get isActive => status.isActive;
   bool get isPending => !isActive;
 
-  /// Everyone is a member in your model.
-  bool get isMember => type.isMember;
+  /// Everyone is a "member" by default now.
+  /// Staff is derived purely from staffRoles and/or superadmin.
+  bool get isMember => true;
 
   /// High-level staff flag:
-  /// - explicit `type.staff`
-  /// - OR presence of staff roles
+  /// - presence of staff roles
   /// - OR superadmin
-  bool get isStaff => type.isStaff || staffRoles.isNotEmpty || isSuperAdmin;
+  bool get isStaff => staffRoles.isNotEmpty || isSuperAdmin;
 
-  // Derived convenience flags using updated StaffRoleX
+  // Derived convenience flags using StaffRoleX
   bool get isOwner => isSuperAdmin || staffRoles.any((r) => r.isOwner);
   bool get isAdmin => isSuperAdmin || staffRoles.any((r) => r.isAdmin);
   bool get isManager => staffRoles.any((r) => r.isManager);
@@ -49,7 +49,7 @@ extension AuthUserX on AuthUser {
   bool get isGovernance => isOwner || isAdmin;
 
   /// Main “second dashboard” toggle.
-  bool get hasStaffWorkspace => type.hasStaffWorkspace || isStaff;
+  bool get hasStaffWorkspace => isStaff;
 
   // Internal helper
   bool _anyRole(bool Function(StaffRole) predicate) =>
@@ -213,7 +213,6 @@ extension AuthUserX on AuthUser {
     required Map<String, dynamic> fields,
   }) async {
     final service = await ref.read(userProfileServiceProvider(tenantId).future);
-
     await service.updateUserFields(uid, fields);
   }
 }

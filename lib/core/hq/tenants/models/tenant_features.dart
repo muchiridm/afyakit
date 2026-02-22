@@ -1,3 +1,5 @@
+// lib/core/hq/tenants/models/tenant_features.dart
+
 import 'package:flutter/foundation.dart';
 
 /// ─────────────────────────────────────────────

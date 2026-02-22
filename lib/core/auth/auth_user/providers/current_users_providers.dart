@@ -1,4 +1,4 @@
-// lib/core/auth_user/providers/current_user_providers.dart
+// lib/core/auth_user/providers/current_users_providers.dart
 
 import 'dart:async';
 
@@ -76,7 +76,7 @@ final currentUserProvider = FutureProvider.autoDispose<AuthUser?>((ref) async {
 
       if (kDebugMode) {
         debugPrint(
-          '✅ [currentUser] loaded uid=${me.uid} tenant=${me.tenantId} type=${me.type}',
+          '✅ [currentUser] loaded uid=${me.uid} tenant=${me.tenantId} staff=${me.isStaffResolved}',
         );
       }
 
@@ -101,9 +101,9 @@ final userDisplayNameProvider = Provider<String?>((ref) {
   final u = ref.watch(currentUserValueProvider);
   if (u == null) return null;
 
-  final name = u.displayName?.trim();
-  if (name!.isNotEmpty) return name;
+  final dn = (u.displayName ?? '').trim();
+  if (dn.isNotEmpty) return dn;
 
-  final phone = u.phoneNumber!.trim();
-  return phone.isNotEmpty ? phone : null;
+  final full = u.computedDisplayName.trim();
+  return full.isNotEmpty ? full : null;
 });

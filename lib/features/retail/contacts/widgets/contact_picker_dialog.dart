@@ -1,3 +1,5 @@
+// lib/features/retail/contacts/widgets/contact_picker_dialog.dart
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,8 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_search_field.dart';
 
-import '../../shared/models/zoho_contact.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
+
+import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
 import '../services/zoho_contacts_service.dart';
+import '../../shared/models/zoho_contact.dart';
 
 class ContactPickerDialog extends ConsumerStatefulWidget {
   const ContactPickerDialog({super.key});
@@ -18,75 +24,180 @@ class ContactPickerDialog extends ConsumerStatefulWidget {
 }
 
 class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
+  static const int _perPage = 50;
+  static const Duration _debounceMs = Duration(milliseconds: 250);
+
   final _ctl = TextEditingController();
+  final _scroll = ScrollController();
+
   Timer? _debounce;
 
-  bool _loading = false;
+  bool _loading = false; // initial / refresh load
+  bool _loadingMore = false; // pagination load
   String? _error;
+
   List<ZohoContact> _items = const <ZohoContact>[];
+
+  int _page = 1;
+  bool _hasMore = true;
+
+  bool _autoPicked = false; // prevent double-pop in member UX
 
   @override
   void initState() {
     super.initState();
 
-    // Initial load (no search)
-    _load();
+    _ctl.addListener(_scheduleSearch);
+    _scroll.addListener(_maybeLoadMore);
 
-    _ctl.addListener(_scheduleLoad);
+    // initial load
+    _refresh();
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
-    _ctl.removeListener(_scheduleLoad);
+    _ctl.removeListener(_scheduleSearch);
+    _scroll.removeListener(_maybeLoadMore);
+    _scroll.dispose();
     _ctl.dispose();
     super.dispose();
   }
 
-  void _scheduleLoad() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), _load);
+  EntryMode get _mode => ref.read(effectiveEntryModeProvider);
+
+  bool get _memberUx => _mode == EntryMode.member;
+
+  /// IMPORTANT:
+  /// - Member UX: bind to accountNumber (deterministic single customer contact)
+  /// - Staff UX: DO NOT apply accountNumber scope (list all contacts)
+  String? get _accountNumberScopeIfMember {
+    if (!_memberUx) return null;
+    final acct = ref.read(zohoContactsAccountScopeProvider);
+    final a = (acct ?? '').trim();
+    return a.isEmpty ? null : a;
   }
 
-  Future<void> _load() async {
+  void _scheduleSearch() {
+    // Member UX: search is irrelevant; do not reload on typing.
+    if (_memberUx) return;
+
+    _debounce?.cancel();
+    _debounce = Timer(_debounceMs, _refresh);
+  }
+
+  void _maybeLoadMore() {
+    if (_memberUx) return; // member should never paginate
+    if (!_hasMore) return;
+    if (_loading || _loadingMore) return;
+    if (!_scroll.hasClients) return;
+
+    // load when we're close to the bottom
+    final pos = _scroll.position;
+    if (pos.pixels >= (pos.maxScrollExtent - 240)) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _refresh() async {
     if (!mounted) return;
 
     setState(() {
       _loading = true;
+      _loadingMore = false;
+      _error = null;
+      _items = const <ZohoContact>[];
+      _page = 1;
+      _hasMore = true;
+      _autoPicked = false; // reset for new open/search
+    });
+
+    await _loadPage(page: 1, append: false);
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+  }
+
+  Future<void> _loadMore() async {
+    if (!mounted) return;
+    if (!_hasMore) return;
+
+    setState(() {
+      _loadingMore = true;
       _error = null;
     });
 
+    final nextPage = _page + 1;
+    await _loadPage(page: nextPage, append: true);
+
+    if (!mounted) return;
+    setState(() => _loadingMore = false);
+  }
+
+  Future<void> _loadPage({required int page, required bool append}) async {
     try {
       final svc = await ref.read(zohoContactsServiceProvider.future);
-      final q = _ctl.text.trim();
-      final items = await svc.list(search: q.isEmpty ? null : q);
+
+      final acct = _accountNumberScopeIfMember;
+
+      // Member UX: ignore search.
+      // Staff UX: apply search query if present.
+      final q = _memberUx ? '' : _ctl.text.trim();
+
+      final items = await svc.list(
+        search: q.isEmpty ? null : q,
+        accountNumber: acct, // ✅ NULL in staff mode → list all
+        page: page,
+        perPage: _perPage,
+      );
 
       if (!mounted) return;
+
+      // basic pagination heuristic:
+      // if Zoho returns fewer than perPage, we've reached the end.
+      final hasMore = items.length >= _perPage;
+
       setState(() {
-        _loading = false;
-        _items = items;
+        _page = page;
+        _hasMore = hasMore;
+        _items = append ? [..._items, ...items] : items;
       });
+
+      // ✅ Member UX: auto-pick deterministically on any match.
+      if (_memberUx && !_autoPicked && _items.isNotEmpty) {
+        _autoPicked = true;
+
+        // Let the dialog paint at least once before closing.
+        Future.microtask(() {
+          if (!mounted) return;
+          Navigator.of(context).pop(_items.first);
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _loading = false;
         _error = e.toString();
-        _items = const <ZohoContact>[];
+        _hasMore = false;
       });
     }
   }
 
   void _clearAndReload() {
-    // Avoid double-triggering from controller listener
+    if (_memberUx) return;
     _debounce?.cancel();
     _ctl.clear();
-    _load();
+    _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+
+    // reactive for labels, but actual behavior remains driven by the getters above
+    final isMemberUx =
+        ref.watch(effectiveEntryModeProvider) == EntryMode.member;
+    final acct = ref.watch(zohoContactsAccountScopeProvider);
 
     final q = _ctl.text.trim();
     final hasQuery = q.isNotEmpty;
@@ -95,51 +206,89 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
     if (_loading && _items.isEmpty) {
       body = const Center(child: CircularProgressIndicator());
-    } else if (_error != null) {
-      body = _ErrorState(message: _error!, onRetry: _load);
+    } else if (_error != null && _items.isEmpty) {
+      body = _ErrorState(message: _error!, onRetry: _refresh);
     } else if (_items.isEmpty) {
       body = AppEmptyState(
         icon: Icons.people_alt_outlined,
-        title: hasQuery ? 'No results' : 'Search contacts',
-        subtitle: hasQuery
-            ? 'Try a different search.'
-            : 'Type a name, phone, or email to find a customer.',
-        actionLabel: hasQuery ? 'Clear search' : 'Refresh',
+        title: isMemberUx
+            ? 'No linked Zoho contact'
+            : (hasQuery ? 'No results' : 'Search contacts'),
+        subtitle: isMemberUx
+            ? 'Your account (${(acct ?? '-').trim().isEmpty ? '-' : (acct ?? '-')}) has no Zoho contact linked yet.'
+            : (hasQuery
+                  ? 'Try a different search.'
+                  : 'Type a name, phone, or email to find a customer.'),
+        actionLabel: isMemberUx
+            ? 'Retry'
+            : (hasQuery ? 'Clear search' : 'Refresh'),
         onAction: () {
-          if (hasQuery) {
+          if (isMemberUx) {
+            _refresh();
+          } else if (hasQuery) {
             _clearAndReload();
           } else {
-            _load();
+            _refresh();
           }
         },
       );
     } else {
-      body = ListView.separated(
-        itemCount: _items.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, i) {
-          final c = _items[i];
+      body = Stack(
+        children: [
+          ListView.separated(
+            controller: _scroll,
+            itemCount: _items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final c = _items[i];
 
-          final subtitle =
-              <String?>[c.personContact?.personName, c.companyName, c.bestPhone]
-                  .whereType<String>()
-                  .map((s) => s.trim())
-                  .where((s) => s.isNotEmpty)
-                  .take(2)
-                  .join(' • ');
+              final subtitle =
+                  <String?>[c.accountNumber, c.contactType, c.bestPhone]
+                      .whereType<String>()
+                      .map((s) => s.trim())
+                      .where((s) => s.isNotEmpty)
+                      .take(2)
+                      .join(' • ');
 
-          final title = c.displayName.trim();
-          return ListTile(
-            title: Text(title.isEmpty ? 'Contact' : title),
-            subtitle: subtitle.trim().isEmpty ? null : Text(subtitle),
-            onTap: () => Navigator.of(context).pop(c),
-          );
-        },
+              final title = c.displayName.trim();
+
+              return ListTile(
+                title: Text(title.isEmpty ? 'Contact' : title),
+                subtitle: subtitle.trim().isEmpty ? null : Text(subtitle),
+                onTap: () => Navigator.of(context).pop(c),
+              );
+            },
+          ),
+
+          if (_loadingMore)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 8,
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       );
     }
 
     return AlertDialog(
-      title: const Text('Pick contact'),
+      title: Text(isMemberUx ? 'Your account' : 'Pick contact'),
       content: SizedBox(
         width: 520,
         child: LayoutBuilder(
@@ -149,13 +298,26 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AppSearchField(
-                    controller: _ctl,
-                    hintText: 'Search contacts…',
-                    loading: _loading,
-                    onClear: _clearAndReload,
-                  ),
-                  const SizedBox(height: 12),
+                  if (!isMemberUx) ...[
+                    AppSearchField(
+                      controller: _ctl,
+                      hintText: 'Search contacts…',
+                      loading: _loading,
+                      onClear: _clearAndReload,
+                    ),
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Account: ${(acct ?? '-').trim().isEmpty ? '-' : (acct ?? '-')}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(

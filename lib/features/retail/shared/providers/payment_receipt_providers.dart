@@ -11,27 +11,26 @@ import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 
 /// Strictly invoice-scoped payments list.
-/// Uses /payments?invoice_id=... under the hood.
-final invoicePaymentsProvider =
-    FutureProvider.family<List<ZohoInvoicePayment>, String>((
-      ref,
-      invoiceId,
-    ) async {
+/// Uses invoice endpoint under the hood:
+/// GET /zoho/v1/payments/invoice/:invoiceId
+final invoicePaymentsProvider = FutureProvider.family
+    .autoDispose<List<ZohoInvoicePayment>, String>((ref, invoiceId) async {
       final id = invoiceId.trim();
-      if (id.isEmpty) throw StateError('invoiceId is empty');
+      if (id.isEmpty) return const <ZohoInvoicePayment>[];
 
       final svc = await ref.read(zohoPaymentsServiceProvider.future);
 
-      // This *should* already be invoice-scoped…
+      // ✅ Backend list is invoice-scoped already…
       final pays = await svc.listInvoicePayments(id);
 
-      // ✅ …but we enforce it anyway, because backend/Zoho payloads can be sloppy.
-      final scoped = _onlyForInvoice(pays, id);
+      // ✅ …but enforce fail-closed scoping anyway.
+      // If a row cannot prove it belongs to this invoice, it is excluded.
+      final scoped = _onlyForInvoiceFailClosed(pays, id);
 
       return _dedupeAndSortNewestFirst(scoped);
     });
 
-List<ZohoInvoicePayment> _onlyForInvoice(
+List<ZohoInvoicePayment> _onlyForInvoiceFailClosed(
   List<ZohoInvoicePayment> xs,
   String invoiceId,
 ) {
@@ -40,11 +39,33 @@ List<ZohoInvoicePayment> _onlyForInvoice(
 
   return <ZohoInvoicePayment>[
     for (final p in xs)
-      if ((p.invoiceId ?? '').trim() == inv || p.invoiceIds.contains(inv)) p,
+      if (_paymentHasInvoice(p, inv)) p,
   ];
 }
 
-final invoiceProvider = FutureProvider.family<ZohoInvoice, String>((
+/// ✅ Fail-closed membership:
+/// - if invoiceId matches → OK
+/// - else if invoiceIds contains invoiceId → OK
+/// - else (no linkage) → NOT OK
+bool _paymentHasInvoice(ZohoInvoicePayment p, String invoiceId) {
+  final inv = invoiceId.trim();
+  if (inv.isEmpty) return false;
+
+  final primary = (p.invoiceId ?? '').trim();
+  if (primary.isNotEmpty) return primary == inv;
+
+  // In your UI you already call `p.invoiceIds.contains(...)`,
+  // so this is assumed non-null (at least empty list).
+  final ids = p.invoiceIds;
+  if (ids.isEmpty) return false;
+
+  for (final x in ids) {
+    if (x.trim() == inv) return true;
+  }
+  return false;
+}
+
+final invoiceProvider = FutureProvider.family.autoDispose<ZohoInvoice, String>((
   ref,
   invoiceId,
 ) async {
@@ -55,18 +76,16 @@ final invoiceProvider = FutureProvider.family<ZohoInvoice, String>((
   return svc.get(id);
 });
 
-final invoiceContactProvider = FutureProvider.family<ZohoContact?, String>((
-  ref,
-  invoiceId,
-) async {
-  final inv = await ref.watch(invoiceProvider(invoiceId).future);
+final invoiceContactProvider = FutureProvider.family
+    .autoDispose<ZohoContact?, String>((ref, invoiceId) async {
+      final inv = await ref.watch(invoiceProvider(invoiceId).future);
 
-  final contactId = (inv.customerId ?? '').trim();
-  if (contactId.isEmpty) return null;
+      final contactId = (inv.customerId ?? '').trim();
+      if (contactId.isEmpty) return null;
 
-  final svc = await ref.read(zohoContactsServiceProvider.future);
-  return svc.getOrNull(contactId);
-});
+      final svc = await ref.read(zohoContactsServiceProvider.future);
+      return svc.getOrNull(contactId);
+    });
 
 typedef ReceiptKey = ({String invoiceId, String paymentId});
 
@@ -84,23 +103,47 @@ class PaymentReceiptVm {
   final List<ZohoInvoicePayment> otherPayments;
 }
 
-final paymentReceiptVmProvider =
-    FutureProvider.family<PaymentReceiptVm, ReceiptKey>((ref, key) async {
+final paymentReceiptVmProvider = FutureProvider.family
+    .autoDispose<PaymentReceiptVm, ReceiptKey>((ref, key) async {
       final invoiceId = key.invoiceId.trim();
       final paymentId = key.paymentId.trim();
 
       if (invoiceId.isEmpty) throw StateError('invoiceId is empty');
       if (paymentId.isEmpty) throw StateError('paymentId is empty');
 
-      final invoice = await ref.watch(invoiceProvider(invoiceId).future);
-      final contact = await ref.watch(invoiceContactProvider(invoiceId).future);
+      // ✅ Speed: invoice + payments can load in parallel.
+      final invoiceFuture = ref.watch(invoiceProvider(invoiceId).future);
+      final paysFuture = ref.watch(invoicePaymentsProvider(invoiceId).future);
 
-      final pays = await ref.watch(invoicePaymentsProvider(invoiceId).future);
+      final invoice = await invoiceFuture;
 
-      final payment = pays.firstWhere(
-        (p) => p.paymentId.trim() == paymentId,
-        orElse: () => throw StateError('Payment not found on this invoice'),
-      );
+      // Contact depends on invoice.customerId
+      final contactFuture = ref.watch(invoiceContactProvider(invoiceId).future);
+
+      final pays = await paysFuture;
+      final contact = await contactFuture;
+
+      // 1) Prefer invoice-scoped list
+      final hit = pays.where((p) => p.paymentId.trim() == paymentId).toList();
+
+      ZohoInvoicePayment payment;
+      if (hit.isNotEmpty) {
+        payment = hit.first;
+      } else {
+        // 2) Fallback: fetch payment detail & still enforce invoice membership
+        final paySvc = await ref.read(zohoPaymentsServiceProvider.future);
+        final detail = await paySvc.get(paymentId);
+
+        if (detail == null) {
+          throw StateError('Payment not found on this invoice');
+        }
+
+        if (!_paymentHasInvoice(detail, invoiceId)) {
+          throw StateError('Payment not found on this invoice');
+        }
+
+        payment = detail;
+      }
 
       final others = <ZohoInvoicePayment>[
         for (final p in pays)

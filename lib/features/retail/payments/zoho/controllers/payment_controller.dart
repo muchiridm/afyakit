@@ -1,3 +1,5 @@
+// lib/features/retail/payments/zoho/controllers/payment_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/payments/zoho/controllers/payment_state.dart';
@@ -22,7 +24,9 @@ class PaymentController extends StateNotifier<PaymentState> {
       ) {
     final id = (state.invoiceId ?? '').trim();
     if (id.isNotEmpty) {
-      load(); // fire-and-forget for UX
+      // fire-and-forget for UX
+      // ignore: discarded_futures
+      load();
     }
   }
 
@@ -115,7 +119,6 @@ class PaymentController extends StateNotifier<PaymentState> {
         amount: p.amount,
         date: dateOnly,
         mode: p.mode,
-        referenceNumber: p.referenceNumber,
         description: p.description,
         accountId: null, // Zoho often doesn't return it reliably
       ),
@@ -134,8 +137,6 @@ class PaymentController extends StateNotifier<PaymentState> {
     DateTime? date,
     String? mode,
     bool clearMode = false,
-    String? referenceNumber,
-    bool clearReferenceNumber = false,
     String? description,
     bool clearDescription = false,
     String? accountId,
@@ -156,9 +157,6 @@ class PaymentController extends StateNotifier<PaymentState> {
         amount: amount ?? d.amount,
         date: nextDate ?? d.date,
         mode: clearMode ? null : (mode ?? d.mode),
-        referenceNumber: clearReferenceNumber
-            ? null
-            : (referenceNumber ?? d.referenceNumber),
         description: clearDescription ? null : (description ?? d.description),
         accountId: clearAccountId ? null : (accountId ?? d.accountId),
       ),
@@ -176,7 +174,7 @@ class PaymentController extends StateNotifier<PaymentState> {
       return false;
     }
 
-    // ✅ Force invoiceId into the draft right before POST/PUT
+    // Force invoiceId into the draft right before POST/PUT
     final draft = state.paymentDraft.copyWith(invoiceId: invId).withDateOnly();
 
     if (!_validateDraft(draft)) return false;
@@ -195,7 +193,7 @@ class PaymentController extends StateNotifier<PaymentState> {
         SnackService.showSuccess('Payment recorded');
       }
 
-      // ✅ Always refresh list+balance from invoice-scoped endpoint
+      // Always refresh list+balance from invoice-scoped endpoint
       final payRes = await svc.listInvoicePaymentsWithBalance(invId);
 
       state = state.copyWith(

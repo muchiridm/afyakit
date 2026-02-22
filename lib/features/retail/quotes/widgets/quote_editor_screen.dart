@@ -1,6 +1,10 @@
 // lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
@@ -93,18 +97,15 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   Future<void> _bootstrap() async {
     if (!mounted) return;
 
-    // 1) ensure meta is in the right mode (new vs edit)
+    // Ensure meta is in the right mode (new vs edit)
     final metaCtl = ref.read(quoteMetaControllerProvider.notifier);
     final id = (widget.editingQuoteId ?? '').trim();
 
-    if (id.isEmpty) {
-      // New quote - keep whatever meta user already entered.
-      // If you WANT a hard reset when opening a new checkout screen, call metaCtl.clearAll() here.
-    } else {
+    if (id.isNotEmpty) {
       metaCtl.beginEdit(id);
     }
 
-    // 2) Let quote controller do its load work (it will populate quote lines, etc.)
+    // Let quote controller do its load work (it will auto-bind member contact if scoped)
     final ctl = ref.read(quoteControllerProvider.notifier);
     await ctl.ensureReady(
       editingQuoteId: widget.editingQuoteId,
@@ -112,7 +113,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  // Quote lines are the single truth
   void _clearQuoteLines() =>
       ref.read(quoteLinesControllerProvider.notifier).clear();
 
@@ -180,6 +180,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final linesState = ref.watch(quoteLinesControllerProvider);
 
+    // ✅ reactive member scope detection (no stale getter using ref.read)
+    final mode = ref.watch(effectiveEntryModeProvider);
+    final acct = (ref.watch(zohoContactsAccountScopeProvider) ?? '').trim();
+    final isMemberScoped = mode == EntryMode.member && acct.isNotEmpty;
+
     return WillPopScope(
       onWillPop: () => _handleBack(context, s),
       child: AppPage(
@@ -188,14 +193,30 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         maxWidth: _contentMaxW,
         scrollable: false,
         actions: const <Widget>[],
-        body: _buildBody(context, s, ctl, meta, metaCtl, linesState),
+        body: _buildBody(
+          context,
+          s,
+          ctl,
+          meta,
+          metaCtl,
+          linesState,
+          isMemberScoped: isMemberScoped,
+        ),
       ),
     );
   }
 
-  SalesDocMetaVm _metaVm(QuoteMetaState meta, QuoteLinesState linesState) {
+  SalesDocMetaVm _metaVm(
+    QuoteMetaState meta,
+    QuoteLinesState linesState, {
+    required String fallbackPartyName,
+  }) {
     final contactTitle = (meta.contact?.title ?? '').trim();
-    final partyName = contactTitle.isNotEmpty ? contactTitle : 'Customer';
+
+    final fb = fallbackPartyName.trim();
+    final partyName = contactTitle.isNotEmpty
+        ? contactTitle
+        : (fb.isNotEmpty ? fb : 'Customer');
 
     final docNo = _isEdit
         ? ((meta.editingQuoteId ?? '').trim().isEmpty
@@ -210,7 +231,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       currencyCode: _currencyCode(),
       total: widget.requirePrices ? linesState.estimatedTotal : 0,
       date: meta.quoteDate,
-      // ✅ important: wire it through (even if header doesn't show it today)
       expiryDate: meta.expiryDate,
     );
   }
@@ -278,9 +298,20 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteController ctl,
     QuoteMetaState meta,
     QuoteMetaController metaCtl,
-    QuoteLinesState linesState,
-  ) {
-    final vmMeta = _metaVm(meta, linesState);
+    QuoteLinesState linesState, {
+    required bool isMemberScoped,
+  }) {
+    // ✅ instant “member name” fallback (kills the header lag)
+    final fallbackPartyName = isMemberScoped
+        ? (ref.watch(userDisplayNameProvider) ?? 'Customer')
+        : 'Customer';
+
+    final vmMeta = _metaVm(
+      meta,
+      linesState,
+      fallbackPartyName: fallbackPartyName,
+    );
+
     final vmLines = _lineVmsFromLines(linesState);
     final bindings = _lineBindings(linesState);
     final busy = s.busy;
@@ -331,7 +362,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
       final lc = linesCtl();
 
-      // Catalog
       if (b.kind == _LineKind.catalog && line is CatalogQuoteLine) {
         lc.updateCatalogLine(
           line.tile,
@@ -343,7 +373,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         return;
       }
 
-      // Manual
       if (b.kind == _LineKind.manual && line is ManualQuoteLine) {
         lc.updateManualLine(
           b.manualId!,
@@ -373,6 +402,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             meta,
             metaCtl,
             vmMeta,
+            isMemberScoped: isMemberScoped,
           ),
         ),
 
@@ -423,7 +453,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                           if (isCatalogAt(index)) {
                             final line =
                                 linesState.lines[index] as CatalogQuoteLine;
-
                             lc.updateCatalogLine(
                               line.tile,
                               qty: qty,
@@ -496,8 +525,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteController ctl,
     QuoteMetaState meta,
     QuoteMetaController metaCtl,
-    SalesDocMetaVm vmMeta,
-  ) {
+    SalesDocMetaVm vmMeta, {
+    required bool isMemberScoped,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final busy = s.busy;
 
@@ -517,6 +547,19 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final hasContact = meta.contact != null;
 
+    Future<void> pickContact() async {
+      final ok = await _ensureAuthed(context);
+      if (!ok) return;
+
+      final ZohoContact? picked = await showDialog<ZohoContact>(
+        context: context,
+        builder: (_) => const ContactPickerDialog(),
+      );
+      if (picked == null) return;
+
+      metaCtl.setContact(picked);
+    }
+
     return SizedBox(
       height: _kTrailH,
       child: Row(
@@ -528,26 +571,18 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             visualDensity: VisualDensity.compact,
             forceLabel: _isEdit ? 'editing' : 'draft',
           ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            style: pickStyle,
-            icon: const Icon(Icons.person_outline, size: 18),
-            label: Text(hasContact ? 'Change' : 'Pick'),
-            onPressed: busy
-                ? null
-                : () async {
-                    final ok = await _ensureAuthed(context);
-                    if (!ok) return;
 
-                    final ZohoContact? picked = await showDialog<ZohoContact>(
-                      context: context,
-                      builder: (_) => const ContactPickerDialog(),
-                    );
-                    if (picked == null) return;
+          // ✅ Member scoped: NO contact UI at all (controller binds automatically).
+          if (!isMemberScoped) ...[
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              style: pickStyle,
+              icon: const Icon(Icons.person_outline, size: 18),
+              label: Text(hasContact ? 'Change' : 'Pick'),
+              onPressed: busy ? null : pickContact,
+            ),
+          ],
 
-                    metaCtl.setContact(picked);
-                  },
-          ),
           if (_isEdit) ...[
             const SizedBox(width: 8),
             IconButton(
@@ -608,7 +643,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
       metaCtl.setQuoteDate(picked);
 
-      // Optional nice UX: if expiry is empty, auto-suggest quote+30d
       final currentExpiry = meta.expiryDate;
       if (currentExpiry == null) {
         metaCtl.setExpiryDate(_dateOnly(picked.add(const Duration(days: 30))));

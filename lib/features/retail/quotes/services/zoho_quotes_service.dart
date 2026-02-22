@@ -35,8 +35,22 @@ class ZohoQuotesService {
 
   // ───────────────────────── List / Get ─────────────────────────
 
-  Future<List<ZohoQuote>> list({int limit = 50, int page = 1}) async {
-    final uri = routes.zohoListQuotes(limit: limit, page: page);
+  Future<List<ZohoQuote>> list({
+    int limit = 50,
+    int page = 1,
+    String? q,
+    String? accountNumber,
+  }) async {
+    final qq = (q ?? '').trim();
+    final acct = (accountNumber ?? '').trim();
+
+    final uri = routes.zohoListQuotes(
+      limit: limit,
+      page: page,
+      q: qq.isEmpty ? null : qq,
+      accountNumber: acct.isEmpty ? null : acct,
+    );
+
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);

@@ -4,42 +4,51 @@ part of 'routes.dart';
 
 extension AfyaKitZohoRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
-  // 💼 Zoho OAuth callback (core; not tenant-scoped)
-  // ─────────────────────────────────────────────
-
-  Uri zohoOAuthCallback() => _uriCore('zoho/oauth/callback');
-
-  // ─────────────────────────────────────────────
   // 💼 Zoho Books (tenant-scoped; authenticated)
   // ─────────────────────────────────────────────
 
   /// NOTE: Zoho Books uses `search_text` (not `search`) for list filters.
+  /// BE also supports member scoping via `account_number`.
   Uri zohoListContacts({
     String? search,
     String? type,
-    int limit = 50,
+    int perPage = 50,
     int page = 1,
-  }) => _uri(
-    'zoho/v1/contacts',
-    query: {
-      if (search != null && search.trim().isNotEmpty)
-        'search_text': search.trim(),
-      if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
-      'limit': '$limit',
-      'page': '$page',
-    },
-  );
+    String? accountNumber,
+  }) {
+    final q = <String, String>{'per_page': '$perPage', 'page': '$page'};
 
-  /// NOTE: keep consistent with Zoho param naming.
-  Uri zohoListCustomers({String? search, int limit = 50, int page = 1}) => _uri(
-    'zoho/v1/contacts/customers',
-    query: {
-      if (search != null && search.trim().isNotEmpty)
-        'search_text': search.trim(),
-      'limit': '$limit',
-      'page': '$page',
-    },
-  );
+    final s = (search ?? '').trim();
+    if (s.isNotEmpty) q['search_text'] = s;
+
+    final t = (type ?? '').trim();
+    if (t.isNotEmpty) q['type'] = t;
+
+    // ✅ MEMBER SCOPE for contacts (snake_case to match BE)
+    final acct = (accountNumber ?? '').trim();
+    if (acct.isNotEmpty) q['account_number'] = acct;
+
+    return _uri('zoho/v1/contacts', query: q);
+  }
+
+  /// Convenience endpoint: /contacts/customers
+  Uri zohoListCustomers({
+    String? search,
+    int perPage = 50,
+    int page = 1,
+    String? accountNumber,
+  }) {
+    final q = <String, String>{'per_page': '$perPage', 'page': '$page'};
+
+    final s = (search ?? '').trim();
+    if (s.isNotEmpty) q['search_text'] = s;
+
+    // ✅ MEMBER SCOPE for customers list as well
+    final acct = (accountNumber ?? '').trim();
+    if (acct.isNotEmpty) q['account_number'] = acct;
+
+    return _uri('zoho/v1/contacts/customers', query: q);
+  }
 
   Uri zohoGetContact(String contactId) =>
       _uri('zoho/v1/contacts/${_seg(contactId)}');
@@ -53,8 +62,22 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
   // 💼 Zoho Quotes
   // ─────────────────────────────────────────────
 
-  Uri zohoListQuotes({int limit = 50, int page = 1}) =>
-      _uri('zoho/v1/quotes', query: {'limit': '$limit', 'page': '$page'});
+  Uri zohoListQuotes({
+    int limit = 50,
+    int page = 1,
+    String? q,
+    String? accountNumber,
+  }) {
+    final query = <String, String>{'limit': '$limit', 'page': '$page'};
+
+    final qq = (q ?? '').trim();
+    if (qq.isNotEmpty) query['q'] = qq;
+
+    final acct = (accountNumber ?? '').trim();
+    if (acct.isNotEmpty) query['accountNumber'] = acct;
+
+    return _uri('zoho/v1/quotes', query: query);
+  }
 
   Uri zohoGetQuote(String quoteId) => _uri('zoho/v1/quotes/${_seg(quoteId)}');
   Uri zohoCreateQuote() => _uri('zoho/v1/quotes');
@@ -76,8 +99,24 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
   // 💼 Zoho Invoices
   // ─────────────────────────────────────────────
 
-  Uri zohoListInvoices({int limit = 50, int page = 1}) =>
-      _uri('zoho/v1/invoices', query: {'limit': '$limit', 'page': '$page'});
+  /// List invoices.
+  /// - q: optional search string
+  /// - accountNumber: optional member hard-scope
+  Uri zohoListInvoices({
+    int limit = 50,
+    int page = 1,
+    String? q,
+    String? accountNumber,
+  }) => _uri(
+    'zoho/v1/invoices',
+    query: {
+      'limit': '$limit',
+      'page': '$page',
+      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      if (accountNumber != null && accountNumber.trim().isNotEmpty)
+        'accountNumber': accountNumber.trim(),
+    },
+  );
 
   Uri zohoGetInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
@@ -112,16 +151,26 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     },
   );
 
-  Uri zohoPaymentsList({int perPage = 200, int page = 1, String? invoiceId}) =>
-      _uri(
-        'zoho/v1/payments',
-        query: {
-          if (invoiceId != null && invoiceId.trim().isNotEmpty)
-            'invoice_id': invoiceId.trim(),
-          'per_page': '$perPage',
-          'page': '$page',
-        },
-      );
+  /// Payments list (optionally filtered)
+  /// GET /zoho/v1/payments?per_page=&page=&invoice_id=&q=&accountNumber=
+  Uri zohoPaymentsList({
+    int perPage = 200,
+    int page = 1,
+    String? invoiceId,
+    String? q,
+    String? accountNumber,
+  }) => _uri(
+    'zoho/v1/payments',
+    query: {
+      'per_page': '$perPage',
+      'page': '$page',
+      if (invoiceId != null && invoiceId.trim().isNotEmpty)
+        'invoice_id': invoiceId.trim(),
+      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      if (accountNumber != null && accountNumber.trim().isNotEmpty)
+        'accountNumber': accountNumber.trim(),
+    },
+  );
 
   Uri zohoPaymentsCreate() => _uri('zoho/v1/payments');
 

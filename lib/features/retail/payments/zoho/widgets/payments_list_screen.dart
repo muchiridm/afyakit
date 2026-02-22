@@ -1,5 +1,6 @@
-// lib/features/retail/sales/payments/widgets/payments_list_screen.dart
+// lib/features/retail/payments/zoho/widgets/payments_list_screen.dart
 
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/providers/payment_invoice_summary_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,20 +18,26 @@ import 'package:afyakit/features/retail/payments/zoho/controllers/payments_list_
 import 'package:afyakit/features/retail/shared/models/zoho_invoice_payment.dart';
 
 class PaymentsListScreen extends ConsumerWidget {
-  const PaymentsListScreen({super.key});
+  const PaymentsListScreen({super.key, this.scope = RetailDocScope.all});
+
+  final RetailDocScope scope;
 
   static const double _loadMoreThresholdPx = 240;
   static const double _contentMaxW = 720;
 
+  bool get _isMine => scope == RetailDocScope.mine;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(paymentsListControllerProvider);
-    final ctl = ref.read(paymentsListControllerProvider.notifier);
+    final state = ref.watch(paymentsListControllerProvider(scope));
+    final ctl = ref.read(paymentsListControllerProvider(scope).notifier);
+
+    final title = _isMine ? 'My Payments' : 'Payments';
 
     return AppPage(
       scrollable: false,
       maxWidth: _contentMaxW,
-      title: 'Payments',
+      title: title,
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
@@ -86,7 +93,9 @@ class PaymentsListScreen extends ConsumerWidget {
       return _EmptyState(
         icon: Icons.payments_outlined,
         title: 'No payments yet',
-        subtitle: 'Payments will appear here after they are recorded.',
+        subtitle: _isMine
+            ? 'Your payments will appear here after they are recorded.'
+            : 'Payments will appear here after they are recorded.',
         actionLabel: 'Refresh',
         onAction: () => ctl.refresh(reset: true),
       );
@@ -110,7 +119,7 @@ class PaymentsListScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 96),
           children: [
             SalesListCard(
-              title: 'Recent payments',
+              title: _isMine ? 'Your recent payments' : 'Recent payments',
               icon: Icons.payments_outlined,
               children: [
                 for (final p in state.items)
@@ -127,10 +136,6 @@ class PaymentsListScreen extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Row UI (now reads invoice summary)
-// ─────────────────────────────────────────────
-
 class _PaymentRow extends ConsumerWidget {
   const _PaymentRow({required this.payment, required this.onOpen});
 
@@ -146,13 +151,11 @@ class _PaymentRow extends ConsumerWidget {
 
     final dateText = _formatDate(payment.date);
     final mode = (payment.mode ?? '').trim();
-    final refNo = (payment.referenceNumber ?? '').trim();
     final desc = (payment.description ?? '').trim();
     final amount = _formatAmount(payment.amount);
 
     final invoiceId = (payment.invoiceId ?? '').trim();
 
-    // ✅ Load invoice summary (customerName, invoiceNumber, etc.)
     final invAsync = invoiceId.isEmpty
         ? null
         : ref.watch(paymentInvoiceSummaryProvider(invoiceId));
@@ -173,7 +176,6 @@ class _PaymentRow extends ConsumerWidget {
         ) ??
         '';
 
-    // Title priority: customer name → (fallback) payment id
     final title = customerName.isNotEmpty ? customerName : pidLabel;
 
     return InkWell(
@@ -205,29 +207,18 @@ class _PaymentRow extends ConsumerWidget {
                         icon: Icons.calendar_today_outlined,
                         text: dateText,
                       ),
-
-                      // ✅ Invoice number if we have it
                       if (invoiceNo.isNotEmpty)
                         _MetaPill(
                           icon: Icons.receipt_long_outlined,
                           text: invoiceNo,
                         ),
-
-                      // ✅ Always show payment id so it’s traceable
                       _MetaPill(icon: Icons.tag_outlined, text: pidLabel),
-
                       if (mode.isNotEmpty)
                         _MetaPill(icon: Icons.payments_outlined, text: mode),
-                      if (refNo.isNotEmpty)
-                        _MetaPill(icon: Icons.numbers_outlined, text: refNo),
                       if (desc.isNotEmpty)
                         _MetaPill(icon: Icons.notes_outlined, text: desc),
-
-                      // Optional: show invoiceId if no invoiceNo (debug / trace)
                       if (invoiceNo.isEmpty && invoiceId.isNotEmpty)
                         _MetaPill(icon: Icons.tag_outlined, text: invoiceId),
-
-                      // Optional: subtle loading hint
                       if (invoiceId.isNotEmpty && invAsync?.isLoading == true)
                         const _MetaPill(
                           icon: Icons.hourglass_top,
@@ -301,10 +292,6 @@ class _MetaPill extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────
-// Error / Empty
-// ─────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message, required this.onRetry});

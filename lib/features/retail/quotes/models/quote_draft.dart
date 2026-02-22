@@ -220,7 +220,7 @@ class QuoteDraft {
       contactId: (q.customerId ?? '').trim().isEmpty ? null : q.customerId,
       contactName: q.customerName.trim().isEmpty ? null : q.customerName.trim(),
       customerNotes: q.notes,
-      reference: q.referenceNumber,
+      reference: q.accountNumber,
       currencyCode: q.currencyCode,
       lines: hydratedLines,
     );

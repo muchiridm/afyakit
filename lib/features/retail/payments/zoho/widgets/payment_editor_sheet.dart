@@ -1,3 +1,5 @@
+// lib/features/retail/payments/zoho/widgets/payment_editor_sheet.dart
+
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,7 +28,6 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
   late final TextEditingController _amountCtl;
   late final TextEditingController _dateCtl;
   late final TextEditingController _modeCtl;
-  late final TextEditingController _refCtl;
   late final TextEditingController _descCtl;
 
   String? _lastEditingPaymentId;
@@ -44,7 +45,6 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _amountCtl.dispose();
     _dateCtl.dispose();
     _modeCtl.dispose();
-    _refCtl.dispose();
     _descCtl.dispose();
     super.dispose();
   }
@@ -53,9 +53,6 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _amountCtl = TextEditingController(text: s.paymentDraft.amount.toString());
     _dateCtl = TextEditingController(text: ymd.format(s.paymentDraft.date));
     _modeCtl = TextEditingController(text: (s.paymentDraft.mode ?? '').trim());
-    _refCtl = TextEditingController(
-      text: (s.paymentDraft.referenceNumber ?? '').trim(),
-    );
     _descCtl = TextEditingController(
       text: (s.paymentDraft.description ?? '').trim(),
     );
@@ -65,7 +62,6 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _amountCtl.text = s.paymentDraft.amount.toString();
     _dateCtl.text = ymd.format(s.paymentDraft.date);
     _modeCtl.text = (s.paymentDraft.mode ?? '').trim();
-    _refCtl.text = (s.paymentDraft.referenceNumber ?? '').trim();
     _descCtl.text = (s.paymentDraft.description ?? '').trim();
   }
 
@@ -142,16 +138,6 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
               border: OutlineInputBorder(),
             ),
             onChanged: (v) => ctl.patchDraft(mode: v),
-          ),
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: _refCtl,
-            decoration: const InputDecoration(
-              labelText: 'Reference number (optional)',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => ctl.patchDraft(referenceNumber: v),
           ),
           const SizedBox(height: 10),
 

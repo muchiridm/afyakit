@@ -1,10 +1,7 @@
-// lib/core/auth/shared/models/auth_user_model.dart
-
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
 @immutable
@@ -19,9 +16,8 @@ class AuthUser {
   /// Membership scope.
   final String tenantId;
 
-  // ────────────── Status / type ──────────────
+  // ────────────── Status ──────────────
   final UserStatus status; // active | disabled (BE); tolerant parsing
-  final UserType type; // member | staff
 
   // ────────────── Membership / access ──────────────
   final List<String> stores;
@@ -49,14 +45,10 @@ class AuthUser {
   final String? emailPendingAt; // ISO string (optional)
 
   // ────────────── Phone verification model ──────────────
-
-  /// Strong proof via Firebase Phone Auth / WA OTP / etc.
   final bool phoneVerified;
   final String? phoneVerifiedAt; // ISO string
 
-  /// Somalia (+252) fallback acceptance:
-  /// - phoneClaimed means we accept this phone as identity anchor even if OTP is bypassed.
-  /// - For non-+252, backend should mirror claimed==verified, but FE stays tolerant.
+  /// Somalia (+252) fallback acceptance.
   final bool phoneClaimed;
   final String? phoneClaimedAt; // ISO string
 
@@ -94,7 +86,6 @@ class AuthUser {
     required this.uid,
     required this.tenantId,
     required this.status,
-    required this.type,
     this.phoneNumber,
     this.stores = const [],
     this.firstName,
@@ -183,23 +174,6 @@ class AuthUser {
     }
   }
 
-  static UserType _parseType({
-    required Object? rawType,
-    required List<StaffRole> staffRoles,
-    required bool isSuperAdmin,
-  }) {
-    final s = rawType is String ? rawType.trim() : '';
-    if (s.isNotEmpty) {
-      try {
-        return UserType.fromString(s);
-      } catch (_) {
-        // fall through
-      }
-    }
-    if (staffRoles.isNotEmpty || isSuperAdmin) return UserType.staff;
-    return UserType.member;
-  }
-
   static bool _isSomaliaPhone(String? phoneE164) =>
       phoneE164 != null && phoneE164.trim().startsWith('+252');
 
@@ -213,8 +187,16 @@ class AuthUser {
     return phoneVerified == true || phoneClaimed == true;
   }
 
+  // ─────────────────────────────────────────────
+  // Derived semantics (NO "type" field)
+  // ─────────────────────────────────────────────
+
+  /// Member unless staffRoles assigned (or superadmin).
+  bool get isStaffResolved => staffRoles.isNotEmpty || isSuperAdmin == true;
+
+  bool get isMemberResolved => !isStaffResolved;
+
   /// Preferred display value for UI labels.
-  /// Falls back in this order:
   /// displayName → first+last → companyName (if isCompany) → phoneNumber → uid
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
@@ -279,22 +261,18 @@ class AuthUser {
     return pending.isNotEmpty ? pending : null;
   }
 
-  /// If we have a pending email, the UI should show “verify” (or “waiting for verify”).
+  /// If we have a pending email, the UI should show “verify”.
   bool get needsEmailVerificationResolved => hasPendingEmail;
 
   // ─────────────────────────────────────────────
-  // Backwards-compatible aliases (so old UI compiles)
+  // Back-compat aliases used by your gates/UI
   // ─────────────────────────────────────────────
 
-  /// Legacy name used across older UI code.
-  /// Option A meaning: "has *any* email context" (verified OR pending).
   bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
 
-  /// Legacy: If an email exists but is not verified yet, we should show verification step.
-  /// Option A: pending email implies verification still required.
   bool get needsEmailVerification => needsEmailVerificationResolved;
 
-  /// Legacy: emailLower best-effort (verified preferred, else pending)
+  /// Verified first, else pending.
   String? get bestEmailLower {
     final v = bestVerifiedEmailLower;
     if (v != null) return v;
@@ -311,18 +289,11 @@ class AuthUser {
     if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
     if (tenant.isEmpty) throw ArgumentError('AuthUser requires tenantId');
 
-    // phoneNumber is optional now (legacy tolerant)
     final phone = _optStr(json['phoneNumber']);
 
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
     final staffRoles = _normalizeStaffRoles(json['staffRoles']);
-
-    final type = _parseType(
-      rawType: json['type'] ?? json['userType'],
-      staffRoles: staffRoles,
-      isSuperAdmin: isSuperAdmin,
-    );
 
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
@@ -347,6 +318,10 @@ class AuthUser {
         ? null
         : _bool(phoneSatisfiedRaw);
 
+    // Account number: tolerate snake_case too (just in case)
+    final accountNumber =
+        _optStr(json['accountNumber']) ?? _optStr(json['account_number']);
+
     AuthUserZohoLink? zoho;
     if (allowZoho) {
       final rawZoho = json['zoho'];
@@ -368,7 +343,6 @@ class AuthUser {
       phoneNumber: phone,
       tenantId: tenant,
       status: _parseStatus(json['status']),
-      type: type,
       stores: _normalizeStores(json['stores']),
       firstName: _optStr(json['firstName']),
       lastName: _optStr(json['lastName']),
@@ -387,7 +361,7 @@ class AuthUser {
       emailVerifiedAt: _optStr(json['emailVerifiedAt']),
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
-      accountNumber: _optStr(json['accountNumber']),
+      accountNumber: accountNumber,
       zoho: zoho,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
@@ -406,7 +380,6 @@ class AuthUser {
 
   AuthUser copyWith({
     UserStatus? status,
-    UserType? type,
     List<String>? stores,
     String? firstName,
     String? lastName,
@@ -438,7 +411,6 @@ class AuthUser {
       phoneNumber: phoneNumber,
       tenantId: tenantId,
       status: status ?? this.status,
-      type: type ?? this.type,
       stores: stores ?? this.stores,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
@@ -474,7 +446,6 @@ class AuthUser {
     'tenantId': tenantId,
     if (phoneNumber != null) 'phoneNumber': phoneNumber,
     'status': status.wire,
-    'type': type.wire,
     'stores': stores,
     if (firstName != null) 'firstName': firstName,
     if (lastName != null) 'lastName': lastName,

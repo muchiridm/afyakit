@@ -1,3 +1,5 @@
+// lib/features/retail/shared/models/zoho_contact.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 
@@ -65,8 +67,8 @@ class ZohoContact {
     this.companyName,
     this.personContact,
     this.status,
-    this.contactType, // NEW
-    this.referenceNumber, // ✅ NEW
+    this.contactType,
+    this.accountNumber,
   });
 
   final String contactId;
@@ -78,9 +80,9 @@ class ZohoContact {
   /// "customer" | "vendor" | "customer_vendor" | null
   final String? contactType;
 
-  /// ✅ Deterministic linking key from backend (Zoho Books: reference_number).
-  /// We’ll use this for debugging and for your DP account number linking.
-  final String? referenceNumber;
+  /// ✅ Deterministic linking key (Zoho Books custom field cf_account_number).
+  /// Wire name (BE API): account_number
+  final String? accountNumber;
 
   bool get isActive => (status ?? '').toLowerCase() != 'inactive';
 
@@ -98,12 +100,16 @@ class ZohoContact {
     return '';
   }
 
-  String get subtitle {
-    final p = bestPhone.trim();
-    if (p.isNotEmpty) return p;
-    final e = bestEmail.trim();
-    if (e.isNotEmpty) return e;
-    return '';
+  String get contactTypeNorm => (contactType ?? '').trim().toLowerCase();
+
+  bool get isCustomer {
+    final t = contactTypeNorm;
+    return t == 'customer' || t == 'customer_vendor';
+  }
+
+  bool get isVendor {
+    final t = contactTypeNorm;
+    return t == 'vendor' || t == 'customer_vendor';
   }
 
   String get title {
@@ -119,16 +125,22 @@ class ZohoContact {
     return '';
   }
 
-  String get contactTypeNorm => (contactType ?? '').trim().toLowerCase();
+  /// ✅ Prefer showing account number (linking key), then type, then phone/email.
+  String get subtitle {
+    final acct = (accountNumber ?? '').trim();
+    final type = contactTypeNorm;
 
-  bool get isCustomer {
-    final t = contactTypeNorm;
-    return t == 'customer' || t == 'customer_vendor';
-  }
+    if (acct.isNotEmpty && type.isNotEmpty) return '$acct • $type';
+    if (acct.isNotEmpty) return acct;
+    if (type.isNotEmpty) return type;
 
-  bool get isVendor {
-    final t = contactTypeNorm;
-    return t == 'vendor' || t == 'customer_vendor';
+    final p = bestPhone.trim();
+    if (p.isNotEmpty) return p;
+
+    final e = bestEmail.trim();
+    if (e.isNotEmpty) return e;
+
+    return '';
   }
 
   // ─────────────────────────────────────────────
@@ -139,41 +151,30 @@ class ZohoContact {
     final j = json.cast<String, Object?>();
 
     final id = readString(j['contact_id'] ?? j['contactId'] ?? j['id']);
+
     final display = readStringOrNull(j['display_name'] ?? j['displayName']);
     final company = readStringOrNull(j['company_name'] ?? j['companyName']);
     final status = readStringOrNull(j['status']);
 
-    final contactType = readStringOrNull(
-      j['contact_type'] ?? j['type'] ?? j['contactType'],
-    );
+    final contactType = readStringOrNull(j['contact_type'] ?? j['contactType']);
 
-    // ✅ NEW: reference_number (snake) or referenceNumber (camel)
-    final referenceNumber = readStringOrNull(
-      j['reference_number'] ?? j['referenceNumber'],
+    // ✅ New world: account_number only (BE emits this from cf_account_number)
+    //
+    // Keep a permissive fallback for camelCase, but DO NOT support reference_number.
+    final accountNumberRaw = readStringOrNull(
+      j['account_number'] ?? j['accountNumber'],
     );
 
     PersonContact? person;
 
-    // New backend shape: person_contact is nested
+    // Backend shape: person_contact is nested
     if (j.containsKey('person_contact')) {
       final rawPc = j['person_contact'];
       person = rawPc == null ? null : PersonContact.fromJson(rawPc);
     } else {
-      // Legacy flat shape: person_name + phone/email/mobile
-      final legacyPersonName = readStringOrNull(j['person_name']);
-      if (legacyPersonName != null) {
-        person = PersonContact(
-          personName: legacyPersonName,
-          contactPersonId: readStringOrNull(j['contact_person_id']),
-          email: readStringOrNull(j['email']),
-          phone: readStringOrNull(j['phone']),
-          mobile: readStringOrNull(j['mobile']),
-          isPrimary: readBool(j['is_primary']),
-        );
-      } else {
-        // Zoho native legacy shape: contact_persons array
-        person = _pickPrimaryFromZohoLegacy(j);
-      }
+      // Zoho native legacy shape: contact_persons array
+      // (This is not "our legacy"; it's Zoho's payload reality)
+      person = _pickPrimaryFromZohoLegacy(j);
     }
 
     final zohoContactName = readStringOrNull(
@@ -186,6 +187,8 @@ class ZohoContact {
       person: person?.personName,
     );
 
+    final acct = (accountNumberRaw ?? '').trim();
+
     return ZohoContact(
       contactId: id,
       displayName: derived,
@@ -193,9 +196,7 @@ class ZohoContact {
       personContact: person,
       status: status,
       contactType: contactType,
-      referenceNumber: (referenceNumber ?? '').trim().isNotEmpty
-          ? referenceNumber!.trim()
-          : null,
+      accountNumber: acct.isNotEmpty ? acct : null,
     );
   }
 
@@ -267,13 +268,15 @@ class ZohoContact {
     }
 
     final company = (companyName ?? '').trim();
-    final ref = (referenceNumber ?? '').trim();
+    final acct = (accountNumber ?? '').trim();
 
     return <String, Object?>{
       'display_name': dn,
       if (company.isNotEmpty) 'company_name': company,
-      // ✅ NEW: only include if you actually have it (DP-xxxxxx or fallback)
-      if (ref.isNotEmpty) 'reference_number': ref,
+
+      // ✅ include only if present
+      if (acct.isNotEmpty) 'account_number': acct,
+
       if (personContact != null)
         'person_contact': personContact!.toJsonForUpsert(),
     };
@@ -286,7 +289,7 @@ class ZohoContact {
     PersonContact? personContact,
     String? status,
     String? contactType,
-    String? referenceNumber,
+    String? accountNumber,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
@@ -295,7 +298,7 @@ class ZohoContact {
       personContact: personContact ?? this.personContact,
       status: status ?? this.status,
       contactType: contactType ?? this.contactType,
-      referenceNumber: referenceNumber ?? this.referenceNumber,
+      accountNumber: accountNumber ?? this.accountNumber,
     );
   }
 }
@@ -306,16 +309,15 @@ class ContactUpdatePatch {
     this.displayName,
     this.companyName,
     this.personContact,
-    this.referenceNumber, // ✅ NEW
+    this.accountNumber,
   });
 
   final String? displayName;
   final String? companyName;
   final PersonContactPatch? personContact;
 
-  /// ✅ Optional patch for backend reference_number
-  /// (you may or may not expose this in UI; useful for repair tooling)
-  final String? referenceNumber;
+  /// ✅ BE expects: account_number (custom field cf_account_number)
+  final String? accountNumber;
 
   Map<String, Object?> toJson() {
     final out = <String, Object?>{};
@@ -332,9 +334,10 @@ class ContactUpdatePatch {
           : companyName!.trim();
     }
 
-    if (referenceNumber != null) {
-      final rn = referenceNumber!.trim();
-      out['reference_number'] = rn.isEmpty ? '' : rn;
+    if (accountNumber != null) {
+      final acct = accountNumber!.trim();
+      // empty string => explicit clear
+      out['account_number'] = acct.isEmpty ? '' : acct;
     }
 
     if (personContact != null) {
