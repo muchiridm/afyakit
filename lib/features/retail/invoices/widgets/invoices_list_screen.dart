@@ -58,13 +58,11 @@ class InvoicesListScreen extends ConsumerWidget {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      fab: _isMine
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _openCatalogToStartNewInvoice(context),
-              icon: const Icon(Icons.add),
-              label: const Text('New invoice'),
-            ),
+      fab: FloatingActionButton.extended(
+        onPressed: () => _openCatalogToStartNewInvoice(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New invoice'),
+      ),
       body: Stack(
         children: [
           Column(

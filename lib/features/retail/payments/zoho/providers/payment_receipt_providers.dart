@@ -1,5 +1,3 @@
-// lib/features/retail/shared/providers/payment_receipt_providers.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';

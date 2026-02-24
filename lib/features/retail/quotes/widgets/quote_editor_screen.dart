@@ -1,16 +1,16 @@
 // lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
+
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
@@ -25,6 +25,9 @@ import 'package:afyakit/shared/layout/app_page.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Editor result used by parent screens (detail/list) to decide navigation.
+enum QuoteEditorResult { saved, deleted }
 
 class QuoteEditorScreen extends ConsumerStatefulWidget {
   const QuoteEditorScreen({
@@ -180,10 +183,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final linesState = ref.watch(quoteLinesControllerProvider);
 
-    // ✅ reactive member scope detection (no stale getter using ref.read)
-    final mode = ref.watch(effectiveEntryModeProvider);
-    final acct = (ref.watch(zohoContactsAccountScopeProvider) ?? '').trim();
-    final isMemberScoped = mode == EntryMode.member && acct.isNotEmpty;
+    // ✅ single source of truth
+    final policy = ref.watch(quoteContactPolicyProvider);
+    final isMemberScoped = policy == QuoteContactPolicy.memberScoped;
 
     return WillPopScope(
       onWillPop: () => _handleBack(context, s),
@@ -301,9 +303,10 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteLinesState linesState, {
     required bool isMemberScoped,
   }) {
-    // ✅ instant “member name” fallback (kills the header lag)
     final fallbackPartyName = isMemberScoped
-        ? (ref.watch(userDisplayNameProvider) ?? 'Customer')
+        ? ((meta.contact?.title ?? '').trim().isNotEmpty
+              ? meta.contact!.title
+              : 'Loading customer…')
         : 'Customer';
 
     final vmMeta = _metaVm(
@@ -514,7 +517,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             ),
           ),
 
-        _buildSubmitButton(context, s, ctl, meta, linesState),
+        _buildSubmitButton(
+          context,
+          s,
+          ctl,
+          meta,
+          linesState,
+          isMemberScoped: isMemberScoped,
+        ),
       ],
     );
   }
@@ -607,7 +617,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       if (!context.mounted) return;
 
                       await _clearAll();
-                      Navigator.of(context).pop(true);
+
+                      Navigator.of(context).pop(QuoteEditorResult.deleted);
                     },
             ),
           ],
@@ -722,13 +733,15 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     QuoteState s,
     QuoteController ctl,
     QuoteMetaState meta,
-    QuoteLinesState linesState,
-  ) {
+    QuoteLinesState linesState, {
+    required bool isMemberScoped,
+  }) {
     final busy = s.busy;
 
     final canSubmit =
         linesState.lines.isNotEmpty &&
-        (!widget.requirePrices || linesState.hasAllPrices);
+        (!widget.requirePrices || linesState.hasAllPrices) &&
+        (!isMemberScoped || meta.contact != null);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -756,7 +769,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                 if (!context.mounted) return;
 
                 await _clearAll();
-                Navigator.of(context).pop(true);
+
+                Navigator.of(context).pop(QuoteEditorResult.saved);
               },
       ),
     );

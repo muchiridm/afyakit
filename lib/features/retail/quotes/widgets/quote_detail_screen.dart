@@ -64,7 +64,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   // ─────────────────────────────────────────────
 
   Future<void> _editQuote(BuildContext context) async {
-    final changed = await Navigator.of(context).push<bool>(
+    final res = await Navigator.of(context).push<QuoteEditorResult>(
       MaterialPageRoute(
         builder: (_) => QuoteEditorScreen(editingQuoteId: widget.quoteId),
       ),
@@ -72,8 +72,14 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
     if (!mounted) return;
 
-    // ✅ stay on this screen; just refresh the quote
-    if (changed == true) {
+    if (res == QuoteEditorResult.deleted) {
+      // ✅ Quote is gone; don't refetch. Exit detail back to list.
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    if (res == QuoteEditorResult.saved) {
+      // ✅ stay on this screen; just refresh the quote
       ref.invalidate(zohoQuoteProvider(widget.quoteId));
       SnackService.showSuccess('Quote refreshed');
     }

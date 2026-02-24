@@ -66,6 +66,7 @@ class ZohoQuotesService {
     return const <ZohoQuote>[];
   }
 
+  /// Strict: 404 throws.
   Future<ZohoQuote> get(String quoteId) async {
     final id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
@@ -78,6 +79,28 @@ class ZohoQuotesService {
     if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
     throw StateError('Unexpected response: missing "quote"');
+  }
+
+  /// ✅ Soft: 404 returns null (deleted / not found).
+  Future<ZohoQuote?> getOrNull(String quoteId) async {
+    final id = quoteId.trim();
+    if (id.isEmpty) return null;
+
+    final uri = routes.zohoGetQuote(id);
+
+    try {
+      final res = await api.getUri(uri);
+
+      final data = _asJsonMap(res.data);
+      final raw = data['quote'];
+      if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+
+      throw StateError('Unexpected response: missing "quote"');
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 404) return null;
+      rethrow;
+    }
   }
 
   // ───────────────────────── Create / Update / Delete ─────────────────────────
@@ -189,7 +212,7 @@ class ZohoQuotesService {
   }
 
   Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? email}) async {
-    await this.email(quoteId, email: email);
+    await email!;
     await markSent(quoteId);
   }
 
@@ -244,10 +267,10 @@ class ZohoQuotesService {
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
 
-      // Zoho: estimate_date
+      // Zoho: estimate_date (your BE currently expects 'date')
       if (quoteDateStr != null) 'date': quoteDateStr,
 
-      // ✅ NEW: Zoho: expiry_date
+      // Zoho: expiry_date
       if (expiryDateStr != null) 'expiry_date': expiryDateStr,
 
       if (asCleanStringOrNull(draft.reference) != null)

@@ -1,3 +1,5 @@
+// lib/features/retail/quotes/controllers/quote_engine.dart
+
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';

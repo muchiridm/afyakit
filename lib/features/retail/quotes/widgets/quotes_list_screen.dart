@@ -60,13 +60,11 @@ class QuotesListScreen extends ConsumerWidget {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      fab: _isMine
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _openCatalogToStartNewQuote(context),
-              icon: const Icon(Icons.add),
-              label: const Text('New quote'),
-            ),
+      fab: FloatingActionButton.extended(
+        onPressed: () => _openCatalogToStartNewQuote(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New quote'),
+      ),
       body: Stack(
         children: [
           Column(

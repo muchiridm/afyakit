@@ -1,7 +1,7 @@
 // lib/features/retail/payments/zoho/widgets/payments_list_screen.dart
 
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
-import 'package:afyakit/features/retail/shared/providers/payment_invoice_summary_provider.dart';
+import 'package:afyakit/features/retail/payments/zoho/providers/payment_invoice_summary_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';

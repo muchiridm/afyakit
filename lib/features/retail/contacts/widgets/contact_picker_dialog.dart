@@ -2,18 +2,18 @@
 
 import 'dart:async';
 
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_search_field.dart';
 
-import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
+import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
-import '../services/zoho_contacts_service.dart';
-import '../../shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 
 class ContactPickerDialog extends ConsumerStatefulWidget {
   const ContactPickerDialog({super.key});
@@ -32,8 +32,8 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
   Timer? _debounce;
 
-  bool _loading = false; // initial / refresh load
-  bool _loadingMore = false; // pagination load
+  bool _loading = false;
+  bool _loadingMore = false;
   String? _error;
 
   List<ZohoContact> _items = const <ZohoContact>[];
@@ -41,7 +41,12 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
   int _page = 1;
   bool _hasMore = true;
 
-  bool _autoPicked = false; // prevent double-pop in member UX
+  bool _autoPicked = false;
+
+  // cache to prevent “null for a moment” scope fetches in member-scoped UX
+  String? _memberAcct;
+
+  ProviderSubscription<String?>? _scopeSub;
 
   @override
   void initState() {
@@ -50,12 +55,33 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     _ctl.addListener(_scheduleSearch);
     _scroll.addListener(_maybeLoadMore);
 
+    // Cache initial scope
+    _memberAcct = (ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+
+    // ✅ Riverpod-safe: listenManual in initState
+    _scopeSub = ref.listenManual<String?>(zohoContactsAccountScopeProvider, (
+      prev,
+      next,
+    ) {
+      final a = (next ?? '').trim();
+      final old = (_memberAcct ?? '').trim();
+      if (a == old) return;
+
+      _memberAcct = a;
+
+      // Only refresh for member-scoped UX (staff should not care)
+      if (_isMemberUx) {
+        _refresh();
+      }
+    });
+
     // initial load
     _refresh();
   }
 
   @override
   void dispose() {
+    _scopeSub?.close();
     _debounce?.cancel();
     _ctl.removeListener(_scheduleSearch);
     _scroll.removeListener(_maybeLoadMore);
@@ -64,35 +90,32 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     super.dispose();
   }
 
-  EntryMode get _mode => ref.read(effectiveEntryModeProvider);
+  QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
 
-  bool get _memberUx => _mode == EntryMode.member;
+  bool get _isMemberUx => _policy == QuoteContactPolicy.memberScoped;
 
-  /// IMPORTANT:
-  /// - Member UX: bind to accountNumber (deterministic single customer contact)
-  /// - Staff UX: DO NOT apply accountNumber scope (list all contacts)
+  /// Member-scoped: accountNumber hard scope (must exist).
+  /// Staff/picker: null => unscoped list.
   String? get _accountNumberScopeIfMember {
-    if (!_memberUx) return null;
-    final acct = ref.read(zohoContactsAccountScopeProvider);
-    final a = (acct ?? '').trim();
+    if (!_isMemberUx) return null;
+    final a = (_memberAcct ?? '').trim();
     return a.isEmpty ? null : a;
   }
 
   void _scheduleSearch() {
-    // Member UX: search is irrelevant; do not reload on typing.
-    if (_memberUx) return;
+    // Member-scoped: search is irrelevant; do not reload on typing.
+    if (_isMemberUx) return;
 
     _debounce?.cancel();
     _debounce = Timer(_debounceMs, _refresh);
   }
 
   void _maybeLoadMore() {
-    if (_memberUx) return; // member should never paginate
+    if (_isMemberUx) return; // member should never paginate
     if (!_hasMore) return;
     if (_loading || _loadingMore) return;
     if (!_scroll.hasClients) return;
 
-    // load when we're close to the bottom
     final pos = _scroll.position;
     if (pos.pixels >= (pos.maxScrollExtent - 240)) {
       _loadMore();
@@ -109,7 +132,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
       _items = const <ZohoContact>[];
       _page = 1;
       _hasMore = true;
-      _autoPicked = false; // reset for new open/search
+      _autoPicked = false;
     });
 
     await _loadPage(page: 1, append: false);
@@ -140,21 +163,32 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
       final acct = _accountNumberScopeIfMember;
 
-      // Member UX: ignore search.
-      // Staff UX: apply search query if present.
-      final q = _memberUx ? '' : _ctl.text.trim();
+      // ✅ CRITICAL:
+      // Member UX must NEVER query unscoped contacts.
+      // If scope isn't ready yet, do nothing and wait for listener to refresh.
+      if (_isMemberUx && (acct == null || acct.trim().isEmpty)) {
+        if (!mounted) return;
+        setState(() {
+          _page = 1;
+          _hasMore = false;
+          _items = const <ZohoContact>[];
+          _error = null;
+        });
+        return;
+      }
+
+      // Member UX: ignore search. Staff UX: apply search query.
+      final q = _isMemberUx ? '' : _ctl.text.trim();
 
       final items = await svc.list(
         search: q.isEmpty ? null : q,
-        accountNumber: acct, // ✅ NULL in staff mode → list all
+        accountNumber: acct, // null in staff => list all
         page: page,
         perPage: _perPage,
       );
 
       if (!mounted) return;
 
-      // basic pagination heuristic:
-      // if Zoho returns fewer than perPage, we've reached the end.
       final hasMore = items.length >= _perPage;
 
       setState(() {
@@ -164,10 +198,8 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
       });
 
       // ✅ Member UX: auto-pick deterministically on any match.
-      if (_memberUx && !_autoPicked && _items.isNotEmpty) {
+      if (_isMemberUx && !_autoPicked && _items.isNotEmpty) {
         _autoPicked = true;
-
-        // Let the dialog paint at least once before closing.
         Future.microtask(() {
           if (!mounted) return;
           Navigator.of(context).pop(_items.first);
@@ -183,7 +215,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
   }
 
   void _clearAndReload() {
-    if (_memberUx) return;
+    if (_isMemberUx) return;
     _debounce?.cancel();
     _ctl.clear();
     _refresh();
@@ -194,10 +226,12 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    // reactive for labels, but actual behavior remains driven by the getters above
-    final isMemberUx =
-        ref.watch(effectiveEntryModeProvider) == EntryMode.member;
+    // ✅ reactive UX based on policy (no EntryMode checks here)
+    final policy = ref.watch(quoteContactPolicyProvider);
+    final isMemberUx = policy == QuoteContactPolicy.memberScoped;
+
     final acct = ref.watch(zohoContactsAccountScopeProvider);
+    final acctReady = (acct ?? '').trim().isNotEmpty;
 
     final q = _ctl.text.trim();
     final hasQuery = q.isNotEmpty;
@@ -212,15 +246,19 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
       body = AppEmptyState(
         icon: Icons.people_alt_outlined,
         title: isMemberUx
-            ? 'No linked Zoho contact'
+            ? (acctReady
+                  ? 'No linked Zoho contact'
+                  : 'Loading customer profile')
             : (hasQuery ? 'No results' : 'Search contacts'),
         subtitle: isMemberUx
-            ? 'Your account (${(acct ?? '-').trim().isEmpty ? '-' : (acct ?? '-')}) has no Zoho contact linked yet.'
+            ? (acctReady
+                  ? 'Your account (${(acct ?? '-').trim()}) has no Zoho contact linked yet.'
+                  : 'Please wait a moment while we load your account scope…')
             : (hasQuery
                   ? 'Try a different search.'
                   : 'Type a name, phone, or email to find a customer.'),
         actionLabel: isMemberUx
-            ? 'Retry'
+            ? (acctReady ? 'Retry' : 'Refresh')
             : (hasQuery ? 'Clear search' : 'Refresh'),
         onAction: () {
           if (isMemberUx) {
@@ -242,13 +280,11 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
             itemBuilder: (context, i) {
               final c = _items[i];
 
-              final subtitle =
-                  <String?>[c.accountNumber, c.contactType, c.bestPhone]
-                      .whereType<String>()
-                      .map((s) => s.trim())
-                      .where((s) => s.isNotEmpty)
-                      .take(2)
-                      .join(' • ');
+              final subtitle = <String?>[
+                (c.accountNumber ?? '').trim().isEmpty ? null : c.accountNumber,
+                (c.contactType ?? '').trim().isEmpty ? null : c.contactType,
+                c.bestPhone.trim().isEmpty ? null : c.bestPhone,
+              ].whereType<String>().take(2).join(' • ');
 
               final title = c.displayName.trim();
 
@@ -259,7 +295,6 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
               );
             },
           ),
-
           if (_loadingMore)
             Positioned(
               left: 0,

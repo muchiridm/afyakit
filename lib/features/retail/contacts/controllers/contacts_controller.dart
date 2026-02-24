@@ -2,7 +2,7 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -117,12 +117,16 @@ class ContactsController extends StateNotifier<ContactsState> {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
       final q = state.search.trim();
 
-      // ✅ MEMBER HARD-SCOPE (if applicable)
-      final accountNumber = _ref.read(zohoContactsAccountScopeProvider);
+      // ✅ Single source of truth:
+      // - Staff mode => provider returns null => unscoped list
+      // - Member mode => provider returns accountNumber => scoped list
+      final accountNumber = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
+          .trim();
+      final scopedAccount = accountNumber.isEmpty ? null : accountNumber;
 
       final items = await svc.list(
         search: q.isEmpty ? null : q,
-        accountNumber: accountNumber,
+        accountNumber: scopedAccount,
       );
 
       if (!_alive) return;

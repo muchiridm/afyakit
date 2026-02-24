@@ -1,7 +1,17 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contact_scope_providers.dart';
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,76 +26,31 @@ final quoteControllerProvider =
       (ref) => QuoteController(ref),
     );
 
-@immutable
-class QuoteState {
-  const QuoteState({
-    this.submitting = false,
-    this.loadingEdit = false,
-    this.downloadingPdf = false,
-    this.sending = false,
-    this.converting = false,
-    this.error,
-    this.lastCreatedQuoteId,
-    this.editingQuoteId,
-    this.loadedEditId,
-  });
-
-  final bool submitting;
-  final bool loadingEdit;
-
-  final bool downloadingPdf;
-  final bool sending;
-  final bool converting;
-
-  final String? error;
-  final String? lastCreatedQuoteId;
-
-  final String? editingQuoteId;
-  final String? loadedEditId;
-
-  bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
-
-  bool get busy =>
-      submitting || loadingEdit || downloadingPdf || sending || converting;
-
-  QuoteState copyWith({
-    bool? submitting,
-    bool? loadingEdit,
-    bool? downloadingPdf,
-    bool? sending,
-    bool? converting,
-    String? error,
-    bool clearError = false,
-    String? lastCreatedQuoteId,
-    bool clearLastCreatedId = false,
-    String? editingQuoteId,
-    bool clearEditingQuoteId = false,
-    String? loadedEditId,
-    bool clearLoadedEditId = false,
-  }) {
-    return QuoteState(
-      submitting: submitting ?? this.submitting,
-      loadingEdit: loadingEdit ?? this.loadingEdit,
-      downloadingPdf: downloadingPdf ?? this.downloadingPdf,
-      sending: sending ?? this.sending,
-      converting: converting ?? this.converting,
-      error: clearError ? null : (error ?? this.error),
-      lastCreatedQuoteId: clearLastCreatedId
-          ? null
-          : (lastCreatedQuoteId ?? this.lastCreatedQuoteId),
-      editingQuoteId: clearEditingQuoteId
-          ? null
-          : (editingQuoteId ?? this.editingQuoteId),
-      loadedEditId: clearLoadedEditId
-          ? null
-          : (loadedEditId ?? this.loadedEditId),
-    );
-  }
-}
-
 class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
+
+    // ✅ If account scope changes while member-scoped, rebind the contact.
+    _ref.listen<String?>(zohoContactsAccountScopeProvider, (prev, next) {
+      final p = (prev ?? '').trim();
+      final n = (next ?? '').trim();
+      if (p == n) return;
+
+      if (_policy != QuoteContactPolicy.memberScoped) return;
+
+      // Fire-and-forget; do not block UI.
+      unawaited(_ensureMemberContactBound(showError: false));
+    });
+
+    // ✅ If policy flips (picker <-> memberScoped), enforce invariants.
+    _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (prev, next) {
+      if (prev == next) return;
+
+      if (next == QuoteContactPolicy.memberScoped) {
+        // Now locked: ensure correct member contact is bound ASAP.
+        unawaited(_ensureMemberContactBound(showError: false));
+      }
+    });
   }
 
   final Ref _ref;
@@ -100,6 +65,8 @@ class QuoteController extends StateNotifier<QuoteState> {
       _ref.read(quoteMetaControllerProvider.notifier);
 
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
+
+  QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
 
   // ───────────────────────── Public API ─────────────────────────
 
@@ -129,9 +96,6 @@ class QuoteController extends StateNotifier<QuoteState> {
   }) async {
     if (_busy) return;
 
-    // ✅ bind member contact ASAP (prevents “Customer → Name” lag where possible)
-    await _ensureMemberContactBound();
-
     final nextId = (editingQuoteId ?? '').trim();
     final prevEditingId = (state.editingQuoteId ?? '').trim();
     final prevLoadedId = (state.loadedEditId ?? '').trim();
@@ -147,7 +111,13 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.beginNew();
       state = const QuoteState();
 
-      // (member contact already attempted above)
+      // ✅ Member-scoped: block UI until contact is bound (prevents stale name).
+      if (_policy == QuoteContactPolicy.memberScoped) {
+        state = state.copyWith(loadingEdit: true, clearError: true);
+        await _ensureMemberContactBound(showError: false);
+        state = state.copyWith(loadingEdit: false);
+      }
+
       await ensureDraftFromLines(requirePrices: requirePrices);
       return;
     }
@@ -160,6 +130,12 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.clearAll();
       _metaCtl.beginEdit(nextId);
       state = const QuoteState().copyWith(editingQuoteId: nextId);
+
+      // Optional rule: if you want edit screens in memberScoped mode
+      // to also force binding, you can enable this:
+      // if (_policy == QuoteContactPolicy.memberScoped) {
+      //   await _ensureMemberContactBound(showError: false);
+      // }
     } else {
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
@@ -172,26 +148,35 @@ class QuoteController extends StateNotifier<QuoteState> {
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
-  bool get _isMemberMode {
-    final acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
-    return acct.isNotEmpty;
-  }
+  // inside QuoteController
+
+  // inside QuoteController (quote_controller.dart)
 
   Future<void> _ensureMemberContactBound({bool showError = false}) async {
-    if (!_isMemberMode) return;
-
-    final meta = _meta;
-    if (meta.contact != null) return;
+    // Use your policy provider
+    final policy = _ref.read(quoteContactPolicyProvider);
+    final isMemberScoped = policy == QuoteContactPolicy.memberScoped;
+    if (!isMemberScoped) return;
 
     final acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+    if (acct.isEmpty) {
+      if (showError) SnackService.showError('Missing account scope.');
+      return;
+    }
+
+    // Already bound correctly => nothing to do.
+    final current = _meta.contact;
+    final currentAcct = (current?.accountNumber ?? '').trim();
+    if (current != null && currentAcct == acct) return;
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
 
+      // Pull enough results to resolve duplicates deterministically
       final items = await svc.list(
         accountNumber: acct,
         type: ZohoContactTypeFilter.customerOnly,
-        perPage: 5,
+        perPage: 50,
         page: 1,
       );
 
@@ -202,19 +187,93 @@ class QuoteController extends StateNotifier<QuoteState> {
         return;
       }
 
-      _metaCtl.setContact(items.first);
-    } catch (_) {
-      if (showError) {
-        SnackService.showError('Failed to resolve customer profile.');
+      // Use current user signals (phone/email/displayName) to choose best match.
+      final u = _ref.read(currentUserValueProvider);
+
+      final userPhone = (u?.phoneNumber ?? '').trim();
+      final userEmail = (u?.email ?? '').trim(); // if your AuthUser has email
+      final userName = (u?.displayName ?? u?.computedDisplayName ?? '').trim();
+
+      int score(ZohoContact c) {
+        int s = 0;
+
+        // Safety: if Zoho payload includes accountNumber and it doesn't match, discard.
+        final cAcct = (c.accountNumber ?? '').trim();
+        if (cAcct.isNotEmpty && cAcct != acct) return -9999;
+
+        // Strong signals
+        final cPhone = c.bestPhone.trim();
+        if (userPhone.isNotEmpty && cPhone.isNotEmpty) {
+          if (_phoneLooseEqual(userPhone, cPhone)) s += 50;
+        }
+
+        final cEmail = c.bestEmail.trim().toLowerCase();
+        if (userEmail.isNotEmpty && cEmail.isNotEmpty) {
+          if (cEmail == userEmail.toLowerCase()) s += 30;
+        }
+
+        // Soft signal: name contains
+        final cName = c.title.trim().toLowerCase();
+        final uName = userName.toLowerCase();
+        if (uName.isNotEmpty && cName.isNotEmpty && cName.contains(uName)) {
+          s += 10;
+        }
+
+        // Prefer active contacts
+        if (c.isActive) s += 2;
+
+        return s;
       }
+
+      ZohoContact best = items.first;
+      int bestScore = score(best);
+
+      for (final c in items.skip(1)) {
+        final sc = score(c);
+        if (sc > bestScore) {
+          best = c;
+          bestScore = sc;
+          continue;
+        }
+
+        // Tie-breaker: stable deterministic ordering by contactId
+        if (sc == bestScore) {
+          final a = best.contactId.trim();
+          final b = c.contactId.trim();
+          if (b.compareTo(a) < 0) best = c;
+        }
+      }
+
+      // HARD LOCK
+      _metaCtl.setContact(best);
+    } catch (_) {
+      if (showError)
+        SnackService.showError('Failed to resolve customer profile.');
     }
+  }
+
+  bool _phoneLooseEqual(String a, String b) {
+    String norm(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+    final aa = norm(a);
+    final bb = norm(b);
+    if (aa.isEmpty || bb.isEmpty) return false;
+
+    // compare last 9 digits (works well for KE numbers across formats)
+    String tail9(String s) => s.length <= 9 ? s : s.substring(s.length - 9);
+    return tail9(aa) == tail9(bb);
   }
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
 
-    // ✅ Hard rule: member must always resolve contact automatically
-    await _ensureMemberContactBound(showError: true);
+    // ✅ Member-scoped hard rule: must resolve contact automatically.
+    if (_policy == QuoteContactPolicy.memberScoped) {
+      await _ensureMemberContactBound(showError: true);
+      if (_meta.contact == null) {
+        SnackService.showError('Could not resolve your customer profile.');
+        return null;
+      }
+    }
 
     final meta = _meta;
 
@@ -260,6 +319,8 @@ class QuoteController extends StateNotifier<QuoteState> {
           expiryDate: meta.expiryDate,
         );
 
+        _invalidateQuoteCaches(id);
+
         state = state.copyWith(submitting: false);
         SnackService.showSuccess('Quote updated');
         return id;
@@ -275,6 +336,12 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       _linesCtl.clear();
       _metaCtl.clearAll();
+
+      if (createdId.isNotEmpty) {
+        _invalidateQuoteCaches(createdId);
+      } else {
+        _invalidateQuotesList();
+      }
 
       state = state.copyWith(
         submitting: false,
@@ -312,6 +379,24 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
   }
 
+  // ───────────────────────── Cache invalidation helpers ─────────────────────────
+
+  void _invalidateQuotesList() {
+    for (final s in RetailDocScope.values) {
+      _ref.invalidate(quotesListControllerProvider(s));
+    }
+  }
+
+  void _invalidateQuoteCaches(String quoteId) {
+    final id = quoteId.trim();
+    if (id.isEmpty) return;
+
+    // _ref.invalidate(zohoQuoteProvider(id)); // if you have it
+    _invalidateQuotesList();
+  }
+
+  // ───────────────────────── Delete ─────────────────────────
+
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
 
@@ -322,6 +407,8 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     try {
       await _engine.delete(id);
+
+      _invalidateQuoteCaches(id);
 
       if ((state.editingQuoteId ?? '').trim() == id) {
         _linesCtl.clear();
@@ -339,6 +426,8 @@ class QuoteController extends StateNotifier<QuoteState> {
       return false;
     }
   }
+
+  // ───────────────────────── PDF / Email / Convert ─────────────────────────
 
   Future<Uint8List?> getPdfBytes(String quoteId) async {
     if (_busy) return null;
@@ -367,6 +456,9 @@ class QuoteController extends StateNotifier<QuoteState> {
     state = state.copyWith(sending: true, clearError: true);
     try {
       await _engine.email(id);
+
+      _invalidateQuoteCaches(id);
+
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Quote sent');
       return true;
@@ -385,6 +477,9 @@ class QuoteController extends StateNotifier<QuoteState> {
     state = state.copyWith(sending: true, clearError: true);
     try {
       await _engine.markSent(id);
+
+      _invalidateQuoteCaches(id);
+
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Marked as sent');
       return true;
@@ -411,6 +506,9 @@ class QuoteController extends StateNotifier<QuoteState> {
         invoiceDate: invoiceDate,
         dueDate: dueDate,
       );
+
+      _invalidateQuoteCaches(id);
+
       state = state.copyWith(converting: false);
       SnackService.showSuccess('Converted to invoice');
       return res;
@@ -420,6 +518,8 @@ class QuoteController extends StateNotifier<QuoteState> {
       return null;
     }
   }
+
+  // ───────────────────────── Draft helpers ─────────────────────────
 
   Future<void> ensureDraftFromLines({required bool requirePrices}) async {
     if (_busy) return;

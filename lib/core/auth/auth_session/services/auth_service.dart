@@ -2,7 +2,7 @@
 
 import 'dart:convert';
 
-import 'package:afyakit/core/auth/auth_session/services/auth_api_exception.dart';
+import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
