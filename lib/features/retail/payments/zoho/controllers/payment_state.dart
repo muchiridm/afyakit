@@ -28,7 +28,6 @@ class PaymentState {
     this.suggestedMpesaPhone,
     this.defaultsSeeded = false,
   }) : payments = payments ?? const <ZohoInvoicePayment>[],
-       // ✅ draft MUST carry invoiceId so backend receives invoice_id (create)
        paymentDraft =
            paymentDraft ??
            ZohoPaymentDraft.today(invoiceId: (invoiceId ?? '').trim());
@@ -82,31 +81,23 @@ class PaymentState {
     bool? savingPayment,
     bool? deletingPayment,
     bool? payingMpesa,
-
     String? editingPaymentId,
     bool clearEditingPaymentId = false,
-
     List<ZohoInvoicePayment>? payments,
     bool clearPayments = false,
-
     InvoiceBalanceSummary? invoiceSummary,
     bool clearInvoiceSummary = false,
-
     ZohoPaymentDraft? paymentDraft,
-
     String? error,
     bool clearError = false,
-
     MpesaPayment? mpesaLastPayment,
     bool clearMpesaLastPayment = false,
 
-    // ✅ new
+    // ✅ defaults / hints
     num? pendingAmount,
     bool clearPendingAmount = false,
-
     String? suggestedMpesaPhone,
     bool clearSuggestedMpesaPhone = false,
-
     bool? defaultsSeeded,
   }) {
     return PaymentState(
@@ -116,35 +107,26 @@ class PaymentState {
       savingPayment: savingPayment ?? this.savingPayment,
       deletingPayment: deletingPayment ?? this.deletingPayment,
       payingMpesa: payingMpesa ?? this.payingMpesa,
-
       editingPaymentId: clearEditingPaymentId
           ? null
           : (editingPaymentId ?? this.editingPaymentId),
-
       payments: clearPayments
           ? const <ZohoInvoicePayment>[]
           : (payments ?? this.payments),
-
       invoiceSummary: clearInvoiceSummary
           ? null
           : (invoiceSummary ?? this.invoiceSummary),
-
       paymentDraft: paymentDraft ?? this.paymentDraft,
-
       error: clearError ? null : (error ?? this.error),
-
       mpesaLastPayment: clearMpesaLastPayment
           ? null
           : (mpesaLastPayment ?? this.mpesaLastPayment),
-
       pendingAmount: clearPendingAmount
           ? null
           : (pendingAmount ?? this.pendingAmount),
-
       suggestedMpesaPhone: clearSuggestedMpesaPhone
           ? null
           : (suggestedMpesaPhone ?? this.suggestedMpesaPhone),
-
       defaultsSeeded: defaultsSeeded ?? this.defaultsSeeded,
     );
   }

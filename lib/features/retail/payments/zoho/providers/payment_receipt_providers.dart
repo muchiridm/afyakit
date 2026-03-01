@@ -77,12 +77,10 @@ final invoiceProvider = FutureProvider.family.autoDispose<ZohoInvoice, String>((
 final invoiceContactProvider = FutureProvider.family
     .autoDispose<ZohoContact?, String>((ref, invoiceId) async {
       final inv = await ref.watch(invoiceProvider(invoiceId).future);
-
       final contactId = (inv.customerId ?? '').trim();
       if (contactId.isEmpty) return null;
 
-      final svc = await ref.read(zohoContactsServiceProvider.future);
-      return svc.getOrNull(contactId);
+      return ref.watch(zohoContactProvider(contactId).future);
     });
 
 typedef ReceiptKey = ({String invoiceId, String paymentId});
@@ -154,6 +152,15 @@ final paymentReceiptVmProvider = FutureProvider.family
         payment: payment,
         otherPayments: List<ZohoInvoicePayment>.unmodifiable(others),
       );
+    });
+
+final zohoContactProvider = FutureProvider.family
+    .autoDispose<ZohoContact?, String>((ref, contactId) async {
+      final id = contactId.trim();
+      if (id.isEmpty) return null;
+
+      final svc = await ref.read(zohoContactsServiceProvider.future);
+      return svc.getOrNull(id);
     });
 
 List<ZohoInvoicePayment> _dedupeAndSortNewestFirst(

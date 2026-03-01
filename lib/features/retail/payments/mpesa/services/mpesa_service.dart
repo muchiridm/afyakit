@@ -92,8 +92,8 @@ class MpesaService {
   }) async {
     final init = await initiateStk(draft);
 
-    // Wait for terminal STK result
-    var p = await pollStatusUntilTerminal(
+    // 1) Wait only for terminal STK (success/failed).
+    final terminal = await pollStatusUntilTerminal(
       paymentId: init.paymentId,
       timeout: timeout,
       firstDelay: firstDelay,
@@ -101,25 +101,45 @@ class MpesaService {
       onTick: onTick,
     );
 
-    // If STK not success -> done
-    if (!p.isSuccess) return p;
+    // Always emit terminal tick
+    onTick?.call(terminal);
 
-    // If STK success, Zoho sync may still be pending.
-    // Wait briefly for zohoSyncStatus to hit success/failed.
-    final deadline = DateTime.now().add(zohoSyncWaitMax);
+    // 2) Return immediately once STK is terminal.
+    //    Zoho sync is secondary and MUST NOT block.
+    if (!terminal.isSuccess) return terminal;
+
+    // 3) Optional: fire-and-forget short Zoho sync watcher for UI niceness.
+    //    This updates UI via onTick but does not block the returned result.
+    // ignore: discarded_futures
+    _watchZohoSyncNonBlocking(
+      paymentId: terminal.id,
+      onTick: onTick,
+      maxWait: zohoSyncWaitMax,
+      interval: zohoSyncPollInterval,
+    );
+
+    return terminal;
+  }
+
+  Future<void> _watchZohoSyncNonBlocking({
+    required String paymentId,
+    required MpesaTick? onTick,
+    required Duration maxWait,
+    required Duration interval,
+  }) async {
+    if (onTick == null) return;
+
+    final deadline = DateTime.now().add(maxWait);
 
     while (DateTime.now().isBefore(deadline)) {
+      final p = await getPaymentStatus(paymentId);
+      onTick(p);
+
       final z = (p.zohoSyncStatus ?? '').trim().toLowerCase();
-      if (z == 'success' || z == 'failed') return p;
+      if (z == 'success' || z == 'failed') return;
 
-      await Future<void>.delayed(zohoSyncPollInterval);
-
-      // re-fetch
-      p = await getPaymentStatus(p.id);
-      onTick?.call(p);
+      await Future<void>.delayed(interval);
     }
-
-    return p;
   }
 }
 

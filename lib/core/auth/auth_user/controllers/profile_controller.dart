@@ -4,10 +4,11 @@ import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -118,6 +119,31 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     });
   }
 
+  // ────────────────────────────────────────────
+  // SOT helpers
+  // ────────────────────────────────────────────
+
+  /// Role assignment policy:
+  /// - superadmin can assign anything
+  /// - otherwise, any of editor's roles must allow assigning the target role
+  bool _canAssignRole(AuthUser editor, StaffRole targetRole) {
+    if (editor.isSuperAdmin) return true;
+    if (editor.staffRoles.isEmpty) return false;
+    return editor.staffRoles.any((r) => r.canAssignRole(targetRole));
+  }
+
+  List<StaffRole> _effectiveTargetRoles(AuthUser target) {
+    return List<StaffRole>.from(state.staffRoleOverrides ?? target.staffRoles);
+  }
+
+  List<String> _effectiveTargetStores(AuthUser target) {
+    return List<String>.from(state.storeOverrides ?? target.stores);
+  }
+
+  // ────────────────────────────────────────────
+  // Init
+  // ────────────────────────────────────────────
+
   Future<void> init() async {
     if (_inited) return;
     _inited = true;
@@ -125,6 +151,10 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     final sessionUser = ref.read(currentUserValueProvider);
     final baseUser = targetUser ?? sessionUser;
 
+    // Admin editing is ONLY when:
+    // - session user exists
+    // - target user exists
+    // - SOT permission says editor can manage target
     final isAdminEditing =
         (sessionUser != null &&
         targetUser != null &&
@@ -139,6 +169,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
       final u = baseUser;
       if (u != null) {
+        // Use displayName field for editing (not computed fallback)
         state.nameController.text = (u.displayName ?? '').trim();
         state.phoneController.text = (u.phoneNumber ?? '').trim();
       }
@@ -159,17 +190,17 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   }
 
   // ────────────────────────────────────────────
-  // Admin-edit setters
+  // Admin-edit setters (SOT gates)
   // ────────────────────────────────────────────
 
   void setStatus(UserStatus status) {
     final target = state.user;
-    final current = ref.read(currentUserValueProvider);
+    final editor = ref.read(currentUserValueProvider);
 
-    if (target == null || current == null) return;
-    if (!current.canChangeStatusFor(target)) return;
+    if (target == null || editor == null) return;
+    if (!editor.canChangeStatusFor(target)) return;
 
-    if (status.isDisabled && !current.canDisableUser(target)) {
+    if (status.isDisabled && !editor.canDisableUser(target)) {
       SnackService.showError("You can't disable this account.");
       return;
     }
@@ -179,29 +210,30 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
   void toggleStaffRole(StaffRole role) {
     final target = state.user;
-    final current = ref.read(currentUserValueProvider);
+    final editor = ref.read(currentUserValueProvider);
 
-    if (target == null || current == null) return;
-    if (!current.canEditUserRolesFor(target)) return;
+    if (target == null || editor == null) return;
+    if (!editor.canEditUserRolesFor(target)) return;
 
-    final currentRoles = List<StaffRole>.from(
-      state.staffRoleOverrides ?? target.staffRoles,
-    );
-
-    final idx = currentRoles.indexWhere((r) => r == role);
+    final roles = _effectiveTargetRoles(target);
+    final idx = roles.indexOf(role);
     final removing = idx >= 0;
 
     if (removing) {
-      if (current.uid == target.uid && role.isOwner) {
+      // Safety (future-proof): prevent removing owner role from self if you ever allow self edits
+      if (editor.uid == target.uid && role == StaffRole.owner) {
         SnackService.showError(
           "You can't remove the Owner role from yourself.",
         );
         return;
       }
 
-      if (current.uid == target.uid && role.isAdmin) {
-        final remaining = currentRoles.where((r) => r != role).toList();
-        final stillGovernance = remaining.any((r) => r.isOwner || r.isAdmin);
+      // Safety (future-proof): don't allow removing last governance role from self
+      if (editor.uid == target.uid && role == StaffRole.admin) {
+        final remaining = roles.where((r) => r != role).toList();
+        final stillGovernance = remaining.any(
+          (r) => r == StaffRole.owner || r == StaffRole.admin,
+        );
         if (!stillGovernance) {
           SnackService.showError(
             "You can't remove your last owner/admin role.",
@@ -210,42 +242,34 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         }
       }
 
-      currentRoles.removeAt(idx);
+      roles.removeAt(idx);
     } else {
-      final canAssign =
-          current.isSuperAdmin ||
-          current.isOwner ||
-          current.staffRoles.any((r) => r.canAssignRole(role));
-
-      if (!canAssign) {
+      if (!_canAssignRole(editor, role)) {
         SnackService.showError("You can't assign the ${role.label} role.");
         return;
       }
-
-      currentRoles.add(role);
+      roles.add(role);
     }
 
-    state = state.copyWith(staffRoleOverrides: currentRoles);
+    state = state.copyWith(staffRoleOverrides: roles);
   }
 
   void toggleStore(String storeId) {
     final target = state.user;
-    final current = ref.read(currentUserValueProvider);
+    final editor = ref.read(currentUserValueProvider);
 
-    if (target == null || current == null) return;
-    if (!current.canEditUserStoresFor(target)) return;
+    if (target == null || editor == null) return;
+    if (!editor.canEditUserStoresFor(target)) return;
 
-    final currentStores = List<String>.from(
-      state.storeOverrides ?? target.stores,
-    );
+    final stores = _effectiveTargetStores(target);
 
-    if (currentStores.contains(storeId)) {
-      currentStores.remove(storeId);
+    if (stores.contains(storeId)) {
+      stores.remove(storeId);
     } else {
-      currentStores.add(storeId);
+      stores.add(storeId);
     }
 
-    state = state.copyWith(storeOverrides: currentStores);
+    state = state.copyWith(storeOverrides: stores);
   }
 
   // ────────────────────────────────────────────
@@ -253,10 +277,10 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   // ────────────────────────────────────────────
 
   Future<void> save(BuildContext context) async {
-    final user = state.user;
-    if (user == null || !mounted) return;
+    final target = state.user;
+    if (target == null || !mounted) return;
 
-    final sessionUser = ref.read(currentUserValueProvider);
+    final editor = ref.read(currentUserValueProvider);
     final name = state.nameController.text.trim();
 
     if (name.isEmpty) {
@@ -266,61 +290,62 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
     final fields = <String, dynamic>{};
 
-    // All users can edit their display name
-    if (name != (user.displayName ?? '').trim()) {
+    // Everyone can edit their display name (self profile path)
+    if (name != (target.displayName ?? '').trim()) {
       fields['displayName'] = name;
     }
 
-    if (state.isAdminEditing && sessionUser != null) {
+    // Admin path: status/roles/stores (all SOT-gated)
+    if (state.isAdminEditing && editor != null) {
       // STATUS
-      if (sessionUser.canChangeStatusFor(user)) {
-        final newStatus = state.statusOverride ?? user.status;
-        if (newStatus != user.status) {
-          if (newStatus.isDisabled && !sessionUser.canDisableUser(user)) {
+      if (editor.canChangeStatusFor(target)) {
+        final nextStatus = state.statusOverride ?? target.status;
+        if (nextStatus != target.status) {
+          if (nextStatus.isDisabled && !editor.canDisableUser(target)) {
             SnackService.showError("You can't disable this account.");
           } else {
-            fields['status'] = newStatus.wire;
+            fields['status'] = nextStatus.wire;
           }
         }
       }
 
       // STAFF ROLES
-      if (sessionUser.canEditUserRolesFor(user)) {
-        final newRoles = state.staffRoleOverrides ?? user.staffRoles;
+      if (editor.canEditUserRolesFor(target)) {
+        final desiredRoles = _effectiveTargetRoles(target);
 
-        final filteredRoles = newRoles
-            .where((role) {
-              final canAssign =
-                  sessionUser.isSuperAdmin ||
-                  sessionUser.isOwner ||
-                  sessionUser.staffRoles.any((r) => r.canAssignRole(role));
-              return canAssign;
-            })
+        // Enforce assignment policy: editor may only assign roles they are allowed to assign.
+        final filteredRoles = desiredRoles
+            .where((r) => _canAssignRole(editor, r))
             .toList(growable: false);
 
-        if (sessionUser.uid == user.uid) {
+        // Safety (future-proof): if ever editing self in future, ensure governance not lost
+        if (editor.uid == target.uid) {
           final hasGovernance = filteredRoles.any(
-            (r) => r.isOwner || r.isAdmin,
+            (r) => r == StaffRole.owner || r == StaffRole.admin,
           );
           if (!hasGovernance) {
             SnackService.showError(
               "You can't remove your last owner/admin role.",
             );
-          } else if (!listEquals(filteredRoles, user.staffRoles)) {
-            fields['staffRoles'] = filteredRoles.map((r) => r.wire).toList();
+          } else if (!listEquals(filteredRoles, target.staffRoles)) {
+            fields['staffRoles'] = filteredRoles
+                .map((r) => r.wire)
+                .toList(growable: false);
           }
         } else {
-          if (!listEquals(filteredRoles, user.staffRoles)) {
-            fields['staffRoles'] = filteredRoles.map((r) => r.wire).toList();
+          if (!listEquals(filteredRoles, target.staffRoles)) {
+            fields['staffRoles'] = filteredRoles
+                .map((r) => r.wire)
+                .toList(growable: false);
           }
         }
       }
 
       // STORES
-      if (sessionUser.canEditUserStoresFor(user)) {
-        final newStores = state.storeOverrides ?? user.stores;
-        if (!listEquals(newStores, user.stores)) {
-          fields['stores'] = newStores;
+      if (editor.canEditUserStoresFor(target)) {
+        final desiredStores = _effectiveTargetStores(target);
+        if (!listEquals(desiredStores, target.stores)) {
+          fields['stores'] = desiredStores;
         }
       }
     }
@@ -333,21 +358,22 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     state = state.copyWith(loading: true);
 
     try {
-      final tenantId = (sessionUser ?? user).tenantId;
-
+      final tenantId = (editor ?? target).tenantId;
       final svc = await ref.read(userProfileServiceProvider(tenantId).future);
-      await svc.updateUserFields(user.uid, fields);
+      await svc.updateUserFields(target.uid, fields);
 
       SnackService.showSuccess('Profile updated');
 
       _afterFrame(() {
         if (!mounted) return;
 
+        // Admin editing a target → close back to list/detail
         if (state.isAdminEditing) {
           if (Navigator.of(context).canPop()) Navigator.of(context).pop();
           return;
         }
 
+        // Self-edit → refresh session user and restart shell
         ref.invalidate(currentUserProvider);
         ref.invalidate(currentUserValueProvider);
 

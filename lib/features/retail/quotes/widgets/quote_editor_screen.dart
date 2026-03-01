@@ -9,7 +9,7 @@ import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 
-import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
@@ -100,15 +100,12 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   Future<void> _bootstrap() async {
     if (!mounted) return;
 
-    // Ensure meta is in the right mode (new vs edit)
     final metaCtl = ref.read(quoteMetaControllerProvider.notifier);
     final id = (widget.editingQuoteId ?? '').trim();
-
     if (id.isNotEmpty) {
       metaCtl.beginEdit(id);
     }
 
-    // Let quote controller do its load work (it will auto-bind member contact if scoped)
     final ctl = ref.read(quoteControllerProvider.notifier);
     await ctl.ensureReady(
       editingQuoteId: widget.editingQuoteId,
@@ -183,7 +180,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final linesState = ref.watch(quoteLinesControllerProvider);
 
-    // ✅ single source of truth
     final policy = ref.watch(quoteContactPolicyProvider);
     final isMemberScoped = policy == QuoteContactPolicy.memberScoped;
 
@@ -319,6 +315,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final bindings = _lineBindings(linesState);
     final busy = s.busy;
 
+    // 🔒 Member-scoped rule: qty-only.
+    final canEditLineDetails = !isMemberScoped; // name/desc only
+    final canEditLineRate =
+        !isMemberScoped && widget.requirePrices; // staff only
+
     QuoteLinesController linesCtl() =>
         ref.read(quoteLinesControllerProvider.notifier);
 
@@ -353,36 +354,61 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
           ? line.effectiveRate
           : (line is ManualQuoteLine ? line.rate : 0);
 
+      // ✅ Staff: name/desc/qty (+ rate if requirePrices)
+      // ✅ Member: qty ONLY (everything else locked)
       final res = await SalesDocDialogs.editLine(
         context,
         initialName: initialName,
         initialDescription: initialDesc,
         initialQty: initialQty,
         initialRate: initialRate,
-        enableRate: widget.requirePrices,
+        enableRate: canEditLineRate,
+
+        // 🔒 Member qty-only; staff full.
+        enableName: canEditLineDetails,
+        enableDescription: canEditLineDetails,
+        enableQty: true,
       );
       if (res == null) return;
 
       final lc = linesCtl();
 
       if (b.kind == _LineKind.catalog && line is CatalogQuoteLine) {
+        if (isMemberScoped) {
+          // ✅ Member: qty only
+          lc.updateCatalogLine(
+            line.tile,
+            lineKey: b.key, // ✅ critical to avoid duplicates
+            qty: res.qty,
+          );
+          return;
+        }
+
+        // ✅ Staff: full update
         lc.updateCatalogLine(
           line.tile,
+          lineKey: b.key,
           qty: res.qty,
-          name: res.name,
+          name: safeName(res.name),
           description: res.description,
-          rate: widget.requirePrices ? safeRate(res.rate) : 0,
+          rate: canEditLineRate ? safeRate(res.rate) : line.effectiveRate,
         );
         return;
       }
 
       if (b.kind == _LineKind.manual && line is ManualQuoteLine) {
+        if (isMemberScoped) {
+          // Defensive: members shouldn't have manual lines, but keep safe.
+          lc.updateManualLine(b.manualId!, qty: res.qty);
+          return;
+        }
+
         lc.updateManualLine(
           b.manualId!,
           name: safeName(res.name),
           description: res.description,
           qty: res.qty,
-          rate: widget.requirePrices ? safeRate(res.rate) : 0,
+          rate: canEditLineRate ? safeRate(res.rate) : line.rate,
         );
       }
     }
@@ -416,15 +442,15 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         Expanded(
           child: linesState.lines.isEmpty
               ? const Center(
-                  child: Text(
-                    'No items yet. Add from Catalog or Custom below.',
-                  ),
+                  child: Text('No items yet. Add from Catalog below.'),
                 )
               : SalesDocLinesList(
                   currencyCode: vmMeta.currencyCode,
                   lines: vmLines,
                   mode: SalesDocMode.edit,
-                  onEditName: busy
+
+                  // 🔒 Member: no name edits
+                  onEditName: (!canEditLineDetails || busy)
                       ? null
                       : (int index, String nextName) async {
                           final lc = linesCtl();
@@ -439,14 +465,20 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                           }
 
                           if (isCatalogAt(index)) {
+                            final b = bindings[index];
                             final line =
                                 linesState.lines[index] as CatalogQuoteLine;
+
                             lc.updateCatalogLine(
                               line.tile,
+                              lineKey: b.key,
                               name: safeName(nextName),
                             );
                           }
                         },
+
+                  // ✅ Everyone: qty changes allowed.
+                  // 🔒 Member: ignore nextRate completely.
                   onEditQtyRate: busy
                       ? null
                       : (int index, int nextQty, num nextRate) async {
@@ -454,32 +486,70 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                           final qty = nextQty;
 
                           if (isCatalogAt(index)) {
+                            final b = bindings[index];
                             final line =
                                 linesState.lines[index] as CatalogQuoteLine;
-                            lc.updateCatalogLine(
-                              line.tile,
-                              qty: qty,
-                              rate: widget.requirePrices
-                                  ? safeRate(nextRate)
-                                  : 0,
-                            );
+
+                            if (isMemberScoped) {
+                              lc.updateCatalogLine(
+                                line.tile,
+                                lineKey: b.key,
+                                qty: qty,
+                              );
+                              return;
+                            }
+
+                            if (canEditLineRate) {
+                              lc.updateCatalogLine(
+                                line.tile,
+                                lineKey: b.key,
+                                qty: qty,
+                                rate: safeRate(nextRate),
+                              );
+                            } else {
+                              lc.updateCatalogLine(
+                                line.tile,
+                                lineKey: b.key,
+                                qty: qty,
+                              );
+                            }
                             return;
                           }
 
                           if (isManualAt(index)) {
                             final b = bindings[index];
-                            lc.updateManualLine(
-                              b.manualId!,
-                              qty: qty,
-                              rate: widget.requirePrices
-                                  ? safeRate(nextRate)
-                                  : 0,
-                            );
+                            final line =
+                                linesState.lines[index] as ManualQuoteLine;
+
+                            if (isMemberScoped) {
+                              lc.updateManualLine(b.manualId!, qty: qty);
+                              return;
+                            }
+
+                            if (canEditLineRate) {
+                              lc.updateManualLine(
+                                b.manualId!,
+                                qty: qty,
+                                rate: safeRate(nextRate),
+                              );
+                            } else {
+                              lc.updateManualLine(
+                                b.manualId!,
+                                qty: qty,
+                                rate: line.rate,
+                              );
+                            }
                           }
                         },
+
+                  // ✅ Everyone: edit button opens dialog
+                  // - member: qty-only dialog
+                  // - staff: full dialog
                   onEditLine: busy
                       ? null
                       : (int index) async => editLineDialog(index),
+
+                  // ✅ Everyone: allow remove line
                   onRemoveLine: busy
                       ? null
                       : (int index) async {
@@ -498,7 +568,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
         const Divider(height: 1),
 
-        _buildAddBar(context, s),
+        _buildAddBar(context, s, isMemberScoped: isMemberScoped),
 
         if (widget.requirePrices)
           SalesDocTotalBar(
@@ -581,8 +651,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             visualDensity: VisualDensity.compact,
             forceLabel: _isEdit ? 'editing' : 'draft',
           ),
-
-          // ✅ Member scoped: NO contact UI at all (controller binds automatically).
           if (!isMemberScoped) ...[
             const SizedBox(width: 8),
             OutlinedButton.icon(
@@ -592,7 +660,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               onPressed: busy ? null : pickContact,
             ),
           ],
-
           if (_isEdit) ...[
             const SizedBox(width: 8),
             IconButton(
@@ -776,8 +843,35 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
   }
 
-  Widget _buildAddBar(BuildContext context, QuoteState s) {
+  Widget _buildAddBar(
+    BuildContext context,
+    QuoteState s, {
+    required bool isMemberScoped,
+  }) {
     final busy = s.busy;
+
+    if (isMemberScoped) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: FilledButton.icon(
+          icon: const Icon(Icons.search),
+          label: const Text('Add from Catalog'),
+          onPressed: busy
+              ? null
+              : () async {
+                  final ok = await _ensureAuthed(context);
+                  if (!ok) return;
+
+                  if (!context.mounted) return;
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const CatalogScreen(),
+                    ),
+                  );
+                },
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),

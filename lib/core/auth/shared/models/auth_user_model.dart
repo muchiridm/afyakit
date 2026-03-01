@@ -1,3 +1,5 @@
+// lib/core/auth/shared/models/auth_user_model.dart
+
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';

@@ -1,4 +1,11 @@
 // lib/core/auth_users/extensions/auth_user_x.dart
+//
+// ✅ SINGLE SOURCE OF TRUTH:
+//   - staff_role_x.dart defines StaffCapability and role->capability mapping.
+//   - AuthUserX asks: "does user have capability X? and (if scoped) can access store?"
+//
+// ✅ No back-compat role predicates.
+// ✅ primaryStaffRole exists ONLY for UI tier / mode switching (not permissions).
 
 import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,194 +20,192 @@ import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 
 extension AuthUserX on AuthUser {
   // ────────────────────────────────────────────
-  // Claims / roles
+  // Status / identity
   // ────────────────────────────────────────────
-
-  /// Merge token claims into your AuthUser model.
-  /// MODEL WINS. Do NOT let stale claims override your migrated data.
-  AuthUser withMergedClaims(Map<String, dynamic> tokenClaims) =>
-      copyWith(claims: {...(claims ?? const {}), ...tokenClaims});
 
   bool get isActive => status.isActive;
   bool get isPending => !isActive;
 
   /// Everyone is a "member" by default now.
-  /// Staff is derived purely from staffRoles and/or superadmin.
   bool get isMember => true;
 
-  /// High-level staff flag:
-  /// - presence of staff roles
-  /// - OR superadmin
-  bool get isStaff => staffRoles.isNotEmpty || isSuperAdmin;
+  /// UI-only tiering:
+  /// - null => member-only
+  /// - superadmin => owner tier
+  /// - otherwise highest precedence assigned role
+  StaffRole? get primaryStaffRole {
+    if (isSuperAdmin) return StaffRole.owner;
+    return staffRoles.primaryRole;
+  }
 
-  // Derived convenience flags using StaffRoleX
-  bool get isOwner => isSuperAdmin || staffRoles.any((r) => r.isOwner);
-  bool get isAdmin => isSuperAdmin || staffRoles.any((r) => r.isAdmin);
-  bool get isManager => staffRoles.any((r) => r.isManager);
-
-  bool get isRunner => staffRoles.contains(StaffRole.runner);
-  bool get isDispatcher => staffRoles.contains(StaffRole.dispatcher);
-  bool get isDoctor => staffRoles.contains(StaffRole.prescriber);
-  bool get isPharmacist => staffRoles.contains(StaffRole.pharmacist);
-
-  bool get isManagerOrAdmin => isSuperAdmin || isAdmin || isManager;
-
-  /// Governance (owner or admin)
-  bool get isGovernance => isOwner || isAdmin;
+  bool get isStaff => primaryStaffRole != null;
+  bool get isMemberResolved => !isStaff;
+  bool get isStaffResolved => isStaff;
 
   /// Main “second dashboard” toggle.
   bool get hasStaffWorkspace => isStaff;
 
-  // Internal helper
-  bool _anyRole(bool Function(StaffRole) predicate) =>
-      staffRoles.any(predicate);
-
   // ────────────────────────────────────────────
-  // Store access helpers
+  // Capabilities (THE ONLY PERMISSION TRUTH)
   // ────────────────────────────────────────────
 
+  /// Effective capabilities for this user.
+  /// - inactive => none
+  /// - superadmin => owner capability set
+  /// - otherwise union of assigned role capabilities
+  Set<StaffCapability> get effectiveCapabilities {
+    if (!isActive) return const <StaffCapability>{};
+    if (isSuperAdmin) return StaffRole.owner.capabilities;
+    if (staffRoles.isEmpty) return const <StaffCapability>{};
+    return staffRoles.allCapabilities;
+  }
+
+  bool hasCap(StaffCapability cap) => effectiveCapabilities.contains(cap);
+
+  bool hasAnyCap(Iterable<StaffCapability> caps) {
+    for (final c in caps) {
+      if (hasCap(c)) return true;
+    }
+    return false;
+  }
+
+  bool hasAllCaps(Iterable<StaffCapability> caps) {
+    for (final c in caps) {
+      if (!hasCap(c)) return false;
+    }
+    return true;
+  }
+
+  // ────────────────────────────────────────────
+  // Store access
+  // ────────────────────────────────────────────
+
+  /// Store access is NOT a capability by itself; it's a membership list,
+  /// with an override capability for "all stores".
   bool canAccessStore(String storeId) {
-    if (isSuperAdmin || _anyRole((r) => r.canManageAllStores)) return true;
+    if (!isActive) return false;
+
+    // Global store access
+    if (hasCap(StaffCapability.manageAllStores)) return true;
+
     final target = storeId.normalize();
     return stores.any((s) => s.normalize() == target);
   }
 
-  bool hasScopedPermission(
-    bool Function(StaffRole) predicate,
-    String storeId,
-  ) =>
-      isActive &&
-      (isSuperAdmin || _anyRole(predicate)) &&
-      canAccessStore(storeId);
-
-  bool canManageStoreById(String storeId) =>
-      hasScopedPermission((r) => r.canManageSku, storeId);
+  /// Capability that is scoped by store access.
+  bool hasScopedCap(StaffCapability cap, String storeId) {
+    if (!isActive) return false;
+    if (!hasCap(cap)) return false;
+    return canAccessStore(storeId);
+  }
 
   // ────────────────────────────────────────────
-  // Inventory permissions
+  // Inventory permissions (scoped)
   // ────────────────────────────────────────────
 
   bool canViewItem(BaseInventoryItem item) => true;
 
   bool canManageItem(BaseInventoryItem item) =>
-      hasScopedPermission((r) => r.canManageSku, item.storeId);
+      hasScopedCap(StaffCapability.manageSku, item.storeId);
 
   bool canEditItem(BaseInventoryItem item) => canManageItem(item);
   bool canDeleteItem(BaseInventoryItem item) => canManageItem(item);
 
   // ────────────────────────────────────────────
-  // Batch permissions
+  // Batch permissions (scoped)
   // ────────────────────────────────────────────
 
   bool canViewBatch(BatchRecord batch) => true;
 
   bool canManageBatch(BatchRecord batch) =>
-      hasScopedPermission((r) => r.canReceiveBatches, batch.storeId);
+      hasScopedCap(StaffCapability.receiveBatches, batch.storeId);
 
   bool canEditBatch(BatchRecord batch) => canManageBatch(batch);
   bool canDeleteBatch(BatchRecord batch) => canManageBatch(batch);
 
   bool get canAccessInventory =>
-      isSuperAdmin ||
-      _anyRole((r) => r.canManageBatches || r.canReceiveBatches) ||
-      isPharmacist;
+      isActive &&
+      hasAnyCap(const [
+        StaffCapability.manageBatches,
+        StaffCapability.receiveBatches,
+      ]);
 
   // ────────────────────────────────────────────
-  // Issue workflow permissions
+  // Issue workflow permissions (scoped)
   // ────────────────────────────────────────────
 
   bool canApproveIssueFrom(String fromStoreId) =>
-      hasScopedPermission((r) => r.canApproveIssues, fromStoreId);
+      hasScopedCap(StaffCapability.approveIssues, fromStoreId);
 
   bool canIssueStockFrom(String storeId) => isActive && canAccessStore(storeId);
 
   bool get canCreateIssueRequest => true;
 
   bool canDisposeFrom(String storeId) =>
-      hasScopedPermission((r) => r.canDisposeStock, storeId);
+      hasScopedCap(StaffCapability.disposeStock, storeId);
 
   // ────────────────────────────────────────────
-  // User management / admin panel
+  // Admin / user management
   // ────────────────────────────────────────────
-
-  bool get canManageUsers =>
-      isActive && (isSuperAdmin || _anyRole((r) => r.canManageUsers));
-
-  bool get canEditUserAccounts => canManageUsers;
-
-  bool get canViewUsers => isActive && (isSuperAdmin || isAdmin || isManager);
 
   bool get canAccessAdminPanel =>
-      isSuperAdmin || _anyRole((r) => r.canAccessAdminPanel);
+      isActive && hasCap(StaffCapability.accessAdminPanel);
 
+  bool get canManageUsers => isActive && hasCap(StaffCapability.manageUsers);
+
+  bool get canEditUserAccounts => canManageUsers;
+  bool get canViewUsers => canAccessAdminPanel;
+
+  /// Single-rule management:
+  /// - must have manageUsers
+  /// - cannot manage self
+  ///
+  /// If you later want tier constraints (e.g., admin can’t edit owner),
+  /// implement that here using primaryStaffRole.level comparisons (UI tier),
+  /// but keep capabilities as the primary gate.
   bool canManageUser(AuthUser target) {
-    if (!isActive) return false;
-
-    if (isSuperAdmin) return true;
-
-    if (isOwner) return true;
-
-    if (isAdmin) {
-      if (target.isOwner) return false;
-      return true;
-    }
-
-    return false;
-  }
-
-  bool canChangeStatusFor(AuthUser target) => canManageUser(target);
-
-  bool canDisableUser(AuthUser target) {
-    if (!canManageUser(target)) return false;
+    if (!canManageUsers) return false;
     if (uid == target.uid) return false;
-
-    if (target.isOwner && !(isSuperAdmin || isOwner)) {
-      return false;
-    }
-
     return true;
   }
 
-  bool canEditUserRolesFor(AuthUser target) {
-    if (!canManageUser(target)) return false;
+  bool canChangeStatusFor(AuthUser target) => canManageUser(target);
+  bool canDisableUser(AuthUser target) => canManageUser(target);
+  bool canEditUserRolesFor(AuthUser target) => canManageUser(target);
+  bool canEditUserStoresFor(AuthUser target) => canManageUser(target);
 
-    if (isSuperAdmin || isOwner) return true;
+  // ────────────────────────────────────────────
+  // Professional tools
+  // ────────────────────────────────────────────
 
-    if (isAdmin) {
-      if (target.isOwner) return false;
-      return true;
-    }
-
-    return false;
-  }
-
-  bool canEditUserStoresFor(AuthUser target) {
-    if (!canManageUser(target)) return false;
-
-    if (isSuperAdmin || isOwner) return true;
-
-    if (isAdmin) {
-      if (target.isOwner) return false;
-      return true;
-    }
-
-    return false;
-  }
-
-  /// Clinical/operational tools access
-  bool get canUseProfessionalTools =>
-      isDoctor || isPharmacist || isStaff || isSuperAdmin;
+  bool get canUseProfessionalTools => isActive && isStaff;
 
   // ────────────────────────────────────────────
   // Retail / Zoho permissions
   // ────────────────────────────────────────────
 
-  /// Only managers/admins/owners (or superadmin) can edit/delete invoices.
-  bool get canManageInvoices =>
-      isActive && (isSuperAdmin || isOwner || isAdmin || isManager);
+  bool get canManageSalesDocs =>
+      isActive && hasCap(StaffCapability.manageSalesDocs);
+
+  /// ✅ Explicit doc-type helpers for clean UI gates.
+  /// Today: both map to manageSalesDocs; later you can split capabilities.
+  bool get canManageInvoices => canManageSalesDocs;
+  bool get canManageQuotes => canManageSalesDocs;
 
   bool get canEditInvoice => canManageInvoices;
   bool get canDeleteInvoice => canManageInvoices;
+
+  bool get canEditQuote => canManageQuotes;
+  bool get canDeleteQuote => canManageQuotes;
+
+  // ────────────────────────────────────────────
+  // Claims merge (kept; not a permission source)
+  // ────────────────────────────────────────────
+
+  /// Merge token claims into your AuthUser model.
+  /// MODEL WINS. Do NOT let stale claims override your migrated data.
+  AuthUser withMergedClaims(Map<String, dynamic> tokenClaims) =>
+      copyWith(claims: {...(claims ?? const {}), ...tokenClaims});
 
   // ────────────────────────────────────────────
   // Remote update helper

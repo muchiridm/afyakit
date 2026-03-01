@@ -31,10 +31,15 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
   late final TextEditingController _modeCtl;
   late final TextEditingController _descCtl;
 
+  // ✅ NEW: phone input lives in the sheet (no dialog)
+  late final TextEditingController _phoneCtl;
+
   ProviderSubscription<PaymentState>? _sub;
 
   String? _lastEditingPaymentId;
+
   bool _amountDirty = false;
+  bool _phoneDirty = false;
 
   @override
   void initState() {
@@ -44,25 +49,34 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _seedFromState(s);
     _lastEditingPaymentId = s.editingPaymentId;
 
-    // ✅ Riverpod-safe listener for initState:
+    // ✅ Riverpod-safe listener for initState
     _sub = ref.listenManual<PaymentState>(
       paymentControllerProvider(widget.invoiceId),
       (prev, next) {
         if (!mounted) return;
 
+        // ---- Amount auto-fill (pending) ----
         final prevAmt = prev?.paymentDraft.amount ?? 0;
         final nextAmt = next.paymentDraft.amount;
-
         final becameNonZero = (prevAmt <= 0) && (nextAmt > 0);
 
-        // only auto-fill if user hasn't typed and we’re not editing
         if (!next.isEditing && !_amountDirty && becameNonZero) {
           _amountCtl.text = _fmtAmount(nextAmt);
+        }
+
+        // ---- Phone auto-fill (suggested) ----
+        final prevPhone = (prev?.suggestedMpesaPhone ?? '').trim();
+        final nextPhone = (next.suggestedMpesaPhone ?? '').trim();
+
+        final becameAvailable = prevPhone.isEmpty && nextPhone.isNotEmpty;
+
+        if (!_phoneDirty && becameAvailable) {
+          _phoneCtl.text = nextPhone;
         }
       },
     );
 
-    // ✅ kick seeding
+    // ✅ Kick seeding (pending amount + suggested phone)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
@@ -78,6 +92,7 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _dateCtl.dispose();
     _modeCtl.dispose();
     _descCtl.dispose();
+    _phoneCtl.dispose();
     super.dispose();
   }
 
@@ -88,14 +103,22 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     _descCtl = TextEditingController(
       text: (s.paymentDraft.description ?? '').trim(),
     );
+
+    // ✅ seed phone from state (if already known)
+    _phoneCtl = TextEditingController(
+      text: (s.suggestedMpesaPhone ?? '').trim(),
+    );
   }
 
   void _resetControllersFromDraft(PaymentState s) {
     _amountDirty = false;
+    _phoneDirty = false;
+
     _amountCtl.text = _fmtAmount(s.paymentDraft.amount);
     _dateCtl.text = ymd.format(s.paymentDraft.date);
     _modeCtl.text = (s.paymentDraft.mode ?? '').trim();
     _descCtl.text = (s.paymentDraft.description ?? '').trim();
+    _phoneCtl.text = (s.suggestedMpesaPhone ?? '').trim();
   }
 
   static String _fmtAmount(num v) {
@@ -110,45 +133,9 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     return num.tryParse(t);
   }
 
-  Future<String?> _promptPhone(
-    BuildContext context, {
-    String? initialPhone,
-  }) async {
-    final ctl = TextEditingController(text: (initialPhone ?? '').trim());
-    String? out;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('M-Pesa phone number'),
-          content: TextField(
-            controller: ctl,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              hintText: '07XXXXXXXX or 2547XXXXXXXX',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final v = ctl.text.trim();
-                out = v.isEmpty ? null : v;
-                Navigator.pop(ctx);
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
-
-    ctl.dispose();
-    return out;
+  static String _normalizePhone(String raw) {
+    // keep it minimal: trim only. backend/service can normalize further.
+    return raw.trim();
   }
 
   @override
@@ -167,6 +154,9 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
     final hasPending = pending > 0;
 
     const showMpesa = true;
+
+    final phone = _normalizePhone(_phoneCtl.text);
+    final hasPhone = phone.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -259,6 +249,26 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
           ),
           const SizedBox(height: 12),
 
+          // ✅ NEW: M-Pesa phone field inside the sheet (no dialog)
+          if (showMpesa) ...[
+            TextField(
+              controller: _phoneCtl,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: 'M-Pesa phone',
+                border: const OutlineInputBorder(),
+                hintText: '07XXXXXXXX or 2547XXXXXXXX',
+                helperText: (s.suggestedMpesaPhone ?? '').trim().isNotEmpty
+                    ? 'Suggested phone loaded'
+                    : 'Enter the phone number to receive the STK prompt',
+              ),
+              onChanged: (_) {
+                _phoneDirty = true;
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+
           if (s.mpesaLastPayment != null) ...[
             Align(
               alignment: Alignment.centerLeft,
@@ -296,15 +306,9 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
                           )
                         : const Icon(Icons.phone_android),
                     label: Text(s.busy ? 'Processing…' : 'Pay via M-Pesa'),
-                    onPressed: s.busy
+                    onPressed: (s.busy || !hasPhone)
                         ? null
                         : () async {
-                            final phone = await _promptPhone(
-                              context,
-                              initialPhone: s.suggestedMpesaPhone,
-                            );
-                            if (phone == null) return;
-
                             final ok = await ctl.payViaMpesaStk(phone: phone);
                             if (!ok) return;
                             if (!context.mounted) return;

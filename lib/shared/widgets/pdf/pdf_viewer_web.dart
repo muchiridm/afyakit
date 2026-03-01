@@ -1,3 +1,5 @@
+// lib/shared/widgets/pdf/pdf_viewer_web.dart
+
 import 'dart:typed_data';
 import 'dart:html' as html;
 
