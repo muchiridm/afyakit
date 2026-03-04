@@ -303,6 +303,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     );
   }
 
+  bool _seedScheduled = false;
+
   void _maybeSeedPaymentContext({
     required String invoiceId,
     required num? pendingAmount,
@@ -319,9 +321,23 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     _lastSeededPending = pending;
     _lastSeededPhone = phone;
 
-    ref
-        .read(paymentControllerProvider(invoiceId).notifier)
-        .seedFromInvoiceContext(pendingAmount: pending, suggestedPhone: phone);
+    // ✅ Never write providers during build.
+    // Schedule a single post-frame write. If build runs again before frame ends,
+    // we still only seed once.
+    if (_seedScheduled) return;
+    _seedScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _seedScheduled = false;
+      if (!mounted) return;
+
+      ref
+          .read(paymentControllerProvider(invoiceId).notifier)
+          .seedFromInvoiceContext(
+            pendingAmount: pending,
+            suggestedPhone: phone,
+          );
+    });
   }
 
   static num? _normPending(num? v) {
