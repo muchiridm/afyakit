@@ -76,6 +76,10 @@ class _CatalogCard extends StatelessWidget {
   bool get _hasDesc =>
       tile.tileDesc != null && tile.tileDesc!.trim().isNotEmpty;
 
+  bool get _hasMfg =>
+      tile.supplierManufacturer != null &&
+      tile.supplierManufacturer!.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -105,7 +109,7 @@ class _CatalogCard extends StatelessWidget {
                 child: const Icon(Icons.medication, size: 20),
               ),
               const SizedBox(width: 10),
-              // middle: title + (desc) + chips
+              // middle: title + (mfg) + (desc) + chips
               Expanded(
                 child: Column(
                   // fill available height and compress children as needed
@@ -122,6 +126,36 @@ class _CatalogCard extends StatelessWidget {
                         fontSize: 14,
                       ),
                     ),
+
+                    // ✅ manufacturer (1 line)
+                    if (_hasMfg) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.factory_outlined,
+                            size: 13,
+                            color: theme.colorScheme.onSurface.withOpacity(
+                              0.65,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              tile.supplierManufacturer!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                height: 1.1,
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodySmall?.color
+                                    ?.withOpacity(0.75),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
 
                     // description (1 line)
                     if (_hasDesc) ...[
@@ -208,6 +242,13 @@ class _SingleLineChips extends StatelessWidget {
         _PillChip(
           label: 'Conc ${tile.concentrationSig}',
           icon: Icons.science_outlined,
+        ),
+      // ✅ manufacturer as a compact chip (optional, but nice for trust)
+      if (tile.supplierManufacturer != null &&
+          tile.supplierManufacturer!.trim().isNotEmpty)
+        _PillChip(
+          label: tile.supplierManufacturer!.trim(),
+          icon: Icons.factory_outlined,
         ),
     ];
 

@@ -10,14 +10,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import '../../shared/models/zoho_invoice.dart';
 
 final zohoInvoicesServiceProvider = FutureProvider<ZohoInvoicesService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoInvoicesService(api: api, routes: routes);

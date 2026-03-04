@@ -6,13 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 /// Ensures the user is authenticated before continuing.
 /// Returns true if authenticated, false if user cancels/closes login.
 Future<bool> requireAuth(BuildContext context, WidgetRef ref) async {
-  final tenantId = ref.read(tenantSlugProvider);
+  final tenantId = ref.read(tenantIdProvider);
 
   // 1) Fast path — already logged in for this tenant session
   final session = ref.read(sessionControllerProvider(tenantId));

@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
 import 'package:afyakit/features/inventory/records/issues/models/view_models/cart_item_models.dart';
@@ -21,7 +21,7 @@ class CartService {
   CartService(this.ref);
 
   List<CartDisplayItem> getDisplayItems(Map<String, Map<String, int>> cart) {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
 
     // Use watch so providers that depend on this recompute reactively.
     final batches = ref
@@ -83,7 +83,7 @@ class CartService {
   Widget buildSummaryFromEntries(List<IssueEntry> entries) {
     if (entries.isEmpty) return const SizedBox();
 
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final batches = ref
         .watch(batchRecordsStreamProvider(tenantId))
         .maybeWhen(data: (d) => d, orElse: () => <BatchRecord>[]);

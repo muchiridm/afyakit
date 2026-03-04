@@ -17,7 +17,7 @@ part 'routes_tenants.dart';
 class AfyaKitRoutes {
   AfyaKitRoutes(String tenantId) : tenantId = tenantId.trim().toLowerCase();
 
-  /// Tenant slug/id used in API base: .../api/:tenantId
+  /// Tenant tenantId/id used in API base: .../api/:tenantId
   final String tenantId;
 
   /// Tenant base: https://host/api/:tenantId

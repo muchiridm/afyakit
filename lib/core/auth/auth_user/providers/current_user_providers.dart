@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 /// Keep a per-tenant inflight lock so multiple widgets don't spam /me.
 final Map<String, Future<AuthUser>> _meInflightByTenant =
@@ -32,7 +32,7 @@ final currentUserProvider = FutureProvider.autoDispose<AuthUser?>((ref) async {
   ref.onCancel(() => purge = Timer(const Duration(seconds: 20), link.close));
   ref.onResume(() => purge?.cancel());
 
-  final tenantId = _normTenant(ref.watch(tenantSlugProvider));
+  final tenantId = _normTenant(ref.watch(tenantIdProvider));
 
   final fbUserAsync = ref.watch(firebaseUserProvider);
   final fbUser = fbUserAsync.valueOrNull;

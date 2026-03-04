@@ -2,7 +2,7 @@
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -85,7 +85,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
     required String source,
     String? storeId,
   }) => _withKeepAlive(() async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final cleanSrc = source.trim();
     final cleanStore = (storeId ?? '').trim();
 
@@ -174,7 +174,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   });
 
   Future<DeliveryReviewSummary?> review(WidgetRef widgetRef) async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     return svc.buildReviewSummary(
       ref: widgetRef,
       tenantId: tenantId,
@@ -185,7 +185,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   Future<bool> end({bool autoRestart = false}) => _withKeepAlive(() async {
     if (!mounted) return false;
 
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
     final batches = await ref.read(batchRecordsStreamProvider(tenantId).future);
     if (!mounted) return false;
 
@@ -258,7 +258,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   Future<void> rememberLastUsed({String? lastStoreId, String? lastSource}) =>
       _withKeepAlive(() async {
         if (!mounted || !state.isActive) return;
-        final tenantId = ref.read(tenantSlugProvider);
+        final tenantId = ref.read(tenantIdProvider);
 
         final newLastStore = (lastStoreId ?? '').trim();
         final newLastSource = (lastSource ?? '').trim();
@@ -284,7 +284,7 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> _restore() => _withKeepAlive(() async {
-    final tenantId = ref.read(tenantSlugProvider);
+    final tenantId = ref.read(tenantIdProvider);
 
     // 1) Try local cache first
     final local = await svc.restoreLocal();

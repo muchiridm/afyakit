@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
@@ -21,7 +21,7 @@ class DeliverySessionReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // STATE comes from the engine
     final session = ref.watch(deliverySessionEngineProvider);
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
 
     // Stores & dispensaries (plain lists)
     final stores = ref.watch(allStoresProvider);

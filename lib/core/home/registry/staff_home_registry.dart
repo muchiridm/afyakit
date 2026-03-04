@@ -1,9 +1,9 @@
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/hq/tenants/models/feature_keys.dart';
-import 'package:afyakit/hq/tenants/models/feature_registry.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/admin/widgets/admin_dashboard_screen.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/home/widgets/admin_dashboard_screen.dart';
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
 import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';

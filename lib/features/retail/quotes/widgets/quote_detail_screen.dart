@@ -1,5 +1,6 @@
 // lib/features/retail/sales/quotes/widgets/quote_detail_screen.dart
 
+import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 import 'package:afyakit/shared/widgets/pdf/pdf_preview_screen.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +12,6 @@ import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
@@ -21,6 +21,16 @@ import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 
 enum _QuoteAction { send, markSent, invoice }
+
+/// Riverpod-native quote loader.
+/// ✅ Refreshable (`ref.refresh(...)`)
+final zohoQuoteProvider = FutureProvider.autoDispose.family<ZohoQuote, String>((
+  ref,
+  quoteId,
+) async {
+  final svc = await ref.watch(zohoQuotesServiceProvider.future);
+  return svc.get(quoteId);
+});
 
 class QuoteDetailScreen extends ConsumerStatefulWidget {
   const QuoteDetailScreen({super.key, required this.quoteId});
@@ -32,27 +42,6 @@ class QuoteDetailScreen extends ConsumerStatefulWidget {
 
 class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   bool _acting = false;
-
-  // ─────────────────────────────────────────────
-  // Navigation
-  // ─────────────────────────────────────────────
-
-  Future<void> _editQuote(BuildContext context) async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => QuoteEditorScreen(editingQuoteId: widget.quoteId),
-      ),
-    );
-
-    if (!context.mounted) return;
-
-    if (changed == true) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const QuotesListScreen()),
-        (_) => false,
-      );
-    }
-  }
 
   // ─────────────────────────────────────────────
   // Action runner
@@ -67,6 +56,26 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       SnackService.showError(e.toString());
     } finally {
       if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Navigation
+  // ─────────────────────────────────────────────
+
+  Future<void> _editQuote(BuildContext context) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => QuoteEditorScreen(editingQuoteId: widget.quoteId),
+      ),
+    );
+
+    if (!mounted) return;
+
+    // ✅ stay on this screen; just refresh the quote
+    if (changed == true) {
+      ref.invalidate(zohoQuoteProvider(widget.quoteId));
+      SnackService.showSuccess('Quote refreshed');
     }
   }
 
@@ -103,9 +112,11 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
-      // ✅ aligned to service: email()
       await svc.email(widget.quoteId);
       SnackService.showSuccess('Quote sent');
+
+      // Optional: status may change; refresh the detail.
+      ref.invalidate(zohoQuoteProvider(widget.quoteId));
     });
   }
 
@@ -121,9 +132,9 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
-      // ✅ aligned to service: markSent()
       await svc.markSent(widget.quoteId);
       SnackService.showSuccess('Marked as sent');
+      ref.invalidate(zohoQuoteProvider(widget.quoteId));
     });
   }
 
@@ -139,9 +150,24 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (!ok) return;
 
     await _runAction(() async {
-      // ✅ aligned to service: convertToInvoice()
-      await svc.convertToInvoice(widget.quoteId);
-      SnackService.showSuccess('Converted to invoice');
+      final res = await svc.convertToInvoice(widget.quoteId);
+
+      // Don’t assume exact response shape; show something useful if present.
+      final invoiceId = (res['invoice_id'] ?? res['invoiceId'] ?? '')
+          .toString();
+      final invoiceNumber =
+          (res['invoice_number'] ?? res['invoiceNumber'] ?? '').toString();
+
+      if (invoiceNumber.trim().isNotEmpty) {
+        SnackService.showSuccess('Converted → Invoice $invoiceNumber');
+      } else if (invoiceId.trim().isNotEmpty) {
+        SnackService.showSuccess('Converted → Invoice $invoiceId');
+      } else {
+        SnackService.showSuccess('Converted to invoice');
+      }
+
+      // Quote may change status; refresh.
+      ref.invalidate(zohoQuoteProvider(widget.quoteId));
     });
   }
 
@@ -151,33 +177,30 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final quoteAsync = ref.watch(zohoQuoteProvider(widget.quoteId));
     final svcAsync = ref.watch(zohoQuotesServiceProvider);
 
-    return svcAsync.when(
-      loading: () => AppPage(
-        title: 'Quote',
-        showBack: true,
-        scrollable: false,
-        body: const Center(child: CircularProgressIndicator()),
+    return AppPage(
+      title: 'Quote',
+      showBack: true,
+      scrollable: false,
+      actions: svcAsync.maybeWhen(
+        data: (svc) => _buildConstrainedActions(svc),
+        orElse: () => const <Widget>[],
       ),
-      error: (e, _) => AppPage(
-        title: 'Quote',
-        showBack: true,
-        scrollable: false,
-        body: SalesDocErrorState(
-          title: 'Zoho service failed',
+      body: quoteAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => SalesDocErrorState(
+          title: 'Failed to load quote',
           message: e.toString(),
         ),
-      ),
-      data: (svc) => _QuoteLoader(
-        quoteId: widget.quoteId,
-        svc: svc,
-        builder: (q) => AppPage(
-          title: 'Quote',
-          showBack: true,
-          scrollable: false,
-          actions: _buildConstrainedActions(svc),
-          body: _buildDetail(q),
+        data: (q) => RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(zohoQuoteProvider(widget.quoteId));
+            // Wait for reload so indicator feels correct
+            await ref.read(zohoQuoteProvider(widget.quoteId).future);
+          },
+          child: _buildDetail(context, q),
         ),
       ),
     );
@@ -228,7 +251,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     ];
   }
 
-  Widget _buildDetail(ZohoQuote q) {
+  Widget _buildDetail(BuildContext context, ZohoQuote q) {
     final meta = SalesDocMetaVm(
       partyName: q.customerName.trim().isEmpty ? 'Customer' : q.customerName,
       docNumberOrId: (q.referenceNumber ?? '').trim().isNotEmpty
@@ -238,6 +261,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       currencyCode: (q.currencyCode ?? '').trim(),
       total: q.total,
       date: q.date,
+      expiryDate: q.expiryDate,
     );
 
     final currency = _currency(meta.currencyCode);
@@ -253,28 +277,26 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
         )
         .toList(growable: false);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    // RefreshIndicator needs a scrollable child.
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         if (_acting) const LinearProgressIndicator(minHeight: 2),
-
         SalesDocHeader(
           title: '',
           meta: meta,
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
         ),
-
         const Divider(height: 1),
-
-        Expanded(
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
           child: SalesDocLinesList(
             currencyCode: currency,
             lines: lines,
             mode: SalesDocMode.view,
           ),
         ),
-
         SalesDocTotalBar(
           label: 'Total',
           total: meta.total,
@@ -310,49 +332,6 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (t.isEmpty) return null;
     if (t.toLowerCase() == 'item') return null;
     return t;
-  }
-}
-
-typedef _QuoteBuilder = Widget Function(ZohoQuote quote);
-
-class _QuoteLoader extends StatelessWidget {
-  const _QuoteLoader({
-    required this.quoteId,
-    required this.svc,
-    required this.builder,
-  });
-
-  final String quoteId;
-  final ZohoQuotesService svc;
-  final _QuoteBuilder builder;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<ZohoQuote>(
-      future: svc.get(quoteId), // ✅ aligned: service has get()
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snap.hasError) {
-          return SalesDocErrorState(
-            title: 'Failed to load quote',
-            message: (snap.error ?? 'Unknown error').toString(),
-          );
-        }
-
-        final q = snap.data;
-        if (q == null) {
-          return const SalesDocErrorState(
-            title: 'Failed to load quote',
-            message: 'No data returned',
-          );
-        }
-
-        return builder(q);
-      },
-    );
   }
 }
 

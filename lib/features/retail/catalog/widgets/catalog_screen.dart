@@ -1,6 +1,8 @@
 // lib/features/retail/catalog/widgets/catalog_screen.dart
 
-import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
+import 'dart:async';
+
+import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
@@ -31,10 +33,7 @@ class CatalogScreen extends ConsumerStatefulWidget {
     this.autofocusSearch = false,
   });
 
-  /// Optional initial query (e.g. from guest home search)
   final String? initialQuery;
-
-  /// If true, focus the search field on open.
   final bool autofocusSearch;
 
   @override
@@ -51,31 +50,24 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
 
-    // Seed search box immediately (UI), then refresh provider query after first frame.
     final seed = (widget.initialQuery ?? '').trim();
-    if (seed.isNotEmpty) {
-      _searchC.text = seed;
-    }
+    if (seed.isNotEmpty) _searchC.text = seed;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      // Apply initial query to provider/controller (data)
       final q = (widget.initialQuery ?? '').trim();
       if (q.isNotEmpty) {
         final state = ref.read(catalogControllerProvider);
         final ctrl = ref.read(catalogControllerProvider.notifier);
 
-        // Only refresh if different (avoid redundant reload)
         if (state.query.q.trim() != q) {
+          // ignore: discarded_futures
           ctrl.refresh(query: state.query.copyWith(q: q));
         }
       }
 
-      // Focus search if requested
-      if (widget.autofocusSearch) {
-        _searchFocus.requestFocus();
-      }
+      if (widget.autofocusSearch) _searchFocus.requestFocus();
     });
   }
 
@@ -94,6 +86,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
 
     if (state.hasMore && atEnd) {
+      // ignore: discarded_futures
       ref.read(catalogControllerProvider.notifier).loadMore();
     }
   }
@@ -104,7 +97,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final state = ref.watch(catalogControllerProvider);
     final ctrl = ref.read(catalogControllerProvider.notifier);
 
-    // ✅ quote lines state (replaces cart)
+    // quote lines state (replaces cart)
     final quoteLinesState = ref.watch(quoteLinesControllerProvider);
     final quoteLineCount = quoteLinesState.lines.length;
 
@@ -121,6 +114,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
         quoteItemCount: quoteLineCount,
         quoteTotalLabel: quoteTotalLabel,
+
         onClearQuote: quoteLineCount == 0
             ? null
             : () {
@@ -163,7 +157,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         const SizedBox(height: 12),
         SearchBarField(
           controller: _searchC,
-          focusNode: _searchFocus, // ✅ new (see tiny change below)
+          focusNode: _searchFocus,
           resultCount: resultCount,
           onSubmit: (q) => ctrl.refresh(query: state.query.copyWith(q: q)),
           onChanged: (q) =>
@@ -191,56 +185,58 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     showModalBottomSheet(
       context: context,
       useRootNavigator: false,
-      isScrollControlled: true,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => SafeArea(
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SheetHeader(
-                  tile: t,
-                  priceFormatter: _formatPriceCeil,
-                  priceColor: _priceGreen,
-                ),
-                const Divider(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.info_outline),
-                        label: const Text('Details'),
-                        onPressed: () {
-                          // TODO: implement details sheet / screen
-                        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+          child: Material(
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            color: Theme.of(ctx).colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SheetHeader(
+                    tile: t,
+                    priceFormatter: _formatPriceCeil,
+                    priceColor: _priceGreen,
+                  ),
+                  const Divider(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.info_outline),
+                          label: const Text('Details'),
+                          onPressed: () {},
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.add_shopping_cart),
-                        label: const Text('Add to quote'),
-                        onPressed: () {
-                          ref
-                              .read(quoteLinesControllerProvider.notifier)
-                              .addOrIncrement(t);
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Added to quote'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-
-                          Navigator.of(ctx, rootNavigator: false).maybePop();
-                        },
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          icon: const Icon(Icons.add_shopping_cart),
+                          label: const Text('Add to quote'),
+                          onPressed: () {
+                            ref
+                                .read(quoteLinesControllerProvider.notifier)
+                                .addOrIncrement(t);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Added to quote'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                            Navigator.of(ctx).maybePop();
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

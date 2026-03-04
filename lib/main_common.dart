@@ -14,31 +14,19 @@ import 'firebase_options.dart';
 
 import 'package:afyakit/app/app_mode.dart';
 import 'package:afyakit/app/app_root.dart';
-import 'package:afyakit/hq/domains/services/domain_tenant_resolver.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/domains/services/domain_tenant_resolver.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/debug/riverpod_logger.dart';
 
-/// ─────────────────────────────────────────────
-/// Providers
-/// ─────────────────────────────────────────────
-
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
-
-/// ─────────────────────────────────────────────
-/// Boot logger
-/// ─────────────────────────────────────────────
 
 final class BootLog {
   static void d(String msg) => debugPrint('🚀 $msg');
   static void e(String msg) => debugPrint('💥 $msg');
 }
 
-/// ─────────────────────────────────────────────
-/// Bootstrap
-/// ─────────────────────────────────────────────
-
 Future<void> bootstrapAndRun({
-  required String defaultTenantSlug,
+  required String defaultTenantId,
   AppMode appMode = AppMode.tenant,
 }) async {
   runZonedGuarded(
@@ -46,7 +34,6 @@ Future<void> bootstrapAndRun({
       WidgetsFlutterBinding.ensureInitialized();
       _installGlobalErrorHandlers();
 
-      // ── Firebase init ────────────────────────
       BootLog.d('Initializing Firebase…');
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -55,28 +42,25 @@ Future<void> bootstrapAndRun({
       final usingAuthEmulator = await _configureAuthForDev();
       _logFirebaseAppInfo(usingAuthEmulator);
 
-      // ── Firestore (platform-aware) ───────────
       await _configureFirestoreForPlatform();
 
-      // ── Tenant resolution ────────────────────
-      String? resolvedSlug;
+      // ── Decide FINAL tenant ID exactly once ──────────────────────────
+      final String resolvedId;
       if (appMode == AppMode.tenant) {
-        resolvedSlug = await resolveTenantSlugAsync(
-          defaultSlug: defaultTenantSlug,
-        );
-        BootLog.d('Using tenant: $resolvedSlug');
+        resolvedId = await resolveTenantIdAsync(defaultId: defaultTenantId);
+        BootLog.d('Using tenant: $resolvedId');
       } else {
-        BootLog.d('Running in HQ mode (no tenant resolution)');
+        // HQ must never resolve by domain — it is explicit.
+        resolvedId = defaultTenantId;
+        BootLog.d('Running in HQ mode (tenantId=$resolvedId)');
       }
 
-      // ── Run app ──────────────────────────────
       runApp(
         ProviderScope(
           observers: const [RiverpodLogger()],
           overrides: [
             authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
-            if (resolvedSlug != null)
-              tenantSlugProvider.overrideWithValue(resolvedSlug),
+            tenantIdProvider.overrideWithValue(resolvedId),
           ],
           child: AppRoot(mode: appMode),
         ),
@@ -88,10 +72,6 @@ Future<void> bootstrapAndRun({
     },
   );
 }
-
-/// ─────────────────────────────────────────────
-/// Global error handlers
-/// ─────────────────────────────────────────────
 
 void _installGlobalErrorHandlers() {
   FlutterError.onError = (details) {
@@ -108,10 +88,6 @@ void _installGlobalErrorHandlers() {
     return true;
   };
 }
-
-/// ─────────────────────────────────────────────
-/// Firebase Auth (emulator-safe)
-/// ─────────────────────────────────────────────
 
 Future<bool> _configureAuthForDev() async {
   if (!kDebugMode) return false;
@@ -149,10 +125,6 @@ Future<bool> _configureAuthForDev() async {
   return true;
 }
 
-/// ─────────────────────────────────────────────
-/// Firestore (IMPORTANT PART)
-/// ─────────────────────────────────────────────
-
 Future<void> _configureFirestoreForPlatform() async {
   final fs = FirebaseFirestore.instance;
 
@@ -166,10 +138,7 @@ Future<void> _configureFirestoreForPlatform() async {
     final isLocalDev =
         host == 'localhost' || host == '127.0.0.1' || host.endsWith('.local');
 
-    // 🔥 CRITICAL: disable persistence on localhost web
-    if (isLocalDev || insecure) {
-      enablePersistence = false;
-    }
+    if (isLocalDev || insecure) enablePersistence = false;
   }
 
   try {
@@ -180,14 +149,9 @@ Future<void> _configureFirestoreForPlatform() async {
       '(platform=${kIsWeb ? 'web' : 'mobile'} origin=${kIsWeb ? Uri.base.origin : '-'})',
     );
   } catch (e) {
-    // Happens if Firestore already initialized — safe to ignore
     BootLog.e('Firestore settings skipped: $e');
   }
 }
-
-/// ─────────────────────────────────────────────
-/// Firebase info logging
-/// ─────────────────────────────────────────────
 
 void _logFirebaseAppInfo(bool emulatorEnabled) {
   final o = Firebase.app().options;

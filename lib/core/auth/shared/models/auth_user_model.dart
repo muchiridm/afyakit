@@ -33,7 +33,11 @@ class AuthUser {
 
   final String? avatarUrl;
 
-  /// Tenant-scoped email (NOT Firebase Auth email). Backend only exposes it when verified.
+  /// Tenant-scoped email (NOT Firebase Auth email).
+  ///
+  /// IMPORTANT:
+  /// - Backend may choose to hide unverified emails for privacy.
+  /// - FE must NOT erase it if backend does send it (we need it to drive verification UX).
   final String? email;
   final String? emailLower;
 
@@ -234,6 +238,26 @@ class AuthUser {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Email helpers (THIS is what your login flow should use)
+  // ─────────────────────────────────────────────
+
+  bool get hasEmail {
+    final el = (emailLower ?? '').trim();
+    final e = (email ?? '').trim();
+    return el.isNotEmpty || e.isNotEmpty;
+  }
+
+  /// If user has an email but it’s not verified, we should show verify flow (not re-collect).
+  bool get needsEmailVerification => hasEmail && emailVerified != true;
+
+  String? get bestEmailLower {
+    final el = (emailLower ?? '').trim().toLowerCase();
+    if (el.isNotEmpty) return el;
+    final e = (email ?? '').trim().toLowerCase();
+    return e.isNotEmpty ? e : null;
+  }
+
   // ────────────── Parsing ──────────────
 
   factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
@@ -258,15 +282,18 @@ class AuthUser {
 
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
+
+    // ✅ DO NOT default this to true anywhere.
     final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
 
-    // Backend already hides unverified emails; still keep safe.
-    final email = _optStr(json['email'])?.toLowerCase();
-    final emailLower = _optStr(json['emailLower'])?.toLowerCase();
+    // ✅ Keep whatever backend sends. Don’t “safeguard” by erasing;
+    // the login UX needs to know an email exists even if unverified.
+    final emailRaw = _optStr(json['email']);
+    final emailLowerRaw = _optStr(json['emailLower']);
 
-    final safeEmail = emailVerified ? email : null;
-    final safeEmailLower = emailVerified ? (emailLower ?? email) : null;
+    final email = emailRaw?.toLowerCase();
+    final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
 
     // Optional convenience: phoneSatisfied from backend (if you add it later)
     final phoneSatisfiedRaw = json['phoneSatisfied'];
@@ -301,8 +328,8 @@ class AuthUser {
       lastName: _optStr(json['lastName']),
       displayName: _optStr(json['displayName']),
       avatarUrl: _optStr(json['avatarUrl']),
-      email: safeEmail,
-      emailLower: safeEmailLower,
+      email: email,
+      emailLower: emailLower,
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,

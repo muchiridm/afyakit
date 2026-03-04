@@ -63,6 +63,16 @@ class SalesDocHeader extends StatelessWidget {
           formatDocDate(meta.date!),
           density: pillDensity,
         ),
+
+      // ✅ NEW: expiry pill
+      if (meta.expiryDate != null)
+        _pill(
+          context,
+          Icons.event_busy_outlined,
+          'Exp ${formatDocDate(meta.expiryDate!)}',
+          density: pillDensity,
+        ),
+
       if (showStatus && meta.status.trim().isNotEmpty)
         _statusPill(context, meta.status, density: pillDensity),
     ];

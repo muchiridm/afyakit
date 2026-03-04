@@ -1,17 +1,83 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
+
 import 'package:afyakit/shared/services/snack_service.dart';
 
 final quoteControllerProvider =
     StateNotifierProvider<QuoteController, QuoteState>(
       (ref) => QuoteController(ref),
     );
+
+@immutable
+class QuoteState {
+  const QuoteState({
+    this.submitting = false,
+    this.loadingEdit = false,
+    this.downloadingPdf = false,
+    this.sending = false,
+    this.converting = false,
+    this.error,
+    this.lastCreatedQuoteId,
+    this.editingQuoteId,
+    this.loadedEditId,
+  });
+
+  final bool submitting;
+  final bool loadingEdit;
+
+  final bool downloadingPdf;
+  final bool sending;
+  final bool converting;
+
+  final String? error;
+  final String? lastCreatedQuoteId;
+
+  final String? editingQuoteId;
+  final String? loadedEditId;
+
+  bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
+
+  bool get busy =>
+      submitting || loadingEdit || downloadingPdf || sending || converting;
+
+  QuoteState copyWith({
+    bool? submitting,
+    bool? loadingEdit,
+    bool? downloadingPdf,
+    bool? sending,
+    bool? converting,
+    String? error,
+    bool clearError = false,
+    String? lastCreatedQuoteId,
+    bool clearLastCreatedId = false,
+    String? editingQuoteId,
+    bool clearEditingQuoteId = false,
+    String? loadedEditId,
+    bool clearLoadedEditId = false,
+  }) {
+    return QuoteState(
+      submitting: submitting ?? this.submitting,
+      loadingEdit: loadingEdit ?? this.loadingEdit,
+      downloadingPdf: downloadingPdf ?? this.downloadingPdf,
+      sending: sending ?? this.sending,
+      converting: converting ?? this.converting,
+      error: clearError ? null : (error ?? this.error),
+      lastCreatedQuoteId: clearLastCreatedId
+          ? null
+          : (lastCreatedQuoteId ?? this.lastCreatedQuoteId),
+      editingQuoteId: clearEditingQuoteId
+          ? null
+          : (editingQuoteId ?? this.editingQuoteId),
+      loadedEditId: clearLoadedEditId
+          ? null
+          : (loadedEditId ?? this.loadedEditId),
+    );
+  }
+}
 
 class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
@@ -30,8 +96,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       _ref.read(quoteMetaControllerProvider.notifier);
 
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
-
-  // ───────────────────────── Helpers ─────────────────────────
 
   // ───────────────────────── Public API ─────────────────────────
 
@@ -74,7 +138,7 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     // NEW MODE
     if (nextId.isEmpty) {
-      // Keep meta + lines as they are (this is the persistence you want).
+      // Keep meta + lines as they are (persistence you want).
       // Only mark meta as "new", to avoid stale editingQuoteId.
       _metaCtl.beginNew();
 
@@ -116,15 +180,9 @@ class QuoteController extends StateNotifier<QuoteState> {
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
+    DateTime? expiryDate, // ✅ NEW
   }) {
     if (_busy) return;
-
-    if (contact is Object) {
-      // only accept ZohoContact; ignore junk safely
-      if (contact.runtimeType.toString() == 'ZohoContact') {
-        // won't run in AOT in a predictable way; better keep it explicit:
-      }
-    }
 
     // Strongly typed path is preferred:
     // Your UI calls ctl.patchDraft(contact: picked) where picked is ZohoContact.
@@ -135,6 +193,7 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (reference != null) _metaCtl.setReference(reference);
     if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
     if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
+    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate); // ✅ NEW
   }
 
   // ───────────────────────── Submit / Delete ─────────────────────────
@@ -179,14 +238,23 @@ class QuoteController extends StateNotifier<QuoteState> {
           return null;
         }
 
-        await _engine.update(id, payload, quoteDate: meta.quoteDate);
+        await _engine.update(
+          id,
+          payload,
+          quoteDate: meta.quoteDate,
+          expiryDate: meta.expiryDate, // ✅ NEW
+        );
 
         state = state.copyWith(submitting: false);
         SnackService.showSuccess('Quote updated');
         return id;
       }
 
-      final created = await _engine.create(payload, quoteDate: meta.quoteDate);
+      final created = await _engine.create(
+        payload,
+        quoteDate: meta.quoteDate,
+        expiryDate: meta.expiryDate, // ✅ NEW
+      );
 
       final createdId = created.quoteId.trim();
 
@@ -365,6 +433,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         reference: meta.reference,
         customerNotes: meta.customerNotes,
         quoteDate: meta.quoteDate,
+        expiryDate: meta.expiryDate, // ✅ NEW
       );
 
       state = state.copyWith(loadingEdit: false, loadedEditId: id);

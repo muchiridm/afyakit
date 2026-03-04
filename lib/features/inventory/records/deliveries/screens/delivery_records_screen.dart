@@ -1,4 +1,4 @@
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/inventory/records/shared/grouped_records_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +16,7 @@ class DeliveryRecordsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final deliveriesAsync = ref.watch(deliveryRecordsStreamProvider(tenantId));
     final stores = ref
         .watch(inventoryLocationProvider(InventoryLocationType.store))

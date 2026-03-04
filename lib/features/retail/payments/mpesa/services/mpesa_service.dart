@@ -5,7 +5,7 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 
 import '../models/mpesa_stk_draft.dart';
@@ -39,7 +39,7 @@ class MpesaService {
 
 /// ✅ Provider (matches your existing pattern)
 final mpesaServiceProvider = FutureProvider<MpesaService>((ref) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
 
   final client = await ref.watch(afyakitClientFutureProvider.future);

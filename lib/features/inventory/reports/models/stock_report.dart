@@ -6,7 +6,8 @@ import 'package:afyakit/features/inventory/items/models/items/consumable_item.da
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
-import 'package:afyakit/shared/utils/parsers/int_parser.dart';
+import 'package:afyakit/shared/utils/parse/primitives.dart';
+
 import 'package:flutter/foundation.dart';
 
 class StockReport {
@@ -224,9 +225,9 @@ class StockReport {
         name: data['name'] ?? '',
         group: data['group'] ?? '',
         storeId: data['storeId'] ?? '',
-        quantity: parseInt(data['quantity']) ?? 0, // 💥 protect this!
-        reorderLevel: parseInt(data['reorderLevel']),
-        proposedOrder: parseInt(data['proposedOrder']),
+        quantity: asIntOrNull(data['quantity']) ?? 0, // 💥 protect this!
+        reorderLevel: asIntOrNull(data['reorderLevel']),
+        proposedOrder: asIntOrNull(data['proposedOrder']),
         brandName: data['brandName'],
         strength: data['strength'],
         size: data['size'],

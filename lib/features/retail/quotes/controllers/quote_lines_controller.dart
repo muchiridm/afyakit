@@ -1,5 +1,7 @@
 // lib/features/retail/quotes/controllers/quote_lines_controller.dart
 
+import 'dart:math';
+
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +20,11 @@ sealed class QuoteLine {
 
 /// Catalog-backed line (tile id is stable)
 /// Supports overrides for editing inside the quote editor.
+///
+/// IMPORTANT:
+/// - Default cart behavior: merge by tile.id (lineId == null)
+/// - Once overrides are applied (name/desc/rate), we PROMOTE the line into a unique
+///   identity (lineId != null) so multiple catalog lines with different edits do NOT merge.
 @immutable
 class CatalogQuoteLine extends QuoteLine {
   const CatalogQuoteLine({
@@ -26,6 +33,7 @@ class CatalogQuoteLine extends QuoteLine {
     this.nameOverride,
     this.descriptionOverride,
     this.rateOverride,
+    this.lineId, // ✅ NEW
   });
 
   final CatalogTile tile;
@@ -42,11 +50,17 @@ class CatalogQuoteLine extends QuoteLine {
   /// If null => fall back to tile.bestSellPrice.
   final num? rateOverride;
 
+  /// ✅ NEW: if set, this catalog line becomes unique and no longer merges
+  /// with other lines for the same tile.
+  final String? lineId;
+
   @override
   final int qty;
 
+  /// ✅ Key: merge bucket when lineId == null, otherwise unique per lineId
   @override
-  String get key => 'tile:${tile.id}';
+  String get key =>
+      lineId == null ? 'tile:${tile.id}' : 'tile:${tile.id}:$lineId';
 
   // ───────────────────────── Effective values ─────────────────────────
 
@@ -68,6 +82,12 @@ class CatalogQuoteLine extends QuoteLine {
 
   num get effectiveRate => rateOverride ?? (tile.bestSellPrice ?? 0);
 
+  bool get hasOverrides {
+    final n = (nameOverride ?? '').trim();
+    final d = (descriptionOverride ?? '').trim();
+    return n.isNotEmpty || d.isNotEmpty || rateOverride != null;
+  }
+
   // ───────────────────────── copyWith ─────────────────────────
 
   CatalogQuoteLine copyWith({
@@ -79,6 +99,8 @@ class CatalogQuoteLine extends QuoteLine {
     bool clearDescriptionOverride = false,
     num? rateOverride,
     bool clearRateOverride = false,
+    String? lineId, // ✅ NEW
+    bool clearLineId = false, // ✅ NEW (rare, but useful)
   }) {
     String? cleanStr(String? v) {
       final t = (v ?? '').trim();
@@ -97,7 +119,9 @@ class CatalogQuoteLine extends QuoteLine {
 
     final nextRateOverride = clearRateOverride
         ? null
-        : (rateOverride == null ? this.rateOverride : rateOverride);
+        : (rateOverride ?? this.rateOverride);
+
+    final nextLineId = clearLineId ? null : (lineId ?? this.lineId);
 
     return CatalogQuoteLine(
       tile: tile ?? this.tile,
@@ -105,6 +129,7 @@ class CatalogQuoteLine extends QuoteLine {
       nameOverride: nextNameOverride,
       descriptionOverride: nextDescOverride,
       rateOverride: nextRateOverride,
+      lineId: nextLineId,
     );
   }
 
@@ -225,6 +250,9 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
   static const int _minQty = 1;
   static const int _maxQty = 9999;
 
+  final Random _rng = Random.secure();
+  int _seq = 0;
+
   int _clampQty(int qty) => qty.clamp(_minQty, _maxQty);
 
   num _sanitizeRate(num rate) {
@@ -244,19 +272,45 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
 
   void replaceAll(List<QuoteLine> lines) => _setLines(lines);
 
+  // ───────────────────────── ID generators ─────────────────────────
+  // Must be unique even in tight loops (microseconds can collide).
+  String _newId(String prefix) {
+    _seq = (_seq + 1) % 1_000_000;
+    final t = DateTime.now().microsecondsSinceEpoch;
+    final r = _rng.nextInt(1 << 31);
+    return '${prefix}_${t}_${_seq}_$r';
+  }
+
+  String _newManualId() => _newId('m');
+  String _newCatalogLineId() => _newId('c');
+
   // ───────────────────────── Catalog ─────────────────────────
 
   int getQty(CatalogTile tile) {
-    final idx = _indexOfKey('tile:${tile.id}');
+    // Quantity for the “base bucket” line (lineId == null)
+    final idx = state.lines.indexWhere((l) {
+      if (l is! CatalogQuoteLine) return false;
+      return l.tile.id == tile.id && l.lineId == null;
+    });
     if (idx == -1) return 0;
     return state.lines[idx].qty;
   }
 
-  bool contains(CatalogTile tile) => _indexOfKey('tile:${tile.id}') != -1;
+  bool contains(CatalogTile tile) {
+    return state.lines.any((l) {
+      if (l is! CatalogQuoteLine) return false;
+      return l.tile.id == tile.id && l.lineId == null;
+    });
+  }
 
+  /// Cart-style:
+  /// - If a “base bucket” catalog line exists (same tile, lineId == null), increment it.
+  /// - Otherwise create a new base bucket line.
   void addOrIncrement(CatalogTile tile, {int delta = 1}) {
-    final key = 'tile:${tile.id}';
-    final idx = _indexOfKey(key);
+    final idx = state.lines.indexWhere((l) {
+      if (l is! CatalogQuoteLine) return false;
+      return l.tile.id == tile.id && l.lineId == null;
+    });
 
     if (idx == -1) {
       final qty = _clampQty(delta < 1 ? 1 : delta);
@@ -264,7 +318,7 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
       return;
     }
 
-    final current = state.lines[idx];
+    final current = state.lines[idx] as CatalogQuoteLine;
     final nextQty = _clampQty(current.qty + delta);
     if (nextQty == current.qty) return;
 
@@ -278,8 +332,17 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
   }
 
   /// Update existing catalog lines (name/desc/rate/qty) via overrides.
+  ///
+  /// IMPORTANT:
+  /// - Default behavior (cart): targets base bucket (tile.id + lineId == null)
+  /// - Editor behavior: pass [lineKey] (or [lineId]) to update the exact line.
+  /// - If a base bucket gets overrides, we PROMOTE it to unique (lineId != null).
   void updateCatalogLine(
     CatalogTile tile, {
+    // ✅ NEW: target a specific catalog line when editing in the quote editor
+    String? lineKey,
+    String? lineId,
+
     String? name,
     String? description,
     num? rate,
@@ -288,8 +351,26 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     bool clearDescription = false,
     bool clearRate = false,
   }) {
-    final key = 'tile:${tile.id}';
-    final idx = _indexOfKey(key);
+    // 1) Resolve target index
+    int idx = -1;
+
+    final k = (lineKey ?? '').trim();
+    final lid = (lineId ?? '').trim();
+
+    if (k.isNotEmpty) {
+      idx = _indexOfKey(k);
+    } else if (lid.isNotEmpty) {
+      idx = state.lines.indexWhere((l) {
+        if (l is! CatalogQuoteLine) return false;
+        return l.tile.id == tile.id && (l.lineId ?? '') == lid;
+      });
+    } else {
+      // Default: base bucket
+      idx = state.lines.indexWhere((l) {
+        if (l is! CatalogQuoteLine) return false;
+        return l.tile.id == tile.id && l.lineId == null;
+      });
+    }
 
     String? cleanStr(String? v) {
       final t = (v ?? '').trim();
@@ -302,21 +383,32 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     final nextName = name == null ? null : cleanStr(name);
     final nextDesc = description == null ? null : cleanStr(description);
 
-    // Create if missing
+    // 2) Create if missing (only sensible for base-bucket usage)
     if (idx == -1) {
+      // If caller gave lineKey/lineId but we couldn't find it, DO NOT silently create,
+      // because that's how duplicates sneak in.
+      if (k.isNotEmpty || lid.isNotEmpty) {
+        return;
+      }
+
       final q = nextQty ?? 1;
       if (q <= 0) return;
 
-      _setLines([
-        ...state.lines,
-        CatalogQuoteLine(
-          tile: tile,
-          qty: q,
-          nameOverride: clearName ? null : nextName,
-          descriptionOverride: clearDescription ? null : nextDesc,
-          rateOverride: clearRate ? null : nextRate,
-        ),
-      ]);
+      var created = CatalogQuoteLine(
+        tile: tile,
+        qty: q,
+        nameOverride: clearName ? null : nextName,
+        descriptionOverride: clearDescription ? null : nextDesc,
+        rateOverride: clearRate ? null : nextRate,
+        lineId: null,
+      );
+
+      // Promote on create if overrides are present
+      if (created.hasOverrides) {
+        created = created.copyWith(lineId: _newCatalogLineId());
+      }
+
+      _setLines([...state.lines, created]);
       return;
     }
 
@@ -324,11 +416,11 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     if (cur is! CatalogQuoteLine) return;
 
     if (nextQty != null && nextQty <= 0) {
-      removeByKey(key);
+      removeByKey(cur.key);
       return;
     }
 
-    final updated = cur.copyWith(
+    var updated = cur.copyWith(
       qty: nextQty ?? cur.qty,
       nameOverride: nextName,
       clearNameOverride: clearName,
@@ -337,6 +429,12 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
       rateOverride: nextRate,
       clearRateOverride: clearRate,
     );
+
+    // ✅ Promote ONLY when updating the base bucket line
+    // (so cart behavior changes identity exactly once).
+    if (updated.lineId == null && updated.hasOverrides) {
+      updated = updated.copyWith(lineId: _newCatalogLineId());
+    }
 
     final nextLines = [...state.lines];
     nextLines[idx] = updated;
@@ -358,9 +456,7 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
     final safeQty = _clampQty(qty < 1 ? 1 : qty);
 
     final zohoId = (zohoLineItemId ?? '').trim();
-    final id = zohoId.isNotEmpty
-        ? zohoId
-        : 'm_${DateTime.now().microsecondsSinceEpoch}';
+    final id = zohoId.isNotEmpty ? zohoId : _newManualId();
 
     final descTrim = (description ?? '').trim();
 
@@ -425,16 +521,14 @@ class QuoteLinesController extends StateNotifier<QuoteLinesState> {
 
   // ───────────────────────── Zoho Edit Hydration ─────────────────────────
 
-  /// ✅ Critical: when editing an existing Zoho quote, treat ALL Zoho lines as ManualQuoteLine
+  /// ✅ When editing an existing Zoho quote, treat ALL Zoho lines as ManualQuoteLine
   /// using line_item_id as stable identity so overrides persist and updates target the right line.
   void loadFromZohoQuote(ZohoQuote q) {
     final next = <QuoteLine>[];
 
     for (final li in q.lineItems) {
       final zohoId = (li.lineItemId ?? '').trim();
-      final manualId = zohoId.isNotEmpty
-          ? zohoId
-          : 'm_${DateTime.now().microsecondsSinceEpoch}';
+      final manualId = zohoId.isNotEmpty ? zohoId : _newManualId();
 
       final nm = li.name.trim().isEmpty ? 'Item' : li.name.trim();
       final desc = (li.description ?? '').trim();

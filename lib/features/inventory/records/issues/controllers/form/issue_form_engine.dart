@@ -10,12 +10,12 @@ import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_
 import 'package:afyakit/features/inventory/records/issues/services/issue_submission.dart';
 import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
 import 'package:afyakit/features/inventory/records/issues/services/issue_validator.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   return IssueFormEngine(IssueService(tenantId));
 });
 

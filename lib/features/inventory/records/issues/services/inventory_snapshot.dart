@@ -1,6 +1,6 @@
 // lib/features/records/issues/services/inventory_snapshot.dart
 import 'package:afyakit/features/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
 
@@ -24,7 +24,7 @@ class InventorySnapshot {
 }
 
 InventorySnapshot readInventorySnapshot(Ref ref) {
-  final tenantId = ref.read(tenantSlugProvider);
+  final tenantId = ref.read(tenantIdProvider);
 
   List<T> read<T>(AsyncValue<List<T>> v) =>
       v.maybeWhen(data: (d) => d, orElse: () => const []);

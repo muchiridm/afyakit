@@ -9,15 +9,18 @@ extension AfyaKitTenantRoutes on AfyaKitRoutes {
 
   Uri listTenants() => _uriCore('tenants');
   Uri createTenant() => _uriCore('tenants');
-  Uri getTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
-  Uri updateTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
-  Uri deleteTenant(String slug) => _uriCore('tenants/${_seg(slug)}');
+  Uri getTenant(String tenantId) => _uriCore('tenants/${_seg(tenantId)}');
+  Uri updateTenant(String tenantId) => _uriCore('tenants/${_seg(tenantId)}');
+  Uri deleteTenant(String tenantId) => _uriCore('tenants/${_seg(tenantId)}');
 
-  Uri setTenantStatus(String slug) => _uriCore('tenants/${_seg(slug)}/status');
+  Uri setTenantStatus(String tenantId) =>
+      _uriCore('tenants/${_seg(tenantId)}/status');
 
-  Uri setTenantFlag(String slug, String key) =>
-      _uriCore('tenants/${_seg(slug)}/flags/${_seg(key)}');
+  Uri setTenantFlag(String tenantId, String key) =>
+      _uriCore('tenants/${_seg(tenantId)}/flags/${_seg(key)}');
 
-  Uri setTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
-  Uri removeTenantOwner(String slug) => _uriCore('tenants/${_seg(slug)}/owner');
+  Uri setTenantOwner(String tenantId) =>
+      _uriCore('tenants/${_seg(tenantId)}/owner');
+  Uri removeTenantOwner(String tenantId) =>
+      _uriCore('tenants/${_seg(tenantId)}/owner');
 }

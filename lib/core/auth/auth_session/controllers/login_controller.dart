@@ -6,7 +6,7 @@ import 'package:afyakit/core/auth/auth_session/controllers/session_controller.da
 import 'package:afyakit/core/auth/auth_session/models/start_response.dart';
 import 'package:afyakit/core/auth/auth_session/services/auth_api_exception.dart';
 import 'package:afyakit/core/auth/auth_session/services/auth_service.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
@@ -120,7 +120,7 @@ class LoginState {
 
 final loginControllerProvider =
     StateNotifierProvider<LoginController, LoginState>((ref) {
-      final tenantId = ref.watch(tenantSlugProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       return LoginController(ref, tenantId);
     });
 

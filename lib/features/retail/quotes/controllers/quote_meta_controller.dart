@@ -11,13 +11,19 @@ class QuoteMetaState {
     this.reference,
     this.customerNotes,
     this.quoteDate,
+    this.expiryDate, // ✅ NEW
   });
 
   final String? editingQuoteId;
   final ZohoContact? contact;
   final String? reference;
   final String? customerNotes;
+
+  /// Zoho: `date` (estimate_date)
   final DateTime? quoteDate;
+
+  /// ✅ NEW: Zoho `expiry_date`
+  final DateTime? expiryDate;
 
   bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
 
@@ -39,6 +45,8 @@ class QuoteMetaState {
     bool clearCustomerNotes = false,
     DateTime? quoteDate,
     bool clearQuoteDate = false,
+    DateTime? expiryDate, // ✅ NEW
+    bool clearExpiryDate = false, // ✅ NEW
   }) {
     return QuoteMetaState(
       editingQuoteId: clearEditingQuoteId
@@ -50,6 +58,7 @@ class QuoteMetaState {
           ? null
           : (customerNotes ?? this.customerNotes),
       quoteDate: clearQuoteDate ? null : (quoteDate ?? this.quoteDate),
+      expiryDate: clearExpiryDate ? null : (expiryDate ?? this.expiryDate),
     );
   }
 
@@ -79,7 +88,6 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   void clearAll() => state = const QuoteMetaState();
 
   void setContact(ZohoContact c) {
-    // accept "title-only" contacts too (some UIs show title even before id)
     final id = c.contactId.trim();
     final title = c.title.trim();
     if (id.isEmpty && title.isEmpty) return;
@@ -102,12 +110,21 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(quoteDate: _normalize(d));
   }
 
+  /// ✅ NEW
+  void setExpiryDate(DateTime d) {
+    state = state.copyWith(expiryDate: _normalize(d));
+  }
+
+  /// ✅ Optional helper if you want a "clear" button in UI
+  void clearExpiryDate() => state = state.copyWith(clearExpiryDate: true);
+
   void applyZohoMeta({
     required String editingQuoteId,
     ZohoContact? contact,
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
+    DateTime? expiryDate, // ✅ NEW
   }) {
     final id = editingQuoteId.trim();
     state = QuoteMetaState(
@@ -118,7 +135,12 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
           ? null
           : customerNotes!.trim(),
       quoteDate: QuoteMetaState.normalizeDate(quoteDate),
+      expiryDate: QuoteMetaState.normalizeDate(expiryDate), // ✅ NEW
     );
+  }
+
+  void clearQuoteDate() {
+    state = state.copyWith(quoteDate: null);
   }
 }
 

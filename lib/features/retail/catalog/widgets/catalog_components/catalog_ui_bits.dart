@@ -209,6 +209,10 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priceText = priceFormatter(tile.bestSellPrice);
+    final theme = Theme.of(context);
+
+    final mfg = tile.supplierManufacturer?.trim();
+    final hasMfg = mfg != null && mfg.isNotEmpty;
 
     return Row(
       children: [
@@ -222,9 +226,38 @@ class SheetHeader extends StatelessWidget {
                 '${tile.brand} ${tile.strengthSig}'.trim(),
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
+
+              // ✅ Manufacturer (if available)
+              if (hasMfg) ...[
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.factory_outlined,
+                      size: 14,
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        mfg,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.75),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
+                runSpacing: 6,
                 children: [
                   _PillChip(
                     label: tile.form.isEmpty ? 'form' : tile.form,

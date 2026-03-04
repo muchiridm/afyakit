@@ -3,7 +3,7 @@
 part of 'routes.dart';
 
 extension AfyaKitAuthRoutes on AfyaKitRoutes {
-  Uri checkUserStatus() => _uri('auth_login/check-user-status');
+  // Uri checkUserStatus() => _uri('auth_login/check-user-status');
 
   /// Phone-only entry. Backend returns either:
   /// - email attempt (attemptId), OR

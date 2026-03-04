@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/hq/tenants/models/feature_registry.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_feature_providers.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 
 typedef StaffAllowed = bool Function(AuthUser user);
 typedef StaffAllowedRef = bool Function(WidgetRef ref, AuthUser user);

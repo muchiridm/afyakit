@@ -1,8 +1,8 @@
+import 'package:afyakit/shared/utils/parse/collections.dart';
+import 'package:afyakit/shared/utils/parse/primitives.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/items/models/items/base_inventory_item.dart';
-import 'package:afyakit/shared/utils/parsers/parse_ToStringList.dart';
-import 'package:afyakit/shared/utils/parsers/parse_nullable_int.dart';
 
 class MedicationItem implements BaseInventoryItem {
   // ─────────────────────────────────────────────
@@ -93,8 +93,8 @@ class MedicationItem implements BaseInventoryItem {
       route: parseToStringList(map['route']),
       formulation: map['formulation'],
       packSize: map['packSize'],
-      reorderLevel: parseNullableInt(map['reorderLevel']),
-      proposedOrder: parseNullableInt(map['proposedOrder']),
+      reorderLevel: asIntOrNull(map['reorderLevel']),
+      proposedOrder: asIntOrNull(map['proposedOrder']),
     );
   }
 

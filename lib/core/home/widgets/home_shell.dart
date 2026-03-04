@@ -6,9 +6,9 @@ import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/providers/staff_view_mode_provider.dart';
 import 'package:afyakit/core/home/widgets/home_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_feature_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,7 +23,7 @@ class HomeShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantSlugProvider);
+    final tenantId = ref.watch(tenantIdProvider);
     final tenantName = ref.watch(tenantDisplayNameProvider);
 
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));

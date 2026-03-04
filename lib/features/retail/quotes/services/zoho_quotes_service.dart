@@ -11,7 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import '../models/quote_draft.dart';
 import '../models/zoho_quote.dart';
@@ -19,7 +19,7 @@ import '../models/zoho_quote.dart';
 final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoQuotesService(api: api, routes: routes);
@@ -76,11 +76,13 @@ class ZohoQuotesService {
   Future<ZohoQuote> createFromDraft(
     QuoteDraft draft, {
     DateTime? quoteDate,
+    DateTime? expiryDate, // ✅ NEW
   }) async {
     final body = _buildDraftPayload(
       draft,
       requireCustomer: true,
       quoteDate: quoteDate,
+      expiryDate: expiryDate,
     );
 
     final uri = routes.zohoCreateQuote();
@@ -97,6 +99,7 @@ class ZohoQuotesService {
     String quoteId,
     QuoteDraft draft, {
     DateTime? quoteDate,
+    DateTime? expiryDate, // ✅ NEW
   }) async {
     final id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
@@ -105,6 +108,7 @@ class ZohoQuotesService {
       draft,
       requireCustomer: false,
       quoteDate: quoteDate,
+      expiryDate: expiryDate,
     );
 
     final uri = routes.zohoUpdateQuote(id);
@@ -149,10 +153,6 @@ class ZohoQuotesService {
   }
 
   // ───────────────────────── Email / Mark sent ─────────────────────────
-  //
-  // Backend now owns the email flow (contact-person attach, retries, etc).
-  // So FE just triggers it.
-  // ───────────────────────────────────────────────────────────────────
 
   Future<void> email(String quoteId, {ZohoEmailDraft? email}) async {
     final id = quoteId.trim();
@@ -160,8 +160,6 @@ class ZohoQuotesService {
 
     final uri = routes.zohoSendQuote(id);
 
-    // If your BE ignores body for "noBody" send mode, pass null.
-    // If later you support optional email payload, we keep this ready.
     final payload = _pruneEmailJson(
       email?.toJson() ?? const <String, Object?>{},
     );
@@ -194,8 +192,9 @@ class ZohoQuotesService {
     final uri = routes.zohoConvertQuoteToInvoice(id);
 
     final body = <String, Object?>{
-      if (invoiceDate != null) 'invoice_date': _zohoDateFmt.format(invoiceDate),
-      if (dueDate != null) 'due_date': _zohoDateFmt.format(dueDate),
+      if (invoiceDate != null)
+        'invoice_date': _zohoDateFmt.format(_dateOnly(invoiceDate)),
+      if (dueDate != null) 'due_date': _zohoDateFmt.format(_dateOnly(dueDate)),
     };
 
     final res = await api.postUri(uri, data: body.isEmpty ? null : body);
@@ -203,17 +202,12 @@ class ZohoQuotesService {
   }
 
   // ───────────────────────── Payload builder ─────────────────────────
-  //
-  // Matches backend QuoteDraftInput:
-  // - customer_id optional on update, required on create (controlled by requireCustomer)
-  // - line_items always required (min 1)
-  // - line_item_id included when present (important on update to avoid duplication)
-  // ─────────────────────────────────────────────────────────────────
 
   JsonMap _buildDraftPayload(
     QuoteDraft draft, {
     required bool requireCustomer,
     DateTime? quoteDate,
+    DateTime? expiryDate, // ✅ NEW
   }) {
     final customerId = draft.customerIdResolved.trim();
 
@@ -225,21 +219,31 @@ class ZohoQuotesService {
       throw StateError('quote must have at least one line');
     }
 
-    final dateStr = quoteDate == null ? null : _zohoDateFmt.format(quoteDate);
+    final quoteDateStr = quoteDate == null
+        ? null
+        : _zohoDateFmt.format(_dateOnly(quoteDate));
+
+    final expiryDateStr = expiryDate == null
+        ? null
+        : _zohoDateFmt.format(_dateOnly(expiryDate));
 
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
-      if (dateStr != null) 'date': dateStr,
-      if (_cleanOrNull(draft.reference) != null)
-        'reference_number': _cleanOrNull(draft.reference),
-      if (_cleanOrNull(draft.customerNotes) != null)
-        'notes': _cleanOrNull(draft.customerNotes),
 
-      // If you later support 'terms', 'expiry_date', 'contact_person_id' on FE,
-      // add them here too and keep this service as the single mapper.
+      // Zoho: estimate_date
+      if (quoteDateStr != null) 'date': quoteDateStr,
+
+      // ✅ NEW: Zoho: expiry_date
+      if (expiryDateStr != null) 'expiry_date': expiryDateStr,
+
+      if (asCleanStringOrNull(draft.reference) != null)
+        'reference_number': asCleanStringOrNull(draft.reference),
+      if (asCleanStringOrNull(draft.customerNotes) != null)
+        'notes': asCleanStringOrNull(draft.customerNotes),
+
       'line_items': draft.lines
           .map((l) {
-            final lineItemId = _cleanOrNull(l.lineItemId);
+            final lineItemId = asCleanStringOrNull(l.lineItemId);
             final name = _safeLineName(l);
             final description = _safeLineDescription(l);
 
@@ -249,7 +253,6 @@ class ZohoQuotesService {
               if (description != null) 'description': description,
               'quantity': _safeQty(l.quantity),
               'rate': _safeRate(l.rate),
-              // unit: optional; add when you have it in draft
             };
           })
           .toList(growable: false),
@@ -257,6 +260,8 @@ class ZohoQuotesService {
   }
 
   // ───────────────────────── Tiny utils ─────────────────────────
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static Map<String, Object?> _pruneEmailJson(Map<String, Object?> input) {
     final out = <String, Object?>{...input};
@@ -276,7 +281,7 @@ class ZohoQuotesService {
     return out;
   }
 
-  static String? _cleanOrNull(String? v) {
+  static String? asCleanStringOrNull(String? v) {
     final t = (v ?? '').trim();
     return t.isEmpty ? null : t;
   }

@@ -1,6 +1,7 @@
 // lib/features/retail/contacts/services/zoho_contacts_service.dart
 
 import 'package:afyakit/shared/utils/utils.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
@@ -8,12 +9,12 @@ import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   ref,
 ) async {
-  final tenantId = ref.watch(tenantSlugProvider);
+  final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return ZohoContactsService(api: api, routes: routes);
@@ -38,6 +39,9 @@ class ZohoContactsService {
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
+
+  /// Flip this to true temporarily when debugging.
+  static const bool _debug = false;
 
   static String? _toZohoType(ZohoContactTypeFilter f) {
     switch (f) {
@@ -69,18 +73,45 @@ class ZohoContactsService {
     }
   }
 
+  /// Ensures we use Zoho's expected search parameter: `search_text`
+  /// even if routes accidentally uses `search` or something else.
+  Uri _withSearchText(Uri uri, String? search) {
+    final q = (search ?? '').trim();
+    if (q.isEmpty) return uri;
+
+    final qp = Map<String, String>.from(uri.queryParameters);
+
+    // Zoho Books uses `search_text`.
+    // If routes used `search`, replace it.
+    if (qp.containsKey('search')) {
+      qp.remove('search');
+    }
+
+    qp['search_text'] = q;
+
+    return uri.replace(queryParameters: qp);
+  }
+
   Future<List<ZohoContact>> list({
     String? search,
     int limit = 50,
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
   }) async {
-    final uri = routes.zohoListContacts(
-      search: search,
+    final cleanSearch = (search ?? '').trim();
+    final uri0 = routes.zohoListContacts(
+      search: cleanSearch.isEmpty ? null : cleanSearch,
       limit: limit,
       page: page,
       type: _toZohoType(type),
     );
+
+    // ✅ Force correct Zoho search param
+    final uri = _withSearchText(uri0, cleanSearch);
+
+    if (_debug) {
+      debugPrint('[ZohoContactsService.list] q="$cleanSearch" uri=$uri');
+    }
 
     final res = await api.getUri(uri);
     final data = _asJsonMap(res.data);

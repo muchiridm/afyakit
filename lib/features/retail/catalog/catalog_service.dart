@@ -1,4 +1,7 @@
+// lib/features/retail/catalog/catalog_service.dart
+
 import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
@@ -12,6 +15,19 @@ class CatalogService {
 
   CatalogService({required this.api, required this.routes});
 
+  static Map<String, Object?> _asMap(Object? v) {
+    if (v is Map<String, Object?>) return v;
+    if (v is Map) return v.cast<String, Object?>();
+    throw const FormatException('Expected object map');
+  }
+
+  static List<Map<String, Object?>> _asListOfMaps(Object? v) {
+    if (v is List) {
+      return v.map((e) => _asMap(e)).toList(growable: false);
+    }
+    return const [];
+  }
+
   Future<(List<CatalogTile>, bool)> fetchTiles({
     required int offset,
     required int limit,
@@ -21,7 +37,7 @@ class CatalogService {
 
     final uri = routes.diSalesTiles(
       q: query.q.trim().isNotEmpty ? query.q.trim() : null,
-      form: query.form.isNotEmpty ? query.form : null,
+      form: query.form.trim().isNotEmpty ? query.form.trim() : null,
       limit: limit,
       offset: offset,
     );
@@ -30,18 +46,23 @@ class CatalogService {
 
     final Map<String, Object?> body = switch (res.data) {
       final Map<String, Object?> m => m,
-      final String s => jsonDecode(s) as Map<String, Object?>,
+      final Map m => m.cast<String, Object?>(),
+      final String s => _asMap(jsonDecode(s)),
       _ => throw StateError('Unexpected tiles payload'),
     };
 
-    final items = (body['items'] as List)
-        .cast<Map<String, Object?>>()
-        .map(CatalogTile.fromJson)
-        .toList();
+    final rawItems = _asListOfMaps(body['items']);
+    final items = rawItems.map(CatalogTile.fromJson).toList(growable: false);
 
-    final nextOffset = body['nextOffset'] as int?;
-    final hasMore = (nextOffset != null) && items.isNotEmpty;
+    // DawaIndex payload: nextOffset (camel) from your BE proxy
+    final nextOffset = body['nextOffset'];
+    final int? next = nextOffset is int
+        ? nextOffset
+        : (nextOffset is num
+              ? nextOffset.toInt()
+              : int.tryParse('$nextOffset'));
 
+    final hasMore = (next != null) && items.isNotEmpty;
     return (items, hasMore);
   }
 }

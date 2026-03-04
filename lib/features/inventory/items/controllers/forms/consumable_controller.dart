@@ -1,5 +1,5 @@
 import 'package:afyakit/features/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
@@ -24,7 +24,7 @@ class ConsumableController extends InventoryEditableBase {
       _ref.read(inventoryControllerProvider.notifier);
 
   List<ConsumableItem> get all {
-    final tenantId = _ref.read(tenantSlugProvider);
+    final tenantId = _ref.read(tenantIdProvider);
     final asyncValue = _ref.watch(consumableItemsStreamProvider(tenantId));
     return asyncValue.maybeWhen(data: (items) => items, orElse: () => []);
   }

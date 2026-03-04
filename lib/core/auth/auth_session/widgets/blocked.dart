@@ -1,3 +1,5 @@
+// lib/core/auth/auth_session/widgets/blocked.dart
+
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 

@@ -1,6 +1,6 @@
-import 'package:afyakit/core/auth/auth_session/widgets/auth_button.dart';
+import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/core/home/widgets/components/catalog_button.dart';
 import 'package:flutter/material.dart';

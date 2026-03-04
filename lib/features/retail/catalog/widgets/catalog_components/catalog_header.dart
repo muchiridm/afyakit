@@ -4,9 +4,9 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
-import 'package:afyakit/hq/tenants/models/tenant_profile.dart';
-import 'package:afyakit/hq/branding/providers/tenant_logo_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/core/hq/branding/providers/tenant_logo_providers.dart';
+import 'package:afyakit/core/hq/tenants/models/tenant_profile.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,8 +20,11 @@ class CatalogHeader extends ConsumerWidget {
   final String? quoteTotalLabel; // formatted total e.g. "KES 9,147"
   final VoidCallback? onViewQuote;
 
-  /// ✅ NEW: clear cart
+  /// clear quote
   final VoidCallback? onClearQuote;
+
+  /// export tiles CSV (public)
+  final VoidCallback? onExportCsv;
 
   const CatalogHeader({
     super.key,
@@ -31,6 +34,7 @@ class CatalogHeader extends ConsumerWidget {
     this.quoteTotalLabel,
     this.onViewQuote,
     this.onClearQuote,
+    this.onExportCsv,
   });
 
   static const double _bp = 820;
@@ -52,7 +56,6 @@ class CatalogHeader extends ConsumerWidget {
     final gap = _responsiveGap(width);
 
     final logoUrl = ref.watch(tenantPrimaryLogoUrlProvider);
-
     final Widget logo = Image.network(logoUrl, height: 90, fit: BoxFit.contain);
 
     return Container(
@@ -79,6 +82,7 @@ class CatalogHeader extends ConsumerWidget {
                     quoteTotalLabel: quoteTotalLabel,
                     onViewQuote: onViewQuote,
                     onClearQuote: onClearQuote,
+                    onExportCsv: onExportCsv,
                     onLogin: () async => requireAuth(context, ref),
                     centered: true,
                     horizontal: true,
@@ -108,6 +112,7 @@ class CatalogHeader extends ConsumerWidget {
                         quoteTotalLabel: quoteTotalLabel,
                         onViewQuote: onViewQuote,
                         onClearQuote: onClearQuote,
+                        onExportCsv: onExportCsv,
                         onLogin: () async => requireAuth(context, ref),
                         centered: false,
                         horizontal: false,
@@ -278,7 +283,8 @@ class _HeaderButtons extends ConsumerWidget {
   final String? quoteTotalLabel;
 
   final VoidCallback? onViewQuote;
-  final VoidCallback? onClearQuote; // ✅ NEW
+  final VoidCallback? onClearQuote;
+  final VoidCallback? onExportCsv;
 
   final VoidCallback? onLogin;
   final bool centered;
@@ -291,6 +297,7 @@ class _HeaderButtons extends ConsumerWidget {
     this.quoteTotalLabel,
     this.onViewQuote,
     this.onClearQuote,
+    this.onExportCsv,
     this.onLogin,
   });
 
@@ -300,21 +307,17 @@ class _HeaderButtons extends ConsumerWidget {
     final user = userAsync.value;
 
     final count = quoteItemCount ?? 0;
-    final canViewCart = onViewQuote != null && count > 0;
-    final canClearCart = onClearQuote != null && count > 0;
+    final canView = onViewQuote != null && count > 0;
+    final canClear = onClearQuote != null && count > 0;
 
-    // Cart label
-    String cartLabel() {
-      if (count <= 0) return 'Cart';
+    String quoteLabel() {
+      if (count <= 0) return 'Quote';
       final total = quoteTotalLabel;
       return total == null || total.isEmpty
-          ? 'Cart ($count)'
-          : 'Cart ($count) · $total';
+          ? 'Quote ($count)'
+          : 'Quote ($count) · $total';
     }
 
-    // ─────────────────────────────────────────────
-    // 1. USER SIGNED IN → show HOME button
-    // ─────────────────────────────────────────────
     final homeButton = user != null
         ? FilledButton.tonalIcon(
             icon: const Icon(Icons.home_outlined),
@@ -327,9 +330,6 @@ class _HeaderButtons extends ConsumerWidget {
           )
         : null;
 
-    // ─────────────────────────────────────────────
-    // 2. USER NOT SIGNED IN → show Login/Register
-    // ─────────────────────────────────────────────
     final loginButton = (user == null && onLogin != null)
         ? FilledButton.tonal(
             onPressed: onLogin,
@@ -337,39 +337,29 @@ class _HeaderButtons extends ConsumerWidget {
           )
         : null;
 
-    // ─────────────────────────────────────────────
-    // Clear cart button (only if cart has items)
-    // ─────────────────────────────────────────────
-    final clearCartButton = count > 0
+    final clearButton = count > 0
         ? IconButton(
-            tooltip: 'Clear cart',
-            onPressed: canClearCart ? onClearQuote : null,
+            tooltip: 'Clear quote',
+            onPressed: canClear ? onClearQuote : null,
             icon: const Icon(Icons.delete_outline),
           )
         : null;
 
-    // ─────────────────────────────────────────────
-    // Compose children in order:
-    // Home (if logged in)
-    // Clear (if cart has items)
-    // Cart (always shown if callback provided)
-    // Login (if not logged in)
-    // ─────────────────────────────────────────────
+    final quoteButton = (onViewQuote != null)
+        ? FilledButton.icon(
+            onPressed: canView ? onViewQuote : null,
+            icon: const Icon(Icons.shopping_cart_outlined),
+            label: Text(quoteLabel()),
+          )
+        : null;
+
     final children = <Widget>[
       if (homeButton != null) homeButton,
-      if (clearCartButton != null) clearCartButton,
-      if (onViewQuote != null)
-        FilledButton.icon(
-          onPressed: canViewCart ? onViewQuote : null,
-          icon: const Icon(Icons.shopping_cart_outlined),
-          label: Text(cartLabel()),
-        ),
+      if (clearButton != null) clearButton,
+      if (quoteButton != null) quoteButton,
       if (loginButton != null) loginButton,
     ];
 
-    if (children.isEmpty) return const SizedBox.shrink();
-
-    // Horizontal layout for narrow screens
     if (horizontal) {
       final align = centered ? WrapAlignment.center : WrapAlignment.end;
       return Wrap(
@@ -381,7 +371,6 @@ class _HeaderButtons extends ConsumerWidget {
       );
     }
 
-    // Vertical layout for wide screens
     final align = centered ? CrossAxisAlignment.center : CrossAxisAlignment.end;
     return Column(
       mainAxisSize: MainAxisSize.min,

@@ -5,8 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/hq/tenants/providers/tenant_session_guard_provider.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_session_guard_provider.dart';
 
 /// Async init (real client creation)
 /// Async init (real client creation)
@@ -26,7 +26,7 @@ final afyakitClientFutureProvider = FutureProvider<AfyaKitClient>((ref) async {
     }
   }
 
-  final tenantId = ref.watch(tenantSlugProvider).trim().toLowerCase();
+  final tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
   final base = apiBaseUrl(tenantId);
 
   return AfyaKitClient.create(

@@ -49,6 +49,8 @@ OtpNextStep _parseNextStep(String? s) {
 
 OtpNextStep _nextFromUser(AuthUser u) {
   // 1) requiresEmailStep
+  // NOTE: backend might send 'email' but FE model stores emailLower.
+  // As long as AuthUser.fromMap maps it, this is correct.
   if (!u.emailVerified || (u.emailLower ?? '').trim().isEmpty) {
     return OtpNextStep.collectEmail;
   }
@@ -138,6 +140,8 @@ class AuthService {
 
   Options get _skipAuth =>
       Options(extra: const <String, dynamic>{'skipAuth': true});
+
+  static bool _acceptStatusUnder500(int? s) => s != null && s < 500;
 
   // ─────────────────────────────────────────────
   // Debug logging
@@ -290,11 +294,6 @@ class AuthService {
 
   // ─────────────────────────────────────────────
   // PUBLIC: start phone entry (AUTO)
-  //
-  // Backend chooses:
-  // - 201 + { channel: 'email', attemptId, ... }  → email OTP flow
-  // - 201 + { channel: 'sms', clientAction:'firebase_sms', ... } → Firebase SMS flow
-  // - 400 + { code:'EMAIL_REQUIRED', clientAction:'collect_email', ... } → collect email UI
   // ─────────────────────────────────────────────
 
   Future<StartResponse> startAutoOtp(
@@ -309,11 +308,9 @@ class AuthService {
       'codeLength': codeLength,
     };
 
-    // ✅ Critical: allow 400 to be handled as control-flow (EMAIL_REQUIRED),
-    // while still rejecting 500+ as real server errors.
     final opts = Options(
-      extra: _skipAuth.extra, // preserve skipAuth behavior
-      validateStatus: (s) => s != null && s < 500,
+      extra: _skipAuth.extra,
+      validateStatus: _acceptStatusUnder500,
     );
 
     try {
@@ -326,7 +323,6 @@ class AuthService {
       final out = _parseStartResponse(res.data);
 
       // ✅ If backend says EMAIL_REQUIRED (expected 400), DO NOT throw.
-      // UI should branch based on StartResponse fields.
       if (res.statusCode == 400 && out.requiresCollectEmail) {
         return out;
       }
@@ -337,7 +333,6 @@ class AuthService {
         throw StateError('startAutoOtp · HTTP ${res.statusCode} · $err');
       }
 
-      // 201 path (email attempt OR firebase sms client flow)
       _ensureAttemptId(
         out,
         'OTP start returned ok=true but no attemptId was returned (and not firebase_sms).',
@@ -345,7 +340,6 @@ class AuthService {
 
       return out;
     } on DioException catch (e) {
-      // 500+ still lands here (validateStatus rejects)
       _failDio('startAutoOtp', e);
     }
   }
@@ -391,9 +385,6 @@ class AuthService {
 
   // ─────────────────────────────────────────────
   // AUTH REQUIRED: OTP verify for verify-email flow
-  //
-  // Uses the same /otp/verify endpoint but requires Authorization.
-  // Backend will enforce purpose=verify_email by the attemptId it minted.
   // ─────────────────────────────────────────────
 
   Future<OtpVerifyApiResult> verifyEmailOtpAuthed({
@@ -507,7 +498,7 @@ class AuthService {
 
     final opts = Options(
       extra: _skipAuth.extra,
-      validateStatus: (s) => s != null && s < 500,
+      validateStatus: _acceptStatusUnder500,
     );
 
     try {
@@ -557,19 +548,18 @@ class AuthService {
   // ─────────────────────────────────────────────
   // AUTH REQUIRED: membership handshake (after Firebase login)
   //
-  // Backend returns RegistrationPayload-like membership data (NOT {ok,next}).
-  // We treat this call as:
-  // - "ensure membership + projections"
-  // then we load the real session user (/auth/session/me)
-  // and compute the next step locally.
+  // ✅ Backend-aligned: we use /auth/session/sync-claims as the handshake.
+  // This is exactly the “refresh session” endpoint in your backend.
+  //
+  // Then we load /auth/session/me as canonical session user and compute next.
   // ─────────────────────────────────────────────
 
   Future<CheckStatusResult> checkUserStatusAfterFirebaseLogin() async {
-    final uri = routes.checkUserStatus();
+    final uri = routes.syncClaims();
     final authed = await _authHeaderFresh();
 
     try {
-      _logReq(op: 'checkUserStatus', uri: uri, data: const {}, options: authed);
+      _logReq(op: 'syncClaims', uri: uri, data: const {}, options: authed);
 
       final res = await _dio.postUri(
         uri,
@@ -577,17 +567,14 @@ class AuthService {
         options: authed,
       );
 
-      _logResp('checkUserStatus', res);
+      _logResp('syncClaims', res);
 
-      // We intentionally do NOT parse this response into a strict model,
-      // because backend returns RegistrationPayload and may evolve.
-      // The canonical user for the app is /auth/session/me.
       final user = await loadSession();
       final next = _nextFromUser(user);
 
       return CheckStatusResult(ok: true, next: next, user: user);
     } on DioException catch (ex) {
-      _failDio('checkUserStatus', ex);
+      _failDio('syncClaims', ex);
     }
   }
 

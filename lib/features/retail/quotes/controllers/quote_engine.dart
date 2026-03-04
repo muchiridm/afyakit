@@ -1,17 +1,14 @@
-// lib/features/retail/quotes/controllers/quote_engine.dart
-
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
+
 import 'package:afyakit/features/retail/quotes/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 
 class QuoteEngine {
   QuoteEngine(this.ref);
@@ -52,39 +49,7 @@ class QuoteEngine {
     return false;
   }
 
-  // ───────────────────────── Draft patching (legacy helper) ─────────────────────────
-
-  QuoteDraft patchDraftMeta(
-    QuoteDraft cur, {
-    ZohoContact? contact,
-    String? reference,
-    String? customerNotes,
-  }) {
-    var next = cur;
-
-    if (contact != null) {
-      final customerId = contact.contactId.trim();
-      final customerName = contact.title.trim();
-
-      next = next.copyWith(
-        contact: contact,
-        contactId: customerId.isEmpty ? null : customerId,
-        contactName: customerName.isEmpty ? null : customerName,
-      );
-    }
-
-    if (reference != null) {
-      final t = reference.trim();
-      next = next.copyWith(reference: t.isEmpty ? null : t);
-    }
-
-    if (customerNotes != null) {
-      final t = customerNotes.trim();
-      next = next.copyWith(customerNotes: t.isEmpty ? null : t);
-    }
-
-    return next;
-  }
+  // ───────────────────────── Date helpers ─────────────────────────
 
   DateTime? normalizeDate(DateTime? d) {
     if (d == null) return null;
@@ -100,10 +65,10 @@ class QuoteEngine {
   }
 
   void setLinesFromZoho(ZohoQuote q) {
-    // Current approach: hydrate as ManualQuoteLine so we preserve Zoho line_item_id.
     final lines = q.lineItems
         .map((li) {
           final qty = li.quantity.round().clamp(1, 9999);
+
           final rate = (li.rate.isNaN || li.rate.isInfinite || li.rate < 0)
               ? 0
               : li.rate;
@@ -133,10 +98,12 @@ class QuoteEngine {
   }
 
   QuoteMetaState metaFromZoho(ZohoQuote q) {
-    final draft = QuoteDraft.fromZohoQuote(q);
+    final quoteDate = normalizeDate(q.date);
+    final expiryDate = normalizeDate(q.expiryDate);
 
-    final d = q.date;
-    final quoteDate = d == null ? null : DateTime(d.year, d.month, d.day);
+    // Note: QuoteDraft.fromZohoQuote is line/customer hydration only.
+    // Meta dates are taken from ZohoQuote directly.
+    final draft = QuoteDraft.fromZohoQuote(q);
 
     return QuoteMetaState(
       contact: draft.contact,
@@ -147,36 +114,11 @@ class QuoteEngine {
           ? null
           : draft.customerNotes!.trim(),
       quoteDate: quoteDate,
+      expiryDate: expiryDate, // ✅ NEW
     );
   }
 
-  DateTime? quoteDateFromZoho(ZohoQuote q) => q.date == null
-      ? null
-      : DateTime(q.date!.year, q.date!.month, q.date!.day);
-
   // ───────────────────────── Validation ─────────────────────────
-
-  String? validateForSubmit({
-    required QuoteState state,
-    required bool requirePrices,
-  }) {
-    if (_lines.lines.isEmpty) {
-      return state.isEditing ? 'Quote has no items' : 'Add at least one item';
-    }
-
-    if (!state.isEditing) {
-      return null;
-    }
-
-    final unnamedManual = _lines.lines.whereType<ManualQuoteLine>().where((l) {
-      return l.name.trim().isEmpty;
-    }).toList();
-    if (unnamedManual.isNotEmpty) {
-      return 'Some items are missing a name. Please edit them.';
-    }
-
-    return null;
-  }
 
   String? validateForSubmitV2({
     required QuoteMetaState meta,
@@ -194,6 +136,7 @@ class QuoteEngine {
     final unnamedManual = _lines.lines.whereType<ManualQuoteLine>().where((l) {
       return l.name.trim().isEmpty;
     }).toList();
+
     if (unnamedManual.isNotEmpty) {
       return 'Some items are missing a name. Please edit them.';
     }
@@ -204,11 +147,6 @@ class QuoteEngine {
   int missingPriceLineCount() => _lines.missingPriceLineCount;
 
   // ───────────────────────── Payload build ─────────────────────────
-
-  QuoteDraft buildPayloadDraftFromState(QuoteState state) {
-    final lineDrafts = _buildLineDrafts(requirePrices: true);
-    return const QuoteDraft().copyWith(lines: lineDrafts);
-  }
 
   QuoteDraft buildPayloadDraftFromMeta({
     required QuoteMetaState meta,
@@ -234,15 +172,9 @@ class QuoteEngine {
     );
   }
 
-  /// ✅ FIXED:
-  /// Must match ZohoQuotesService mapping:
-  /// - Zoho "name" comes from QuoteLineDraft.description (preferred), then tileTitle.
-  /// - Zoho "description" comes from tile.tileDesc.
-  /// - rate/quantity from draft.rate/draft.quantity.
   List<QuoteLineDraft> _buildLineDrafts({required bool requirePrices}) {
     return _lines.lines
         .map((l) {
-          // ───────────────────────── Catalog lines ─────────────────────────
           if (l is CatalogQuoteLine) {
             final qty = (l.qty < 1 ? 1 : l.qty).clamp(1, 9999);
 
@@ -259,10 +191,6 @@ class QuoteEngine {
                 ? 0
                 : rate;
 
-            // Build a tile that reflects edits:
-            // - tileTitle is fallback name
-            // - tileDesc becomes Zoho description
-            // - bestSellPrice reflects edited rate (useful elsewhere)
             final tile = _toDiSalesTileFromCatalogLine(
               l,
               name: name,
@@ -273,16 +201,11 @@ class QuoteEngine {
               tile: tile,
               quantity: qty,
               rate: safeRate,
-
-              // ✅ Critical: this is what ZohoQuotesService uses as "name"
               description: name,
-
-              // Catalog lines currently don't preserve Zoho line_item_id
               lineItemId: null,
             );
           }
 
-          // ───────────────────────── Manual lines ─────────────────────────
           final m = l as ManualQuoteLine;
 
           final qty = (m.qty < 1 ? 1 : m.qty).clamp(1, 9999);
@@ -297,7 +220,6 @@ class QuoteEngine {
               ? null
               : m.description!.trim();
 
-          // This tile feeds Zoho description via tileDesc
           final tile = DiSalesTile.fallbackFromName(
             name: name,
             description: desc,
@@ -313,11 +235,7 @@ class QuoteEngine {
             tile: tile,
             quantity: qty,
             rate: safeRate,
-
-            // ✅ Zoho name (service prefers this over tileTitle)
             description: name,
-
-            // ✅ Preserve Zoho identity for in-place updates
             lineItemId: lineItemId,
           );
         })
@@ -325,16 +243,29 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Remote ops ─────────────────────────
+  // ✅ UPDATED signatures: quoteDate + expiryDate
 
-  Future<ZohoQuote> create(QuoteDraft payload, {DateTime? quoteDate}) async =>
-      (await _svc).createFromDraft(payload, quoteDate: quoteDate);
+  Future<ZohoQuote> create(
+    QuoteDraft payload, {
+    DateTime? quoteDate,
+    DateTime? expiryDate,
+  }) async => (await _svc).createFromDraft(
+    payload,
+    quoteDate: quoteDate,
+    expiryDate: expiryDate,
+  );
 
   Future<ZohoQuote> update(
     String quoteId,
     QuoteDraft payload, {
     DateTime? quoteDate,
-  }) async =>
-      (await _svc).updateFromDraft(quoteId, payload, quoteDate: quoteDate);
+    DateTime? expiryDate,
+  }) async => (await _svc).updateFromDraft(
+    quoteId,
+    payload,
+    quoteDate: quoteDate,
+    expiryDate: expiryDate,
+  );
 
   Future<void> delete(String quoteId) async => (await _svc).delete(quoteId);
 
@@ -360,10 +291,6 @@ class QuoteEngine {
 
   // ───────────────────────── Helpers ─────────────────────────
 
-  /// ✅ NEW: builds a DiSalesTile that reflects user overrides.
-  /// IMPORTANT:
-  /// - Zoho description comes from tileDesc.
-  /// - Zoho name comes from QuoteLineDraft.description, but tileTitle is still a good fallback.
   static DiSalesTile _toDiSalesTileFromCatalogLine(
     CatalogQuoteLine l, {
     required String name,
