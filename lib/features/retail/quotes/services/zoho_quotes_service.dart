@@ -212,7 +212,7 @@ class ZohoQuotesService {
   }
 
   Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? email}) async {
-    await email!;
+    email!;
     await markSent(quoteId);
   }
 

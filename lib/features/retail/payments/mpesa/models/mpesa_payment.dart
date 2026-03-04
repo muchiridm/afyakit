@@ -103,10 +103,11 @@ class MpesaPayment {
       src['updatedAtIso'] ?? src['updated_at_iso'] ?? src['updatedAt'],
     );
     final updatedAt = DateTime.tryParse(updatedAtIso ?? '');
-    if (updatedAt == null)
+    if (updatedAt == null) {
       throw const FormatException(
         'MpesaPayment.fromJson: missing/invalid updatedAtIso',
       );
+    }
 
     final zohoSyncedAtIso = _optStr(src['zohoSyncedAtIso']);
     final zohoSyncedAt = zohoSyncedAtIso != null

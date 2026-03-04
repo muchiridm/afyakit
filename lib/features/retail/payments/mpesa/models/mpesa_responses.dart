@@ -27,10 +27,12 @@ class MpesaInitiateResult {
     final id = _s(j['paymentId'] ?? j['payment_id'] ?? j['id']);
     final status = _s(j['status']);
 
-    if (id.isEmpty)
+    if (id.isEmpty) {
       throw const FormatException('MpesaInitiateResult: missing paymentId');
-    if (status.isEmpty)
+    }
+    if (status.isEmpty) {
       throw const FormatException('MpesaInitiateResult: missing status');
+    }
 
     return MpesaInitiateResult(
       paymentId: id,

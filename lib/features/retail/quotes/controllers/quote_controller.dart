@@ -247,8 +247,9 @@ class QuoteController extends StateNotifier<QuoteState> {
       // HARD LOCK
       _metaCtl.setContact(best);
     } catch (_) {
-      if (showError)
+      if (showError) {
         SnackService.showError('Failed to resolve customer profile.');
+      }
     }
   }
 
