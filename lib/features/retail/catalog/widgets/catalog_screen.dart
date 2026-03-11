@@ -3,8 +3,11 @@
 import 'dart:async';
 
 import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
-import 'package:afyakit/features/retail/catalog/catalog_models.dart';
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +48,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   final _searchC = TextEditingController();
   final _searchFocus = FocusNode();
 
+  bool get _showDiscovery {
+    final state = ref.read(catalogControllerProvider);
+    return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +89,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   void _onScroll() {
+    if (!mounted) return;
+    if (_showDiscovery) return;
+    if (!_scroll.hasClients) return;
+
     final state = ref.read(catalogControllerProvider);
     final atEnd =
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
@@ -91,13 +103,23 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     }
   }
 
+  void _applySearch(String q, CatalogState state) {
+    final next = q.trim();
+    _searchC.text = next;
+    _searchC.selection = TextSelection.collapsed(offset: _searchC.text.length);
+
+    // ignore: discarded_futures
+    ref
+        .read(catalogControllerProvider.notifier)
+        .refresh(query: state.query.copyWith(q: next));
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(catalogItemsProvider);
     final state = ref.watch(catalogControllerProvider);
     final ctrl = ref.read(catalogControllerProvider.notifier);
 
-    // quote lines state (replaces cart)
     final quoteLinesState = ref.watch(quoteLinesControllerProvider);
     final quoteLineCount = quoteLinesState.lines.length;
 
@@ -114,7 +136,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
         quoteItemCount: quoteLineCount,
         quoteTotalLabel: quoteTotalLabel,
-
         onClearQuote: quoteLineCount == 0
             ? null
             : () {
@@ -145,38 +166,73 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     CatalogState state,
   ) {
     final ctrl = ref.read(catalogControllerProvider.notifier);
+    final showDiscovery =
+        state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
 
-    final int? resultCount = itemsAsync.maybeWhen(
-      data: (items) => items.length,
-      orElse: () => null,
-    );
+    final int? resultCount = showDiscovery
+        ? null
+        : itemsAsync.maybeWhen(
+            data: (items) => items.length,
+            orElse: () => null,
+          );
+
+    final hasActiveFilters =
+        state.query.q.trim().isNotEmpty || state.query.form.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         SearchBarField(
           controller: _searchC,
           focusNode: _searchFocus,
           resultCount: resultCount,
-          onSubmit: (q) => ctrl.refresh(query: state.query.copyWith(q: q)),
-          onChanged: (q) =>
-              ctrl.refreshDebounced(query: state.query.copyWith(q: q)),
+          showClear: hasActiveFilters,
+          onClear: () {
+            if (!mounted) return;
+            _searchC.clear();
+            // ignore: discarded_futures
+            ctrl.refresh(query: const CatalogQuery());
+          },
+          onSubmit: (q) {
+            if (!mounted) return;
+            // ignore: discarded_futures
+            ctrl.refresh(query: state.query.copyWith(q: q));
+          },
+          onChanged: (q) {
+            if (!mounted) return;
+            ctrl.refreshDebounced(query: state.query.copyWith(q: q));
+          },
         ),
         const SizedBox(height: 8),
-        itemsAsync.when(
-          loading: () => SkeletonGrid(scrollController: _scroll),
-          error: (e, _) =>
-              ErrorPane(error: '$e', onRetry: () => ctrl.refresh()),
-          data: (items) => CatalogGrid(
-            items: items,
-            scrollController: _scroll,
-            onTapTile: (t) => _showTileSheet(context, t),
-            showTailLoader: state.hasMore,
-            priceFormatter: _formatPriceCeil,
-            priceColor: _priceGreen,
-          ),
+        const CatalogDisclaimer(),
+        const SizedBox(height: 14),
+
+        CatalogFiltersBar(
+          selectedForm: state.query.form,
+          onSelectForm: (form) {
+            ctrl.refresh(query: state.query.copyWith(form: form));
+          },
         ),
+
+        const SizedBox(height: 14),
+
+        if (showDiscovery)
+          CatalogDiscovery(onExampleTap: (q) => _applySearch(q, state))
+        else
+          itemsAsync.when(
+            loading: () => SkeletonGrid(scrollController: _scroll),
+            error: (e, _) =>
+                ErrorPane(error: '$e', onRetry: () => ctrl.refresh()),
+            data: (items) => CatalogGrid(
+              items: items,
+              scrollController: _scroll,
+              onTapTile: (t) => _showTileSheet(context, t),
+              showTailLoader: state.hasMore,
+              priceFormatter: _formatPriceCeil,
+              priceColor: _priceGreen,
+            ),
+          ),
       ],
     );
   }

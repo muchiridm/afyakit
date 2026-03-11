@@ -2,10 +2,10 @@
 
 import 'dart:async';
 
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'catalog_models.dart';
 import 'catalog_service.dart';
 
 @immutable
@@ -14,8 +14,6 @@ class CatalogState {
   final CatalogQuery query;
   final bool hasMore;
   final int offset;
-
-  /// UI can reflect export in progress without owning export logic.
   final bool exporting;
 
   const CatalogState({
@@ -27,9 +25,9 @@ class CatalogState {
   });
 
   const CatalogState.initial()
-    : items = const AsyncLoading(),
+    : items = const AsyncData(<CatalogTile>[]),
       query = const CatalogQuery(),
-      hasMore = true,
+      hasMore = false,
       offset = 0,
       exporting = false;
 
@@ -48,17 +46,14 @@ class CatalogState {
       exporting: exporting ?? this.exporting,
     );
   }
+
+  bool get isDiscoveryMode => query.normalized.isDiscoveryMode;
 }
 
 class CatalogController extends StateNotifier<CatalogState> {
   CatalogController(CatalogService? service)
     : _service = service,
-      super(const CatalogState.initial()) {
-    if (_service != null) {
-      // ignore: discarded_futures
-      refresh();
-    }
-  }
+      super(const CatalogState.initial());
 
   CatalogService? _service;
 
@@ -66,31 +61,42 @@ class CatalogController extends StateNotifier<CatalogState> {
   Timer? _debounce;
   int _generation = 0;
 
-  bool get hasMore => state.hasMore;
-  CatalogQuery get query => state.query;
-  bool get exporting => state.exporting;
-
   bool get _ready => _service != null;
 
-  /// Called when AfyaKitClient becomes ready later
   void setService(CatalogService service) {
+    if (!mounted) return;
     if (_service != null) return;
     _service = service;
-
-    // ignore: discarded_futures
-    refresh();
   }
 
-  /// Hard refresh
   Future<void> refresh({CatalogQuery? query}) async {
     _debounce?.cancel();
 
+    if (!mounted) return;
+
+    final CatalogQuery baseQuery = query ?? state.query;
+    final CatalogQuery nextQuery = baseQuery.normalized;
+
     _generation++;
-    final currentGen = _generation;
+    final int currentGen = _generation;
+
+    _acc.clear();
+
+    if (nextQuery.isDiscoveryMode) {
+      if (!mounted || currentGen != _generation) return;
+      state = state.copyWith(
+        query: nextQuery,
+        items: const AsyncData(<CatalogTile>[]),
+        hasMore: false,
+        offset: 0,
+      );
+      return;
+    }
 
     if (!_ready) {
+      if (!mounted || currentGen != _generation) return;
       state = state.copyWith(
-        query: query ?? state.query,
+        query: nextQuery,
         items: const AsyncLoading(),
         hasMore: true,
         offset: 0,
@@ -98,9 +104,8 @@ class CatalogController extends StateNotifier<CatalogState> {
       return;
     }
 
-    _acc.clear();
     state = state.copyWith(
-      query: query ?? state.query,
+      query: nextQuery,
       hasMore: true,
       offset: 0,
       items: const AsyncLoading(),
@@ -108,31 +113,47 @@ class CatalogController extends StateNotifier<CatalogState> {
 
     await _loadPage(
       gen: currentGen,
-      query: query ?? state.query,
+      query: nextQuery,
       offset: 0,
       append: false,
     );
   }
 
-  /// Debounced search
   void refreshDebounced({CatalogQuery? query, Duration? delay}) {
     _debounce?.cancel();
-    _debounce = Timer(delay ?? const Duration(milliseconds: 420), () {
+
+    if (!mounted) return;
+
+    final CatalogQuery baseQuery = query ?? state.query;
+    final CatalogQuery nextQuery = baseQuery.normalized;
+
+    if (nextQuery.isDiscoveryMode) {
       // ignore: discarded_futures
-      refresh(query: query);
+      refresh(query: nextQuery);
+      return;
+    }
+
+    _debounce = Timer(delay ?? const Duration(milliseconds: 420), () {
+      if (!mounted) return;
+      // ignore: discarded_futures
+      refresh(query: nextQuery);
     });
   }
 
   Future<void> loadMore() async {
+    if (!mounted) return;
     if (!_ready) return;
-    if (!state.hasMore) return;
 
-    final currentGen = _generation;
+    final CatalogState current = state;
+    if (current.isDiscoveryMode) return;
+    if (!current.hasMore) return;
+
+    final int currentGen = _generation;
 
     await _loadPage(
       gen: currentGen,
-      query: state.query,
-      offset: state.offset,
+      query: current.query.normalized,
+      offset: current.offset,
       append: true,
     );
   }
@@ -143,6 +164,9 @@ class CatalogController extends StateNotifier<CatalogState> {
     required int offset,
     required bool append,
   }) async {
+    if (!mounted) return;
+    if (!_ready) return;
+
     try {
       final (items, hasMore) = await _service!.fetchTiles(
         offset: offset,
@@ -161,8 +185,6 @@ class CatalogController extends StateNotifier<CatalogState> {
           ..addAll(items);
       }
 
-      if (!mounted) return;
-
       state = state.copyWith(
         items: AsyncData(List.unmodifiable(_acc)),
         hasMore: hasMore,
@@ -174,5 +196,16 @@ class CatalogController extends StateNotifier<CatalogState> {
 
       state = state.copyWith(items: AsyncError(e, st));
     }
+  }
+
+  void disposeDebounce() {
+    _debounce?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _generation++; // invalidate any in-flight callbacks/results
+    super.dispose();
   }
 }

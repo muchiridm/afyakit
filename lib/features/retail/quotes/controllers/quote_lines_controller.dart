@@ -6,7 +6,7 @@ import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/retail/catalog/catalog_models.dart';
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 
 @immutable
 sealed class QuoteLine {

@@ -17,13 +17,9 @@ class CatalogHeader extends ConsumerWidget {
   final ValueChanged<String> onFormChanged;
 
   final int? quoteItemCount;
-  final String? quoteTotalLabel; // formatted total e.g. "KES 9,147"
+  final String? quoteTotalLabel;
   final VoidCallback? onViewQuote;
-
-  /// clear quote
   final VoidCallback? onClearQuote;
-
-  /// export tiles CSV (public)
   final VoidCallback? onExportCsv;
 
   const CatalogHeader({
@@ -37,10 +33,10 @@ class CatalogHeader extends ConsumerWidget {
     this.onExportCsv,
   });
 
-  static const double _bp = 820;
+  static const double _bp = 860;
 
   static double _responsiveGap(double w) {
-    const minG = 6.0;
+    const minG = 8.0;
     const maxG = 16.0;
     const start = 480.0;
     const end = 1440.0;
@@ -56,7 +52,11 @@ class CatalogHeader extends ConsumerWidget {
     final gap = _responsiveGap(width);
 
     final logoUrl = ref.watch(tenantPrimaryLogoUrlProvider);
-    final Widget logo = Image.network(logoUrl, height: 90, fit: BoxFit.contain);
+    final logo = Image.network(
+      logoUrl,
+      height: isNarrow ? 82 : 88,
+      fit: BoxFit.contain,
+    );
 
     return Container(
       width: double.infinity,
@@ -64,18 +64,18 @@ class CatalogHeader extends ConsumerWidget {
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: theme.dividerColor.withOpacity(0.35),
-            width: 0.5,
+            color: theme.dividerColor.withOpacity(0.28),
+            width: 0.6,
           ),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        padding: EdgeInsets.fromLTRB(16, isNarrow ? 12 : 10, 16, 8),
         child: isNarrow
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(height: 90, child: Center(child: logo)),
+                  SizedBox(height: 86, child: Center(child: logo)),
                   const SizedBox(height: 8),
                   _HeaderButtons(
                     quoteItemCount: quoteItemCount,
@@ -103,7 +103,7 @@ class CatalogHeader extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  SizedBox(width: 240, height: 90, child: Center(child: logo)),
+                  SizedBox(width: 220, height: 88, child: Center(child: logo)),
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerRight,
@@ -115,7 +115,7 @@ class CatalogHeader extends ConsumerWidget {
                         onExportCsv: onExportCsv,
                         onLogin: () async => requireAuth(context, ref),
                         centered: false,
-                        horizontal: false,
+                        horizontal: true,
                       ),
                     ),
                   ),
@@ -125,8 +125,6 @@ class CatalogHeader extends ConsumerWidget {
     );
   }
 }
-
-// ───────────────────── left: contact info ─────────────────────
 
 class _HeaderContact extends ConsumerWidget {
   final bool centered;
@@ -162,44 +160,33 @@ class _HeaderContact extends ConsumerWidget {
       },
     );
 
-    final items = <Widget>[];
-
-    if (whatsapp != null) {
-      items.add(
+    final items = <Widget>[
+      if (whatsapp != null)
         _ContactItem(
           icon: Icons.chat_bubble_outline,
           label: 'WhatsApp',
           value: whatsapp!,
         ),
-      );
-    }
-
-    if (mobileMoneyName != null && mobileMoneyNumber != null) {
-      items.add(
+      if (mobileMoneyName != null && mobileMoneyNumber != null)
         _ContactItem(
           icon: Icons.payments_rounded,
           label: mobileMoneyName!,
           value: mobileMoneyNumber!,
         ),
-      );
-    }
-
-    if (registrationNumber != null) {
-      items.add(
+      if (registrationNumber != null)
         _ContactItem(
           icon: Icons.verified_rounded,
           label: 'Reg. No.',
           value: registrationNumber!,
         ),
-      );
-    }
+    ];
 
     if (items.isEmpty) return const SizedBox.shrink();
 
     if (horizontalLayout) {
       final align = centered ? WrapAlignment.center : WrapAlignment.start;
       return Wrap(
-        spacing: 16,
+        spacing: 14,
         runSpacing: 4,
         alignment: align,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -216,7 +203,7 @@ class _HeaderContact extends ConsumerWidget {
       crossAxisAlignment: align,
       children: [
         for (final w in items)
-          Padding(padding: const EdgeInsets.only(bottom: 2), child: w),
+          Padding(padding: const EdgeInsets.only(bottom: 3), child: w),
       ],
     );
   }
@@ -241,21 +228,25 @@ class _ContactItem extends StatelessWidget {
     final baseValue = theme.textTheme.bodySmall;
 
     final labelStyle = baseLabel?.copyWith(
-      fontSize: (baseLabel.fontSize ?? 11) + 1,
-      color: theme.colorScheme.onSurface.withOpacity(0.7),
+      fontSize: (baseLabel.fontSize ?? 11),
+      color: theme.colorScheme.onSurface.withOpacity(0.62),
       fontWeight: FontWeight.w500,
     );
 
     final valueStyle = baseValue?.copyWith(
-      fontSize: (baseValue.fontSize ?? 12) + 1,
-      color: theme.colorScheme.onSurface,
+      fontSize: (baseValue.fontSize ?? 12),
+      color: theme.colorScheme.onSurface.withOpacity(0.88),
       fontWeight: FontWeight.w600,
     );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16),
+        Icon(
+          icon,
+          size: 15,
+          color: theme.colorScheme.onSurface.withOpacity(0.7),
+        ),
         const SizedBox(width: 6),
         Text(label, style: labelStyle),
         const SizedBox(width: 6),
@@ -276,16 +267,12 @@ class _ContactItem extends StatelessWidget {
   }
 }
 
-// ───────────────────── right: buttons ─────────────────────
-
 class _HeaderButtons extends ConsumerWidget {
   final int? quoteItemCount;
   final String? quoteTotalLabel;
-
   final VoidCallback? onViewQuote;
   final VoidCallback? onClearQuote;
   final VoidCallback? onExportCsv;
-
   final VoidCallback? onLogin;
   final bool centered;
   final bool horizontal;
@@ -320,8 +307,12 @@ class _HeaderButtons extends ConsumerWidget {
 
     final homeButton = user != null
         ? FilledButton.tonalIcon(
-            icon: const Icon(Icons.home_outlined),
+            icon: const Icon(Icons.home_outlined, size: 18),
             label: const Text('Home'),
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
             onPressed: () {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -332,6 +323,10 @@ class _HeaderButtons extends ConsumerWidget {
 
     final loginButton = (user == null && onLogin != null)
         ? FilledButton.tonal(
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
             onPressed: onLogin,
             child: const Text('Login / Register'),
           )
@@ -340,6 +335,7 @@ class _HeaderButtons extends ConsumerWidget {
     final clearButton = count > 0
         ? IconButton(
             tooltip: 'Clear quote',
+            visualDensity: VisualDensity.compact,
             onPressed: canClear ? onClearQuote : null,
             icon: const Icon(Icons.delete_outline),
           )
@@ -348,8 +344,12 @@ class _HeaderButtons extends ConsumerWidget {
     final quoteButton = (onViewQuote != null)
         ? FilledButton.icon(
             onPressed: canView ? onViewQuote : null,
-            icon: const Icon(Icons.shopping_cart_outlined),
-            label: Text(quoteLabel()),
+            icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            label: Text(quoteLabel(), overflow: TextOverflow.ellipsis),
           )
         : null;
 
@@ -359,6 +359,8 @@ class _HeaderButtons extends ConsumerWidget {
       if (quoteButton != null) quoteButton,
       if (loginButton != null) loginButton,
     ];
+
+    if (children.isEmpty) return const SizedBox.shrink();
 
     if (horizontal) {
       final align = centered ? WrapAlignment.center : WrapAlignment.end;
@@ -385,8 +387,6 @@ class _HeaderButtons extends ConsumerWidget {
     );
   }
 }
-
-// ───────────────────────── helpers ─────────────────────────
 
 void _copyToClipboard(BuildContext context, String text, String label) {
   Clipboard.setData(ClipboardData(text: text));

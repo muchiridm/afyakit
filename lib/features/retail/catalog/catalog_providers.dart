@@ -7,7 +7,7 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import 'catalog_controller.dart';
-import 'catalog_models.dart';
+import 'models/catalog_models.dart';
 import 'catalog_service.dart';
 
 final catalogServiceProvider = Provider<CatalogService?>((ref) {

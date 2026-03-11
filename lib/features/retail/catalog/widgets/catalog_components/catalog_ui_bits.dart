@@ -2,7 +2,7 @@
 
 import 'dart:math' as math;
 
-import 'package:afyakit/features/retail/catalog/catalog_models.dart';
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:flutter/material.dart';
 
 /// Shared, lightweight UI pieces used across the Catalog screen and sheets:
@@ -11,69 +11,95 @@ import 'package:flutter/material.dart';
 /// - Error pane
 /// - Bottom-sheet header
 ///
-/// Keep these “dumb” and reusable (no Riverpod, no service calls).
+/// Keep these dumb and reusable (no Riverpod, no service calls).
 
 // ─────────────────────────────────────────────────────────────
 // Search
 // ─────────────────────────────────────────────────────────────
 
-// lib/core/catalog/widgets/catalog_components/catalog_ui_bits.dart
 class SearchBarField extends StatelessWidget {
   final TextEditingController controller;
-  final FocusNode? focusNode; // ✅ NEW
+  final FocusNode? focusNode;
   final ValueChanged<String> onSubmit;
   final ValueChanged<String> onChanged;
   final int? resultCount;
+
+  final bool showClear;
+  final VoidCallback? onClear;
 
   const SearchBarField({
     super.key,
     required this.controller,
     required this.onSubmit,
     required this.onChanged,
-    this.focusNode, // ✅ NEW
+    this.focusNode,
     this.resultCount,
+    this.showClear = false,
+    this.onClear,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final String? resultsLabel = (resultCount != null)
-        ? '${resultCount!} result${resultCount == 1 ? '' : 's'}'
-        : null;
+    final String? resultsLabel = resultCount == null
+        ? null
+        : '${resultCount!} result${resultCount == 1 ? '' : 's'}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Material(
-          elevation: 1.5,
-          borderRadius: BorderRadius.circular(12),
+          elevation: 0.6,
+          borderRadius: BorderRadius.circular(16),
           color: theme.colorScheme.surface,
           child: TextField(
             controller: controller,
-            focusNode: focusNode, // ✅ NEW
+            focusNode: focusNode,
             textInputAction: TextInputAction.search,
             onSubmitted: onSubmit,
             onChanged: onChanged,
-            decoration: const InputDecoration(
-              hintText: 'Search brand, strength, form…',
-              prefixIcon: Icon(Icons.search),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search brand, strength, form...',
+              hintStyle: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.45),
+                fontWeight: FontWeight.w400,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                size: 22,
+                color: theme.colorScheme.onSurface.withOpacity(0.62),
+              ),
+              suffixIcon: showClear
+                  ? IconButton(
+                      tooltip: 'Clear filters',
+                      onPressed: onClear,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: theme.colorScheme.onSurface.withOpacity(0.62),
+                      ),
+                    )
+                  : null,
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 14,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 16,
               ),
             ),
           ),
         ),
         if (resultsLabel != null) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
               resultsLabel,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withOpacity(0.55),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -96,8 +122,9 @@ class SkeletonGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final cross = width < 520 ? 1 : (width < 900 ? 2 : 3);
+    final cross = width < 560 ? 1 : (width < 980 ? 2 : 3);
     final items = math.max(6, cross * 4);
+    final aspect = width < 560 ? 3.0 : 3.15;
 
     return GridView.builder(
       controller: scrollController,
@@ -108,7 +135,7 @@ class SkeletonGrid extends StatelessWidget {
         crossAxisCount: cross,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 3.6,
+        childAspectRatio: aspect,
       ),
       itemBuilder: (_, __) => const _SkeletonCard(),
     );
@@ -144,13 +171,13 @@ class _SkeletonCardState extends State<_SkeletonCard>
       builder: (_, __) {
         final t = (math.sin(_ac.value * 2 * math.pi) + 1) / 2;
         final base = theme.colorScheme.surfaceContainerHighest.withOpacity(
-          0.35,
+          0.28,
         );
-        final hi = theme.colorScheme.surfaceContainerHighest.withOpacity(0.65);
+        final hi = theme.colorScheme.surfaceContainerHighest.withOpacity(0.48);
 
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             color: Color.lerp(base, hi, t),
           ),
         );
@@ -171,20 +198,35 @@ class ErrorPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline, size: 40),
-          const SizedBox(height: 8),
-          Text(error, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
-        ],
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 36,
+              color: theme.colorScheme.onSurface.withOpacity(0.68),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.76),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -206,17 +248,29 @@ class SheetHeader extends StatelessWidget {
     required this.priceColor,
   });
 
+  static String _clean(String? s) {
+    final t = (s ?? '').trim();
+    if (t.isEmpty || t.toLowerCase() == 'null') return '';
+    return t;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final priceText = priceFormatter(tile.bestSellPrice);
     final theme = Theme.of(context);
+    final priceText = priceFormatter(tile.bestSellPrice).trim();
 
-    final mfg = tile.supplierManufacturer?.trim();
-    final hasMfg = mfg != null && mfg.isNotEmpty;
+    final manufacturer = _clean(tile.supplierManufacturer);
+    final form = _clean(tile.form);
+    final offers = tile.offerCount ?? 0;
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.medication, size: 28),
+        Icon(
+          Icons.medication_outlined,
+          size: 24,
+          color: theme.colorScheme.onSurface.withOpacity(0.82),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -224,61 +278,63 @@ class SheetHeader extends StatelessWidget {
             children: [
               Text(
                 '${tile.brand} ${tile.strengthSig}'.trim(),
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  height: 1.15,
+                ),
               ),
-
-              // ✅ Manufacturer (if available)
-              if (hasMfg) ...[
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.factory_outlined,
-                      size: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        mfg,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.75),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+              if (manufacturer.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  manufacturer,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.66),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
-
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               Wrap(
-                spacing: 8,
+                spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _PillChip(
-                    label: tile.form.isEmpty ? 'form' : tile.form,
-                    icon: Icons.category_outlined,
-                  ),
-                  if ((tile.offerCount ?? 0) > 0)
-                    _SoftBadge('${tile.offerCount} offers'),
+                  if (form.isNotEmpty) _PillChip(label: form),
+                  if (tile.bestPackCount != null)
+                    _PillChip(label: 'Pack ${tile.bestPackCount}'),
+                  if (offers > 0)
+                    _SoftBadge('$offers offer${offers == 1 ? '' : 's'}'),
                 ],
               ),
             ],
           ),
         ),
-        if (priceText.isNotEmpty)
-          Text(
-            priceText,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
-              color: priceColor,
-            ),
+        if (priceText.isNotEmpty) ...[
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                priceText,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  color: priceColor,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'KES',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.56),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
+        ],
       ],
     );
   }
@@ -286,26 +342,25 @@ class SheetHeader extends StatelessWidget {
 
 class _PillChip extends StatelessWidget {
   final String label;
-  final IconData? icon;
 
-  const _PillChip({required this.label, this.icon});
+  const _PillChip({required this.label});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.42),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 14), const SizedBox(width: 6)],
-          Text(label, style: theme.textTheme.labelMedium),
-        ],
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: theme.colorScheme.onSurface.withOpacity(0.76),
+        ),
       ),
     );
   }
@@ -321,10 +376,10 @@ class _SoftBadge extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
+        color: theme.colorScheme.primary.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
