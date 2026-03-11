@@ -3,29 +3,28 @@
 import 'dart:async';
 
 import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
-import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:afyakit/shared/layout/app_page.dart';
-
-import 'catalog_components/catalog_header.dart';
 import 'catalog_components/catalog_grid.dart';
+import 'catalog_components/catalog_header.dart';
 import 'catalog_components/catalog_ui_bits.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
 String _formatPriceCeil(num? v) {
   if (v == null) return '';
-  final rounded = v.ceil();
-  final nf = NumberFormat.decimalPattern();
+  final int rounded = v.ceil();
+  final NumberFormat nf = NumberFormat.decimalPattern();
   return nf.format(rounded);
 }
 
@@ -44,12 +43,14 @@ class CatalogScreen extends ConsumerStatefulWidget {
 }
 
 class _CatalogScreenState extends ConsumerState<CatalogScreen> {
-  final _scroll = ScrollController();
-  final _searchC = TextEditingController();
-  final _searchFocus = FocusNode();
+  final ScrollController _scroll = ScrollController();
+  final TextEditingController _searchC = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+
+  bool _seedApplied = false;
 
   bool get _showDiscovery {
-    final state = ref.read(catalogControllerProvider);
+    final CatalogState state = ref.read(catalogControllerProvider);
     return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
   }
 
@@ -58,25 +59,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
 
-    final seed = (widget.initialQuery ?? '').trim();
-    if (seed.isNotEmpty) _searchC.text = seed;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      final q = (widget.initialQuery ?? '').trim();
-      if (q.isNotEmpty) {
-        final state = ref.read(catalogControllerProvider);
-        final ctrl = ref.read(catalogControllerProvider.notifier);
-
-        if (state.query.q.trim() != q) {
-          // ignore: discarded_futures
-          ctrl.refresh(query: state.query.copyWith(q: q));
-        }
-      }
-
-      if (widget.autofocusSearch) _searchFocus.requestFocus();
-    });
+    final String seed = (widget.initialQuery ?? '').trim();
+    if (seed.isNotEmpty) {
+      _searchC.text = seed;
+    }
   }
 
   @override
@@ -88,13 +74,39 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     super.dispose();
   }
 
+  void _applyInitialQueryIfNeeded() {
+    if (_seedApplied) return;
+    if (!mounted) return;
+
+    _seedApplied = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final String q = (widget.initialQuery ?? '').trim();
+      final CatalogController ctrl = ref.read(
+        catalogControllerProvider.notifier,
+      );
+      final CatalogState state = ref.read(catalogControllerProvider);
+
+      if (q.isNotEmpty && state.query.q.trim() != q) {
+        // ignore: discarded_futures
+        ctrl.refresh(query: state.query.copyWith(q: q));
+      }
+
+      if (widget.autofocusSearch) {
+        _searchFocus.requestFocus();
+      }
+    });
+  }
+
   void _onScroll() {
     if (!mounted) return;
     if (_showDiscovery) return;
     if (!_scroll.hasClients) return;
 
-    final state = ref.read(catalogControllerProvider);
-    final atEnd =
+    final CatalogState state = ref.read(catalogControllerProvider);
+    final bool atEnd =
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
 
     if (state.hasMore && atEnd) {
@@ -104,7 +116,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   void _applySearch(String q, CatalogState state) {
-    final next = q.trim();
+    if (!mounted) return;
+
+    final String next = q.trim();
     _searchC.text = next;
     _searchC.selection = TextSelection.collapsed(offset: _searchC.text.length);
 
@@ -116,48 +130,76 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final itemsAsync = ref.watch(catalogItemsProvider);
-    final state = ref.watch(catalogControllerProvider);
-    final ctrl = ref.read(catalogControllerProvider.notifier);
+    final AsyncValue<void> readyAsync = ref.watch(catalogReadyProvider);
 
-    final quoteLinesState = ref.watch(quoteLinesControllerProvider);
-    final quoteLineCount = quoteLinesState.lines.length;
-
-    final String? quoteTotalLabel = quoteLineCount == 0
-        ? null
-        : 'KES ${_formatPriceCeil(quoteLinesState.estimatedTotal)}';
-
-    return AppPage(
-      scrollable: true,
-      maxWidth: 1100,
-      header: CatalogHeader(
-        selectedForm: state.query.form,
-        onFormChanged: (form) =>
-            ctrl.refreshDebounced(query: state.query.copyWith(form: form)),
-        quoteItemCount: quoteLineCount,
-        quoteTotalLabel: quoteTotalLabel,
-        onClearQuote: quoteLineCount == 0
-            ? null
-            : () {
-                ref.read(quoteLinesControllerProvider.notifier).clear();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Quote cleared'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
-        onViewQuote: quoteLineCount == 0
-            ? null
-            : () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const QuoteEditorScreen(),
-                  ),
-                );
-              },
+    return readyAsync.when(
+      loading: () => const AppPage(
+        scrollable: true,
+        maxWidth: 1100,
+        body: Center(child: CircularProgressIndicator()),
       ),
-      body: _buildBody(itemsAsync, state),
+      error: (e, _) => AppPage(
+        scrollable: true,
+        maxWidth: 1100,
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('Failed to initialize catalog: $e'),
+          ),
+        ),
+      ),
+      data: (_) {
+        _applyInitialQueryIfNeeded();
+
+        final AsyncValue<List<CatalogTile>> itemsAsync = ref.watch(
+          catalogItemsProvider,
+        );
+        final CatalogState state = ref.watch(catalogControllerProvider);
+        final CatalogController ctrl = ref.read(
+          catalogControllerProvider.notifier,
+        );
+
+        final quoteLinesState = ref.watch(quoteLinesControllerProvider);
+        final int quoteLineCount = quoteLinesState.lines.length;
+
+        final String? quoteTotalLabel = quoteLineCount == 0
+            ? null
+            : 'KES ${_formatPriceCeil(quoteLinesState.estimatedTotal)}';
+
+        return AppPage(
+          scrollable: true,
+          maxWidth: 1100,
+          header: CatalogHeader(
+            selectedForm: state.query.form,
+            onFormChanged: (form) {
+              ctrl.refreshDebounced(query: state.query.copyWith(form: form));
+            },
+            quoteItemCount: quoteLineCount,
+            quoteTotalLabel: quoteTotalLabel,
+            onClearQuote: quoteLineCount == 0
+                ? null
+                : () {
+                    ref.read(quoteLinesControllerProvider.notifier).clear();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Quote cleared'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+            onViewQuote: quoteLineCount == 0
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const QuoteEditorScreen(),
+                      ),
+                    );
+                  },
+          ),
+          body: _buildBody(itemsAsync, state),
+        );
+      },
     );
   }
 
@@ -165,8 +207,8 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     AsyncValue<List<CatalogTile>> itemsAsync,
     CatalogState state,
   ) {
-    final ctrl = ref.read(catalogControllerProvider.notifier);
-    final showDiscovery =
+    final CatalogController ctrl = ref.read(catalogControllerProvider.notifier);
+    final bool showDiscovery =
         state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
 
     final int? resultCount = showDiscovery
@@ -176,7 +218,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             orElse: () => null,
           );
 
-    final hasActiveFilters =
+    final bool hasActiveFilters =
         state.query.q.trim().isNotEmpty || state.query.form.trim().isNotEmpty;
 
     return Column(
@@ -207,23 +249,26 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         const SizedBox(height: 8),
         const CatalogDisclaimer(),
         const SizedBox(height: 14),
-
         CatalogFiltersBar(
           selectedForm: state.query.form,
           onSelectForm: (form) {
+            // ignore: discarded_futures
             ctrl.refresh(query: state.query.copyWith(form: form));
           },
         ),
-
         const SizedBox(height: 14),
-
         if (showDiscovery)
           CatalogDiscovery(onExampleTap: (q) => _applySearch(q, state))
         else
           itemsAsync.when(
             loading: () => SkeletonGrid(scrollController: _scroll),
-            error: (e, _) =>
-                ErrorPane(error: '$e', onRetry: () => ctrl.refresh()),
+            error: (e, _) => ErrorPane(
+              error: '$e',
+              onRetry: () {
+                // ignore: discarded_futures
+                ctrl.refresh();
+              },
+            ),
             data: (items) => CatalogGrid(
               items: items,
               scrollController: _scroll,
@@ -238,7 +283,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   Future<void> _showTileSheet(BuildContext context, CatalogTile t) async {
-    showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: false,
       isScrollControlled: false,

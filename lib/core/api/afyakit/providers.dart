@@ -1,54 +1,62 @@
 // lib/core/api/afyakit/providers.dart
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
+import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_session_guard_provider.dart';
 
-/// Async init (real client creation)
-/// Async init (real client creation)
+/// Builds the shared AfyaKit API client.
+///
+/// Guest users are supported:
+/// - no tenant-session guard is required
+/// - token callbacks simply return null
+///
+/// Logged-in users are guarded so tenant claims are aligned before
+/// protected API calls are made.
 final afyakitClientFutureProvider = FutureProvider<AfyaKitClient>((ref) async {
-  final user = fb.FirebaseAuth.instance.currentUser;
+  final fb.User? user = fb.FirebaseAuth.instance.currentUser;
 
-  // ✅ Only enforce claim/tenant sync when logged in.
   if (user != null) {
-    // Ensure claims match tenant BEFORE any protected API call
     await ref.watch(tenantSessionGuardProvider.future);
 
-    // Prime a fresh token once after guard attempts sync/poll.
     try {
       await user.getIdToken(true);
     } catch (_) {
-      // ignore
+      // Intentionally ignored: API client can still be created and
+      // downstream calls may retry or fail with proper handling.
     }
   }
 
-  final tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
-  final base = apiBaseUrl(tenantId);
+  final String tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
+  final String baseUrl = apiBaseUrl(tenantId);
 
   return AfyaKitClient.create(
-    baseUrl: base,
+    baseUrl: baseUrl,
     getToken: () async => fb.FirebaseAuth.instance.currentUser?.getIdToken(),
     getFreshToken: () async =>
         fb.FirebaseAuth.instance.currentUser?.getIdToken(true),
   );
 });
 
-/// Sync accessor (never crashes)
+/// Nullable synchronous accessor for convenience in UI/provider code.
 final afyakitClientProvider = Provider<AfyaKitClient?>((ref) {
   return ref
       .watch(afyakitClientFutureProvider)
-      .maybeWhen(data: (c) => c, orElse: () => null);
+      .maybeWhen(data: (client) => client, orElse: () => null);
 });
 
-/// Strict accessor (use only where you WANT to throw if not ready)
 extension AfyaKitClientRefX on Ref {
+  /// Strict synchronous accessor.
+  ///
+  /// Use only in places where the client must already be ready.
   AfyaKitClient get afyakitClient {
-    final c = read(afyakitClientProvider);
-    if (c == null) throw StateError('AfyaKitClient not ready');
-    return c;
+    final AfyaKitClient? client = read(afyakitClientProvider);
+    if (client == null) {
+      throw StateError('AfyaKitClient is not ready');
+    }
+    return client;
   }
 }

@@ -7,44 +7,36 @@ import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import 'catalog_controller.dart';
-import 'models/catalog_models.dart';
 import 'catalog_service.dart';
+import 'models/catalog_models.dart';
 
-final catalogServiceProvider = Provider<CatalogService?>((ref) {
-  final tenantIdRaw = ref.watch(tenantIdProvider);
-  final tenantId = tenantIdRaw.trim().toLowerCase();
+final catalogServiceFutureProvider = FutureProvider<CatalogService>((
+  ref,
+) async {
+  final String tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
+  final api = await ref.watch(afyakitClientFutureProvider.future);
 
-  final apiAsync = ref.watch(afyakitClientFutureProvider);
-
-  return apiAsync.when(
-    data: (api) {
-      final routes = AfyaKitRoutes(tenantId);
-      return CatalogService(api: api, routes: routes);
-    },
-    loading: () => null,
-    error: (_, __) => null,
-  );
+  return CatalogService(api: api, routes: AfyaKitRoutes(tenantId));
 });
 
 final catalogControllerProvider =
     StateNotifierProvider.autoDispose<CatalogController, CatalogState>((ref) {
-      final link = ref.keepAlive();
+      final serviceAsync = ref.watch(catalogServiceFutureProvider);
 
-      final service = ref.watch(catalogServiceProvider);
-      final controller = CatalogController(service);
-
-      ref.listen<CatalogService?>(catalogServiceProvider, (prev, next) {
-        if (prev == null && next != null) {
-          controller.setService(next);
-        }
-      });
-
-      ref.onDispose(() {
-        Future.delayed(const Duration(minutes: 5), link.close);
-      });
-
-      return controller;
+      return serviceAsync.when(
+        data: (service) => CatalogController(service),
+        loading: () => throw StateError(
+          'CatalogController requested before CatalogService is ready',
+        ),
+        error: (error, stackTrace) =>
+            throw StateError('Failed to initialize CatalogService: $error'),
+      );
     });
+
+final catalogReadyProvider = Provider<AsyncValue<void>>((ref) {
+  final serviceAsync = ref.watch(catalogServiceFutureProvider);
+  return serviceAsync.whenData((_) {});
+});
 
 final catalogItemsProvider = Provider<AsyncValue<List<CatalogTile>>>((ref) {
   return ref.watch(catalogControllerProvider.select((s) => s.items));
