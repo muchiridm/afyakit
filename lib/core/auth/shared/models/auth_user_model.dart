@@ -1,8 +1,9 @@
+// lib/core/auth/shared/models/auth_user_model.dart
+
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth/auth_user/extensions/user_type_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
 @immutable
@@ -17,9 +18,8 @@ class AuthUser {
   /// Membership scope.
   final String tenantId;
 
-  // ────────────── Status / type ──────────────
+  // ────────────── Status ──────────────
   final UserStatus status; // active | disabled (BE); tolerant parsing
-  final UserType type; // member | staff
 
   // ────────────── Membership / access ──────────────
   final List<String> stores;
@@ -35,21 +35,22 @@ class AuthUser {
 
   /// Tenant-scoped email (NOT Firebase Auth email).
   ///
-  /// IMPORTANT:
-  /// - Backend may choose to hide unverified emails for privacy.
-  /// - FE must NOT erase it if backend does send it (we need it to drive verification UX).
+  /// Backend behavior (Option A):
+  /// - Verified email: comes as emailLower/email (+ emailVerified=true)
+  /// - Unverified email: SHOULD NOT be returned as email/emailLower (privacy),
+  ///   instead it should appear in emailPendingLower.
   final String? email;
   final String? emailLower;
 
-  // ────────────── Phone verification model ──────────────
+  /// ✅ Option A: pending email (unverified; verification in progress)
+  final String? emailPendingLower;
+  final String? emailPendingAt; // ISO string (optional)
 
-  /// Strong proof via Firebase Phone Auth / WA OTP / etc.
+  // ────────────── Phone verification model ──────────────
   final bool phoneVerified;
   final String? phoneVerifiedAt; // ISO string
 
-  /// Somalia (+252) fallback acceptance:
-  /// - phoneClaimed means we accept this phone as identity anchor even if OTP is bypassed.
-  /// - For non-+252, backend should mirror claimed==verified, but FE stays tolerant.
+  /// Somalia (+252) fallback acceptance.
   final bool phoneClaimed;
   final String? phoneClaimedAt; // ISO string
 
@@ -87,7 +88,6 @@ class AuthUser {
     required this.uid,
     required this.tenantId,
     required this.status,
-    required this.type,
     this.phoneNumber,
     this.stores = const [],
     this.firstName,
@@ -96,6 +96,8 @@ class AuthUser {
     this.avatarUrl,
     this.email,
     this.emailLower,
+    this.emailPendingLower,
+    this.emailPendingAt,
     this.phoneVerified = false,
     this.phoneVerifiedAt,
     this.phoneClaimed = false,
@@ -174,23 +176,6 @@ class AuthUser {
     }
   }
 
-  static UserType _parseType({
-    required Object? rawType,
-    required List<StaffRole> staffRoles,
-    required bool isSuperAdmin,
-  }) {
-    final s = rawType is String ? rawType.trim() : '';
-    if (s.isNotEmpty) {
-      try {
-        return UserType.fromString(s);
-      } catch (_) {
-        // fall through
-      }
-    }
-    if (staffRoles.isNotEmpty || isSuperAdmin) return UserType.staff;
-    return UserType.member;
-  }
-
   static bool _isSomaliaPhone(String? phoneE164) =>
       phoneE164 != null && phoneE164.trim().startsWith('+252');
 
@@ -204,8 +189,16 @@ class AuthUser {
     return phoneVerified == true || phoneClaimed == true;
   }
 
+  // ─────────────────────────────────────────────
+  // Derived semantics (NO "type" field)
+  // ─────────────────────────────────────────────
+
+  /// Member unless staffRoles assigned (or superadmin).
+  bool get isStaffResolved => staffRoles.isNotEmpty || isSuperAdmin == true;
+
+  bool get isMemberResolved => !isStaffResolved;
+
   /// Preferred display value for UI labels.
-  /// Falls back in this order:
   /// displayName → first+last → companyName (if isCompany) → phoneNumber → uid
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
@@ -239,23 +232,54 @@ class AuthUser {
   }
 
   // ─────────────────────────────────────────────
-  // Email helpers (THIS is what your login flow should use)
+  // Email helpers (Option A aligned)
   // ─────────────────────────────────────────────
 
-  bool get hasEmail {
+  /// Verified email presence (what BE is willing to expose).
+  bool get hasVerifiedEmail {
     final el = (emailLower ?? '').trim();
     final e = (email ?? '').trim();
-    return el.isNotEmpty || e.isNotEmpty;
+    return emailVerified == true && (el.isNotEmpty || e.isNotEmpty);
   }
 
-  /// If user has an email but it’s not verified, we should show verify flow (not re-collect).
-  bool get needsEmailVerification => hasEmail && emailVerified != true;
+  /// Pending email presence (verification in progress).
+  bool get hasPendingEmail => (emailPendingLower ?? '').trim().isNotEmpty;
 
-  String? get bestEmailLower {
+  /// Best verified email to display/use.
+  String? get bestVerifiedEmailLower {
     final el = (emailLower ?? '').trim().toLowerCase();
     if (el.isNotEmpty) return el;
     final e = (email ?? '').trim().toLowerCase();
     return e.isNotEmpty ? e : null;
+  }
+
+  /// Best email to *show* in UI:
+  /// - verified email if present
+  /// - otherwise pending email (Option A)
+  String? get bestEmailForDisplay {
+    final verified = bestVerifiedEmailLower;
+    if (verified != null) return verified;
+    final pending = (emailPendingLower ?? '').trim().toLowerCase();
+    return pending.isNotEmpty ? pending : null;
+  }
+
+  /// If we have a pending email, the UI should show “verify”.
+  bool get needsEmailVerificationResolved => hasPendingEmail;
+
+  // ─────────────────────────────────────────────
+  // Back-compat aliases used by your gates/UI
+  // ─────────────────────────────────────────────
+
+  bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
+
+  bool get needsEmailVerification => needsEmailVerificationResolved;
+
+  /// Verified first, else pending.
+  String? get bestEmailLower {
+    final v = bestVerifiedEmailLower;
+    if (v != null) return v;
+    final p = (emailPendingLower ?? '').trim().toLowerCase();
+    return p.isNotEmpty ? p : null;
   }
 
   // ────────────── Parsing ──────────────
@@ -267,39 +291,38 @@ class AuthUser {
     if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
     if (tenant.isEmpty) throw ArgumentError('AuthUser requires tenantId');
 
-    // phoneNumber is optional now (legacy tolerant)
     final phone = _optStr(json['phoneNumber']);
 
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
     final staffRoles = _normalizeStaffRoles(json['staffRoles']);
 
-    final type = _parseType(
-      rawType: json['type'] ?? json['userType'],
-      staffRoles: staffRoles,
-      isSuperAdmin: isSuperAdmin,
-    );
-
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
 
-    // ✅ DO NOT default this to true anywhere.
     final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
 
-    // ✅ Keep whatever backend sends. Don’t “safeguard” by erasing;
-    // the login UX needs to know an email exists even if unverified.
+    // Verified email (backend may hide if not verified)
     final emailRaw = _optStr(json['email']);
     final emailLowerRaw = _optStr(json['emailLower']);
-
     final email = emailRaw?.toLowerCase();
     final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
 
-    // Optional convenience: phoneSatisfied from backend (if you add it later)
+    // ✅ Option A pending email
+    final pendingRaw = _optStr(json['emailPendingLower']);
+    final emailPendingLower = pendingRaw?.toLowerCase();
+    final emailPendingAt = _optStr(json['emailPendingAt']);
+
+    // Optional convenience: phoneSatisfied from backend
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
         ? null
         : _bool(phoneSatisfiedRaw);
+
+    // Account number: tolerate snake_case too (just in case)
+    final accountNumber =
+        _optStr(json['accountNumber']) ?? _optStr(json['account_number']);
 
     AuthUserZohoLink? zoho;
     if (allowZoho) {
@@ -322,7 +345,6 @@ class AuthUser {
       phoneNumber: phone,
       tenantId: tenant,
       status: _parseStatus(json['status']),
-      type: type,
       stores: _normalizeStores(json['stores']),
       firstName: _optStr(json['firstName']),
       lastName: _optStr(json['lastName']),
@@ -330,6 +352,8 @@ class AuthUser {
       avatarUrl: _optStr(json['avatarUrl']),
       email: email,
       emailLower: emailLower,
+      emailPendingLower: emailPendingLower,
+      emailPendingAt: emailPendingAt,
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,
@@ -339,7 +363,7 @@ class AuthUser {
       emailVerifiedAt: _optStr(json['emailVerifiedAt']),
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
-      accountNumber: _optStr(json['accountNumber']),
+      accountNumber: accountNumber,
       zoho: zoho,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
@@ -358,7 +382,6 @@ class AuthUser {
 
   AuthUser copyWith({
     UserStatus? status,
-    UserType? type,
     List<String>? stores,
     String? firstName,
     String? lastName,
@@ -366,6 +389,8 @@ class AuthUser {
     String? avatarUrl,
     String? email,
     String? emailLower,
+    String? emailPendingLower,
+    String? emailPendingAt,
     bool? phoneVerified,
     String? phoneVerifiedAt,
     bool? phoneClaimed,
@@ -388,7 +413,6 @@ class AuthUser {
       phoneNumber: phoneNumber,
       tenantId: tenantId,
       status: status ?? this.status,
-      type: type ?? this.type,
       stores: stores ?? this.stores,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
@@ -396,6 +420,8 @@ class AuthUser {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       email: email ?? this.email,
       emailLower: emailLower ?? this.emailLower,
+      emailPendingLower: emailPendingLower ?? this.emailPendingLower,
+      emailPendingAt: emailPendingAt ?? this.emailPendingAt,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
       phoneClaimed: phoneClaimed ?? this.phoneClaimed,
@@ -422,14 +448,20 @@ class AuthUser {
     'tenantId': tenantId,
     if (phoneNumber != null) 'phoneNumber': phoneNumber,
     'status': status.wire,
-    'type': type.wire,
     'stores': stores,
     if (firstName != null) 'firstName': firstName,
     if (lastName != null) 'lastName': lastName,
     if (displayName != null) 'displayName': displayName,
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
+
+    // Verified email only (by convention)
     if (email != null) 'email': email,
     if (emailLower != null) 'emailLower': emailLower,
+
+    // Option A: pending email
+    if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
+    if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
+
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,

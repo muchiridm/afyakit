@@ -31,8 +31,22 @@ class ZohoInvoicesService {
 
   // ───────────────────────── Read ─────────────────────────
 
-  Future<List<ZohoInvoice>> list({int limit = 50, int page = 1}) async {
-    final uri = routes.zohoListInvoices(limit: limit, page: page);
+  Future<List<ZohoInvoice>> list({
+    int limit = 50,
+    int page = 1,
+    String? q,
+    String? accountNumber,
+  }) async {
+    final qq = (q ?? '').trim();
+    final acct = (accountNumber ?? '').trim();
+
+    final uri = routes.zohoListInvoices(
+      limit: limit,
+      page: page,
+      q: qq.isEmpty ? null : qq,
+      accountNumber: acct.isEmpty ? null : acct,
+    );
+
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -69,12 +83,17 @@ class ZohoInvoicesService {
     throw StateError('Unexpected response shape: missing invoice object');
   }
 
-  Future<JsonMap> updateInvoice(String invoiceId, JsonMap patch) async {
+  /// Backend contract is PATCH /invoices/:invoiceId (partial update).
+  /// Keep this as a thin transport call.
+  Future<JsonMap> patchInvoice(String invoiceId, JsonMap patch) async {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoUpdateInvoice(id);
-    final res = await api.putUri(uri, data: patch);
+    final uri = routes.zohoUpdateInvoice(
+      id,
+    ); // ensure routes points to PATCH endpoint
+    final res = await api.patchUri(uri, data: patch);
+
     return _asJsonMap(res.data);
   }
 

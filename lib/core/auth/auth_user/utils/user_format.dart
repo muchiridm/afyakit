@@ -1,6 +1,7 @@
 // lib/core/auth_users/utils/user_format.dart
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart'; // StaffRole + primaryRole
 
 String initialsFromName(String name, {int max = 2}) {
   final trimmed = name.trim();
@@ -28,19 +29,27 @@ String roleLabel(dynamic role) {
   return last.replaceAll(RegExp(r'[_\\-]+'), ' ').toPascalCase();
 }
 
+/// Truth: user participates in staff ecosystem if:
+/// - isSuperAdmin OR has one or more staffRoles.
+/// (We do NOT trust `type` for labels during migrations/dirty payloads.)
+bool hasStaffWorkspace(AuthUser user) =>
+    user.isSuperAdmin || user.staffRoles.isNotEmpty;
+
 /// Primary label for displaying a user's "role" in the UI.
 ///
-/// - If the user has one or more staffRoles → highest-precedence StaffRole.label.
-/// - If no staffRoles → "Staff".
+/// Rules:
+/// - If NOT staff ecosystem → "Member"
+/// - If superadmin → "Owner" (or change to "Super Admin" if you prefer)
+/// - Else → highest precedence StaffRole.label
+/// - Else (shouldn't happen if staffRoles non-empty) → "Staff"
 String staffRoleLabel(AuthUser user) {
-  // if (user.isSuperAdmin) return 'Superadmin'; // optional special-case
+  if (!hasStaffWorkspace(user)) return 'Member';
 
-  if (user.staffRoles.isEmpty) {
-    return 'Staff';
+  if (user.isSuperAdmin) {
+    // choose your preferred wording:
+    return 'Owner'; // or 'Super Admin'
   }
 
-  final roles = [...user.staffRoles];
-  roles.sort((a, b) => b.level.compareTo(a.level)); // highest level first
-
-  return roles.first.label;
+  final primary = user.staffRoles.primaryRole;
+  return primary?.label ?? 'Staff';
 }

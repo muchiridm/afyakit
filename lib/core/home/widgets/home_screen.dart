@@ -1,18 +1,24 @@
 // lib/core/home/widgets/home_screen.dart
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/widgets/components/home_header.dart';
 import 'package:afyakit/core/home/widgets/member/member_latest_activity_panel.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_features_panel.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_latest_activity_panel.dart';
+
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
+import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
+import 'package:afyakit/features/retail/payments/zoho/widgets/payments_list_screen.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({
@@ -22,19 +28,12 @@ class HomeScreen extends ConsumerWidget {
     required this.user,
   });
 
-  /// Real identity in this tenant (guest/member/staff)
   final EntryMode realEntry;
-
-  /// What surface we are showing (guest/member/staff),
-  /// allows staff to "view as member".
   final EntryMode effectiveEntry;
 
-  /// Nullable because guests exist.
+  /// In HomeShell we only build HomeScreen for non-guests,
+  /// but keep nullable for safety/future reuse.
   final AuthUser? user;
-
-  static const double _staffTwoColBreakpoint = 720;
-
-  bool get _isRealMember => realEntry == EntryMode.member;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,32 +46,258 @@ class HomeScreen extends ConsumerWidget {
       maxWidth: AppLayout.pageMaxW,
       padding: AppLayout.pagePadding,
       body: switch (effectiveEntry) {
-        EntryMode.guest => _buildGuest(context),
-        EntryMode.member => _buildMemberSurface(context),
-        EntryMode.staff => _buildStaffSurface(context),
+        EntryMode.guest => const _GuestHomeBody(),
+        EntryMode.member => _MemberHomeBody(user: user),
+        EntryMode.staff => _StaffHomeBody(user: user),
       },
     );
   }
+}
 
-  Widget _stack(List<Widget> children, {double gap = AppShape.gap12}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+// ─────────────────────────────────────────────
+// MEMBER HOME (REAL MEMBER MODE)
+// If the toggle says Member, this is member mode.
+// No "view-as" concept.
+// Everything here must be "my account", keyed by uid/accountNumber.
+// ─────────────────────────────────────────────
+class _MemberHomeBody extends StatelessWidget {
+  const _MemberHomeBody({required this.user});
+
+  final AuthUser? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final u = user;
+
+    final greeting = (u == null) ? 'Member' : u.computedDisplayName;
+    final memberId = (u?.accountNumber ?? '').trim();
+    final showMemberId = memberId.isNotEmpty ? memberId : null;
+
+    return _stack([
+      HomeHeader(
+        entry: EntryMode.member,
+        greetingName: greeting,
+        memberId: showMemberId,
+        showDeliveryBanner: false,
+        panelWidth: AppLayout.pageMaxW,
+      ),
+
+      const _MemberQuickActions(),
+
+      // If accountNumber is missing, fail gracefully (don’t look “blank”).
+      if (u == null)
+        const _MemberMissingUserHint()
+      else if (memberId.isEmpty)
+        const _MemberMissingAccountHint()
+      else
+        const MemberLatestActivityPanel(),
+
+      const SizedBox(height: AppShape.gap12),
+    ]);
+  }
+}
+
+class _MemberQuickActions extends StatelessWidget {
+  const _MemberQuickActions();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppShape.gap10,
+      runSpacing: AppShape.gap10,
       children: [
-        for (int i = 0; i < children.length; i++) ...[
-          children[i],
-          if (i != children.length - 1) SizedBox(height: gap),
-        ],
+        _ActionChip(
+          icon: Icons.grid_view_rounded,
+          label: 'Catalog',
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const CatalogScreen())),
+        ),
+        _ActionChip(
+          icon: Icons.receipt_long_outlined,
+          label: 'My Quotes',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  const QuotesListScreen(scope: RetailDocScope.mine),
+            ),
+          ),
+        ),
+        _ActionChip(
+          icon: Icons.receipt_outlined,
+          label: 'My Invoices',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  const InvoicesListScreen(scope: RetailDocScope.mine),
+            ),
+          ),
+        ),
+        _ActionChip(
+          icon: Icons.payments_outlined,
+          label: 'My Payments',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  const PaymentsListScreen(scope: RetailDocScope.mine),
+            ),
+          ),
+        ),
       ],
     );
   }
+}
 
-  // ─────────────────────────────────────────────
-  // Guest surface (general)
-  // Only:
-  // - Search (tap -> Catalog)
-  // - Chat with pharmacist (CTA)
-  // ─────────────────────────────────────────────
-  Widget _buildGuest(BuildContext context) {
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: onTap,
+    );
+  }
+}
+
+class _MemberMissingUserHint extends StatelessWidget {
+  const _MemberMissingUserHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(
+      icon: Icons.info_outline,
+      title: 'Loading your account…',
+      body:
+          'Your member dashboard will appear once your profile is loaded. If it stays like this, refresh or log out and log in again.',
+    );
+  }
+}
+
+class _MemberMissingAccountHint extends StatelessWidget {
+  const _MemberMissingAccountHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(
+      icon: Icons.warning_amber_rounded,
+      title: 'Member ID missing',
+      body:
+          'Your accountNumber is missing, so member activity can’t be loaded. This is usually a backend/profile issue. Fix: ensure your member profile has accountNumber (e.g. DP-000123).',
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      elevation: 0,
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: AppShape.gap10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: t.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(body, style: t.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// STAFF HOME
+// ─────────────────────────────────────────────
+class _StaffHomeBody extends StatelessWidget {
+  const _StaffHomeBody({required this.user});
+
+  final AuthUser? user;
+
+  static const double _twoColBreakpoint = 720;
+
+  @override
+  Widget build(BuildContext context) {
+    final greeting = user?.computedDisplayName ?? 'Staff';
+
+    return _stack([
+      HomeHeader(
+        entry: EntryMode.staff,
+        greetingName: greeting,
+        memberId: null,
+        showDeliveryBanner: true,
+        panelWidth: AppLayout.pageMaxW,
+      ),
+      LayoutBuilder(
+        builder: (context, c) {
+          final twoCol = c.maxWidth >= _twoColBreakpoint;
+
+          const latest = StaffLatestActivityPanel();
+          const features = StaffFeaturesPanel();
+
+          if (!twoCol) return _stack([latest, features], gap: AppShape.gap12);
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Expanded(child: features),
+              SizedBox(width: AppShape.gap12),
+              Expanded(child: latest),
+            ],
+          );
+        },
+      ),
+      const SizedBox(height: AppShape.gap12),
+    ], gap: AppShape.gap16);
+  }
+}
+
+// ─────────────────────────────────────────────
+// GUEST HOME (kept minimal)
+// ─────────────────────────────────────────────
+class _GuestHomeBody extends StatelessWidget {
+  const _GuestHomeBody();
+
+  @override
+  Widget build(BuildContext context) {
     return _stack([
       HomeHeader(
         entry: EntryMode.guest,
@@ -81,9 +306,6 @@ class HomeScreen extends ConsumerWidget {
         showDeliveryBanner: false,
         panelWidth: AppLayout.pageMaxW,
       ),
-
-      const SizedBox(height: AppShape.gap8),
-
       _GuestSearchHero(
         onSearch: (q) {
           Navigator.of(context).push(
@@ -103,103 +325,34 @@ class HomeScreen extends ConsumerWidget {
           );
         },
         onChatTap: () {
-          _snack(context, 'Chat with pharmacist (TODO)');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Chat with pharmacist (TODO)')),
+          );
         },
       ),
-
       const SizedBox(height: AppShape.gap12),
-    ], gap: AppShape.gap12);
-  }
-
-  // ─────────────────────────────────────────────
-  // Member surface (individual)
-  // ─────────────────────────────────────────────
-  Widget _buildMemberSurface(BuildContext context) {
-    final greeting = _greetingName();
-    final memberId = _memberIdOrNull();
-
-    return _stack([
-      HomeHeader(
-        entry: effectiveEntry,
-        greetingName: greeting,
-        memberId: memberId,
-        showDeliveryBanner: false,
-        panelWidth: AppLayout.pageMaxW,
-      ),
-
-      // ✅ Only real members should see *their* activity.
-      if (_isRealMember && user != null) const MemberLatestActivityPanel(),
-
-      const SizedBox(height: AppShape.gap12),
-    ], gap: AppShape.gap12);
-  }
-
-  // ─────────────────────────────────────────────
-  // Staff surface (staff tools)
-  // ─────────────────────────────────────────────
-  Widget _buildStaffSurface(BuildContext context) {
-    return _stack([
-      HomeHeader(
-        entry: EntryMode.staff,
-        greetingName: _greetingName(),
-        memberId: null,
-        showDeliveryBanner: true,
-        panelWidth: AppLayout.pageMaxW,
-      ),
-      _buildStaffPanels(),
-      const SizedBox(height: AppShape.gap12),
-    ], gap: AppShape.gap16);
-  }
-
-  Widget _buildStaffPanels() {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final twoCol = c.maxWidth >= _staffTwoColBreakpoint;
-
-        final latest = const StaffLatestActivityPanel();
-        final features = const StaffFeaturesPanel();
-
-        if (!twoCol) {
-          return _stack([latest, features], gap: AppShape.gap12);
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: features),
-            const SizedBox(width: AppShape.gap12),
-            Expanded(child: latest),
-          ],
-        );
-      },
-    );
-  }
-
-  String? _greetingName() {
-    if (user == null) return 'Guest';
-    final n = user!.displayName?.trim();
-    return (n != null && n.isNotEmpty) ? n : user!.phoneNumber;
-  }
-
-  String? _memberIdOrNull() {
-    if (!_isRealMember || user == null) return null;
-    return user!.accountNumber;
-  }
-
-  void _snack(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 1)),
-    );
+    ]);
   }
 }
 
 // ─────────────────────────────────────────────
-// Guest widgets (simple like Google)
+// Shared layout helper
 // ─────────────────────────────────────────────
+Widget _stack(List<Widget> children, {double gap = AppShape.gap12}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (int i = 0; i < children.length; i++) ...[
+        children[i],
+        if (i != children.length - 1) SizedBox(height: gap),
+      ],
+    ],
+  );
+}
 
-// Inside: lib/core/home/widgets/home_screen.dart
-// (Only showing the guest parts + widget — drop into your existing file)
-
+// ─────────────────────────────────────────────
+// Guest search hero
+// ─────────────────────────────────────────────
 class _GuestSearchHero extends StatefulWidget {
   const _GuestSearchHero({
     required this.onSearch,
@@ -222,7 +375,6 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
   @override
   void initState() {
     super.initState();
-    // Autofocus after first frame (safer than autofocus:true)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
@@ -235,10 +387,7 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
     super.dispose();
   }
 
-  void _submit() {
-    final q = _c.text.trim();
-    widget.onSearch(q);
-  }
+  void _submit() => widget.onSearch(_c.text.trim());
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +399,6 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Search bar
             Material(
               elevation: 1.5,
               borderRadius: BorderRadius.circular(12),
@@ -276,10 +424,7 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Actions
             Row(
               children: [
                 Expanded(
@@ -302,9 +447,7 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
                 ),
               ],
             ),
-
             const SizedBox(height: 6),
-
             Text(
               'Browse without logging in',
               textAlign: TextAlign.center,

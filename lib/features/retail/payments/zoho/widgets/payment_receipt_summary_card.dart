@@ -1,3 +1,5 @@
+// lib/features/retail/payments/zoho/widgets/payment_receipt_summary_card.dart
+
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 
@@ -19,7 +21,7 @@ class PaymentReceiptSummaryCard extends StatelessWidget {
     required this.invoiceLoading,
     required this.invoiceError,
 
-    // ✅ new: paid + balance (optional)
+    // paid + balance (optional)
     this.invoicePaid,
     this.invoiceBalance,
 
@@ -145,20 +147,17 @@ class PaymentReceiptSummaryCard extends StatelessWidget {
                               icon: Icons.event_outlined,
                               text: '',
                             )._withText(invDateText),
-
                           if (totalText != null)
                             const _Meta(
                               icon: Icons.payments_outlined,
                               text: '',
                             )._withText(totalText),
-
                           if (paidText != null)
                             _Meta(
                               icon: Icons.check_circle_outline,
                               text: paidText,
                               color: scheme.primary,
                             ),
-
                           if (balanceText != null)
                             _Meta(
                               icon: Icons.account_balance_wallet_outlined,
@@ -243,16 +242,12 @@ class _PaymentDetails extends StatelessWidget {
         : 'Payment date: ${ymd.format(payment.date!)}';
 
     final mode = (payment.mode ?? '').trim();
-    final ref = (payment.referenceNumber ?? '').trim();
     final desc = (payment.description ?? '').trim();
     final amount = money(payment.amount, currencyCode);
 
-    final showPid = pid.isNotEmpty && pid != ref;
-
+    // amount centered; label right; no “ref”
     final bg = scheme.primary.withOpacity(0.06);
     final border = Border.all(color: scheme.primary.withOpacity(0.20));
-
-    // ✅ controlled red label (not “delete” red, but clearly red)
     final receiptLabelColor = scheme.error.withOpacity(0.90);
 
     return Container(
@@ -265,10 +260,6 @@ class _PaymentDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header:
-          // - amount truly centered (Stack)
-          // - label right-aligned
-          // - no magic widths
           SizedBox(
             height: 30,
             child: Stack(
@@ -305,7 +296,6 @@ class _PaymentDetails extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Details: centered distribution
           Align(
             alignment: Alignment.center,
             child: Wrap(
@@ -319,9 +309,7 @@ class _PaymentDetails extends StatelessWidget {
                     icon: Icons.account_balance_outlined,
                     text: 'Method: $mode',
                   ),
-                if (ref.isNotEmpty)
-                  _Meta(icon: Icons.tag_outlined, text: 'Ref: $ref'),
-                if (showPid)
+                if (pid.isNotEmpty)
                   _Meta(
                     icon: Icons.receipt_outlined,
                     text: 'ID: ${_shortId(pid, tail: 8)}',
@@ -398,8 +386,6 @@ class _Meta extends StatelessWidget {
   }
 }
 
-/// Tiny helper to avoid rewriting `_Meta(...)` when you want const + injected text.
-/// (keeps build method tidy, still DRY)
 extension _MetaX on _Meta {
   _Meta _withText(String text) => _Meta(icon: icon, text: text, color: color);
 }

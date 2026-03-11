@@ -1,3 +1,6 @@
+// lib/features/retail/quotes/widgets/quotes_list_screen.dart
+
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -19,22 +22,30 @@ import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 
 class QuotesListScreen extends ConsumerWidget {
-  const QuotesListScreen({super.key});
+  const QuotesListScreen({super.key, this.scope = RetailDocScope.all});
+
+  final RetailDocScope scope;
 
   static const double _loadMoreThresholdPx = 240;
 
   /// Keep consistent with invoices list.
   static const double _contentMaxW = 720;
 
+  bool get _isMine => scope == RetailDocScope.mine;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(quotesListControllerProvider);
-    final ctl = ref.read(quotesListControllerProvider.notifier);
+    final prov = quotesListControllerProvider(scope);
+
+    final state = ref.watch(prov);
+    final ctl = ref.read(prov.notifier);
+
+    final title = _isMine ? 'My Quotes' : 'Quotes';
 
     return AppPage(
       scrollable: false,
       maxWidth: _contentMaxW,
-      title: 'Quotes',
+      title: title,
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
@@ -109,6 +120,12 @@ class QuotesListScreen extends ConsumerWidget {
     WidgetRef ref,
     ZohoQuote q,
   ) async {
+    // Defensive: member scope should never edit
+    if (_isMine) {
+      _toast(context, 'Editing is not available here.');
+      return;
+    }
+
     final id = q.quoteId.trim();
     if (id.isEmpty) {
       _toast(context, 'Missing quote id');
@@ -120,7 +137,7 @@ class QuotesListScreen extends ConsumerWidget {
     );
 
     // Defensive refresh
-    ref.read(quotesListControllerProvider.notifier).refresh(reset: true);
+    ref.read(quotesListControllerProvider(scope).notifier).refresh(reset: true);
   }
 
   // ─────────────────────────────────────────────
@@ -140,10 +157,14 @@ class QuotesListScreen extends ConsumerWidget {
     if (state.items.isEmpty) {
       return _EmptyState(
         icon: Icons.receipt_long_outlined,
-        title: 'No quotes yet',
-        subtitle: 'Tap “New quote” to build one from the catalog.',
-        actionLabel: 'New quote',
-        onAction: () => _openCatalogToStartNewQuote(context),
+        title: _isMine ? 'No quotes yet' : 'No quotes yet',
+        subtitle: _isMine
+            ? 'Your quotes will appear here once they are created.'
+            : 'Tap “New quote” to build one from the catalog.',
+        actionLabel: _isMine ? 'Refresh' : 'New quote',
+        onAction: _isMine
+            ? () => ctl.refresh(reset: true)
+            : () => _openCatalogToStartNewQuote(context),
       );
     }
 
@@ -165,12 +186,13 @@ class QuotesListScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(top: 0, bottom: 96),
           children: [
             SalesListCard(
-              title: 'Recent quotes',
+              title: _isMine ? 'Your recent quotes' : 'Recent quotes',
               icon: Icons.receipt_long_outlined,
               children: [
                 for (final q in state.items)
                   _QuoteRow(
                     q: q,
+                    canEdit: !_isMine,
                     onOpen: () => _openExistingQuote(context, q),
                     onEdit: () => _editQuote(context, ref, q),
                   ),
@@ -196,11 +218,13 @@ class _QuoteRow extends StatelessWidget {
     required this.q,
     required this.onOpen,
     required this.onEdit,
+    required this.canEdit,
   });
 
   final ZohoQuote q;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +235,7 @@ class _QuoteRow extends StatelessWidget {
         : q.customerName.trim();
 
     final dateText = _formatDate(q.date);
-    final ref = (q.referenceNumber ?? '').trim();
+    final acct = (q.accountNumber ?? '').trim();
 
     final currency = (q.currencyCode ?? '').trim();
     final amount = _formatMoney(q.total, currencyCode: currency);
@@ -224,7 +248,6 @@ class _QuoteRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ Shared icon (tone-matched to status)
             SalesDocLeadingIcon(status: q.status),
             const SizedBox(width: AppShape.gap12),
 
@@ -245,16 +268,16 @@ class _QuoteRow extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: AppShape.gap10),
-
-                      // ✅ Shared chip (tone-matched to status)
                       SalesDocStatusChip(status: q.status),
 
-                      const SizedBox(width: AppShape.gap6),
-                      IconButton(
-                        tooltip: 'Edit quote',
-                        onPressed: onEdit,
-                        icon: const Icon(Icons.edit_outlined, size: 20),
-                      ),
+                      if (canEdit) ...[
+                        const SizedBox(width: AppShape.gap6),
+                        IconButton(
+                          tooltip: 'Edit quote',
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: AppShape.gap6),
@@ -266,8 +289,8 @@ class _QuoteRow extends StatelessWidget {
                         icon: Icons.calendar_today_outlined,
                         text: dateText,
                       ),
-                      if (ref.isNotEmpty)
-                        _MetaPill(icon: Icons.tag_outlined, text: ref),
+                      if (acct.isNotEmpty)
+                        _MetaPill(icon: Icons.badge_outlined, text: acct),
                     ],
                   ),
                 ],
@@ -395,7 +418,9 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: AppShape.gap16),
               FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.add),
+                icon: Icon(
+                  actionLabel == 'Refresh' ? Icons.refresh : Icons.add,
+                ),
                 label: Text(actionLabel),
               ),
             ],

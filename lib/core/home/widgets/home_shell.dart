@@ -1,14 +1,16 @@
+// lib/core/home/widgets/home_shell.dart
+
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/providers/staff_view_mode_provider.dart';
+import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
 import 'package:afyakit/core/home/widgets/home_screen.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,8 +19,7 @@ class HomeShell extends ConsumerWidget {
 
   EntryMode _entryModeFor(AuthUser? user) {
     if (user == null) return EntryMode.guest;
-    if (user.type.isStaff) return EntryMode.staff;
-    return EntryMode.member;
+    return user.isStaffResolved ? EntryMode.staff : EntryMode.member;
   }
 
   @override
@@ -26,15 +27,12 @@ class HomeShell extends ConsumerWidget {
     final tenantId = ref.watch(tenantIdProvider);
     final tenantName = ref.watch(tenantDisplayNameProvider);
 
-    final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
-
-    // ✅ Retail controls whether guests are allowed to browse the guest surface
-    // (catalog/search etc). If retail not enabled, guests must login.
+    // Guests:
+    // - if retail enabled: show guest surface
+    // - else: force login
     final retailEnabled = ref.watch(tenantRetailEnabledProvider);
 
-    if (sessionAsync.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
       loading: () =>
@@ -43,44 +41,25 @@ class HomeShell extends ConsumerWidget {
       data: (user) {
         final realEntry = _entryModeFor(user);
 
-        // ✅ Staff-only: allow "view as member" via badge toggle.
-        // IMPORTANT: provider is NOT autoDispose, so it persists.
+        // Staff-only: allow "view as member"
         final staffView = ref.watch(staffViewModeProvider);
 
-        // Default: effective == real
         var effectiveEntry = realEntry;
-
-        // Staff can only be staff-surface or member-surface (never guest)
         if (realEntry == EntryMode.staff) {
           effectiveEntry = (staffView == EntryMode.member)
               ? EntryMode.member
               : EntryMode.staff;
         }
 
-        // Guests:
-        // - if retail enabled: show guest surface
-        // - else: force login
         if (realEntry == EntryMode.guest) {
-          if (retailEnabled) {
-            return const CatalogScreen();
-          }
+          if (retailEnabled) return const CatalogScreen();
           return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName));
         }
 
-        // Members: always member surface
-        if (realEntry == EntryMode.member) {
-          return HomeScreen(
-            realEntry: EntryMode.member,
-            effectiveEntry: EntryMode.member,
-            user: user,
-          );
-        }
-
-        // Staff: staff surface OR member surface depending on toggle
         return HomeScreen(
-          realEntry: EntryMode.staff,
+          realEntry: realEntry,
           effectiveEntry: effectiveEntry,
-          user: user,
+          user: user, // non-null here
         );
       },
     );
@@ -120,10 +99,9 @@ class HomeShell extends ConsumerWidget {
                   ),
                   FilledButton.icon(
                     onPressed: () async {
-                      final ctrl = ref.read(
-                        sessionControllerProvider(tenantId).notifier,
-                      );
-                      await ctrl.logOut();
+                      await ref
+                          .read(sessionControllerProvider(tenantId).notifier)
+                          .logOut();
                     },
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),

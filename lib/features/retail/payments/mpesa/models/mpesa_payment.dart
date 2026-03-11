@@ -1,3 +1,5 @@
+// lib/features/retail/payments/mpesa/models/mpesa_payment.dart
+
 import '../../../../../shared/utils/utils.dart';
 
 class MpesaPayment {
@@ -5,48 +7,50 @@ class MpesaPayment {
     required this.id,
     required this.status,
     required this.amount,
-    this.phone,
+    required this.currency,
+    required this.updatedAt,
+
     this.purpose,
     this.purposeRef,
+
     this.mpesaReceiptNumber,
-    this.checkoutRequestId,
-    this.merchantRequestId,
-    this.transactionDateRaw,
-    this.createdAt,
-    this.updatedAt,
+    this.resultCode,
+    this.resultDesc,
+
     this.zohoSyncStatus,
     this.zohoPaymentId,
     this.zohoSyncError,
+    this.zohoSyncedAt,
   });
 
+  /// BE: paymentId
   final String id;
 
-  /// e.g. "stk_pending" | "stk_success" | "stk_failed"
+  /// "created" | "stk_initiated" | "stk_success" | "stk_failed"
   final String status;
 
   final num amount;
 
-  final String? phone;
+  /// BE: always "KES"
+  final String currency;
+
+  /// BE: updatedAtIso
+  final DateTime updatedAt;
+
   final String? purpose;
   final String? purposeRef;
 
   final String? mpesaReceiptNumber;
-  final String? checkoutRequestId;
-  final String? merchantRequestId;
+  final int? resultCode;
+  final String? resultDesc;
 
-  /// Daraja YYYYMMDDHHMMSS (often)
-  final String? transactionDateRaw;
-
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  /// "idle" | "syncing" | "success" | "failed"
   final String? zohoSyncStatus;
   final String? zohoPaymentId;
   final String? zohoSyncError;
+  final DateTime? zohoSyncedAt;
 
   // ─────────────────────────────
-  // Local parsing helpers (NO deps)
+  // Local parsing helpers
   // ─────────────────────────────
 
   static String _s(Object? v) => (v ?? '').toString().trim();
@@ -62,31 +66,15 @@ class MpesaPayment {
     return num.tryParse(s) ?? 0;
   }
 
-  static DateTime? _dt(Object? v) {
-    if (v is DateTime) return v;
+  static int? _i(Object? v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
     final s = _s(v);
-    if (s.isEmpty) return null;
-
-    // Accept ISO strings
-    final iso = DateTime.tryParse(s);
-    if (iso != null) return iso;
-
-    // Accept Firestore Timestamp-ish maps if they sneak in:
-    // { _seconds: 123, _nanoseconds: 0 } or { seconds: 123, nanoseconds: 0 }
-    if (v is Map) {
-      final sec = v['_seconds'] ?? v['seconds'];
-      final ns = v['_nanoseconds'] ?? v['nanoseconds'];
-      if (sec is int) {
-        final ms = sec * 1000 + ((ns is int) ? (ns ~/ 1000000) : 0);
-        return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
-      }
-    }
-
-    return null;
+    return int.tryParse(s);
   }
 
   factory MpesaPayment.fromJson(JsonMap j) {
-    // allow either {payment:{...}} or direct payload
+    // Accept { payment: {...} } OR direct payload
     final JsonMap src;
     final p = j['payment'];
     if (isRecord(p)) {
@@ -95,39 +83,59 @@ class MpesaPayment {
       src = j;
     }
 
-    final id = _s(src['id'] ?? src['paymentId'] ?? src['payment_id']);
+    final id = _s(src['paymentId'] ?? src['id'] ?? src['payment_id']);
     final status = _s(src['status']);
+
     if (id.isEmpty) {
-      throw const FormatException('MpesaPayment.fromJson: missing id');
+      throw const FormatException('MpesaPayment.fromJson: missing paymentId');
     }
     if (status.isEmpty) {
       throw const FormatException('MpesaPayment.fromJson: missing status');
     }
 
+    final amount = _n(src['amount']);
+    final currency = _s(src['currency']);
+    if (currency.isEmpty) {
+      throw const FormatException('MpesaPayment.fromJson: missing currency');
+    }
+
+    final updatedAtIso = _optStr(
+      src['updatedAtIso'] ?? src['updated_at_iso'] ?? src['updatedAt'],
+    );
+    final updatedAt = DateTime.tryParse(updatedAtIso ?? '');
+    if (updatedAt == null) {
+      throw const FormatException(
+        'MpesaPayment.fromJson: missing/invalid updatedAtIso',
+      );
+    }
+
+    final zohoSyncedAtIso = _optStr(src['zohoSyncedAtIso']);
+    final zohoSyncedAt = zohoSyncedAtIso != null
+        ? DateTime.tryParse(zohoSyncedAtIso)
+        : null;
+
     return MpesaPayment(
       id: id,
       status: status,
-      amount: _n(src['amount']),
-      phone: _optStr(src['phone']),
+      amount: amount,
+      currency: currency,
+      updatedAt: updatedAt,
+
       purpose: _optStr(src['purpose']),
       purposeRef: _optStr(src['purposeRef'] ?? src['purpose_ref']),
-      mpesaReceiptNumber: _optStr(
-        src['mpesaReceiptNumber'] ?? src['mpesa_receipt_number'],
-      ),
-      checkoutRequestId: _optStr(
-        src['checkoutRequestId'] ?? src['checkout_request_id'],
-      ),
-      merchantRequestId: _optStr(
-        src['merchantRequestId'] ?? src['merchant_request_id'],
-      ),
-      transactionDateRaw: _optStr(
-        src['transactionDate'] ?? src['transaction_date'],
-      ),
-      createdAt: _dt(src['createdAt'] ?? src['created_at']),
-      updatedAt: _dt(src['updatedAt'] ?? src['updated_at']),
-      zohoSyncStatus: _optStr(src['zohoSyncStatus'] ?? src['zoho_sync_status']),
-      zohoPaymentId: _optStr(src['zohoPaymentId'] ?? src['zoho_payment_id']),
-      zohoSyncError: _optStr(src['zohoSyncError'] ?? src['zoho_sync_error']),
+
+      mpesaReceiptNumber: _optStr(src['mpesaReceiptNumber']),
+      resultCode: _i(src['resultCode']),
+      resultDesc: _optStr(src['resultDesc']),
+
+      zohoSyncStatus: _optStr(src['zohoSyncStatus']),
+      zohoPaymentId: _optStr(src['zohoPaymentId']),
+      zohoSyncError: _optStr(src['zohoSyncError']),
+      zohoSyncedAt: zohoSyncedAt,
     );
   }
+
+  bool get isTerminal => status == 'stk_success' || status == 'stk_failed';
+  bool get isSuccess => status == 'stk_success';
+  bool get isFailed => status == 'stk_failed';
 }

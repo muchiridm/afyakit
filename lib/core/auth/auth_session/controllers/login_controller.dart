@@ -4,7 +4,7 @@ import 'dart:async';
 
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/start_response.dart';
-import 'package:afyakit/core/auth/auth_session/services/auth_api_exception.dart';
+import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
 import 'package:afyakit/core/auth/auth_session/services/auth_service.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/services/snack_service.dart';

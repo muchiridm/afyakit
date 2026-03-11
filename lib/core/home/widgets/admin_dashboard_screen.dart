@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/tests/api_test_screen.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 
 import 'package:afyakit/features/backup/backup_screen.dart';
 import 'package:afyakit/features/inventory/import/importer/import_inventory_screen.dart';

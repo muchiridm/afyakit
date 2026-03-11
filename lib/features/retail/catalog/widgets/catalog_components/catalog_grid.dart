@@ -28,8 +28,9 @@ class CatalogGrid extends StatelessWidget {
     // responsive columns
     final cross = width < 520 ? 1 : (width < 900 ? 2 : 3);
 
-    // slightly lower aspect ratio → more vertical space per tile
-    final aspect = width < 520 ? 3.0 : 3.2;
+    // ✅ Make cards a bit taller (more breathing room).
+    // Lower ratio => taller tiles.
+    final aspect = width < 520 ? 2.55 : 2.7;
 
     return Column(
       children: [
@@ -61,11 +62,6 @@ class CatalogGrid extends StatelessWidget {
 }
 
 class _CatalogCard extends StatelessWidget {
-  final CatalogTile tile;
-  final VoidCallback onTap;
-  final String Function(num?) priceFormatter;
-  final Color priceColor;
-
   const _CatalogCard({
     required this.tile,
     required this.onTap,
@@ -73,17 +69,65 @@ class _CatalogCard extends StatelessWidget {
     required this.priceColor,
   });
 
-  bool get _hasDesc =>
-      tile.tileDesc != null && tile.tileDesc!.trim().isNotEmpty;
+  final CatalogTile tile;
+  final VoidCallback onTap;
+  final String Function(num?) priceFormatter;
+  final Color priceColor;
 
-  bool get _hasMfg =>
-      tile.supplierManufacturer != null &&
-      tile.supplierManufacturer!.trim().isNotEmpty;
+  // -------------------------
+  // Text safety helpers
+  // -------------------------
+
+  static String _clean(String? s) {
+    final t = (s ?? '').trim();
+    if (t.isEmpty) return '';
+    if (t.toLowerCase() == 'null') return '';
+    return t;
+  }
+
+  static String _clamp(String s, {int max = 36}) {
+    final t = s.trim();
+    if (t.isEmpty) return t;
+    if (t.length <= max) return t;
+    return '${t.substring(0, max - 1)}…';
+  }
+
+  static String _joinMeta(String mfg, String desc) {
+    final a = mfg.trim();
+    final b = desc.trim();
+    if (a.isEmpty && b.isEmpty) return '';
+    if (a.isEmpty) return b;
+    if (b.isEmpty) return a;
+    return '$a • $b';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final priceText = priceFormatter(tile.bestSellPrice);
+    final priceText = priceFormatter(tile.bestSellPrice).trim();
+
+    final brand = _clean(tile.brand);
+    final strength = _clean(tile.strengthSig);
+    final title = '$brand $strength'.trim();
+    final safeTitle = title.isEmpty ? 'Item' : title;
+
+    final mfg = _clean(tile.supplierManufacturer);
+    final desc = _clean(tile.tileDesc);
+
+    // ✅ one-line meta (manufacturer + description), both truncated safely
+    final metaLine = _joinMeta(_clamp(mfg, max: 26), _clamp(desc, max: 40));
+
+    final titleStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      fontSize: 14,
+      height: 1.05,
+    );
+
+    final metaStyle = theme.textTheme.bodySmall?.copyWith(
+      height: 1.05,
+      fontWeight: FontWeight.w600,
+      color: theme.textTheme.bodySmall?.color?.withOpacity(0.72),
+    );
 
     return Material(
       elevation: 1.5,
@@ -93,8 +137,7 @@ class _CatalogCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          // slightly tighter vertical padding to avoid grid overflow
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -109,78 +152,51 @@ class _CatalogCard extends StatelessWidget {
                 child: const Icon(Icons.medication, size: 20),
               ),
               const SizedBox(width: 10),
-              // middle: title + (mfg) + (desc) + chips
+
+              // middle: title + meta + chips
               Expanded(
-                child: Column(
-                  // fill available height and compress children as needed
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // title
-                    Text(
-                      '${tile.brand} ${tile.strengthSig}'.trim(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-
-                    // ✅ manufacturer (1 line)
-                    if (_hasMfg) ...[
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.factory_outlined,
-                            size: 13,
-                            color: theme.colorScheme.onSurface.withOpacity(
-                              0.65,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              tile.supplierManufacturer!.trim(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                height: 1.1,
-                                fontWeight: FontWeight.w600,
-                                color: theme.textTheme.bodySmall?.color
-                                    ?.withOpacity(0.75),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    // description (1 line)
-                    if (_hasDesc) ...[
-                      const SizedBox(height: 2),
+                child: ClipRect(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // title (1 line)
                       Text(
-                        tile.tileDesc!.trim(),
+                        safeTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          height: 1.1,
-                          color: theme.textTheme.bodySmall?.color?.withOpacity(
-                            0.7,
-                          ),
-                        ),
+                        softWrap: false,
+                        style: titleStyle,
+                      ),
+                      const SizedBox(height: 4),
+
+                      // ✅ Meta line (1 line max)
+                      if (metaLine.isNotEmpty)
+                        Text(
+                          metaLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          style: metaStyle,
+                        )
+                      else
+                        const SizedBox(height: 0),
+
+                      const SizedBox(height: 6),
+
+                      // ✅ Chips line (clamped + cannot force height)
+                      SizedBox(
+                        height:
+                            22, // <- hard clamp: no more RenderFlex overflow
+                        child: _SingleLineChips(tile: tile),
                       ),
                     ],
-
-                    const SizedBox(height: 4),
-
-                    // single-line, horizontally scrollable chips
-                    _SingleLineChips(tile: tile),
-                  ],
+                  ),
                 ),
               ),
+
               const SizedBox(width: 10),
+
               // right: price
               if (priceText.isNotEmpty)
                 Column(
@@ -192,14 +208,16 @@ class _CatalogCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w900,
                         fontSize: 15,
+                        height: 1.05,
                         color: priceColor,
                       ),
                     ),
                     Text(
                       'KES',
                       style: theme.textTheme.labelSmall?.copyWith(
+                        height: 1.05,
                         color: theme.textTheme.labelSmall?.color?.withOpacity(
                           0.7,
                         ),
@@ -215,16 +233,28 @@ class _CatalogCard extends StatelessWidget {
   }
 }
 
+/// One-line, horizontally scrollable chips:
+/// - labels are clamped so a single chip can't become absurdly long
+/// - wrapped in ClipRect so it cannot request extra height
 class _SingleLineChips extends StatelessWidget {
+  const _SingleLineChips({required this.tile});
   final CatalogTile tile;
 
-  const _SingleLineChips({required this.tile});
+  static String _clamp(String s, {int max = 20}) {
+    final t = s.trim();
+    if (t.isEmpty) return t;
+    if (t.length <= max) return t;
+    return '${t.substring(0, max - 1)}…';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final form = (tile.form).trim();
+    final mfg = (tile.supplierManufacturer ?? '').trim();
+
     final chips = <Widget>[
       _PillChip(
-        label: tile.form.isEmpty ? 'Form' : 'Form ${tile.form}',
+        label: form.isEmpty ? 'Form' : 'Form ${_clamp(form, max: 12)}',
         icon: Icons.category_outlined,
       ),
       if (tile.bestPackCount != null)
@@ -232,51 +262,52 @@ class _SingleLineChips extends StatelessWidget {
           label: 'Pack ${tile.bestPackCount}',
           icon: Icons.inventory_2_outlined,
         ),
-      if (tile.volumeSig != null && tile.volumeSig!.trim().isNotEmpty)
+      if ((tile.volumeSig ?? '').trim().isNotEmpty)
         _PillChip(
-          label: 'Vol ${tile.volumeSig}',
+          label: 'Vol ${_clamp(tile.volumeSig!.trim(), max: 10)}',
           icon: Icons.water_drop_outlined,
         ),
-      if (tile.concentrationSig != null &&
-          tile.concentrationSig!.trim().isNotEmpty)
+      if ((tile.concentrationSig ?? '').trim().isNotEmpty)
         _PillChip(
-          label: 'Conc ${tile.concentrationSig}',
+          label: 'Conc ${_clamp(tile.concentrationSig!.trim(), max: 10)}',
           icon: Icons.science_outlined,
         ),
-      // ✅ manufacturer as a compact chip (optional, but nice for trust)
-      if (tile.supplierManufacturer != null &&
-          tile.supplierManufacturer!.trim().isNotEmpty)
-        _PillChip(
-          label: tile.supplierManufacturer!.trim(),
-          icon: Icons.factory_outlined,
-        ),
+      if (mfg.isNotEmpty)
+        _PillChip(label: _clamp(mfg, max: 16), icon: Icons.factory_outlined),
     ];
 
     if (chips.isEmpty) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < chips.length; i++) ...[
-            if (i > 0) const SizedBox(width: 6),
-            chips[i],
-          ],
-        ],
+    return ClipRect(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Row(
+            children: [
+              for (var i = 0; i < chips.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                chips[i],
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
 class _PillChip extends StatelessWidget {
+  const _PillChip({required this.label, this.icon});
+
   final String label;
   final IconData? icon;
-
-  const _PillChip({required this.label, this.icon});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
       decoration: BoxDecoration(
@@ -291,7 +322,11 @@ class _PillChip extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(fontSize: 12),
+            softWrap: false,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontSize: 12,
+              height: 1.05,
+            ),
           ),
         ],
       ),

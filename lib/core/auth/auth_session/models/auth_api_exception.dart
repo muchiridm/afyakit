@@ -1,3 +1,5 @@
+// lib/core/auth/auth_session/models/auth_api_exception.dart
+
 class AuthApiException implements Exception {
   AuthApiException({
     required this.statusCode,

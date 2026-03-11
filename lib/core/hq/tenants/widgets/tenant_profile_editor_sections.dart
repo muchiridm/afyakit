@@ -134,15 +134,20 @@ class TenantProfileMobileMoneySection extends StatelessWidget {
   }
 }
 
+/// ✅ New model: single format string (default yymm_seq4 => 26020001)
 class TenantProfileAccountNumberingSection extends StatelessWidget {
   const TenantProfileAccountNumberingSection({
     super.key,
-    required this.accountPrefix,
-    required this.accountPad,
+    required this.accountFormat,
   });
 
-  final TextEditingController accountPrefix;
-  final TextEditingController accountPad;
+  /// Examples:
+  /// - yymm_seq4 -> 26020001 (YYMM + 4-digit seq)
+  /// - yymm_seq5 -> 260200001
+  /// - yymm_seq6 -> 2602000001
+  final TextEditingController accountFormat;
+
+  static const _allowed = <String>{'yymm_seq4', 'yymm_seq5', 'yymm_seq6'};
 
   @override
   Widget build(BuildContext context) {
@@ -154,35 +159,28 @@ class TenantProfileAccountNumberingSection extends StatelessWidget {
         Text('Account numbering', style: t.textTheme.titleSmall),
         const SizedBox(height: 8),
 
-        _text('Account prefix', accountPrefix, hint: 'e.g. DP', required: true),
-
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: TextFormField(
-            controller: accountPad,
-            keyboardType: TextInputType.number,
+            controller: accountFormat,
             decoration: const InputDecoration(
-              labelText: 'Account pad',
-              hintText: 'e.g. 6',
+              labelText: 'Account format',
+              hintText: 'yymm_seq4',
               border: OutlineInputBorder(),
             ),
             validator: (v) {
               final s = (v ?? '').trim();
-              if (s.isEmpty) return 'Required';
-
-              final n = int.tryParse(s);
-              if (n == null) return 'Must be a number';
-
-              // match your model guardrails (3..10)
-              if (n < 3 || n > 10) return 'Must be between 3 and 10';
-
+              if (s.isEmpty) return null; // allow empty => backend default
+              if (!_allowed.contains(s)) {
+                return 'Use: yymm_seq4 / yymm_seq5 / yymm_seq6';
+              }
               return null;
             },
           ),
         ),
 
         Text(
-          'Example: prefix="DP", pad=6 → DP-000123',
+          'Example: yymm_seq4 → 26020001',
           style: t.textTheme.bodySmall?.copyWith(color: Colors.grey),
         ),
       ],

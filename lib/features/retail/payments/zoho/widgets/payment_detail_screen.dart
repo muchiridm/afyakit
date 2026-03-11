@@ -1,6 +1,7 @@
 // lib/features/retail/sales/payments/widgets/payment_detail_screen.dart
 
-import 'package:afyakit/features/retail/shared/providers/payment_receipt_providers.dart';
+import 'package:afyakit/features/retail/payments/zoho/controllers/payment_state.dart';
+import 'package:afyakit/features/retail/payments/zoho/providers/payment_receipt_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,7 +10,6 @@ import 'package:afyakit/shared/services/dialog_service.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 
 import 'package:afyakit/features/retail/payments/zoho/controllers/payment_controller.dart';
-import 'package:afyakit/features/retail/payments/zoho/controllers/payment_state.dart';
 import 'package:afyakit/features/retail/payments/zoho/widgets/payment_editor_sheet.dart';
 import 'package:afyakit/features/retail/payments/zoho/widgets/payment_receipt_summary_card.dart';
 import 'package:afyakit/features/retail/payments/zoho/widgets/payment_history_section.dart';

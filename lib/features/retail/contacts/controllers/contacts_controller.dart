@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -57,7 +58,6 @@ final contactsControllerProvider =
 
       // ✅ IMPORTANT:
       // Don't call refresh() synchronously during provider creation.
-      // This can trigger build/layout assertions and leave the UI half-built.
       Future.microtask(ctl.refresh);
 
       return ctl;
@@ -93,7 +93,6 @@ class ContactsController extends StateNotifier<ContactsState> {
   void setSearch(String v) {
     if (!_alive) return;
 
-    // keep error sticky unless we explicitly clear it
     state = state.copyWith(search: v, error: null);
 
     _debounce?.cancel();
@@ -112,13 +111,23 @@ class ContactsController extends StateNotifier<ContactsState> {
     final seq = ++_refreshSeq;
     final myToken = _token;
 
-    // Don't clobber saving; still show list loading.
     state = state.copyWith(loadingList: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
       final q = state.search.trim();
-      final items = await svc.list(search: q.isEmpty ? null : q);
+
+      // ✅ Single source of truth:
+      // - Staff mode => provider returns null => unscoped list
+      // - Member mode => provider returns accountNumber => scoped list
+      final accountNumber = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
+          .trim();
+      final scopedAccount = accountNumber.isEmpty ? null : accountNumber;
+
+      final items = await svc.list(
+        search: q.isEmpty ? null : q,
+        accountNumber: scopedAccount,
+      );
 
       if (!_alive) return;
       if (myToken != _token) return;
@@ -151,13 +160,11 @@ class ContactsController extends StateNotifier<ContactsState> {
       if (!_alive) return;
       if (myToken != _token) return;
 
-      // Optimistic insert (fast UX)
       state = state.copyWith(
         saving: false,
         items: <ZohoContact>[created, ...state.items],
       );
 
-      // If search is active, reconcile silently
       if (state.search.trim().isNotEmpty) {
         unawaited(refresh());
       }
@@ -267,7 +274,6 @@ class ContactsController extends StateNotifier<ContactsState> {
 
     if (!_alive) return;
 
-    // keep cache fresh
     final next = state.items
         .map((c) => c.contactId == detailed.contactId ? detailed : c)
         .toList(growable: false);
@@ -380,5 +386,4 @@ class ContactsController extends StateNotifier<ContactsState> {
 }
 
 /// Tiny helper to avoid analyzer warnings without importing package:pedantic.
-/// If you already have it, replace with `unawaited(...)` from it.
 void unawaited(Future<void> f) {}

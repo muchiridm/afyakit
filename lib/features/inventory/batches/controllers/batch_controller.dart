@@ -1,6 +1,6 @@
 // lib/features/batches/controllers/batch_controller.dart
 import 'dart:async';
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';

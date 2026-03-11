@@ -1,3 +1,8 @@
+// lib/features/retail/quotes/controllers/quote_meta_controller.dart
+
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +16,7 @@ class QuoteMetaState {
     this.reference,
     this.customerNotes,
     this.quoteDate,
-    this.expiryDate, // ✅ NEW
+    this.expiryDate,
   });
 
   final String? editingQuoteId;
@@ -22,7 +27,7 @@ class QuoteMetaState {
   /// Zoho: `date` (estimate_date)
   final DateTime? quoteDate;
 
-  /// ✅ NEW: Zoho `expiry_date`
+  /// Zoho: `expiry_date`
   final DateTime? expiryDate;
 
   bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
@@ -45,8 +50,8 @@ class QuoteMetaState {
     bool clearCustomerNotes = false,
     DateTime? quoteDate,
     bool clearQuoteDate = false,
-    DateTime? expiryDate, // ✅ NEW
-    bool clearExpiryDate = false, // ✅ NEW
+    DateTime? expiryDate,
+    bool clearExpiryDate = false,
   }) {
     return QuoteMetaState(
       editingQuoteId: clearEditingQuoteId
@@ -69,14 +74,38 @@ class QuoteMetaState {
 }
 
 class QuoteMetaController extends StateNotifier<QuoteMetaState> {
-  QuoteMetaController() : super(const QuoteMetaState());
+  QuoteMetaController(this._ref) : super(const QuoteMetaState());
+
+  final Ref _ref;
 
   static DateTime _normalize(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Enter "new quote" mode. Do NOT clear customer/meta.
+  QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
+
+  String get _acct =>
+      (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+
+  bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
+
+  /// Enter "new quote" mode.
+  /// - Picker: keep customer selection (persist across Catalog ↔ QuoteEditor)
+  /// - MemberScoped: clear stale contact so UI never shows previous user's name
   void beginNew() {
-    if ((state.editingQuoteId ?? '').trim().isEmpty) return;
-    state = state.copyWith(clearEditingQuoteId: true);
+    final wasEditing = (state.editingQuoteId ?? '').trim().isNotEmpty;
+
+    if (_isMemberScoped) {
+      // Always clear contact in member mode to avoid stale header name
+      state = state.copyWith(clearEditingQuoteId: true, clearContact: true);
+      return;
+    }
+
+    // Picker mode:
+    // Only clear editingQuoteId; keep contact/meta
+    if (wasEditing) {
+      state = state.copyWith(clearEditingQuoteId: true);
+    } else {
+      // already new; do nothing
+    }
   }
 
   /// Enter "edit quote" mode (sets editingQuoteId).
@@ -87,14 +116,28 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 
   void clearAll() => state = const QuoteMetaState();
 
-  void setContact(ZohoContact c) {
-    final id = c.contactId.trim();
-    final title = c.title.trim();
-    if (id.isEmpty && title.isEmpty) return;
+  void setContact(ZohoContact? c) {
+    if (_isMemberScoped) {
+      // Member scoped: reject clearing
+      if (c == null) return;
+
+      // Enforce scope if accountNumber present on payload.
+      final nextAcct = (c.accountNumber ?? '').trim();
+      final acct = _acct;
+
+      if (acct.isNotEmpty && nextAcct.isNotEmpty && nextAcct != acct) {
+        return;
+      }
+    }
+
     state = state.copyWith(contact: c);
   }
 
-  void clearContact() => state = state.copyWith(clearContact: true);
+  void clearContact() {
+    // Member scoped: never allow clearing
+    if (_isMemberScoped) return;
+    state = state.copyWith(clearContact: true);
+  }
 
   void setReference(String v) {
     final t = v.trim();
@@ -110,13 +153,17 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(quoteDate: _normalize(d));
   }
 
-  /// ✅ NEW
+  void clearQuoteDate() {
+    state = state.copyWith(clearQuoteDate: true);
+  }
+
   void setExpiryDate(DateTime d) {
     state = state.copyWith(expiryDate: _normalize(d));
   }
 
-  /// ✅ Optional helper if you want a "clear" button in UI
-  void clearExpiryDate() => state = state.copyWith(clearExpiryDate: true);
+  void clearExpiryDate() {
+    state = state.copyWith(clearExpiryDate: true);
+  }
 
   void applyZohoMeta({
     required String editingQuoteId,
@@ -124,23 +171,33 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
-    DateTime? expiryDate, // ✅ NEW
+    DateTime? expiryDate,
   }) {
     final id = editingQuoteId.trim();
+
+    ZohoContact? safeContact = contact;
+
+    // ✅ Member scoped: DO NOT accept a contact that doesn't match scope.
+    if (_isMemberScoped) {
+      final acct = _acct;
+      final contactAcct = (contact?.accountNumber ?? '').trim();
+
+      // If account numbers exist, must match; else drop contact to force rebind.
+      if (acct.isNotEmpty && contactAcct.isNotEmpty && contactAcct != acct) {
+        safeContact = null;
+      }
+    }
+
     state = QuoteMetaState(
       editingQuoteId: id.isEmpty ? null : id,
-      contact: contact,
+      contact: safeContact,
       reference: (reference ?? '').trim().isEmpty ? null : reference!.trim(),
-      customerNotes: (customerNotes ?? '').trim().isEmpty
-          ? null
-          : customerNotes!.trim(),
+      customerNotes: (customerNotes ?? '').trim().isNotEmpty
+          ? customerNotes!.trim()
+          : null,
       quoteDate: QuoteMetaState.normalizeDate(quoteDate),
-      expiryDate: QuoteMetaState.normalizeDate(expiryDate), // ✅ NEW
+      expiryDate: QuoteMetaState.normalizeDate(expiryDate),
     );
-  }
-
-  void clearQuoteDate() {
-    state = state.copyWith(quoteDate: null);
   }
 }
 
@@ -148,5 +205,5 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 /// This keeps customer selection alive across Catalog ↔ QuoteEditor navigation.
 final quoteMetaControllerProvider =
     StateNotifierProvider<QuoteMetaController, QuoteMetaState>(
-      (ref) => QuoteMetaController(),
+      (ref) => QuoteMetaController(ref),
     );

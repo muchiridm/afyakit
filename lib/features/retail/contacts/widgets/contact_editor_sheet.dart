@@ -1,6 +1,5 @@
-// lib/features/retail/contacts/widgets/contact_editor_sheet.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../shared/models/zoho_contact.dart';
 import 'contact_sheet_models.dart';
@@ -21,6 +20,9 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
   late final TextEditingController _displayCtl;
   late final TextEditingController _companyCtl;
+
+  // ✅ NEW: Account number (Zoho Books custom field cf_account_number)
+  late final TextEditingController _acctCtl;
 
   // personContact fields
   late final TextEditingController _personCtl;
@@ -46,6 +48,9 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     _displayCtl = TextEditingController(text: c?.displayName ?? '');
     _companyCtl = TextEditingController(text: c?.companyName ?? '');
 
+    // ✅ account number
+    _acctCtl = TextEditingController(text: c?.accountNumber ?? '');
+
     final pc = c?.personContact;
     _personCtl = TextEditingController(text: pc?.personName ?? '');
     _emailCtl = TextEditingController(text: pc?.email ?? '');
@@ -65,6 +70,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   void dispose() {
     _displayCtl.dispose();
     _companyCtl.dispose();
+    _acctCtl.dispose();
     _personCtl.dispose();
     _emailCtl.dispose();
     _phoneCtl.dispose();
@@ -79,6 +85,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
     _displayCtl.text = c?.displayName ?? '';
     _companyCtl.text = c?.companyName ?? '';
+    _acctCtl.text = c?.accountNumber ?? '';
 
     final pc = c?.personContact;
     _personCtl.text = pc?.personName ?? '';
@@ -114,6 +121,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final display = _displayCtl.text.trim();
     final company = _companyCtl.text.trim();
 
+    final account = _acctCtl.text.trim();
+
     final person = _personCtl.text.trim();
     final email = _emailCtl.text.trim();
     final phone = _phoneCtl.text.trim();
@@ -121,8 +130,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
     PersonContact? personContact;
     if (_kind == _ContactKind.person) {
-      // allow "person mode" even if comms exist and name empty?
-      // no — we validate person name (see validators below)
       personContact = PersonContact(
         personName: person,
         contactPersonId: widget.initial?.personContact?.contactPersonId,
@@ -139,6 +146,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
       companyName: company.isEmpty ? null : company,
       personContact: personContact,
       status: widget.initial?.status,
+
+      // ✅ preserve type + account number in edits
+      contactType: widget.initial?.contactType,
+      accountNumber: account.isEmpty ? null : account,
     );
   }
 
@@ -167,9 +178,57 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     );
   }
 
+  Future<void> _copyToClipboard(String text) async {
+    final v = text.trim();
+    if (v.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: v));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied')));
+  }
+
+  Widget _debugRow({required String label, required String value}) {
+    final t = Theme.of(context).textTheme;
+    final v = value.trim();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(flex: 4, child: Text(label, style: t.labelMedium)),
+          Expanded(
+            flex: 6,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SelectableText(
+                v.isEmpty ? '-' : v,
+                style: t.bodyMedium,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Copy',
+            icon: const Icon(Icons.copy, size: 18),
+            onPressed: v.isEmpty ? null : () => _copyToClipboard(v),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    final c = widget.initial;
+    final contactId = (c?.contactId ?? '').trim();
+    final accountNo = (c?.accountNumber ?? _acctCtl.text).trim();
+    final contactType = (c?.contactType ?? '').trim();
+    final status = (c?.status ?? '').trim();
+    final personId = (c?.personContact?.contactPersonId ?? '').trim();
 
     return SafeArea(
       child: Padding(
@@ -230,6 +289,19 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                             onPressed: _readOnly ? null : _useCompanyAsDisplay,
                             icon: const Icon(Icons.north_west),
                           ),
+                        ),
+                        textInputAction: TextInputAction.next,
+                      ),
+
+                      // ✅ Account number (cf_account_number)
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _acctCtl,
+                        readOnly: _readOnly,
+                        decoration: const InputDecoration(
+                          labelText: 'Account No. (optional)',
+                          hintText: 'e.g. DP-000123',
+                          prefixIcon: Icon(Icons.confirmation_number_outlined),
                         ),
                         textInputAction: TextInputAction.next,
                       ),
@@ -326,6 +398,48 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                             if (!_readOnly && _canSave) _emitSave();
                           },
                         ),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      // ✅ Debug section (only for existing contacts)
+                      if (_isExisting) ...[
+                        _sectionLabel(context, 'Debug'),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).dividerColor.withOpacity(0.6),
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Column(
+                            children: [
+                              _debugRow(label: 'contactId', value: contactId),
+                              _debugRow(
+                                label: 'accountNumber',
+                                value: accountNo,
+                              ),
+                              _debugRow(
+                                label: 'contactPersonId',
+                                value: personId,
+                              ),
+                              _debugRow(
+                                label: 'contactType',
+                                value: contactType,
+                              ),
+                              _debugRow(label: 'status', value: status),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                       ],
 
                       const SizedBox(height: 12),

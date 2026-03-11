@@ -97,6 +97,10 @@ class SalesDocDialogs {
     );
   }
 
+  /// Edit dialog used by SalesDocLinesList "edit" button.
+  ///
+  /// By default: name/desc/qty editable, rate editable if enableRate.
+  /// For member-scoped "rate-only" edit: pass enableName/enableDescription/enableQty = false.
   static Future<SalesDocLineEditResult?> editLine(
     BuildContext context, {
     required String initialName,
@@ -104,6 +108,11 @@ class SalesDocDialogs {
     required int initialQty,
     required num initialRate,
     required bool enableRate,
+
+    // ✅ NEW: fine-grained field enabling
+    bool enableName = true,
+    bool enableDescription = true,
+    bool enableQty = true,
   }) {
     return showDialog<SalesDocLineEditResult>(
       context: context,
@@ -114,6 +123,9 @@ class SalesDocDialogs {
         initialQty: initialQty,
         initialRate: initialRate,
         enableRate: enableRate,
+        enableName: enableName,
+        enableDescription: enableDescription,
+        enableQty: enableQty,
       ),
     );
   }
@@ -140,6 +152,11 @@ class _LineEditDialog extends StatefulWidget {
     required this.initialQty,
     required this.initialRate,
     required this.enableRate,
+
+    // ✅ NEW
+    required this.enableName,
+    required this.enableDescription,
+    required this.enableQty,
   });
 
   final String initialName;
@@ -147,6 +164,10 @@ class _LineEditDialog extends StatefulWidget {
   final int initialQty;
   final num initialRate;
   final bool enableRate;
+
+  final bool enableName;
+  final bool enableDescription;
+  final bool enableQty;
 
   @override
   State<_LineEditDialog> createState() => _LineEditDialogState();
@@ -179,6 +200,7 @@ class _LineEditDialogState extends State<_LineEditDialog> {
   static String _cleanNum(String s) => s.trim().replaceAll(',', '');
 
   int _parseQty(String raw) {
+    if (!widget.enableQty) return widget.initialQty;
     final n = int.tryParse(_cleanNum(raw));
     final v = n ?? widget.initialQty;
     return v < 1 ? 1 : v;
@@ -192,10 +214,15 @@ class _LineEditDialogState extends State<_LineEditDialog> {
   }
 
   void _submit() {
-    final name = _nameCtl.text.trim();
-    if (name.isEmpty) return;
+    // If name disabled, keep initial.
+    final name = widget.enableName ? _nameCtl.text.trim() : widget.initialName;
+    if (name.trim().isEmpty) return;
 
-    final desc = _descCtl.text.trim(); // can be empty string
+    // If desc disabled, keep initial.
+    final desc = widget.enableDescription
+        ? _descCtl.text.trim()
+        : widget.initialDescription.trim();
+
     final qty = _parseQty(_qtyCtl.text);
     final rate = _parseRate(_rateCtl.text);
 
@@ -210,72 +237,139 @@ class _LineEditDialogState extends State<_LineEditDialog> {
     );
   }
 
+  Widget _readonlyRow(String label, String value) {
+    final t = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: t.labelMedium),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final showOnlyRate =
+        !widget.enableName && !widget.enableDescription && !widget.enableQty;
+
     return AlertDialog(
-      title: const Text('Edit item'),
+      title: Text(showOnlyRate ? 'Update rate' : 'Edit item'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _nameCtl,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Item',
-                border: OutlineInputBorder(),
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descCtl,
-              minLines: 2,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _qtyCtl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Qty',
-                      border: OutlineInputBorder(),
-                    ),
-                    textInputAction: widget.enableRate
-                        ? TextInputAction.next
-                        : TextInputAction.done,
-                    onSubmitted: (_) {
-                      if (!widget.enableRate) _submit();
-                    },
-                  ),
+            if (widget.enableName)
+              TextField(
+                controller: _nameCtl,
+                autofocus: true,
+                enabled: widget.enableName,
+                decoration: const InputDecoration(
+                  labelText: 'Item',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _rateCtl,
-                    enabled: widget.enableRate,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Rate',
-                      border: OutlineInputBorder(),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _submit(),
-                  ),
+                textInputAction: TextInputAction.next,
+              )
+            else
+              _readonlyRow('Item', widget.initialName),
+
+            const SizedBox(height: 12),
+
+            if (widget.enableDescription)
+              TextField(
+                controller: _descCtl,
+                enabled: widget.enableDescription,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
                 ),
-              ],
-            ),
+                textInputAction: TextInputAction.next,
+              )
+            else if (!showOnlyRate)
+              _readonlyRow(
+                'Description',
+                widget.initialDescription.trim().isEmpty
+                    ? '—'
+                    : widget.initialDescription.trim(),
+              ),
+
+            if (!showOnlyRate) const SizedBox(height: 12),
+
+            if (!showOnlyRate)
+              Row(
+                children: [
+                  if (widget.enableQty)
+                    Expanded(
+                      child: TextField(
+                        controller: _qtyCtl,
+                        enabled: widget.enableQty,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Qty',
+                          border: OutlineInputBorder(),
+                        ),
+                        textInputAction: widget.enableRate
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        onSubmitted: (_) {
+                          if (!widget.enableRate) _submit();
+                        },
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: _readonlyRow('Qty', '${widget.initialQty}'),
+                    ),
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    child: TextField(
+                      controller: _rateCtl,
+                      enabled: widget.enableRate,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Rate',
+                        border: OutlineInputBorder(),
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                    ),
+                  ),
+                ],
+              )
+            else
+              TextField(
+                controller: _rateCtl,
+                autofocus: true,
+                enabled: widget.enableRate,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Rate',
+                  border: OutlineInputBorder(),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submit(),
+              ),
           ],
         ),
       ),

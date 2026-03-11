@@ -1,9 +1,10 @@
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/core/auth/auth_user/widgets/user_profile_card.dart';
@@ -100,23 +101,20 @@ class UserProfileManagerScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         ...sorted.map((u) {
+                          // Store labels are still resolved here (UI concern)
                           final storeLabels = u.stores
                               .map((id) => storeNameById[id] ?? id)
-                              .toList();
+                              .toList(growable: false);
 
-                          final staffRoleLabels = u.staffRoles
-                              .map((r) => r.label)
-                              .toList();
+                          // Optional: keep your existing role label formatter
+                          // (e.g. "Manager / Pharmacist"). If you don’t need it,
+                          // remove this and let the card derive from staffRoles.
+                          final roleLabel = staffRoleLabel(u);
 
                           return UserProfileCard(
-                            displayName: u.displayLabel(),
-                            email: u.email,
-                            phoneNumber: u.phoneNumber,
-                            userTypeLabel: u.type.label,
-                            roleLabel: staffRoleLabel(u),
+                            user: u,
+                            roleLabelOverride: roleLabel,
                             roleValue: null,
-                            statusLabel: u.status.label,
-                            staffRoleLabels: staffRoleLabels,
                             storeLabels: storeLabels,
                             onAvatarTapped: () => _openEditor(context, u),
                             onTap: () => _openEditor(context, u),
@@ -142,7 +140,7 @@ class UserProfileManagerScreen extends ConsumerWidget {
     return {for (final loc in locations) loc.id: loc.name};
   }
 
-  void _openEditor(BuildContext context, dynamic user) {
+  void _openEditor(BuildContext context, AuthUser user) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => UserProfileEditorScreen(user: user)),
     );

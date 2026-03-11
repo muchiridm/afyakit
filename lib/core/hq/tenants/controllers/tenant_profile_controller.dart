@@ -10,7 +10,6 @@ import 'package:afyakit/core/hq/tenants/models/tenant_profile.dart';
 import 'package:afyakit/core/hq/tenants/services/tenant_service.dart';
 
 // ✅ Replace old stream invalidation with your new fetch provider.
-// Update this import to wherever you placed it.
 import 'package:afyakit/core/hq/tenants/providers/hq_tenants_provider.dart';
 
 /// ─────────────────────────────────────────────
@@ -70,8 +69,9 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
   TextEditingController? _mmAccount;
   TextEditingController? _mmNumber;
 
-  TextEditingController? _accountPrefix;
-  TextEditingController? _accountPad;
+  /// ✅ New: account numbering format (no prefix/pad)
+  /// Default: "yymm_seq4" (26020001)
+  TextEditingController? _accountFormat;
 
   bool _controllersReady = false;
   String? _loadedTenantId; // prevents pointless re-load loops
@@ -86,8 +86,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
   TextEditingController get mmAccount => _mmAccount!;
   TextEditingController get mmNumber => _mmNumber!;
 
-  TextEditingController get accountPrefix => _accountPrefix!;
-  TextEditingController get accountPad => _accountPad!;
+  TextEditingController get accountFormat => _accountFormat!;
 
   void _ensureControllers() {
     if (_controllersReady) return;
@@ -102,8 +101,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
     _mmAccount = TextEditingController();
     _mmNumber = TextEditingController();
 
-    _accountPrefix = TextEditingController();
-    _accountPad = TextEditingController();
+    _accountFormat = TextEditingController();
 
     _controllersReady = true;
   }
@@ -112,31 +110,27 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
     _ensureControllers();
 
     final payments = p?.details.payments ?? const <String, dynamic>{};
+    final compliance = p?.details.compliance ?? const <String, dynamic>{};
 
     displayName.text = p?.displayName ?? '';
     website.text = p?.details.website ?? '';
     email.text = p?.details.email ?? '';
     whatsapp.text = p?.details.whatsapp ?? '';
 
+    // ✅ keep only the canonical key going forward
     registrationNumber.text =
-        (p?.details.compliance['registrationNumber'] as String?) ??
-        (p?.details.compliance['regNumber'] as String?) ??
-        '';
+        (compliance['registrationNumber'] as String?)?.trim() ?? '';
 
-    mmName.text = payments['mobileMoneyName'] as String? ?? '';
-    mmAccount.text = payments['mobileMoneyAccount'] as String? ?? '';
-    mmNumber.text = payments['mobileMoneyNumber'] as String? ?? '';
+    mmName.text = (payments['mobileMoneyName'] as String?)?.trim() ?? '';
+    mmAccount.text = (payments['mobileMoneyAccount'] as String?)?.trim() ?? '';
+    mmNumber.text = (payments['mobileMoneyNumber'] as String?)?.trim() ?? '';
 
-    // ✅ IMPORTANT:
-    // Don't auto-impose DP/6 into the form if the record doesn't actually have it.
-    // Otherwise you’ll "DP-ify" everyone when saving.
-    final prefix = (p == null) ? '' : p.details.accountPrefix;
-    final pad = (p == null) ? '' : '${p.details.accountPad}';
-
-    accountPrefix.text = prefix.trim().isEmpty ? '' : prefix.toUpperCase();
-    accountPad.text = pad.trim();
+    // ✅ account format (no more prefix/pad)
+    final fmt = (p?.details.accountFormat ?? '').trim();
+    accountFormat.text = fmt.isNotEmpty ? fmt : 'yymm_seq4';
   }
 
+  /// Builds the "profile" map payload written under tenant.profile (or wherever svc uses it).
   Map<String, dynamic> buildProfilePayload() {
     final compliance = <String, dynamic>{};
     final reg = registrationNumber.text.trim();
@@ -151,28 +145,16 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
     if (mAcc.isNotEmpty) payments['mobileMoneyAccount'] = mAcc;
     if (mNum.isNotEmpty) payments['mobileMoneyNumber'] = mNum;
 
-    // ✅ Only include accountPrefix/accountPad if explicitly provided.
-    // This prevents accidental overwrite of existing tenant config.
-    final prefixRaw = accountPrefix.text.trim().toUpperCase();
-    final padRaw = accountPad.text.trim();
-    final padParsed = int.tryParse(padRaw);
-
+    final fmt = accountFormat.text.trim();
     final out = <String, dynamic>{
       'website': website.text.trim(),
       'email': email.text.trim(),
       'whatsapp': whatsapp.text.trim(),
       'currency': state.currency,
+      'accountFormat': fmt.isNotEmpty ? fmt : 'yymm_seq4',
       if (compliance.isNotEmpty) 'compliance': compliance,
       if (payments.isNotEmpty) 'payments': payments,
     };
-
-    if (prefixRaw.isNotEmpty) {
-      out['accountPrefix'] = prefixRaw;
-    }
-
-    if (padParsed != null) {
-      out['accountPad'] = padParsed.clamp(3, 10);
-    }
 
     return out;
   }
@@ -251,7 +233,6 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
   // ───────────────────────── Save / delete ─────────────────────────
 
   Future<bool> save({Map<String, dynamic>? assets}) async {
-    // ✅ tenantServiceProvider is a FutureProvider<TenantService>
     final svc = await ref.read(tenantServiceProvider.future);
 
     state = state.copyWith(busy: true, error: null);
@@ -337,8 +318,7 @@ class TenantProfileController extends StateNotifier<TenantProfileState> {
     _mmAccount?.dispose();
     _mmNumber?.dispose();
 
-    _accountPrefix?.dispose();
-    _accountPad?.dispose();
+    _accountFormat?.dispose();
 
     super.dispose();
   }

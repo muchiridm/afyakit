@@ -1,15 +1,19 @@
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+// lib/core/auth/auth_user/widgets/user_badge.dart
+
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/providers/staff_view_mode_provider.dart';
+import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/core/auth/auth_user/utils/user_format.dart'; // staffRoleLabel
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 import 'package:afyakit/core/hq/tenants/widgets/feature_gate.dart';
+
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 
 class UserBadge extends ConsumerWidget {
   const UserBadge({super.key});
@@ -32,25 +36,23 @@ class UserBadge extends ConsumerWidget {
         if (user == null) return const SizedBox.shrink();
 
         final displayName = user.displayLabel();
-        final hasStaffWorkspace = user.type.hasStaffWorkspace;
 
-        final rawStaffLabel = staffRoleLabel(user).trim();
-        final staffLabel = rawStaffLabel.isEmpty ? 'Staff' : rawStaffLabel;
+        // ✅ Use your canonical rule
+        final hasStaffWorkspace = user.hasStaffWorkspace;
 
-        // Member-only users: no switching logic needed.
+        final staffLabel = user.staffRoles.primaryRole?.label ?? 'Staff';
+
         if (!hasStaffWorkspace) {
-          final roleLabel = user.type.label;
           return _buildBadge(
             context,
             displayName: displayName,
-            roleLabel: roleLabel,
+            roleLabel: 'Member',
             showSwitcher: false,
             onToggleView: null,
             onTapProfile: () => _openProfile(context),
           );
         }
 
-        // Staff users: can "view as member" (UI-only) when retail is enabled.
         final viewMode = ref.watch(staffViewModeProvider);
 
         final badgeWithSwitch = _buildBadge(
@@ -81,7 +83,6 @@ class UserBadge extends ConsumerWidget {
   }
 
   void _toggleStaffViewMode(WidgetRef ref, EntryMode current) {
-    // Only two meaningful states for this toggle.
     final next = current == EntryMode.staff
         ? EntryMode.member
         : EntryMode.staff;

@@ -1,3 +1,5 @@
+// lib/features/retail/payments/mpesa/models/mpesa_stk_draft.dart
+
 import '../../../../../shared/utils/utils.dart';
 
 class MpesaStkInitiateDraft {

@@ -10,12 +10,12 @@ sealed class ContactSheetResult {
       _DeleteRequested;
 }
 
-class _SaveRequested extends ContactSheetResult {
+final class _SaveRequested extends ContactSheetResult {
   const _SaveRequested(this.draft);
   final ZohoContact draft;
 }
 
-class _DeleteRequested extends ContactSheetResult {
+final class _DeleteRequested extends ContactSheetResult {
   const _DeleteRequested(this.contactId);
   final String contactId;
 }
@@ -26,8 +26,11 @@ extension ContactSheetResultX on ContactSheetResult {
     required T Function(String contactId) deleteRequested,
   }) {
     final self = this;
+
     if (self is _SaveRequested) return saveRequested(self.draft);
     if (self is _DeleteRequested) return deleteRequested(self.contactId);
-    throw StateError('Unhandled ContactSheetResult: $runtimeType');
+
+    // Should be unreachable, but keep it loud if the sealed hierarchy changes.
+    throw StateError('Unhandled ContactSheetResult: ${self.runtimeType}');
   }
 }

@@ -1,17 +1,29 @@
+// lib/core/auth/shared/models/auth_user_zoho_link.dart
+
 import 'package:flutter/foundation.dart';
 
-/// How the Zoho link was established (backend-aligned).
 enum ZohoMatchStrategy {
+  accountNumber,
   phone,
   email,
   manual,
   created;
 
-  String get wire => name;
+  String get wire {
+    switch (this) {
+      case ZohoMatchStrategy.accountNumber:
+        return 'account_number';
+      default:
+        return name;
+    }
+  }
 
   static ZohoMatchStrategy parse(dynamic raw) {
     final s = (raw ?? '').toString().trim().toLowerCase();
     switch (s) {
+      case 'account_number':
+      case 'accountnumber':
+        return ZohoMatchStrategy.accountNumber;
       case 'phone':
         return ZohoMatchStrategy.phone;
       case 'email':
@@ -30,16 +42,29 @@ class AuthUserZohoLink {
   final String contactId;
   final String? contactPersonId;
 
-  /// ISO timestamp string (backend uses serverTimestamp; API returns ISO).
+  /// ISO timestamp string (backend returns ISO).
   final String? linkedAt;
 
-  /// How the link was established.
-  /// Backend guarantees a value (defaults to "manual").
   final ZohoMatchStrategy matchStrategy;
 
-  /// Optional sync metadata
   final String? syncedAt;
+
+  /// Sync reasons from backend
   final List<String>? lastSyncReasons;
+
+  /// Bootstrap reasons (linking phase)
+  final List<String>? lastBootstrapReasons;
+
+  // ─────────────────────────────
+  // Deterministic linking (new policy)
+  // ─────────────────────────────
+  final String? accountNumber;
+
+  // ─────────────────────────────
+  // Observability snapshot fields (persistZohoSnapshot)
+  // ─────────────────────────────
+  final String? contactType; // can be null in BE; keep nullable string here
+  final String? status; // can be null in BE; keep nullable string here
 
   const AuthUserZohoLink({
     required this.contactId,
@@ -48,11 +73,11 @@ class AuthUserZohoLink {
     this.matchStrategy = ZohoMatchStrategy.manual,
     this.syncedAt,
     this.lastSyncReasons,
+    this.lastBootstrapReasons,
+    this.accountNumber,
+    this.contactType,
+    this.status,
   });
-
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
 
   static String _cleanStr(dynamic v) => (v ?? '').toString().trim();
 
@@ -74,15 +99,14 @@ class AuthUserZohoLink {
     return out.where(seen.add).toList(growable: false);
   }
 
-  // ─────────────────────────────────────────────
-  // Parsing
-  // ─────────────────────────────────────────────
-
   factory AuthUserZohoLink.fromMap(Map<String, dynamic> json) {
     final contactId = _cleanStr(json['contactId']);
     if (contactId.isEmpty) {
       throw ArgumentError('AuthUserZohoLink requires contactId');
     }
+
+    final accountNumber =
+        _optStr(json['accountNumber']) ?? _optStr(json['account_number']);
 
     return AuthUserZohoLink(
       contactId: contactId,
@@ -91,6 +115,12 @@ class AuthUserZohoLink {
       matchStrategy: ZohoMatchStrategy.parse(json['matchStrategy']),
       syncedAt: _optStr(json['syncedAt']),
       lastSyncReasons: _optStringList(json['lastSyncReasons']),
+      lastBootstrapReasons: _optStringList(json['lastBootstrapReasons']),
+      accountNumber: accountNumber,
+      contactType: json['contactType'] == null
+          ? null
+          : _optStr(json['contactType']),
+      status: json['status'] == null ? null : _optStr(json['status']),
     );
   }
 
@@ -102,5 +132,10 @@ class AuthUserZohoLink {
     if (syncedAt != null) 'syncedAt': syncedAt,
     if (lastSyncReasons != null && lastSyncReasons!.isNotEmpty)
       'lastSyncReasons': lastSyncReasons,
+    if (lastBootstrapReasons != null && lastBootstrapReasons!.isNotEmpty)
+      'lastBootstrapReasons': lastBootstrapReasons,
+    if (accountNumber != null) 'accountNumber': accountNumber,
+    if (contactType != null) 'contactType': contactType,
+    if (status != null) 'status': status,
   };
 }

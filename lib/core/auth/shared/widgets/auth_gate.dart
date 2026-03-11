@@ -42,9 +42,7 @@ class AuthGate extends ConsumerWidget {
         showSignOut: true,
       ),
       data: (user) {
-        if (user == null) {
-          return const HomeShell();
-        }
+        if (user == null) return const HomeShell();
 
         if (!_isActive(user)) {
           final status = _statusLabel(user);

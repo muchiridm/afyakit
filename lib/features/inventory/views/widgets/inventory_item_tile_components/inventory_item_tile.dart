@@ -1,11 +1,16 @@
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+// lib/features/inventory/views/widgets/inventory_item_tile_components/inventory_item_tile.dart
+
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
+
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/inventory_tile_header.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/batch_row.dart';
 import 'package:afyakit/features/inventory/items/screens/inventory_editor_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
-import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,7 +54,7 @@ class InventoryItemTile extends ConsumerStatefulWidget {
     required this.batches,
     required this.editable,
     required this.selectable,
-    required this.mode, // 👈 make required
+    required this.mode,
     this.description,
     this.brandName,
     this.strength,
@@ -124,6 +129,19 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
     );
   }
 
+  String _resolveStoreIdForAddBatch() {
+    // Prefer batch storeId (most reliable)
+    if (widget.batches.isNotEmpty) return widget.batches.first.storeId;
+
+    // Fallback: try item.storeId (item is dynamic)
+    try {
+      final v = (widget.item as dynamic).storeId;
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    } catch (_) {}
+
+    return '';
+  }
+
   List<Widget> _buildExpandableContent({
     required List<InventoryLocation>? stores,
   }) {
@@ -137,14 +155,13 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
 
     for (final b in widget.batches) {
       final canEdit = isStockIn && (user?.canManageBatch(b) ?? false);
-      final canSelect =
-          isStockOut; // ← ✅ Always show quantity adjust in Stock Out
+      final canSelect = isStockOut;
 
       rows.add(
         BatchRow(
           batch: b,
-          editable: canEdit, // ✏️ Only in Stock In
-          selectable: canSelect, // 🔢 Always in Stock Out
+          editable: canEdit,
+          selectable: canSelect,
           item: widget.item,
           itemType: widget.item.type,
           mode: widget.mode,
@@ -153,9 +170,14 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
       );
     }
 
-    final canAdd = isStockIn && (user?.isManagerOrAdmin ?? false);
+    // ✅ Add batch = stock-in operation, scoped by store access.
+    final storeId = _resolveStoreIdForAddBatch();
+    final canAddBatch =
+        isStockIn &&
+        storeId.isNotEmpty &&
+        (user?.hasScopedCap(StaffCapability.receiveBatches, storeId) ?? false);
 
-    if (canAdd) {
+    if (canAddBatch) {
       rows.add(
         _buildAddBatchButton(
           widget.onAddBatch ??
@@ -205,9 +227,7 @@ class _InventoryItemTileState extends ConsumerState<InventoryItemTile> {
     final parts = <String>[];
 
     void add(String? val) {
-      if (val != null && val.trim().isNotEmpty) {
-        parts.add(val.trim());
-      }
+      if (val != null && val.trim().isNotEmpty) parts.add(val.trim());
     }
 
     add(widget.group);

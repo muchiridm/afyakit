@@ -1,28 +1,26 @@
+// lib/core/auth/auth_user/widgets/user_profile_card.dart
+
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
+
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
 
 class UserProfileCard extends StatelessWidget {
-  final String displayName;
-  final String? email;
-  final String? phoneNumber;
-
-  /// "Member" / "Staff" (from UserType.label)
-  final String userTypeLabel;
+  /// ✅ Pass the model, not strings
+  final AuthUser user;
 
   /// Human-facing role label (e.g. "Admin", "Manager / Pharmacist").
-  final String roleLabel;
+  /// If you don't want to compute this externally anymore, you can pass null
+  /// and we will fall back to primary staff role label.
+  final String? roleLabelOverride;
 
   /// Backend role key (e.g. "owner", "admin", "manager", "staff", "client").
   /// Used as the dropdown value when [onRoleChanged] is non-null.
   final String? roleValue;
-
-  /// Human-facing status label, e.g. "Active", "Disabled".
-  final String statusLabel;
-
-  /// Human-facing staff role labels (e.g. ["Admin", "Pharmacist"]).
-  final List<String> staffRoleLabels;
 
   /// Already-resolved store labels (e.g. branch names).
   final List<String> storeLabels;
@@ -42,14 +40,9 @@ class UserProfileCard extends StatelessWidget {
 
   const UserProfileCard({
     super.key,
-    required this.displayName,
-    this.email,
-    this.phoneNumber,
-    required this.userTypeLabel,
-    required this.roleLabel,
+    required this.user,
+    this.roleLabelOverride,
     this.roleValue,
-    required this.statusLabel,
-    required this.staffRoleLabels,
     required this.storeLabels,
     this.onAvatarTapped,
     this.onTap,
@@ -90,6 +83,7 @@ class UserProfileCard extends StatelessWidget {
   // ───────────────── UI bits ─────────────────
 
   Widget _buildAvatar(ThemeData theme) {
+    final displayName = user.computedDisplayName;
     final initials = initialsFromName(displayName);
 
     return GestureDetector(
@@ -110,48 +104,72 @@ class UserProfileCard extends StatelessWidget {
   }
 
   Widget _buildUserInfo(ThemeData theme) {
-    final safeName = displayName.trim().isNotEmpty
-        ? displayName.trim()
+    final safeName = user.computedDisplayName.trim().isNotEmpty
+        ? user.computedDisplayName
         : 'Unnamed User';
-    final safePhone = phoneNumber!.trim().isNotEmpty
-        ? phoneNumber?.trim()
-        : '—';
-    final safeEmail = email != null && email!.trim().isNotEmpty
-        ? email!.trim()
-        : null;
+
+    final safePhone = (user.phoneNumber ?? '').trim();
+    final safePhoneLabel = safePhone.isNotEmpty ? safePhone : '—';
+
+    final safeEmail = (user.bestEmailForDisplay ?? '').trim();
+    final safeEmailLabel = safeEmail.isNotEmpty ? safeEmail : null;
+
+    final statusLabel = user.status.label;
+
+    // ✅ Truth: staff = governance/roles/superadmin (per your extension).
+    final isStaff = user.isStaff;
+
+    // ✅ Baseline: everyone is a member.
+    final typeChips = <Widget>[
+      _pillChip(theme, 'Member'),
+      if (isStaff) _pillChip(theme, 'Staff'),
+    ];
+
+    // ✅ Staff-only role logic
+    final roleLabelOverrideSafe = (roleLabelOverride ?? '').trim();
+
+    final derivedPrimaryStaffRole =
+        user.staffRoles.primaryRole?.label ?? 'Staff';
+
+    final staffRoleLabel = roleLabelOverrideSafe.isNotEmpty
+        ? roleLabelOverrideSafe
+        : derivedPrimaryStaffRole;
+
+    final extraStaffRoleChips = isStaff
+        ? user.staffRoles
+              .map((r) => r.label.trim())
+              .where((r) => r.isNotEmpty)
+              .where((r) => r.normalize() != staffRoleLabel.normalize())
+              .map((r) => _pillChip(theme, r))
+              .toList(growable: false)
+        : const <Widget>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Name + status chip on the same row → more even distribution
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(child: _buildLine(safeName, isBold: true, fontSize: 15)),
             const SizedBox(width: 8),
-            _statusChip(theme),
+            _statusChip(theme, statusLabel),
           ],
         ),
-        if (safeEmail != null) _buildLine(safeEmail),
-        _buildLine(safePhone!),
+        if (safeEmailLabel != null) _buildLine(safeEmailLabel),
+        _buildLine(safePhoneLabel),
         const SizedBox(height: 6),
 
-        // Type + primary role + staff roles as chips
-        // Type + primary role + additional staff roles as chips
         Wrap(
           spacing: 8,
           runSpacing: 4,
           children: [
-            // High-level type: Member / Staff
-            _pillChip(theme, userTypeLabel),
+            ...typeChips,
 
-            // Primary role label (e.g. "Admin", "Manager / Pharmacist")
-            if (roleLabel.trim().isNotEmpty) _pillChip(theme, roleLabel),
+            // ✅ ONLY staff get a role chip (prevents Member|Member)
+            if (isStaff && staffRoleLabel.trim().isNotEmpty)
+              _pillChip(theme, staffRoleLabel),
 
-            // Extra staff role labels, excluding duplicates of the primary role
-            ...staffRoleLabels
-                .where((r) => r.normalize() != roleLabel.normalize())
-                .map((r) => _pillChip(theme, r)),
+            ...extraStaffRoleChips,
           ],
         ),
 
@@ -183,7 +201,7 @@ class UserProfileCard extends StatelessWidget {
     );
   }
 
-  Widget _statusChip(ThemeData theme) {
+  Widget _statusChip(ThemeData theme, String statusLabel) {
     final isActive = statusLabel.toLowerCase().contains('active');
     final bg = isActive
         ? theme.colorScheme.primary.withOpacity(0.08)
@@ -228,7 +246,6 @@ class UserProfileCard extends StatelessWidget {
   }
 
   Widget _buildRoleDropdown(ThemeData theme) {
-    // Backend-safe role keys; must match AUTH_USER_ROLES on the API.
     const roleOptions = <String>[
       'owner',
       'admin',

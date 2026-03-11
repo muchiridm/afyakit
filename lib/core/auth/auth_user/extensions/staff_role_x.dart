@@ -1,4 +1,13 @@
 // lib/core/auth_users/extensions/staff_role_x.dart
+//
+// ✅ SINGLE SOURCE OF TRUTH:
+//   role -> capabilities mapping lives here.
+// ✅ No back-compat getters.
+// ✅ Keep parsing, UI labels, precedence, assignment rules.
+// ✅ Extensions provide:
+//   - primaryRole
+//   - capability union
+//   - has/hasAny/hasAll for role lists
 
 /// Staff roles inside a tenant.
 ///
@@ -40,13 +49,11 @@ enum StaffRole {
   }
 
   // ─────────────────────────────────────────────
-  // Wire / UI helpers
+  // Wire / UI
   // ─────────────────────────────────────────────
 
-  /// Backend-facing string value (lowercase).
   String get wire => name;
 
-  /// Human-friendly label.
   String get label => switch (this) {
     StaffRole.owner => 'Owner',
     StaffRole.admin => 'Admin',
@@ -59,10 +66,10 @@ enum StaffRole {
   };
 
   // ─────────────────────────────────────────────
-  // Precedence ranking
+  // Precedence (UI tiering)
   // ─────────────────────────────────────────────
 
-  /// Higher = more powerful (rough ordering for UI + gates).
+  /// Higher = more powerful (rough ordering for UI + "mode" tiering).
   int get level => switch (this) {
     StaffRole.owner => 7,
     StaffRole.admin => 6,
@@ -83,86 +90,236 @@ enum StaffRole {
   int compareTo(StaffRole other) => level.compareTo(other.level);
 
   // ─────────────────────────────────────────────
-  // Capability gates
-  // ─────────────────────────────────────────────
-
-  bool get isOwner => this == StaffRole.owner;
-  bool get isAdmin => this == StaffRole.admin;
-  bool get isManager => this == StaffRole.manager;
-
-  bool get canAccessAdminPanel => isOwner || isAdmin || isManager;
-  bool get canManageUsers => isOwner || isAdmin;
-  bool get canManageAllStores => isOwner || isAdmin;
-
-  bool get canManageSku => isOwner || isAdmin || isManager;
-  bool get canManageBatches => isOwner || isAdmin || isManager;
-  bool get canReceiveBatches => isOwner || isAdmin || isManager;
-  bool get canApproveIssues => isOwner || isAdmin || isManager;
-  bool get canDisposeStock => isOwner || isAdmin || isManager;
-
-  // Everyone in staff ecosystem
-  bool get canViewReports => true;
-  bool get canRequestStock => true;
-
-  // Owner-only governance
-  bool get canManageTenantSettings => isOwner;
-  bool get canManageBilling => isOwner;
-  bool get canTransferOwnership => isOwner;
-  bool get canExportAllData => isOwner;
-  bool get canDeleteTenant => isOwner;
-
-  /// UX hint: anyone not (owner/admin/manager) is effectively view-only.
-  bool get isViewOnly => !(isOwner || isAdmin || isManager);
-
-  // ─────────────────────────────────────────────
-  // Assignment rules
+  // Assignment rules (role-based, not capability-based)
   // ─────────────────────────────────────────────
 
   bool canAssignRole(StaffRole target) {
-    if (isOwner) return true;
+    switch (this) {
+      case StaffRole.owner:
+        return true;
 
-    if (isAdmin) {
-      return target != StaffRole.owner && target != StaffRole.admin;
+      case StaffRole.admin:
+        return target != StaffRole.owner && target != StaffRole.admin;
+
+      case StaffRole.manager:
+        return switch (target) {
+          StaffRole.owner || StaffRole.admin => false,
+          _ => true,
+        };
+
+      default:
+        return false;
     }
-
-    if (isManager) {
-      return switch (target) {
-        StaffRole.owner || StaffRole.admin => false,
-        _ => true,
-      };
-    }
-
-    return false;
   }
 
   List<StaffRole> assignableTargets() {
-    if (isOwner) return StaffRole.values;
+    switch (this) {
+      case StaffRole.owner:
+        return StaffRole.values;
 
-    if (isAdmin) {
-      return StaffRole.values
-          .where((r) => r != StaffRole.owner && r != StaffRole.admin)
-          .toList();
+      case StaffRole.admin:
+        return StaffRole.values
+            .where((r) => r != StaffRole.owner && r != StaffRole.admin)
+            .toList(growable: false);
+
+      case StaffRole.manager:
+        return const [
+          StaffRole.manager,
+          StaffRole.staff,
+          StaffRole.runner,
+          StaffRole.dispatcher,
+          StaffRole.prescriber,
+          StaffRole.pharmacist,
+        ];
+
+      default:
+        return const [];
     }
+  }
 
-    if (isManager) {
-      return const [
-        StaffRole.manager,
-        StaffRole.staff,
-        StaffRole.runner,
-        StaffRole.dispatcher,
-        StaffRole.prescriber,
-        StaffRole.pharmacist,
-      ];
+  // ─────────────────────────────────────────────
+  // Capability model (THE ONLY PERMISSION TRUTH)
+  // ─────────────────────────────────────────────
+
+  bool has(StaffCapability cap) => capabilities.contains(cap);
+
+  Set<StaffCapability> get capabilities => StaffRoleCapabilities.of(this);
+}
+
+/// Capability tokens (not a “mode” enum).
+/// These keep UI + gates DRY and consistent.
+enum StaffCapability {
+  // Admin / governance
+  accessAdminPanel,
+  manageUsers,
+  manageAllStores,
+
+  manageTenantSettings,
+  manageBilling,
+  transferOwnership,
+  exportAllData,
+  deleteTenant,
+
+  // Inventory
+  manageSku,
+  manageBatches,
+  receiveBatches,
+
+  // Issues / stock movement
+  approveIssues,
+  disposeStock,
+  requestStock,
+
+  // Reports
+  viewReports,
+
+  // Retail / Zoho sales docs
+  manageSalesDocs,
+}
+
+/// Single source of truth: role → capabilities.
+abstract final class StaffRoleCapabilities {
+  static Set<StaffCapability> of(StaffRole role) {
+    switch (role) {
+      case StaffRole.owner:
+        return const {
+          // Governance
+          StaffCapability.accessAdminPanel,
+          StaffCapability.manageUsers,
+          StaffCapability.manageAllStores,
+          StaffCapability.manageTenantSettings,
+          StaffCapability.manageBilling,
+          StaffCapability.transferOwnership,
+          StaffCapability.exportAllData,
+          StaffCapability.deleteTenant,
+
+          // Inventory
+          StaffCapability.manageSku,
+          StaffCapability.manageBatches,
+          StaffCapability.receiveBatches,
+
+          // Issues
+          StaffCapability.approveIssues,
+          StaffCapability.disposeStock,
+          StaffCapability.requestStock,
+
+          // Reports
+          StaffCapability.viewReports,
+
+          // Retail
+          StaffCapability.manageSalesDocs,
+        };
+
+      case StaffRole.admin:
+        return const {
+          // Admin
+          StaffCapability.accessAdminPanel,
+          StaffCapability.manageUsers,
+          StaffCapability.manageAllStores,
+          StaffCapability.exportAllData,
+
+          // Inventory
+          StaffCapability.manageSku,
+          StaffCapability.manageBatches,
+          StaffCapability.receiveBatches,
+
+          // Issues
+          StaffCapability.approveIssues,
+          StaffCapability.disposeStock,
+          StaffCapability.requestStock,
+
+          // Reports
+          StaffCapability.viewReports,
+
+          // Retail
+          StaffCapability.manageSalesDocs,
+        };
+
+      case StaffRole.manager:
+        return const {
+          // Admin-ish
+          StaffCapability.accessAdminPanel,
+
+          // Inventory
+          StaffCapability.manageSku,
+          StaffCapability.manageBatches,
+          StaffCapability.receiveBatches,
+
+          // Issues
+          StaffCapability.approveIssues,
+          StaffCapability.disposeStock,
+          StaffCapability.requestStock,
+
+          // Reports
+          StaffCapability.viewReports,
+
+          // Retail
+          StaffCapability.manageSalesDocs,
+        };
+
+      case StaffRole.pharmacist:
+        return const {
+          StaffCapability.requestStock,
+          StaffCapability.viewReports,
+          // Keep/remove depending on your business rule:
+          StaffCapability.manageSalesDocs,
+        };
+
+      case StaffRole.prescriber:
+        return const {
+          StaffCapability.requestStock,
+          StaffCapability.viewReports,
+        };
+
+      case StaffRole.dispatcher:
+        return const {
+          StaffCapability.requestStock,
+          StaffCapability.viewReports,
+        };
+
+      case StaffRole.runner:
+        return const {
+          StaffCapability.requestStock,
+          StaffCapability.viewReports,
+        };
+
+      case StaffRole.staff:
+        return const {
+          StaffCapability.requestStock,
+          StaffCapability.viewReports,
+        };
     }
-
-    return const [];
   }
 }
 
-/// Choose highest-precedence staff role.
+/// Helpers on role lists.
 extension StaffRoleListX on Iterable<StaffRole> {
   StaffRole? get primaryRole {
     if (isEmpty) return null;
     return reduce((a, b) => b.level > a.level ? b : a);
+  }
+
+  bool has(StaffCapability cap) => any((r) => r.has(cap));
+
+  bool hasAny(Iterable<StaffCapability> caps) {
+    for (final c in caps) {
+      if (has(c)) return true;
+    }
+    return false;
+  }
+
+  bool hasAll(Iterable<StaffCapability> caps) {
+    for (final c in caps) {
+      if (!has(c)) return false;
+    }
+    return true;
+  }
+
+  Set<StaffCapability> get allCapabilities {
+    final out = <StaffCapability>{};
+    for (final r in this) {
+      out.addAll(r.capabilities);
+    }
+    return out;
   }
 }

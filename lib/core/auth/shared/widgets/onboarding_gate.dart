@@ -12,11 +12,11 @@ class OnboardingGate {
   static OnboardingNeed need(AuthUser user) {
     if (user.isPhoneSatisfiedResolved != true) return OnboardingNeed.phone;
 
-    final hasEmail = user.hasEmail; // uses your AuthUser getter
+    final hasEmail = user.hasEmail;
     final verified = user.emailVerified == true;
     if (!(hasEmail && verified)) return OnboardingNeed.email;
 
-    // name rules (match your current gate)
+    // name rules
     final dn = (user.displayName ?? '').trim();
     if (dn.isEmpty) return OnboardingNeed.name;
 

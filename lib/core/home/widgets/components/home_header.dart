@@ -1,3 +1,5 @@
+// lib/core/home/widgets/components/home_header.dart
+
 import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';

@@ -15,7 +15,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth/auth_user/providers/current_user_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
