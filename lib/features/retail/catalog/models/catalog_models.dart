@@ -23,9 +23,10 @@ class CatalogTile {
   final String? concentrationSig;
   final String? supplierManufacturer;
 
+  final String? whoPath; // ✅ NEW
+
   final bool? hasMergeOverride;
 
-  // NEW
   final String? uiKey;
   final String? groupKey;
   final bool priceRequestRequired;
@@ -45,6 +46,7 @@ class CatalogTile {
     this.volumeSig,
     this.concentrationSig,
     this.supplierManufacturer,
+    this.whoPath, // ✅ NEW
     this.hasMergeOverride,
     this.uiKey,
     this.groupKey,
@@ -131,6 +133,7 @@ class CatalogTile {
 
     final title = _asString(j['tile_title']).trim();
     final desc = _asString(j['tile_desc']).trim();
+    final whoPath = _asString(j['who_path']).trim(); // ✅ NEW
 
     final price = _asNum(j['best_sell_price']);
     final hasMergeOverride = _asBool(j['has_merge_override']);
@@ -196,6 +199,7 @@ class CatalogTile {
       volumeSig: volumeSig.isEmpty ? null : volumeSig,
       concentrationSig: concentrationSig.isEmpty ? null : concentrationSig,
       supplierManufacturer: supplierMfg.isEmpty ? null : supplierMfg,
+      whoPath: whoPath.isEmpty ? null : whoPath, // ✅ NEW
       hasMergeOverride: hasMergeOverride,
       uiKey: uiKey.isEmpty ? null : uiKey,
       groupKey: groupKey.isEmpty ? null : groupKey,
