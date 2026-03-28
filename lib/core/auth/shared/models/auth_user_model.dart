@@ -8,81 +8,49 @@ import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
 @immutable
 class AuthUser {
-  // ────────────── Identity (immutable) ──────────────
   final String uid;
-
-  /// Canonical Firebase identity (E.164).
-  /// Nullable to tolerate legacy/dirty records coming from backend lists/admin tools.
   final String? phoneNumber;
-
-  /// Membership scope.
   final String tenantId;
 
-  // ────────────── Status ──────────────
-  final UserStatus status; // active | disabled (BE); tolerant parsing
-
-  // ────────────── Membership / access ──────────────
+  final UserStatus status;
   final List<String> stores;
 
-  // ────────────── Profile ──────────────
   final String? firstName;
   final String? lastName;
-
-  /// Backend may send displayName or omit it; keep nullable but provide computed fallback.
   final String? displayName;
-
   final String? avatarUrl;
 
-  /// Tenant-scoped email (NOT Firebase Auth email).
-  ///
-  /// Backend behavior (Option A):
-  /// - Verified email: comes as emailLower/email (+ emailVerified=true)
-  /// - Unverified email: SHOULD NOT be returned as email/emailLower (privacy),
-  ///   instead it should appear in emailPendingLower.
   final String? email;
   final String? emailLower;
 
-  /// ✅ Option A: pending email (unverified; verification in progress)
   final String? emailPendingLower;
-  final String? emailPendingAt; // ISO string (optional)
+  final String? emailPendingAt;
 
-  // ────────────── Phone verification model ──────────────
   final bool phoneVerified;
-  final String? phoneVerifiedAt; // ISO string
+  final String? phoneVerifiedAt;
 
-  /// Somalia (+252) fallback acceptance.
   final bool phoneClaimed;
-  final String? phoneClaimedAt; // ISO string
+  final String? phoneClaimedAt;
 
-  /// Optional convenience flag (backend may send it).
-  /// If missing, FE computes it from phoneNumber + (phoneVerified/phoneClaimed) using +252 rule.
   final bool? phoneSatisfied;
 
-  // ────────────── Email verification model ──────────────
   final bool emailVerified;
-  final String? emailVerifiedAt; // ISO string
+  final String? emailVerifiedAt;
 
-  // ────────────── Organization ──────────────
   final bool isCompany;
   final String? companyName;
 
-  /// Tenant-scoped human account number (e.g. DP-000123).
   final String? accountNumber;
-
-  /// Tenant-scoped Zoho Books contact/person mapping (optional, feature-gated).
   final AuthUserZohoLink? zoho;
 
-  /// Normalized Firebase custom claims for this session (optional).
   final Map<String, dynamic>? claims;
-
-  /// HQ / platform-level superadmin (optional).
   final bool isSuperAdmin;
-
-  /// Multi-role staff capabilities.
   final List<StaffRole> staffRoles;
 
-  final String? createdAt; // ISO string
-  final String? updatedAt; // ISO string
+  final bool recoveryRequired;
+
+  final String? createdAt;
+  final String? updatedAt;
 
   const AuthUser({
     required this.uid,
@@ -112,13 +80,10 @@ class AuthUser {
     this.claims,
     this.isSuperAdmin = false,
     this.staffRoles = const [],
+    this.recoveryRequired = false,
     this.createdAt,
     this.updatedAt,
   });
-
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
 
   static String _cleanStr(Object? v) => (v ?? '').toString().trim();
 
@@ -189,17 +154,10 @@ class AuthUser {
     return phoneVerified == true || phoneClaimed == true;
   }
 
-  // ─────────────────────────────────────────────
-  // Derived semantics (NO "type" field)
-  // ─────────────────────────────────────────────
-
-  /// Member unless staffRoles assigned (or superadmin).
   bool get isStaffResolved => staffRoles.isNotEmpty || isSuperAdmin == true;
 
   bool get isMemberResolved => !isStaffResolved;
 
-  /// Preferred display value for UI labels.
-  /// displayName → first+last → companyName (if isCompany) → phoneNumber → uid
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (dn.isNotEmpty) return dn;
@@ -220,7 +178,6 @@ class AuthUser {
     return uid;
   }
 
-  /// Resolved “phone satisfied” state (Somalia rule).
   bool get isPhoneSatisfiedResolved {
     final explicit = phoneSatisfied;
     if (explicit != null) return explicit;
@@ -231,21 +188,14 @@ class AuthUser {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Email helpers (Option A aligned)
-  // ─────────────────────────────────────────────
-
-  /// Verified email presence (what BE is willing to expose).
   bool get hasVerifiedEmail {
     final el = (emailLower ?? '').trim();
     final e = (email ?? '').trim();
     return emailVerified == true && (el.isNotEmpty || e.isNotEmpty);
   }
 
-  /// Pending email presence (verification in progress).
   bool get hasPendingEmail => (emailPendingLower ?? '').trim().isNotEmpty;
 
-  /// Best verified email to display/use.
   String? get bestVerifiedEmailLower {
     final el = (emailLower ?? '').trim().toLowerCase();
     if (el.isNotEmpty) return el;
@@ -253,9 +203,6 @@ class AuthUser {
     return e.isNotEmpty ? e : null;
   }
 
-  /// Best email to *show* in UI:
-  /// - verified email if present
-  /// - otherwise pending email (Option A)
   String? get bestEmailForDisplay {
     final verified = bestVerifiedEmailLower;
     if (verified != null) return verified;
@@ -263,26 +210,18 @@ class AuthUser {
     return pending.isNotEmpty ? pending : null;
   }
 
-  /// If we have a pending email, the UI should show “verify”.
   bool get needsEmailVerificationResolved => hasPendingEmail;
-
-  // ─────────────────────────────────────────────
-  // Back-compat aliases used by your gates/UI
-  // ─────────────────────────────────────────────
 
   bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
 
   bool get needsEmailVerification => needsEmailVerificationResolved;
 
-  /// Verified first, else pending.
   String? get bestEmailLower {
     final v = bestVerifiedEmailLower;
     if (v != null) return v;
     final p = (emailPendingLower ?? '').trim().toLowerCase();
     return p.isNotEmpty ? p : null;
   }
-
-  // ────────────── Parsing ──────────────
 
   factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
     final uid = _cleanStr(json['uid']);
@@ -302,25 +241,22 @@ class AuthUser {
 
     final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
+    final recoveryRequired = _bool(json['recoveryRequired']);
 
-    // Verified email (backend may hide if not verified)
     final emailRaw = _optStr(json['email']);
     final emailLowerRaw = _optStr(json['emailLower']);
     final email = emailRaw?.toLowerCase();
     final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
 
-    // ✅ Option A pending email
     final pendingRaw = _optStr(json['emailPendingLower']);
     final emailPendingLower = pendingRaw?.toLowerCase();
     final emailPendingAt = _optStr(json['emailPendingAt']);
 
-    // Optional convenience: phoneSatisfied from backend
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
         ? null
         : _bool(phoneSatisfiedRaw);
 
-    // Account number: tolerate snake_case too (just in case)
     final accountNumber =
         _optStr(json['accountNumber']) ?? _optStr(json['account_number']);
 
@@ -368,6 +304,7 @@ class AuthUser {
       claims: claims,
       isSuperAdmin: isSuperAdmin,
       staffRoles: staffRoles,
+      recoveryRequired: recoveryRequired,
       createdAt: _optStr(json['createdAt']),
       updatedAt: _optStr(json['updatedAt']),
     );
@@ -377,8 +314,6 @@ class AuthUser {
     Map<String, dynamic> json, {
     bool allowZoho = true,
   }) => AuthUser.fromMap(json, allowZoho: allowZoho);
-
-  // ────────────── Copy ──────────────
 
   AuthUser copyWith({
     UserStatus? status,
@@ -405,6 +340,7 @@ class AuthUser {
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
+    bool? recoveryRequired,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -436,12 +372,11 @@ class AuthUser {
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       staffRoles: staffRoles ?? this.staffRoles,
+      recoveryRequired: recoveryRequired ?? this.recoveryRequired,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-
-  // ────────────── Serialize ──────────────
 
   Map<String, dynamic> toMap() => {
     'uid': uid,
@@ -453,15 +388,10 @@ class AuthUser {
     if (lastName != null) 'lastName': lastName,
     if (displayName != null) 'displayName': displayName,
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
-
-    // Verified email only (by convention)
     if (email != null) 'email': email,
     if (emailLower != null) 'emailLower': emailLower,
-
-    // Option A: pending email
     if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
     if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
-
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,
@@ -477,6 +407,7 @@ class AuthUser {
     if (isSuperAdmin) 'isSuperAdmin': true,
     if (staffRoles.isNotEmpty)
       'staffRoles': staffRoles.map((r) => r.name).toList(growable: false),
+    if (recoveryRequired) 'recoveryRequired': true,
     if (createdAt != null) 'createdAt': createdAt,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };

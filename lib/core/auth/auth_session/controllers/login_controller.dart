@@ -12,7 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum LoginStep { phone, otp, emailEntry, emailOtp, nameEntry }
+enum LoginStep { phone, otp, emailEntry, emailOtp, nameEntry, recoverAccount }
 
 @immutable
 class LoginState {
@@ -193,6 +193,8 @@ class LoginController extends StateNotifier<LoginState> {
             : 'Enter the email code.';
       case LoginStep.nameEntry:
         return 'Add your display name to finish setup.';
+      case LoginStep.recoverAccount:
+        return 'We found an existing account linked to your verified phone and email. Enter your old account number to recover it.';
     }
   }
 
@@ -202,6 +204,8 @@ class LoginController extends StateNotifier<LoginState> {
         return LoginStep.emailEntry;
       case OtpNextStep.collectName:
         return LoginStep.nameEntry;
+      case OtpNextStep.recoverAccount:
+        return LoginStep.recoverAccount;
       case OtpNextStep.done:
         return LoginStep.phone; // not used
     }
@@ -305,7 +309,6 @@ class LoginController extends StateNotifier<LoginState> {
 
     if (!mounted || state.busy) return;
 
-    // ✅ Persist phone ASAP (used later for EMAIL_REQUIRED → email/start(login))
     _lastPhoneE164 = phone;
 
     state = state.copyWith(
@@ -320,9 +323,6 @@ class LoginController extends StateNotifier<LoginState> {
     StartResponse start;
     try {
       final svc = await _auth();
-
-      // ✅ startAutoOtp may return 400 control-flow (EMAIL_REQUIRED).
-      // AuthService already allows <500 statuses.
       start = await svc.startAutoOtp(phone);
     } catch (err) {
       SnackService.showError('$err');
@@ -339,7 +339,6 @@ class LoginController extends StateNotifier<LoginState> {
 
     if (!mounted) return;
 
-    // Throttle
     if (start.throttled == true) {
       SnackService.showInfo('Please wait before requesting another code.');
       state = state.copyWith(
@@ -350,7 +349,6 @@ class LoginController extends StateNotifier<LoginState> {
       return;
     }
 
-    // ✅ PATH 0: Somalia (+252) new users => EMAIL_REQUIRED => collect email
     if (start.requiresCollectEmail) {
       final masked = (start.maskedTo ?? '').trim().isNotEmpty
           ? start.maskedTo!.trim()
@@ -363,12 +361,10 @@ class LoginController extends StateNotifier<LoginState> {
         channel: (start.channel ?? 'email').trim(),
         maskedTo: masked,
         stepHint: _hintForStep(LoginStep.emailEntry),
-        // phoneNumber stays persisted ✅
       );
       return;
     }
 
-    // PATH A: client-driven Firebase SMS flow
     if (start.requiresFirebaseSmsClientAction) {
       state = state.copyWith(stepHint: 'Sending SMS code…');
 
@@ -415,7 +411,7 @@ class LoginController extends StateNotifier<LoginState> {
       state = state.copyWith(
         sending: false,
         step: LoginStep.otp,
-        clearAttemptId: true, // SMS path does not use backend attemptId
+        clearAttemptId: true,
         channel: 'sms',
         maskedTo: masked,
         stepHint: _hintForStep(LoginStep.otp),
@@ -423,7 +419,6 @@ class LoginController extends StateNotifier<LoginState> {
       return;
     }
 
-    // PATH B: backend email attempt (returning user)
     final attemptId = (start.attemptId ?? '').trim();
     if (attemptId.isEmpty) {
       SnackService.showError('Login start returned no attempt. Try again.');
@@ -501,7 +496,6 @@ class LoginController extends StateNotifier<LoginState> {
       final svc = await _auth();
       final attemptId = (state.attemptId ?? '').trim();
 
-      // EMAIL path
       if (attemptId.isNotEmpty) {
         await svc.verifyOtpAndSignIn(attemptId: attemptId, code: c);
 
@@ -524,7 +518,6 @@ class LoginController extends StateNotifier<LoginState> {
         return;
       }
 
-      // SMS path (Firebase)
       if (kIsWeb) {
         final res = _webResult;
         if (res == null) throw StateError('Missing web confirmation result');
@@ -593,13 +586,7 @@ class LoginController extends StateNotifier<LoginState> {
       final svc = await _auth();
       final fbUser = fb.FirebaseAuth.instance.currentUser;
 
-      // ─────────────────────────────────────────────
-      // PUBLIC: email login start (Somalia flow)
-      // ─────────────────────────────────────────────
       if (fbUser == null) {
-        // Robust phone binding:
-        // 1) Riverpod state
-        // 2) fallback to cached local phone
         final phone = (state.phoneNumber ?? '').trim().isNotEmpty
             ? state.phoneNumber!.trim()
             : (_lastPhoneE164 ?? '').trim();
@@ -652,9 +639,6 @@ class LoginController extends StateNotifier<LoginState> {
         return;
       }
 
-      // ─────────────────────────────────────────────
-      // AUTH REQUIRED: verify-email start (signed in)
-      // ─────────────────────────────────────────────
       await fbUser.getIdToken(true);
 
       final res = await svc.startVerifyEmailOtp(email: e, codeLength: 6);
@@ -686,11 +670,9 @@ class LoginController extends StateNotifier<LoginState> {
             : 'Enter the email code.',
       );
     } catch (err) {
-      // ✅ Friendly UX errors
       if (err is AuthApiException) {
         final code = err.code.trim().toUpperCase();
 
-        // Map special cases to better UX behavior.
         if (code == 'EMAIL_PHONE_MISMATCH') {
           SnackService.showError(
             'That email doesn’t match the phone number you entered. '
@@ -698,7 +680,6 @@ class LoginController extends StateNotifier<LoginState> {
           );
 
           if (!mounted) return;
-          // Optional: bounce them back to phone since that's the fix.
           state = state.copyWith(
             step: LoginStep.phone,
             stepHint: _hintForStep(LoginStep.phone),
@@ -706,7 +687,6 @@ class LoginController extends StateNotifier<LoginState> {
           return;
         }
 
-        // Default typed error
         SnackService.showError(err.userMessage);
 
         if (kDebugMode) {
@@ -718,7 +698,6 @@ class LoginController extends StateNotifier<LoginState> {
         return;
       }
 
-      // Fallback: unexpected errors
       SnackService.showError('Could not send email code. Try again.');
       if (kDebugMode) debugPrint('⚠️ [login] startEmailVerify failed: $err');
 
@@ -791,7 +770,7 @@ class LoginController extends StateNotifier<LoginState> {
   }
 
   // ─────────────────────────────────────────────
-  // Step 3: collect name => persist profile (now includes displayName)
+  // Step 3: collect name => persist profile
   // ─────────────────────────────────────────────
 
   Future<void> finishOnboardingAfterName({
@@ -813,7 +792,6 @@ class LoginController extends StateNotifier<LoginState> {
     final user = _ref.read(sessionControllerProvider(_tenantId)).valueOrNull;
     final isCompany = user?.isCompany == true;
 
-    // Controller remains authority on business rules.
     if (isCompany) {
       if (cn.isEmpty) {
         SnackService.showError('Enter company name');
@@ -821,14 +799,11 @@ class LoginController extends StateNotifier<LoginState> {
       }
     }
 
-    // If first/last missing, derive from display name so backend always gets something.
     final derived = _deriveNamesFromDisplayName(dn);
     final fn = fnIn.isNotEmpty ? fnIn : derived.firstName;
     final ln = lnIn.isNotEmpty ? lnIn : derived.lastName;
 
     if (!isCompany) {
-      // Keep your existing requirement: first+last must exist for individuals.
-      // We satisfy it via derivation above.
       if (fn.trim().isEmpty || ln.trim().isEmpty) {
         SnackService.showError('Enter first and last name');
         return;
@@ -871,5 +846,55 @@ class LoginController extends StateNotifier<LoginState> {
   void forceStep(LoginStep step, {String? hint}) {
     if (!mounted) return;
     state = state.copyWith(step: step, stepHint: hint ?? _hintForStep(step));
+  }
+
+  Future<void> submitRecoveryAccountNumber({
+    required String accountNumber,
+  }) async {
+    final acc = accountNumber.trim();
+
+    if (acc.isEmpty) {
+      SnackService.showError('Enter your old account number');
+      return;
+    }
+
+    if (!mounted || state.busy) return;
+
+    state = state.copyWith(
+      verifying: true,
+      stepHint: 'Recovering your account…',
+    );
+
+    try {
+      final svc = await _auth();
+
+      final out = await svc.submitRecoveryAccountNumber(accountNumber: acc);
+
+      if (!mounted) return;
+
+      if (out.next == OtpNextStep.done) {
+        _closeNow();
+        return;
+      }
+
+      final step = _mapOtpNextToLoginStep(out.next);
+
+      state = state.copyWith(step: step, stepHint: _hintForStep(step));
+    } catch (err) {
+      SnackService.showError(
+        'Could not recover account. Check the account number and try again.',
+      );
+
+      if (kDebugMode) {
+        debugPrint('⚠️ [login] submitRecoveryAccountNumber failed: $err');
+      }
+
+      if (!mounted) return;
+
+      state = state.copyWith(stepHint: _hintForStep(LoginStep.recoverAccount));
+    } finally {
+      if (!mounted) return;
+      state = state.copyWith(verifying: false);
+    }
   }
 }

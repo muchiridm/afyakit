@@ -34,7 +34,7 @@ final authServiceProvider = FutureProvider.family<AuthService, String>((
   );
 });
 
-enum OtpNextStep { collectEmail, collectName, done }
+enum OtpNextStep { collectEmail, collectName, recoverAccount, done }
 
 OtpNextStep _parseNextStep(String? s) {
   switch ((s ?? '').trim()) {
@@ -42,20 +42,22 @@ OtpNextStep _parseNextStep(String? s) {
       return OtpNextStep.collectEmail;
     case 'collect_name':
       return OtpNextStep.collectName;
+    case 'recover_account':
+      return OtpNextStep.recoverAccount;
     default:
       return OtpNextStep.done;
   }
 }
 
 OtpNextStep _nextFromUser(AuthUser u) {
-  // 1) requiresEmailStep
-  // NOTE: backend might send 'email' but FE model stores emailLower.
-  // As long as AuthUser.fromMap maps it, this is correct.
+  if (u.recoveryRequired) {
+    return OtpNextStep.recoverAccount;
+  }
+
   if (!u.emailVerified || (u.emailLower ?? '').trim().isEmpty) {
     return OtpNextStep.collectEmail;
   }
 
-  // 2) requiresNameStep (now includes displayName)
   final dn = (u.displayName ?? '').trim();
   if (dn.isEmpty) return OtpNextStep.collectName;
 
@@ -78,6 +80,7 @@ class OtpVerifyApiResult {
     required this.uid,
     required this.tenant,
     required this.next,
+    required this.recoveryRequired,
   });
 
   final bool ok;
@@ -85,6 +88,7 @@ class OtpVerifyApiResult {
   final String? uid;
   final String? tenant;
   final OtpNextStep next;
+  final bool recoveryRequired;
 
   static String? _readTrimmedString(Object? v) {
     final s = v is String ? v.trim() : null;
@@ -93,12 +97,18 @@ class OtpVerifyApiResult {
 
   factory OtpVerifyApiResult.fromJson(JsonMap j) {
     final ok = j['ok'] == true || j['success'] == true;
+
+    final recovery = j['recoveryRequired'] == true;
+
     return OtpVerifyApiResult(
       ok: ok,
       customToken: _readTrimmedString(j['customToken']),
       uid: _readTrimmedString(j['uid']),
       tenant: _readTrimmedString(j['tenant'] ?? j['tenantId']),
-      next: _parseNextStep(_readTrimmedString(j['next'])),
+      next: recovery
+          ? OtpNextStep.recoverAccount
+          : _parseNextStep(_readTrimmedString(j['next'])),
+      recoveryRequired: recovery,
     );
   }
 }
@@ -110,11 +120,27 @@ class CheckStatusResult {
     required this.ok,
     required this.next,
     required this.user,
+    required this.recoveryRequired,
   });
 
   final bool ok;
   final OtpNextStep next;
   final AuthUser user;
+  final bool recoveryRequired;
+}
+
+class SubmitRecoveryResult {
+  const SubmitRecoveryResult({
+    required this.ok,
+    required this.next,
+    required this.user,
+    required this.recoveryRequired,
+  });
+
+  final bool ok;
+  final OtpNextStep next;
+  final AuthUser user;
+  final bool recoveryRequired;
 }
 
 class AuthService {
@@ -569,12 +595,62 @@ class AuthService {
 
       _logResp('syncClaims', res);
 
-      final user = await loadSession();
-      final next = _nextFromUser(user);
+      final syncMap = _asJsonMap(res.data);
+      final syncRecoveryRequired = syncMap['recoveryRequired'] == true;
 
-      return CheckStatusResult(ok: true, next: next, user: user);
+      final user = await loadSession();
+      final recoveryRequired = syncRecoveryRequired || user.recoveryRequired;
+
+      final next = recoveryRequired
+          ? OtpNextStep.recoverAccount
+          : _nextFromUser(user);
+
+      return CheckStatusResult(
+        ok: true,
+        next: next,
+        user: user,
+        recoveryRequired: recoveryRequired,
+      );
     } on DioException catch (ex) {
       _failDio('syncClaims', ex);
+    }
+  }
+
+  Future<SubmitRecoveryResult> submitRecoveryAccountNumber({
+    required String accountNumber,
+  }) async {
+    final acc = _requireTrimmed(accountNumber, 'Account number is required');
+    final authed = await _authHeaderFresh();
+
+    final uri = routes.sessionRecoverAccount();
+    final payload = <String, dynamic>{'recoverFromAccountNumber': acc};
+
+    try {
+      _logReq(
+        op: 'submitRecoveryAccountNumber',
+        uri: uri,
+        data: payload,
+        options: authed,
+      );
+
+      final res = await _dio.postUri(uri, data: payload, options: authed);
+
+      _logResp('submitRecoveryAccountNumber', res);
+
+      final user = await loadSession();
+      final recoveryRequired = user.recoveryRequired == true;
+      final next = recoveryRequired
+          ? OtpNextStep.recoverAccount
+          : _nextFromUser(user);
+
+      return SubmitRecoveryResult(
+        ok: true,
+        next: next,
+        user: user,
+        recoveryRequired: recoveryRequired,
+      );
+    } on DioException catch (ex) {
+      _failDio('submitRecoveryAccountNumber', ex);
     }
   }
 
