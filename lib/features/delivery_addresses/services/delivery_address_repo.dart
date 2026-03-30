@@ -11,6 +11,7 @@ class DeliveryAddressRepo {
   final FirebaseFirestore _firestore;
 
   static const String _collectionName = 'delivery_addresses';
+  static const String _authUsersCollection = 'auth_users';
 
   CollectionReference<Map<String, dynamic>> _collection({
     required String tenantId,
@@ -19,7 +20,7 @@ class DeliveryAddressRepo {
     return _firestore
         .collection('tenants')
         .doc(tenantId)
-        .collection('users')
+        .collection(_authUsersCollection)
         .doc(ownerUid)
         .collection(_collectionName);
   }
