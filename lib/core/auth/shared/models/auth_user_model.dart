@@ -1,5 +1,3 @@
-// lib/core/auth/shared/models/auth_user_model.dart
-
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
@@ -25,6 +23,10 @@ class AuthUser {
 
   final String? emailPendingLower;
   final String? emailPendingAt;
+  final String? emailVerificationRequestedAt;
+
+  final List<String> phoneHistory;
+  final List<String> emailHistory;
 
   final bool phoneVerified;
   final String? phoneVerifiedAt;
@@ -49,6 +51,10 @@ class AuthUser {
 
   final bool recoveryRequired;
 
+  final String? disabledAt;
+  final String? disabledReason;
+  final String? disabledByUid;
+
   final String? createdAt;
   final String? updatedAt;
 
@@ -66,6 +72,9 @@ class AuthUser {
     this.emailLower,
     this.emailPendingLower,
     this.emailPendingAt,
+    this.emailVerificationRequestedAt,
+    this.phoneHistory = const [],
+    this.emailHistory = const [],
     this.phoneVerified = false,
     this.phoneVerifiedAt,
     this.phoneClaimed = false,
@@ -81,6 +90,9 @@ class AuthUser {
     this.isSuperAdmin = false,
     this.staffRoles = const [],
     this.recoveryRequired = false,
+    this.disabledAt,
+    this.disabledReason,
+    this.disabledByUid,
     this.createdAt,
     this.updatedAt,
   });
@@ -109,6 +121,17 @@ class AuthUser {
       }
     }
 
+    final seen = <String>{};
+    return out.where(seen.add).toList(growable: false);
+  }
+
+  static List<String> _normalizeStringList(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <String>[];
+    for (final v in raw) {
+      final s = _cleanStr(v);
+      if (s.isNotEmpty) out.add(s);
+    }
     final seen = <String>{};
     return out.where(seen.add).toList(growable: false);
   }
@@ -223,6 +246,9 @@ class AuthUser {
     return p.isNotEmpty ? p : null;
   }
 
+  bool get isDisabled => status == UserStatus.disabled;
+  bool get hasRecoveryRequirement => recoveryRequired == true;
+
   factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
     final uid = _cleanStr(json['uid']);
     final tenant = _cleanStr(json['tenantId']);
@@ -243,6 +269,7 @@ class AuthUser {
     final isCompany = _bool(json['isCompany']);
     final recoveryRequired = _bool(json['recoveryRequired']);
 
+    // Keep existing FE behavior to avoid breaking screens that already rely on it.
     final emailRaw = _optStr(json['email']);
     final emailLowerRaw = _optStr(json['emailLower']);
     final email = emailRaw?.toLowerCase();
@@ -251,6 +278,9 @@ class AuthUser {
     final pendingRaw = _optStr(json['emailPendingLower']);
     final emailPendingLower = pendingRaw?.toLowerCase();
     final emailPendingAt = _optStr(json['emailPendingAt']);
+    final emailVerificationRequestedAt = _optStr(
+      json['emailVerificationRequestedAt'],
+    );
 
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
@@ -290,6 +320,9 @@ class AuthUser {
       emailLower: emailLower,
       emailPendingLower: emailPendingLower,
       emailPendingAt: emailPendingAt,
+      emailVerificationRequestedAt: emailVerificationRequestedAt,
+      phoneHistory: _normalizeStringList(json['phoneHistory']),
+      emailHistory: _normalizeStringList(json['emailHistory']),
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,
@@ -305,6 +338,9 @@ class AuthUser {
       isSuperAdmin: isSuperAdmin,
       staffRoles: staffRoles,
       recoveryRequired: recoveryRequired,
+      disabledAt: _optStr(json['disabledAt']),
+      disabledReason: _optStr(json['disabledReason']),
+      disabledByUid: _optStr(json['disabledByUid']),
       createdAt: _optStr(json['createdAt']),
       updatedAt: _optStr(json['updatedAt']),
     );
@@ -326,6 +362,9 @@ class AuthUser {
     String? emailLower,
     String? emailPendingLower,
     String? emailPendingAt,
+    String? emailVerificationRequestedAt,
+    List<String>? phoneHistory,
+    List<String>? emailHistory,
     bool? phoneVerified,
     String? phoneVerifiedAt,
     bool? phoneClaimed,
@@ -341,6 +380,9 @@ class AuthUser {
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
     bool? recoveryRequired,
+    String? disabledAt,
+    String? disabledReason,
+    String? disabledByUid,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -358,6 +400,10 @@ class AuthUser {
       emailLower: emailLower ?? this.emailLower,
       emailPendingLower: emailPendingLower ?? this.emailPendingLower,
       emailPendingAt: emailPendingAt ?? this.emailPendingAt,
+      emailVerificationRequestedAt:
+          emailVerificationRequestedAt ?? this.emailVerificationRequestedAt,
+      phoneHistory: phoneHistory ?? this.phoneHistory,
+      emailHistory: emailHistory ?? this.emailHistory,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
       phoneClaimed: phoneClaimed ?? this.phoneClaimed,
@@ -373,6 +419,9 @@ class AuthUser {
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       staffRoles: staffRoles ?? this.staffRoles,
       recoveryRequired: recoveryRequired ?? this.recoveryRequired,
+      disabledAt: disabledAt ?? this.disabledAt,
+      disabledReason: disabledReason ?? this.disabledReason,
+      disabledByUid: disabledByUid ?? this.disabledByUid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -392,6 +441,10 @@ class AuthUser {
     if (emailLower != null) 'emailLower': emailLower,
     if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
     if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
+    if (emailVerificationRequestedAt != null)
+      'emailVerificationRequestedAt': emailVerificationRequestedAt,
+    if (phoneHistory.isNotEmpty) 'phoneHistory': phoneHistory,
+    if (emailHistory.isNotEmpty) 'emailHistory': emailHistory,
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,
@@ -408,6 +461,9 @@ class AuthUser {
     if (staffRoles.isNotEmpty)
       'staffRoles': staffRoles.map((r) => r.name).toList(growable: false),
     if (recoveryRequired) 'recoveryRequired': true,
+    if (disabledAt != null) 'disabledAt': disabledAt,
+    if (disabledReason != null) 'disabledReason': disabledReason,
+    if (disabledByUid != null) 'disabledByUid': disabledByUid,
     if (createdAt != null) 'createdAt': createdAt,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };

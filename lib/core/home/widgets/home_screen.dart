@@ -1,5 +1,6 @@
 // lib/core/home/widgets/home_screen.dart
 
+import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -82,6 +83,7 @@ class _MemberHomeBody extends StatelessWidget {
         panelWidth: AppLayout.pageMaxW,
       ),
 
+      const _MemberHouseholdInfoCard(),
       const _MemberQuickActions(),
 
       // If accountNumber is missing, fail gracefully (don’t look “blank”).
@@ -100,6 +102,12 @@ class _MemberHomeBody extends StatelessWidget {
 class _MemberQuickActions extends StatelessWidget {
   const _MemberQuickActions();
 
+  void _showTodo(BuildContext context, String label) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label screen coming next.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Wrap(
@@ -112,6 +120,18 @@ class _MemberQuickActions extends StatelessWidget {
           onTap: () => Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const CatalogScreen())),
+        ),
+        _ActionChip(
+          icon: Icons.people_alt_outlined,
+          label: 'My Profiles',
+          onTap: () => _showTodo(context, 'Patient profiles'),
+        ),
+        _ActionChip(
+          icon: Icons.location_on_outlined,
+          label: 'Delivery Addresses',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const DeliveryAddressesScreen()),
+          ),
         ),
         _ActionChip(
           icon: Icons.receipt_long_outlined,
@@ -165,6 +185,48 @@ class _ActionChip extends StatelessWidget {
       avatar: Icon(icon, size: 18),
       label: Text(label),
       onPressed: onTap,
+    );
+  }
+}
+
+class _MemberHouseholdInfoCard extends StatelessWidget {
+  const _MemberHouseholdInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      elevation: 0,
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.family_restroom_outlined, size: 20),
+            const SizedBox(width: AppShape.gap10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Manage yourself and your dependents',
+                    style: t.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'You will be able to save patient profiles for yourself, children, spouse, parents, and other dependents, plus multiple delivery addresses for prescriptions and orders.',
+                    style: t.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
