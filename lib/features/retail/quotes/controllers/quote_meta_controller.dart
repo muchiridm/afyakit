@@ -3,6 +3,7 @@
 import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,6 +18,7 @@ class QuoteMetaState {
     this.customerNotes,
     this.quoteDate,
     this.expiryDate,
+    this.deliveryAddress,
   });
 
   final String? editingQuoteId;
@@ -29,6 +31,8 @@ class QuoteMetaState {
 
   /// Zoho: `expiry_date`
   final DateTime? expiryDate;
+
+  final SalesDocumentAddress? deliveryAddress;
 
   bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
 
@@ -52,6 +56,8 @@ class QuoteMetaState {
     bool clearQuoteDate = false,
     DateTime? expiryDate,
     bool clearExpiryDate = false,
+    SalesDocumentAddress? deliveryAddress,
+    bool clearDeliveryAddress = false,
   }) {
     return QuoteMetaState(
       editingQuoteId: clearEditingQuoteId
@@ -64,6 +70,9 @@ class QuoteMetaState {
           : (customerNotes ?? this.customerNotes),
       quoteDate: clearQuoteDate ? null : (quoteDate ?? this.quoteDate),
       expiryDate: clearExpiryDate ? null : (expiryDate ?? this.expiryDate),
+      deliveryAddress: clearDeliveryAddress
+          ? null
+          : (deliveryAddress ?? this.deliveryAddress),
     );
   }
 
@@ -94,17 +103,13 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     final wasEditing = (state.editingQuoteId ?? '').trim().isNotEmpty;
 
     if (_isMemberScoped) {
-      // Always clear contact in member mode to avoid stale header name
-      state = state.copyWith(clearEditingQuoteId: true, clearContact: true);
+      state = state.copyWith(clearEditingQuoteId: true);
       return;
     }
 
-    // Picker mode:
-    // Only clear editingQuoteId; keep contact/meta
+    // Picker mode: only clear editingQuoteId; keep customer/meta draft state.
     if (wasEditing) {
       state = state.copyWith(clearEditingQuoteId: true);
-    } else {
-      // already new; do nothing
     }
   }
 
@@ -118,7 +123,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 
   void setContact(ZohoContact? c) {
     if (_isMemberScoped) {
-      // Member scoped: reject clearing
+      // Member scoped: reject clearing.
       if (c == null) return;
 
       // Enforce scope if accountNumber present on payload.
@@ -134,7 +139,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   }
 
   void clearContact() {
-    // Member scoped: never allow clearing
+    // Member scoped: never allow clearing.
     if (_isMemberScoped) return;
     state = state.copyWith(clearContact: true);
   }
@@ -165,6 +170,14 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(clearExpiryDate: true);
   }
 
+  void setDeliveryAddress(SalesDocumentAddress? a) {
+    state = state.copyWith(deliveryAddress: a);
+  }
+
+  void clearDeliveryAddress() {
+    state = state.copyWith(clearDeliveryAddress: true);
+  }
+
   void applyZohoMeta({
     required String editingQuoteId,
     ZohoContact? contact,
@@ -172,12 +185,13 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     String? customerNotes,
     DateTime? quoteDate,
     DateTime? expiryDate,
+    SalesDocumentAddress? deliveryAddress,
   }) {
     final id = editingQuoteId.trim();
 
     ZohoContact? safeContact = contact;
 
-    // ✅ Member scoped: DO NOT accept a contact that doesn't match scope.
+    // Member scoped: do not accept a contact that doesn't match scope.
     if (_isMemberScoped) {
       final acct = _acct;
       final contactAcct = (contact?.accountNumber ?? '').trim();
@@ -197,6 +211,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
           : null,
       quoteDate: QuoteMetaState.normalizeDate(quoteDate),
       expiryDate: QuoteMetaState.normalizeDate(expiryDate),
+      deliveryAddress: deliveryAddress,
     );
   }
 }

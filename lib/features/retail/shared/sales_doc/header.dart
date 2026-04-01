@@ -31,8 +31,6 @@ class SalesDocHeader extends StatelessWidget {
   final bool showDate;
   final bool showStatus;
 
-  // A shared height rail for trailing actions (Pick / status / trash).
-  // This is what fixes the “one icon floating” issue across Web/Linux fonts.
   static const double _kTrailingRailH = 36.0;
 
   @override
@@ -43,13 +41,12 @@ class SalesDocHeader extends StatelessWidget {
         ? 'Customer'
         : meta.partyName.trim();
 
-    // Keep the "pills" consistent in size with your existing header chips.
     final VisualDensity pillDensity = compact
         ? const VisualDensity(horizontal: -2, vertical: -2)
         : VisualDensity.compact;
 
     final pills = <Widget>[
-      if (showDocNumber)
+      if (showDocNumber && meta.docNumberOrId.trim().isNotEmpty)
         _pill(
           context,
           Icons.confirmation_number_outlined,
@@ -63,23 +60,20 @@ class SalesDocHeader extends StatelessWidget {
           formatDocDate(meta.date!),
           density: pillDensity,
         ),
-
-      // ✅ NEW: expiry pill
-      if (meta.expiryDate != null)
+      if (showDate && meta.expiryDate != null)
         _pill(
           context,
           Icons.event_busy_outlined,
           'Exp ${formatDocDate(meta.expiryDate!)}',
           density: pillDensity,
         ),
-
       if (showStatus && meta.status.trim().isNotEmpty)
         _statusPill(context, meta.status, density: pillDensity),
     ];
 
     final pad = compact
-        ? const EdgeInsets.fromLTRB(16, 8, 16, 6)
-        : const EdgeInsets.fromLTRB(16, 12, 16, 8);
+        ? const EdgeInsets.fromLTRB(16, 4, 16, 4)
+        : const EdgeInsets.fromLTRB(16, 10, 16, 6);
 
     final gap = compact ? 6.0 : 10.0;
 
@@ -93,19 +87,15 @@ class SalesDocHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                // ✅ Center everything on the same horizontal rail.
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (leading != null) ...[
-                    // Keep leading visually centered too.
                     SizedBox(
                       height: _kTrailingRailH,
                       child: Center(child: leading),
                     ),
                     const SizedBox(width: 10),
                   ],
-
-                  // Left block
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,28 +122,23 @@ class SalesDocHeader extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                  // Right block (pinned to the right edge)
                   if (trailing != null) ...[
                     const SizedBox(width: 12),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        // Don't let trailing steal the whole row.
-                        maxWidth: isWide
-                            ? c.maxWidth * 0.55
-                            : c.maxWidth * 0.60,
-                      ),
+                    Expanded(
                       child: Align(
-                        // ✅ Center-right, not top-right.
                         alignment: Alignment.centerRight,
-                        child: SizedBox(
-                          // ✅ The important bit: rail height.
-                          height: _kTrailingRailH,
-                          child: isWide
-                              ? _TrailingRail(child: trailing!)
-                              : _RightAlignedHScroll(
-                                  child: _TrailingRail(child: trailing!),
-                                ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: isWide ? 220 : c.maxWidth * 0.60,
+                          ),
+                          child: SizedBox(
+                            height: _kTrailingRailH,
+                            child: isWide
+                                ? _TrailingRail(child: trailing!)
+                                : _RightAlignedHScroll(
+                                    child: _TrailingRail(child: trailing!),
+                                  ),
+                          ),
                         ),
                       ),
                     ),
@@ -211,20 +196,16 @@ class SalesDocHeader extends StatelessWidget {
   }
 }
 
-/// Ensures the trailing row is vertically centered inside the rail.
-/// This prevents mixed-height widgets (Chip / OutlinedButton / IconButton)
-/// from “floating” on Web/Linux.
 class _TrailingRail extends StatelessWidget {
   const _TrailingRail({required this.child});
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: child);
+    return Align(alignment: Alignment.centerRight, child: child);
   }
 }
 
-/// Keeps the trailing actions right-aligned even when scrolling on narrow screens.
 class _RightAlignedHScroll extends StatelessWidget {
   const _RightAlignedHScroll({required this.child});
   final Widget child;

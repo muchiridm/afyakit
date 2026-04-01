@@ -1,6 +1,7 @@
 // lib/features/retail/sales/quotes/models/quote_draft.dart
 
 import 'package:flutter/foundation.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 
 import 'di_sales_tile.dart';
@@ -32,13 +33,13 @@ class QuoteLineDraft {
     final id = (lineItemId ?? '').trim();
     if (id.isNotEmpty) return id;
 
-    final c = (tile.canonKey).trim();
+    final c = tile.canonKey.trim();
     if (c.isNotEmpty) return c;
 
-    final g = (tile.groupKey).trim();
+    final g = tile.groupKey.trim();
     if (g.isNotEmpty) return g;
 
-    final t = (tile.tileTitle).trim();
+    final t = tile.tileTitle.trim();
     return t.isNotEmpty ? t : 'line';
   }
 
@@ -74,6 +75,7 @@ class QuoteDraft {
     this.contactName,
     this.customerNotes,
     this.reference,
+    this.deliveryAddress,
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
@@ -86,6 +88,8 @@ class QuoteDraft {
 
   final String? customerNotes;
   final String? reference;
+
+  final SalesDocumentAddress? deliveryAddress;
 
   final String? currencyCode;
 
@@ -127,6 +131,8 @@ class QuoteDraft {
     bool clearCustomerNotes = false,
     String? reference,
     bool clearReference = false,
+    SalesDocumentAddress? deliveryAddress,
+    bool clearDeliveryAddress = false,
     List<QuoteLineDraft>? lines,
     bool clearLines = false,
     String? currencyCode,
@@ -140,6 +146,9 @@ class QuoteDraft {
           ? null
           : (customerNotes ?? this.customerNotes),
       reference: clearReference ? null : (reference ?? this.reference),
+      deliveryAddress: clearDeliveryAddress
+          ? null
+          : (deliveryAddress ?? this.deliveryAddress),
       lines: clearLines ? const <QuoteLineDraft>[] : (lines ?? this.lines),
       currencyCode: clearCurrencyCode
           ? null
@@ -195,13 +204,13 @@ class QuoteDraft {
           final tile = stableKey.isNotEmpty
               ? DiSalesTile.fallbackFromName(
                   name: li.name,
-                  description: li.description, // ✅ correct mapping
+                  description: li.description,
                   canonKey: stableKey,
                   groupKey: stableKey,
                 )
               : DiSalesTile.fallbackFromName(
                   name: li.name,
-                  description: li.description, // ✅ correct mapping
+                  description: li.description,
                 );
 
           return QuoteLineDraft(
@@ -221,6 +230,7 @@ class QuoteDraft {
       contactName: q.customerName.trim().isEmpty ? null : q.customerName.trim(),
       customerNotes: q.notes,
       reference: q.accountNumber,
+      deliveryAddress: q.deliveryAddress,
       currencyCode: q.currencyCode,
       lines: hydratedLines,
     );

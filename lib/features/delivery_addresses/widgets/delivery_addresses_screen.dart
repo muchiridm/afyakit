@@ -1,5 +1,3 @@
-// lib/features/delivery_addresses/widgets/delivery_addresses_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,7 +7,9 @@ import 'package:afyakit/features/delivery_addresses/providers/delivery_address_p
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_pin_picker_screen.dart';
 
 class DeliveryAddressesScreen extends ConsumerWidget {
-  const DeliveryAddressesScreen({super.key});
+  const DeliveryAddressesScreen({super.key, this.pickerMode = false});
+
+  final bool pickerMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -18,7 +18,11 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     final launcher = ref.read(deliveryNavigationLauncherProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Delivery Addresses')),
+      appBar: AppBar(
+        title: Text(
+          pickerMode ? 'Select Delivery Address' : 'Delivery Addresses',
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddressSheet(context, existing: null),
         child: const Icon(Icons.add),
@@ -30,7 +34,10 @@ class DeliveryAddressesScreen extends ConsumerWidget {
           }
 
           if (!state.hasActiveItems) {
-            return const _EmptyState();
+            return _EmptyState(
+              pickerMode: pickerMode,
+              onAddPressed: () => _showAddressSheet(context, existing: null),
+            );
           }
 
           return ListView.builder(
@@ -41,6 +48,10 @@ class DeliveryAddressesScreen extends ConsumerWidget {
 
               return _AddressCard(
                 address: address,
+                pickerMode: pickerMode,
+                onSelect: pickerMode
+                    ? () => Navigator.of(context).pop<DeliveryAddress>(address)
+                    : null,
                 onEdit: () => _showAddressSheet(context, existing: address),
                 onNavigate: address.pinLocation == null
                     ? null
@@ -130,13 +141,17 @@ class DeliveryAddressesScreen extends ConsumerWidget {
 class _AddressCard extends StatelessWidget {
   const _AddressCard({
     required this.address,
+    required this.pickerMode,
     required this.onEdit,
     required this.onNavigate,
     required this.onSetDefault,
     required this.onArchive,
+    this.onSelect,
   });
 
   final DeliveryAddress address;
+  final bool pickerMode;
+  final VoidCallback? onSelect;
   final VoidCallback onEdit;
   final VoidCallback? onNavigate;
   final VoidCallback onSetDefault;
@@ -146,46 +161,49 @@ class _AddressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    address.label,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+    final cardChild = Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  address.label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (address.isDefault) const Chip(label: Text('Default')),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(address.recipientDisplay),
-            if (address.fullDisplay.trim().isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(address.fullDisplay),
-            ],
-            if (address.pinLocation != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                address.pinLocation!.placeName?.trim().isNotEmpty == true
-                    ? 'Pin: ${address.pinLocation!.placeName}'
-                    : 'Pin: '
-                          '${address.pinLocation!.latitude.toStringAsFixed(6)}, '
-                          '${address.pinLocation!.longitude.toStringAsFixed(6)}',
               ),
+              if (address.isDefault) const Chip(label: Text('Default')),
+              if (pickerMode) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right),
+              ],
             ],
-            if ((address.instructions ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text('Instructions: ${address.instructions!.trim()}'),
-            ],
+          ),
+          const SizedBox(height: 6),
+          Text(address.recipientDisplay),
+          if (address.fullDisplay.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(address.fullDisplay),
+          ],
+          if (address.pinLocation != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              address.pinLocation!.placeName?.trim().isNotEmpty == true
+                  ? 'Pin: ${address.pinLocation!.placeName}'
+                  : 'Pin: '
+                        '${address.pinLocation!.latitude.toStringAsFixed(6)}, '
+                        '${address.pinLocation!.longitude.toStringAsFixed(6)}',
+            ),
+          ],
+          if ((address.instructions ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Instructions: ${address.instructions!.trim()}'),
+          ],
+          if (!pickerMode) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -209,8 +227,19 @@ class _AddressCard extends StatelessWidget {
               ],
             ),
           ],
-        ),
+        ],
       ),
+    );
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: pickerMode
+          ? InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onSelect,
+              child: cardChild,
+            )
+          : cardChild,
     );
   }
 }
@@ -519,14 +548,35 @@ class _PinTile extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.pickerMode, required this.onAddPressed});
+
+  final bool pickerMode;
+  final VoidCallback onAddPressed;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'No delivery addresses yet.\nTap + to add one.',
-        textAlign: TextAlign.center,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              pickerMode
+                  ? 'No delivery addresses yet.\nAdd one to continue.'
+                  : 'No delivery addresses yet.\nTap + to add one.',
+              textAlign: TextAlign.center,
+            ),
+            if (pickerMode) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: onAddPressed,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Address'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

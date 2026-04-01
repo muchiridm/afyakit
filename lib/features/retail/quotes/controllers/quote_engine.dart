@@ -103,8 +103,6 @@ class QuoteEngine {
     final quoteDate = normalizeDate(q.date);
     final expiryDate = normalizeDate(q.expiryDate);
 
-    // Note: QuoteDraft.fromZohoQuote is line/customer hydration only.
-    // Meta dates are taken from ZohoQuote directly.
     final draft = QuoteDraft.fromZohoQuote(q);
 
     return QuoteMetaState(
@@ -116,7 +114,8 @@ class QuoteEngine {
           ? null
           : draft.customerNotes!.trim(),
       quoteDate: quoteDate,
-      expiryDate: expiryDate, // ✅ NEW
+      expiryDate: expiryDate,
+      deliveryAddress: q.deliveryAddress,
     );
   }
 
@@ -131,8 +130,8 @@ class QuoteEngine {
       return isEditing ? 'Quote has no items' : 'Add at least one item';
     }
 
-    if (!isEditing) {
-      if (meta.customerIdResolved.isEmpty) return 'Please pick a customer';
+    if (!isEditing && meta.customerIdResolved.isEmpty) {
+      return 'Please pick a customer';
     }
 
     final unnamedManual = _lines.lines.whereType<ManualQuoteLine>().where((l) {
@@ -170,6 +169,7 @@ class QuoteEngine {
       customerNotes: (meta.customerNotes ?? '').trim().isNotEmpty
           ? meta.customerNotes!.trim()
           : null,
+      deliveryAddress: meta.deliveryAddress,
       lines: lineDrafts,
     );
   }
@@ -245,7 +245,6 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Remote ops ─────────────────────────
-  // ✅ UPDATED signatures: quoteDate + expiryDate
 
   Future<ZohoQuote> create(
     QuoteDraft payload, {

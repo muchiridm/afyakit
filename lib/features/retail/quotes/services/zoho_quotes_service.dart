@@ -267,7 +267,7 @@ class ZohoQuotesService {
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
 
-      // Zoho: estimate_date (your BE currently expects 'date')
+      // Zoho: estimate_date
       if (quoteDateStr != null) 'date': quoteDateStr,
 
       // Zoho: expiry_date
@@ -275,8 +275,13 @@ class ZohoQuotesService {
 
       if (asCleanStringOrNull(draft.reference) != null)
         'reference_number': asCleanStringOrNull(draft.reference),
+
       if (asCleanStringOrNull(draft.customerNotes) != null)
         'notes': asCleanStringOrNull(draft.customerNotes),
+
+      // ✅ NEW: delivery address
+      if (draft.deliveryAddress != null)
+        'delivery_address': draft.deliveryAddress!.toJson(),
 
       'line_items': draft.lines
           .map((l) {
