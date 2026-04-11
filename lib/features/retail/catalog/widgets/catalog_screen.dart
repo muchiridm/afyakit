@@ -11,6 +11,8 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catal
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/utils/app_error_message.dart';
+import 'package:afyakit/shared/widgets/app_error_pane.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -48,23 +50,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   final FocusNode _searchFocus = FocusNode();
 
   bool _seedApplied = false;
-  String? _expandedWhoPathForTileId;
 
   bool get _showDiscovery {
     final CatalogState state = ref.read(catalogControllerProvider);
     return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
-  }
-
-  bool _isWhoExpanded(CatalogTile t) => _expandedWhoPathForTileId == t.id;
-
-  void _toggleWhoPath(CatalogTile t) {
-    setState(() {
-      if (_expandedWhoPathForTileId == t.id) {
-        _expandedWhoPathForTileId = null;
-      } else {
-        _expandedWhoPathForTileId = t.id;
-      }
-    });
   }
 
   @override
@@ -152,9 +141,13 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         scrollable: true,
         maxWidth: 1100,
         body: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text('Failed to initialize catalog: $e'),
+          child: AppErrorPane(
+            title: 'Catalog temporarily unavailable',
+            message: appErrorMessage(
+              e,
+              fallback:
+                  'We could not initialize the catalog right now. Please try again shortly.',
+            ),
           ),
         ),
       ),
@@ -269,8 +262,13 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         else
           itemsAsync.when(
             loading: () => SkeletonGrid(scrollController: _scroll),
-            error: (e, _) => ErrorPane(
-              error: '$e',
+            error: (e, _) => AppErrorPane(
+              title: 'Catalog temporarily unavailable',
+              message: appErrorMessage(
+                e,
+                fallback:
+                    'We could not load the catalog right now. Please try again shortly.',
+              ),
               onRetry: () {
                 ctrl.refresh();
               },
@@ -289,6 +287,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   Future<void> _showTileSheet(BuildContext context, CatalogTile t) async {
+    final String whoPreview = t.whoPathPreview?.trim() ?? '';
+    final String whoAtcCode = t.whoAtcCode?.trim() ?? '';
+    final List<String> atcLabels = t.whoAtcLabels ?? const <String>[];
+    final bool hasCombo = atcLabels.length > 1;
+
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: false,
@@ -311,6 +314,53 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     priceFormatter: _formatPriceCeil,
                     priceColor: _priceGreen,
                   ),
+                  if (whoPreview.isNotEmpty ||
+                      whoAtcCode.isNotEmpty ||
+                      atcLabels.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (whoAtcCode.isNotEmpty)
+                            Text(
+                              'ATC: $whoAtcCode',
+                              style: Theme.of(ctx).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      ctx,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          if (whoPreview.isNotEmpty)
+                            Text(
+                              whoPreview,
+                              style: Theme.of(ctx).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      ctx,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                          if (hasCombo) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              atcLabels.join(', '),
+                              style: Theme.of(ctx).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      ctx,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   const Divider(height: 18),
                   Row(
                     children: [
@@ -382,9 +432,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  if ((t.tileDesc ?? '').trim().isNotEmpty)
+                  if ((t.tileDescWithWhoPath ?? '').trim().isNotEmpty)
                     Text(
-                      t.tileDesc!.trim(),
+                      t.tileDescWithWhoPath!.trim(),
                       style: Theme.of(ctx).textTheme.bodyMedium,
                     ),
                   const SizedBox(height: 16),
@@ -433,19 +483,124 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     );
   }
 
+  Future<void> _showWhoPathDialog(BuildContext context, CatalogTile t) async {
+    final whoPath = (t.whoPath ?? '').trim();
+    final whoAtcCode = (t.whoAtcCode ?? '').trim();
+    final whoAtcName = (t.whoAtcName ?? '').trim();
+    final whoPrimaryInn = (t.whoPrimaryInn ?? '').trim();
+    final mappedInns = t.whoMappedInns ?? const <String>[];
+    final atcLabels = t.whoAtcLabels ?? const <String>[];
+
+    if (whoPath.isEmpty &&
+        whoAtcCode.isEmpty &&
+        whoAtcName.isEmpty &&
+        mappedInns.isEmpty &&
+        atcLabels.isEmpty) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('WHO classification'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (whoAtcCode.isNotEmpty) ...[
+                  Text(
+                    'Primary ATC: $whoAtcCode${whoAtcName.isNotEmpty ? ' · $whoAtcName' : ''}',
+                    style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (whoPrimaryInn.isNotEmpty) ...[
+                  Text(
+                    'Primary ingredient: $whoPrimaryInn',
+                    style: Theme.of(ctx).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (whoPath.isNotEmpty) ...[
+                  SelectableText(
+                    whoPath,
+                    style: Theme.of(
+                      ctx,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (mappedInns.isNotEmpty) ...[
+                  Text(
+                    'Mapped ingredients',
+                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    mappedInns.join(', '),
+                    style: Theme.of(ctx).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (atcLabels.isNotEmpty) ...[
+                  Text(
+                    'Mapped ATC codes',
+                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  ...atcLabels.map(
+                    (label) => Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        label,
+                        style: Theme.of(ctx).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _whoSection(BuildContext context, CatalogTile t) {
     final whoPath = (t.whoPath ?? '').trim();
-    if (whoPath.isEmpty) return const SizedBox.shrink();
+    final whoAtcCode = (t.whoAtcCode ?? '').trim();
+    final whoAtcName = (t.whoAtcName ?? '').trim();
+    final whoPrimaryInn = (t.whoPrimaryInn ?? '').trim();
+    final mappedInns = t.whoMappedInns ?? const <String>[];
+    final atcLabels = t.whoAtcLabels ?? const <String>[];
+
+    if (whoPath.isEmpty &&
+        whoAtcCode.isEmpty &&
+        whoAtcName.isEmpty &&
+        mappedInns.isEmpty &&
+        atcLabels.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final theme = Theme.of(context);
-    final expanded = _isWhoExpanded(t);
-    final segments = whoPath
-        .split('>')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    final preview = segments.isEmpty ? whoPath : segments.last;
+    final preview = t.whoPathPreview?.trim().isNotEmpty == true
+        ? t.whoPathPreview!.trim()
+        : whoPath;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -458,29 +613,49 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(preview, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 4),
-          TextButton.icon(
-            onPressed: () => _toggleWhoPath(t),
-            icon: Icon(expanded ? Icons.expand_less : Icons.expand_more),
-            label: Text(expanded ? 'Hide full path' : 'View full path'),
-          ),
-          if (expanded)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: theme.colorScheme.surfaceContainerHighest.withOpacity(
-                  0.35,
-                ),
-              ),
-              child: Text(
-                whoPath,
-                style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
-              ),
+          if (whoAtcCode.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              whoAtcName.isNotEmpty
+                  ? 'ATC: $whoAtcCode · $whoAtcName'
+                  : 'ATC: $whoAtcCode',
+              style: theme.textTheme.bodyMedium,
             ),
+          ],
+          if (whoPrimaryInn.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Primary ingredient: $whoPrimaryInn',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(preview, style: theme.textTheme.bodyMedium),
+          ],
+          if (mappedInns.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Mapped ingredients: ${mappedInns.join(', ')}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+          if (atcLabels.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Mapped ATCs: ${atcLabels.join(', ')}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _showWhoPathDialog(context, t),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open full path'),
+            ),
+          ),
         ],
       ),
     );
