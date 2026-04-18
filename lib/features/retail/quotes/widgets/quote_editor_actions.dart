@@ -5,6 +5,7 @@ import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.d
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:flutter/material.dart';
@@ -126,10 +127,51 @@ class QuoteEditorFooterBar extends ConsumerWidget {
   final Future<bool> Function() onEnsureAuthed;
   final Future<void> Function() onSubmit;
 
+  String _safeName(String value) {
+    final String trimmed = value.trim();
+    return trimmed.isEmpty ? 'Item' : trimmed;
+  }
+
+  num _safeRate(num value) {
+    if (value.isNaN || value.isInfinite || value < 0) {
+      return 0;
+    }
+    return value;
+  }
+
+  Future<void> _addCustomItem(BuildContext context, WidgetRef ref) async {
+    final bool ok = await onEnsureAuthed();
+    if (!ok) return;
+    if (!context.mounted) return;
+
+    final result = await SalesDocDialogs.editLine(
+      context,
+      initialName: '',
+      initialDescription: '',
+      initialQty: 1,
+      initialRate: 0,
+      enableRate: requirePrices,
+      enableName: true,
+      enableDescription: true,
+      enableQty: true,
+    );
+
+    if (result == null) return;
+
+    ref
+        .read(quoteLinesControllerProvider.notifier)
+        .addManualLine(
+          name: _safeName(result.name),
+          description: result.description,
+          qty: result.qty,
+          rate: requirePrices ? _safeRate(result.rate) : 0,
+        );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
 
     final bool canSubmit =
         linesState.lines.isNotEmpty &&
@@ -150,7 +192,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
         ? '$currencyCode ${linesState.estimatedTotal.toStringAsFixed(2)}'
         : '—';
 
-    final Widget addButton = OutlinedButton.icon(
+    final Widget addFromCatalogButton = OutlinedButton.icon(
       icon: const Icon(Icons.search),
       label: const Text('Add from Catalog'),
       onPressed: busy ? null : openCatalog,
@@ -158,6 +200,14 @@ class QuoteEditorFooterBar extends ConsumerWidget {
         foregroundColor: cs.primary,
         side: BorderSide(color: cs.primary),
       ),
+    );
+
+    final Widget addCustomItemButton = OutlinedButton.icon(
+      icon: const Icon(Icons.add_circle_outline),
+      label: const Text('Add custom item'),
+      onPressed: (busy || isMemberScoped)
+          ? null
+          : () => _addCustomItem(context, ref),
     );
 
     final Widget submitButton = FilledButton.icon(
@@ -237,8 +287,16 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
               if (wide) {
                 return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
-                    addButton,
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: <Widget>[
+                        addFromCatalogButton,
+                        if (!isMemberScoped) addCustomItemButton,
+                      ],
+                    ),
                     Expanded(
                       child: Center(
                         child: ConstrainedBox(
@@ -257,11 +315,16 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                 children: <Widget>[
                   Row(children: <Widget>[const Spacer(), totalBlock]),
                   const SizedBox(height: 12),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      Expanded(child: addButton),
-                      const SizedBox(width: 12),
-                      Expanded(child: submitButton),
+                      addFromCatalogButton,
+                      if (!isMemberScoped) ...<Widget>[
+                        const SizedBox(height: 12),
+                        addCustomItemButton,
+                      ],
+                      const SizedBox(height: 12),
+                      submitButton,
                     ],
                   ),
                 ],

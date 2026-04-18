@@ -1,3 +1,5 @@
+// lib/features/retail/catalog/models/catalog_models.dart
+
 import 'package:flutter/foundation.dart';
 
 @immutable
