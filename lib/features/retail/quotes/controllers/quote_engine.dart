@@ -1,7 +1,8 @@
-// lib/features/retail/quotes/controllers/quote_engine.dart
-
 import 'dart:typed_data';
 
+import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
+import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
+import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
@@ -25,8 +26,6 @@ class QuoteEngine {
   Future<ZohoQuotesService> get _svc async =>
       ref.read(zohoQuotesServiceProvider.future);
 
-  // ───────────────────────── Session orchestration ─────────────────────────
-
   bool isEditingId(String? id) => (id ?? '').trim().isNotEmpty;
 
   bool shouldClearLinesOnSwitch({
@@ -34,11 +33,11 @@ class QuoteEngine {
     required String? prevLoadedId,
     required String nextEditingId,
   }) {
-    final hadEditSession =
+    final bool hadEditSession =
         (prevEditingId ?? '').trim().isNotEmpty ||
         (prevLoadedId ?? '').trim().isNotEmpty;
 
-    final wantEdit = nextEditingId.trim().isNotEmpty;
+    final bool wantEdit = nextEditingId.trim().isNotEmpty;
 
     if (!wantEdit && hadEditSession) return true;
 
@@ -51,37 +50,33 @@ class QuoteEngine {
     return false;
   }
 
-  // ───────────────────────── Date helpers ─────────────────────────
-
   DateTime? normalizeDate(DateTime? d) {
     if (d == null) return null;
     return DateTime(d.year, d.month, d.day);
   }
 
-  // ───────────────────────── Load edit ─────────────────────────
-
   Future<ZohoQuote> loadQuote(String quoteId) async {
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
     return (await _svc).get(id);
   }
 
   void setLinesFromZoho(ZohoQuote q) {
-    final lines = q.lineItems
-        .map((li) {
-          final qty = li.quantity.round().clamp(1, 9999);
+    final List<ManualQuoteLine> lines = q.lineItems
+        .map((ZohoQuoteLineItem li) {
+          final int qty = li.quantity.round().clamp(1, 9999);
 
-          final rate = (li.rate.isNaN || li.rate.isInfinite || li.rate < 0)
+          final num rate = (li.rate.isNaN || li.rate.isInfinite || li.rate < 0)
               ? 0
               : li.rate;
 
-          final name = li.name.trim().isEmpty ? 'Item' : li.name.trim();
-          final desc = (li.description ?? '').trim().isEmpty
+          final String name = li.name.trim().isEmpty ? 'Item' : li.name.trim();
+          final String? desc = (li.description ?? '').trim().isEmpty
               ? null
               : li.description!.trim();
 
-          final zohoLineId = (li.lineItemId ?? '').trim();
-          final manualId = zohoLineId.isNotEmpty
+          final String zohoLineId = (li.lineItemId ?? '').trim();
+          final String manualId = zohoLineId.isNotEmpty
               ? 'z_$zohoLineId'
               : 'm_${DateTime.now().microsecondsSinceEpoch}';
 
@@ -92,6 +87,7 @@ class QuoteEngine {
             rate: rate,
             qty: qty,
             zohoLineItemId: zohoLineId.isEmpty ? null : zohoLineId,
+            zohoItemId: null,
           );
         })
         .toList(growable: false);
@@ -100,10 +96,10 @@ class QuoteEngine {
   }
 
   QuoteMetaState metaFromZoho(ZohoQuote q) {
-    final quoteDate = normalizeDate(q.date);
-    final expiryDate = normalizeDate(q.expiryDate);
+    final DateTime? quoteDate = normalizeDate(q.date);
+    final DateTime? expiryDate = normalizeDate(q.expiryDate);
 
-    final draft = QuoteDraft.fromZohoQuote(q);
+    final QuoteDraft draft = QuoteDraft.fromZohoQuote(q);
 
     return QuoteMetaState(
       contact: draft.contact,
@@ -119,8 +115,6 @@ class QuoteEngine {
     );
   }
 
-  // ───────────────────────── Validation ─────────────────────────
-
   String? validateForSubmitV2({
     required QuoteMetaState meta,
     required bool requirePrices,
@@ -134,9 +128,10 @@ class QuoteEngine {
       return 'Please pick a customer';
     }
 
-    final unnamedManual = _lines.lines.whereType<ManualQuoteLine>().where((l) {
-      return l.name.trim().isEmpty;
-    }).toList();
+    final List<ManualQuoteLine> unnamedManual = _lines.lines
+        .whereType<ManualQuoteLine>()
+        .where((ManualQuoteLine l) => l.name.trim().isEmpty)
+        .toList();
 
     if (unnamedManual.isNotEmpty) {
       return 'Some items are missing a name. Please edit them.';
@@ -147,17 +142,17 @@ class QuoteEngine {
 
   int missingPriceLineCount() => _lines.missingPriceLineCount;
 
-  // ───────────────────────── Payload build ─────────────────────────
-
   QuoteDraft buildPayloadDraftFromMeta({
     required QuoteMetaState meta,
     required bool requirePrices,
   }) {
-    final lineDrafts = _buildLineDrafts(requirePrices: requirePrices);
+    final List<QuoteLineDraft> lineDrafts = _buildLineDrafts(
+      requirePrices: requirePrices,
+    );
 
-    final contact = meta.contact;
-    final customerId = (contact?.contactId ?? '').trim();
-    final customerName = (contact?.title ?? '').trim();
+    final ZohoContact? contact = meta.contact;
+    final String customerId = (contact?.contactId ?? '').trim();
+    final String customerName = (contact?.title ?? '').trim();
 
     return QuoteDraft(
       contact: contact,
@@ -176,24 +171,24 @@ class QuoteEngine {
 
   List<QuoteLineDraft> _buildLineDrafts({required bool requirePrices}) {
     return _lines.lines
-        .map((l) {
+        .map((QuoteLine l) {
           if (l is CatalogQuoteLine) {
-            final qty = (l.qty < 1 ? 1 : l.qty).clamp(1, 9999);
+            final int qty = (l.qty < 1 ? 1 : l.qty).clamp(1, 9999);
 
-            final name = l.effectiveName.trim().isEmpty
+            final String name = l.effectiveName.trim().isEmpty
                 ? 'Item'
                 : l.effectiveName.trim();
 
-            final desc = (l.effectiveDescription ?? '').trim().isEmpty
+            final String? desc = (l.effectiveDescription ?? '').trim().isEmpty
                 ? null
                 : l.effectiveDescription!.trim();
 
             final num rate = requirePrices ? l.effectiveRate : 0;
-            final safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
+            final num safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
                 ? 0
                 : rate;
 
-            final tile = _toDiSalesTileFromCatalogLine(
+            final DiSalesTile tile = _toDiSalesTileFromCatalogLine(
               l,
               name: name,
               desc: desc,
@@ -205,33 +200,38 @@ class QuoteEngine {
               rate: safeRate,
               description: name,
               lineItemId: null,
+              zohoItemId: null,
             );
           }
 
-          final m = l as ManualQuoteLine;
+          final ManualQuoteLine m = l as ManualQuoteLine;
 
-          final qty = (m.qty < 1 ? 1 : m.qty).clamp(1, 9999);
+          final int qty = (m.qty < 1 ? 1 : m.qty).clamp(1, 9999);
 
           final num rate = requirePrices ? m.rate : 0;
-          final safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
+          final num safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
               ? 0
               : rate;
 
-          final name = m.name.trim().isEmpty ? 'Item' : m.name.trim();
-          final desc = (m.description ?? '').trim().isEmpty
+          final String name = m.name.trim().isEmpty ? 'Item' : m.name.trim();
+          final String? desc = (m.description ?? '').trim().isEmpty
               ? null
               : m.description!.trim();
 
-          final tile = DiSalesTile.fallbackFromName(
+          final DiSalesTile tile = DiSalesTile.fallbackFromName(
             name: name,
             description: desc,
             canonKey: m.manualId,
             groupKey: m.manualId,
           );
 
-          final lineItemId = (m.zohoLineItemId ?? '').trim().isEmpty
+          final String? lineItemId = (m.zohoLineItemId ?? '').trim().isEmpty
               ? null
               : m.zohoLineItemId!.trim();
+
+          final String? zohoItemId = (m.zohoItemId ?? '').trim().isEmpty
+              ? null
+              : m.zohoItemId!.trim();
 
           return QuoteLineDraft(
             tile: tile,
@@ -239,12 +239,11 @@ class QuoteEngine {
             rate: safeRate,
             description: name,
             lineItemId: lineItemId,
+            zohoItemId: zohoItemId,
           );
         })
         .toList(growable: false);
   }
-
-  // ───────────────────────── Remote ops ─────────────────────────
 
   Future<ZohoQuote> create(
     QuoteDraft payload, {
@@ -290,15 +289,13 @@ class QuoteEngine {
     dueDate: dueDate,
   );
 
-  // ───────────────────────── Helpers ─────────────────────────
-
   static DiSalesTile _toDiSalesTileFromCatalogLine(
     CatalogQuoteLine l, {
     required String name,
     required String? desc,
   }) {
-    final t = l.tile;
-    final key = t.id;
+    final CatalogTile t = l.tile;
+    final String key = t.id;
 
     return DiSalesTile(
       canonKey: key,

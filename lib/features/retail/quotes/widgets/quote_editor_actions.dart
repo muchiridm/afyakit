@@ -158,13 +158,39 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
     if (result == null) return;
 
-    ref
-        .read(quoteLinesControllerProvider.notifier)
-        .addManualLine(
+    ref.read(quoteLinesControllerProvider.notifier).addManualLine(
           name: _safeName(result.name),
           description: result.description,
           qty: result.qty,
           rate: requirePrices ? _safeRate(result.rate) : 0,
+        );
+  }
+
+  Future<void> _addDeliveryCharge(BuildContext context, WidgetRef ref) async {
+    final bool ok = await onEnsureAuthed();
+    if (!ok) return;
+    if (!context.mounted) return;
+
+    final result = await SalesDocDialogs.editLine(
+      context,
+      initialName: kDeliveryChargeDefaultName,
+      initialDescription: kDeliveryChargeDefaultDescription,
+      initialQty: 1,
+      initialRate: 0,
+      enableRate: requirePrices,
+      enableName: true,
+      enableDescription: true,
+      enableQty: true,
+    );
+
+    if (result == null) return;
+
+    ref.read(quoteLinesControllerProvider.notifier).addManualLine(
+          name: _safeName(result.name),
+          description: result.description,
+          qty: result.qty,
+          rate: requirePrices ? _safeRate(result.rate) : 0,
+          zohoItemId: kZohoDeliveryServiceItemId,
         );
   }
 
@@ -208,6 +234,14 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       onPressed: (busy || isMemberScoped)
           ? null
           : () => _addCustomItem(context, ref),
+    );
+
+    final Widget addDeliveryChargeButton = OutlinedButton.icon(
+      icon: const Icon(Icons.local_shipping_outlined),
+      label: const Text('Add delivery charge'),
+      onPressed: (busy || isMemberScoped)
+          ? null
+          : () => _addDeliveryCharge(context, ref),
     );
 
     final Widget submitButton = FilledButton.icon(
@@ -294,7 +328,10 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                       runSpacing: 12,
                       children: <Widget>[
                         addFromCatalogButton,
-                        if (!isMemberScoped) addCustomItemButton,
+                        if (!isMemberScoped) ...<Widget>[
+                          addCustomItemButton,
+                          addDeliveryChargeButton,
+                        ],
                       ],
                     ),
                     Expanded(
@@ -322,6 +359,8 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                       if (!isMemberScoped) ...<Widget>[
                         const SizedBox(height: 12),
                         addCustomItemButton,
+                        const SizedBox(height: 12),
+                        addDeliveryChargeButton,
                       ],
                       const SizedBox(height: 12),
                       submitButton,

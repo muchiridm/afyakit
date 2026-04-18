@@ -66,6 +66,19 @@ class _MemberHomeBody extends StatelessWidget {
 
   final AuthUser? user;
 
+  void _openCatalog(BuildContext context, {String? q, bool autofocus = true}) {
+    final String query = (q ?? '').trim();
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CatalogScreen(
+          initialQuery: query.isEmpty ? null : query,
+          autofocusSearch: autofocus,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final u = user;
@@ -83,8 +96,15 @@ class _MemberHomeBody extends StatelessWidget {
         panelWidth: AppLayout.pageMaxW,
       ),
 
-      const _MemberHouseholdInfoCard(),
+      HomeCatalogSearchHero(
+        autofocus: false,
+        footerText: 'Search the catalog or browse all items',
+        onSearch: (q) => _openCatalog(context, q: q),
+        onBrowse: () => _openCatalog(context, autofocus: true),
+      ),
+
       const _MemberQuickActions(),
+      const _MemberHouseholdInfoCard(),
 
       // If accountNumber is missing, fail gracefully (don’t look “blank”).
       if (u == null)
@@ -116,7 +136,7 @@ class _MemberQuickActions extends StatelessWidget {
       children: [
         _ActionChip(
           icon: Icons.grid_view_rounded,
-          label: 'Catalog',
+          label: 'Browse catalog',
           onTap: () => Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const CatalogScreen())),
@@ -358,6 +378,19 @@ class _StaffHomeBody extends StatelessWidget {
 class _GuestHomeBody extends StatelessWidget {
   const _GuestHomeBody();
 
+  void _openCatalog(BuildContext context, {String? q, bool autofocus = true}) {
+    final String query = (q ?? '').trim();
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CatalogScreen(
+          initialQuery: query.isEmpty ? null : query,
+          autofocusSearch: autofocus,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return _stack([
@@ -368,29 +401,18 @@ class _GuestHomeBody extends StatelessWidget {
         showDeliveryBanner: false,
         panelWidth: AppLayout.pageMaxW,
       ),
-      _GuestSearchHero(
-        onSearch: (q) {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CatalogScreen(
-                initialQuery: q.isEmpty ? null : q,
-                autofocusSearch: true,
-              ),
-            ),
-          );
-        },
-        onBrowse: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const CatalogScreen(autofocusSearch: true),
-            ),
-          );
-        },
-        onChatTap: () {
+      HomeCatalogSearchHero(
+        autofocus: true,
+        footerText: 'Browse without logging in',
+        onSearch: (q) => _openCatalog(context, q: q),
+        onBrowse: () => _openCatalog(context, autofocus: true),
+        onSecondaryTap: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chat with pharmacist (TODO)')),
           );
         },
+        secondaryLabel: 'Chat pharmacist',
+        secondaryIcon: Icons.chat_bubble_outline_rounded,
       ),
       const SizedBox(height: AppShape.gap12),
     ]);
@@ -413,33 +435,46 @@ Widget _stack(List<Widget> children, {double gap = AppShape.gap12}) {
 }
 
 // ─────────────────────────────────────────────
-// Guest search hero
+// Shared home catalog search hero
 // ─────────────────────────────────────────────
-class _GuestSearchHero extends StatefulWidget {
-  const _GuestSearchHero({
+class HomeCatalogSearchHero extends StatefulWidget {
+  const HomeCatalogSearchHero({
+    super.key,
     required this.onSearch,
     required this.onBrowse,
-    required this.onChatTap,
+    this.onSecondaryTap,
+    this.secondaryLabel = 'Chat pharmacist',
+    this.secondaryIcon = Icons.chat_bubble_outline_rounded,
+    this.hintText = 'Search medicines, brands, conditions…',
+    this.footerText = 'Browse catalog',
+    this.autofocus = false,
   });
 
   final void Function(String query) onSearch;
   final VoidCallback onBrowse;
-  final VoidCallback onChatTap;
+  final VoidCallback? onSecondaryTap;
+  final String secondaryLabel;
+  final IconData secondaryIcon;
+  final String hintText;
+  final String footerText;
+  final bool autofocus;
 
   @override
-  State<_GuestSearchHero> createState() => _GuestSearchHeroState();
+  State<HomeCatalogSearchHero> createState() => _HomeCatalogSearchHeroState();
 }
 
-class _GuestSearchHeroState extends State<_GuestSearchHero> {
-  final _c = TextEditingController();
-  final _focus = FocusNode();
+class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
+  final TextEditingController _c = TextEditingController();
+  final FocusNode _focus = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focus.requestFocus();
-    });
+    if (widget.autofocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    }
   }
 
   @override
@@ -453,7 +488,7 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return Center(
       child: ConstrainedBox(
@@ -471,7 +506,7 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _submit(),
                 decoration: InputDecoration(
-                  hintText: 'Search medicines, brands, conditions…',
+                  hintText: widget.hintText,
                   prefixIcon: const Icon(Icons.search),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
@@ -487,31 +522,35 @@ class _GuestSearchHeroState extends State<_GuestSearchHero> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: widget.onChatTap,
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      size: 18,
+            if (widget.onSecondaryTap != null)
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: widget.onSecondaryTap,
+                      icon: Icon(widget.secondaryIcon, size: 18),
+                      label: Text(widget.secondaryLabel),
                     ),
-                    label: const Text('Chat pharmacist'),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: widget.onBrowse,
-                    icon: const Icon(Icons.shopping_bag_outlined, size: 18),
-                    label: const Text('Browse catalog'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: widget.onBrowse,
+                      icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                      label: const Text('Browse catalog'),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              FilledButton.icon(
+                onPressed: widget.onBrowse,
+                icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                label: const Text('Browse catalog'),
+              ),
             const SizedBox(height: 6),
             Text(
-              'Browse without logging in',
+              widget.footerText,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.hintColor,

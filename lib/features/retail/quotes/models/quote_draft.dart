@@ -1,5 +1,4 @@
-// lib/features/retail/sales/quotes/models/quote_draft.dart
-
+import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
@@ -15,6 +14,7 @@ class QuoteLineDraft {
     required this.rate,
     this.description,
     this.lineItemId,
+    this.zohoItemId,
   });
 
   final DiSalesTile tile;
@@ -27,19 +27,22 @@ class QuoteLineDraft {
   /// Zoho `line_item_id` (present when editing existing quotes)
   final String? lineItemId;
 
+  /// Zoho `item_id` (links to a product/service item)
+  final String? zohoItemId;
+
   /// Stable identity for upsert/remove.
   /// If Zoho line_item_id exists, it MUST win.
   String get key {
-    final id = (lineItemId ?? '').trim();
+    final String id = (lineItemId ?? '').trim();
     if (id.isNotEmpty) return id;
 
-    final c = tile.canonKey.trim();
+    final String c = tile.canonKey.trim();
     if (c.isNotEmpty) return c;
 
-    final g = tile.groupKey.trim();
+    final String g = tile.groupKey.trim();
     if (g.isNotEmpty) return g;
 
-    final t = tile.tileTitle.trim();
+    final String t = tile.tileTitle.trim();
     return t.isNotEmpty ? t : 'line';
   }
 
@@ -56,6 +59,8 @@ class QuoteLineDraft {
     bool clearDescription = false,
     String? lineItemId,
     bool clearLineItemId = false,
+    String? zohoItemId,
+    bool clearZohoItemId = false,
   }) {
     return QuoteLineDraft(
       tile: tile ?? this.tile,
@@ -63,6 +68,7 @@ class QuoteLineDraft {
       rate: rate ?? this.rate,
       description: clearDescription ? null : (description ?? this.description),
       lineItemId: clearLineItemId ? null : (lineItemId ?? this.lineItemId),
+      zohoItemId: clearZohoItemId ? null : (zohoItemId ?? this.zohoItemId),
     );
   }
 }
@@ -95,30 +101,23 @@ class QuoteDraft {
 
   final List<QuoteLineDraft> lines;
 
-  // ─────────────────────────────────────────────
-  // Derived helpers
-  // ─────────────────────────────────────────────
-
   String get customerIdResolved =>
       (contactId ?? contact?.contactId ?? '').trim();
 
   bool get hasCustomer => customerIdResolved.isNotEmpty;
 
-  num get total => lines.fold<num>(0, (s, l) => s + l.amount);
+  num get total =>
+      lines.fold<num>(0, (num s, QuoteLineDraft l) => s + l.amount);
 
   String get displayContactName {
-    final n1 = (contact?.displayName ?? '').trim();
+    final String n1 = (contact?.displayName ?? '').trim();
     if (n1.isNotEmpty) return n1;
 
-    final n2 = (contactName ?? '').trim();
+    final String n2 = (contactName ?? '').trim();
     if (n2.isNotEmpty) return n2;
 
     return '';
   }
-
-  // ─────────────────────────────────────────────
-  // Copy / edit helpers
-  // ─────────────────────────────────────────────
 
   QuoteDraft copyWith({
     ZohoContact? contact,
@@ -157,30 +156,34 @@ class QuoteDraft {
   }
 
   QuoteDraft upsertLine(QuoteLineDraft next) {
-    final nextKey = next.key;
-    final idx = lines.indexWhere((l) => l.key == nextKey);
+    final String nextKey = next.key;
+    final int idx = lines.indexWhere((QuoteLineDraft l) => l.key == nextKey);
 
     if (next.safeQty == 0) {
       if (idx < 0) return this;
-      final copy = List<QuoteLineDraft>.from(lines)..removeAt(idx);
+      final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
+        ..removeAt(idx);
       return copyWith(lines: copy);
     }
 
     if (idx < 0) {
-      final copy = List<QuoteLineDraft>.from(lines)..add(next);
+      final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
+        ..add(next);
       return copyWith(lines: copy);
     }
 
-    final copy = List<QuoteLineDraft>.from(lines)..[idx] = next;
+    final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
+      ..[idx] = next;
     return copyWith(lines: copy);
   }
 
   QuoteDraft removeLineByKey(String key) {
-    final k = key.trim();
+    final String k = key.trim();
     if (k.isEmpty) return this;
-    final idx = lines.indexWhere((l) => l.key == k);
+    final int idx = lines.indexWhere((QuoteLineDraft l) => l.key == k);
     if (idx < 0) return this;
-    final copy = List<QuoteLineDraft>.from(lines)..removeAt(idx);
+    final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
+      ..removeAt(idx);
     return copyWith(lines: copy);
   }
 
@@ -192,16 +195,12 @@ class QuoteDraft {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Hydration helper for EDIT mode (Zoho → Draft)
-  // ─────────────────────────────────────────────
-
   factory QuoteDraft.fromZohoQuote(ZohoQuote q) {
-    final hydratedLines = q.lineItems
-        .map((li) {
-          final stableKey = (li.lineItemId ?? '').trim();
+    final List<QuoteLineDraft> hydratedLines = q.lineItems
+        .map((ZohoQuoteLineItem li) {
+          final String stableKey = (li.lineItemId ?? '').trim();
 
-          final tile = stableKey.isNotEmpty
+          final DiSalesTile tile = stableKey.isNotEmpty
               ? DiSalesTile.fallbackFromName(
                   name: li.name,
                   description: li.description,
@@ -221,6 +220,7 @@ class QuoteDraft {
                 ? null
                 : li.description,
             lineItemId: stableKey.isEmpty ? null : stableKey,
+            zohoItemId: null,
           );
         })
         .toList(growable: false);
