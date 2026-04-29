@@ -10,6 +10,7 @@ part 'routes_inventory.dart';
 part 'routes_misc.dart';
 part 'routes_zoho.dart';
 part 'routes_mpesa.dart';
+part 'routes_patients.dart';
 
 part 'routes_domains.dart';
 part 'routes_tenants.dart';

@@ -13,6 +13,7 @@ import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.d
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 
+import 'package:afyakit/features/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -23,9 +24,6 @@ import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Home surface context:
-/// - staff: show staff dashboards + staff quick-actions
-/// - member: show member-safe modules (retail catalog, own docs, etc.)
 enum HomeScope { staff, member }
 
 final class HomeRegistry {
@@ -78,11 +76,7 @@ final class HomeRegistry {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Staff-only quick actions
-  // ─────────────────────────────────────────────────────────────
   static const List<StaffFeatureDef> _staffQuickActions = [
-    // Inventory
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock In',
@@ -112,13 +106,19 @@ final class HomeRegistry {
       allowed: _requireStaff,
     ),
 
-    // Retail (staff)
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
       iconOverride: Icons.apps,
       destination: _catalog,
       allowedRef: _allowRetailForTenant,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.retail,
+      labelOverride: 'Patient Profiles',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _patientProfiles,
+      allowedRef: _allowRetailDocsForStaffRetailTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
@@ -149,7 +149,6 @@ final class HomeRegistry {
       allowedRef: _allowRetailDocsForStaffRetailTenant,
     ),
 
-    // Admin (HQ)
     StaffFeatureDef(
       featureKey: FeatureKeys.hq,
       labelOverride: 'Admin',
@@ -160,11 +159,6 @@ final class HomeRegistry {
     ),
   ];
 
-  // ─────────────────────────────────────────────────────────────
-  // Member quick actions (safe)
-  // Only applies to retail-enabled tenants.
-  // These MUST be "my account" only.
-  // ─────────────────────────────────────────────────────────────
   static const List<StaffFeatureDef> _memberQuickActions = [
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
@@ -172,6 +166,13 @@ final class HomeRegistry {
       iconOverride: Icons.apps,
       destination: _catalog,
       allowedRef: _allowRetailForTenant,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.retail,
+      labelOverride: 'My Profiles',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _myProfiles,
+      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
@@ -196,10 +197,6 @@ final class HomeRegistry {
     ),
   ];
 
-  // ─────────────────────────────────────────────────────────────
-  // Destinations
-  // ─────────────────────────────────────────────────────────────
-
   static Widget _stockIn(BuildContext _) =>
       const StockScreen(mode: InventoryMode.stockIn);
 
@@ -222,8 +219,11 @@ final class HomeRegistry {
 
   static Widget _payments(BuildContext _) => const PaymentsListScreen();
 
-  // Member scoped destinations
-  // NOTE: these require you to add "scope" to the retail list screens (see below).
+  static Widget _patientProfiles(BuildContext _) =>
+      const PatientProfilesScreen();
+
+  static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
+
   static Widget _myQuotes(BuildContext _) =>
       const QuotesListScreen(scope: RetailDocScope.mine);
 
@@ -232,10 +232,6 @@ final class HomeRegistry {
 
   static Widget _myPayments(BuildContext _) =>
       const PaymentsListScreen(scope: RetailDocScope.mine);
-
-  // ─────────────────────────────────────────────────────────────
-  // Gates
-  // ─────────────────────────────────────────────────────────────
 
   static bool _requireStaff(AuthUser u) => u.isStaff;
 
@@ -252,8 +248,6 @@ final class HomeRegistry {
     return _allowRetailForTenant(ref, u);
   }
 
-  /// Real member = not staff-resolved, has an accountNumber.
-  /// This blocks "staff view as member" from seeing private member docs.
   static bool _allowRetailDocsForRealMemberRetailTenant(
     WidgetRef ref,
     AuthUser u,
@@ -263,10 +257,6 @@ final class HomeRegistry {
     if (acct.isEmpty) return false;
     return _allowRetailForTenant(ref, u);
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // Scope filter
-  // ─────────────────────────────────────────────────────────────
 
   static bool _isAllowedForScope(
     WidgetRef ref,
