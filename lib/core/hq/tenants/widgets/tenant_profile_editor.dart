@@ -69,32 +69,16 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
               const SizedBox(height: 16),
 
               // ───────────────────────── Account numbering policy ─────────────────────────
-              // ✅ New model: single format string.
-              // Default: "yymm_seq4" -> 26020001 (YYMM + 4-digit seq)
               TenantProfileAccountNumberingSection(
                 accountFormat: ctrl.accountFormat,
               ),
 
               const SizedBox(height: 16),
 
-              // ───────────────────────── Feature toggles ─────────────────────────
-              Row(
-                children: [
-                  Text(
-                    'Modules',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const Spacer(),
-                  if (state.unknownFeatureKeys.isNotEmpty)
-                    TextButton(
-                      onPressed: ctrl.toggleShowUnknown,
-                      child: Text(
-                        state.showUnknown
-                            ? 'Hide legacy (${state.unknownFeatureKeys.length})'
-                            : 'Show legacy (${state.unknownFeatureKeys.length})',
-                      ),
-                    ),
-                ],
+              // ───────────────────────── Module toggles ─────────────────────────
+              Text(
+                'Module groups',
+                style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 8),
 
@@ -103,15 +87,6 @@ class _TenantProfileEditorState extends ConsumerState<TenantProfileEditor> {
                 values: state.features,
                 onChanged: ctrl.setFeature,
               ),
-
-              if (state.showUnknown && state.unknownFeatureKeys.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                LegacyKeysSection(
-                  keys: state.unknownFeatureKeys,
-                  values: state.features,
-                  onChanged: ctrl.setFeature,
-                ),
-              ],
 
               const SizedBox(height: 16),
 

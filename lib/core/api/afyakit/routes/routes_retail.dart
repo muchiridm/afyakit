@@ -1,15 +1,12 @@
-// lib/core/api/afyakit/routes/routes_zoho.dart
-
 part of 'routes.dart';
 
-extension AfyaKitZohoRoutes on AfyaKitRoutes {
+extension AfyaKitRetailRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
-  // 💼 Zoho Books (tenant-scoped; authenticated)
+  // 🛍️ Retail contacts / quotes / invoices / payments
   // ─────────────────────────────────────────────
 
-  /// NOTE: Zoho Books uses `search_text` (not `search`) for list filters.
-  /// BE also supports member scoping via `account_number`.
-  Uri zohoListContacts({
+  /// Contacts
+  Uri retailListContacts({
     String? search,
     String? type,
     int perPage = 50,
@@ -24,15 +21,13 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     final t = (type ?? '').trim();
     if (t.isNotEmpty) q['type'] = t;
 
-    // ✅ MEMBER SCOPE for contacts (snake_case to match BE)
     final acct = (accountNumber ?? '').trim();
     if (acct.isNotEmpty) q['account_number'] = acct;
 
     return _uri('zoho/v1/contacts', query: q);
   }
 
-  /// Convenience endpoint: /contacts/customers
-  Uri zohoListCustomers({
+  Uri retailListCustomers({
     String? search,
     int perPage = 50,
     int page = 1,
@@ -43,26 +38,28 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     final s = (search ?? '').trim();
     if (s.isNotEmpty) q['search_text'] = s;
 
-    // ✅ MEMBER SCOPE for customers list as well
     final acct = (accountNumber ?? '').trim();
     if (acct.isNotEmpty) q['account_number'] = acct;
 
     return _uri('zoho/v1/contacts/customers', query: q);
   }
 
-  Uri zohoGetContact(String contactId) =>
+  Uri retailGetContact(String contactId) =>
       _uri('zoho/v1/contacts/${_seg(contactId)}');
-  Uri zohoCreateContact() => _uri('zoho/v1/contacts');
-  Uri zohoUpdateContact(String contactId) =>
+
+  Uri retailCreateContact() => _uri('zoho/v1/contacts');
+
+  Uri retailUpdateContact(String contactId) =>
       _uri('zoho/v1/contacts/${_seg(contactId)}');
-  Uri zohoDeleteContact(String contactId) =>
+
+  Uri retailDeleteContact(String contactId) =>
       _uri('zoho/v1/contacts/${_seg(contactId)}');
 
   // ─────────────────────────────────────────────
-  // 💼 Zoho Quotes
+  // Quotes
   // ─────────────────────────────────────────────
 
-  Uri zohoListQuotes({
+  Uri retailListQuotes({
     int limit = 50,
     int page = 1,
     String? q,
@@ -79,30 +76,33 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     return _uri('zoho/v1/quotes', query: query);
   }
 
-  Uri zohoGetQuote(String quoteId) => _uri('zoho/v1/quotes/${_seg(quoteId)}');
-  Uri zohoCreateQuote() => _uri('zoho/v1/quotes');
-  Uri zohoUpdateQuote(String quoteId) =>
-      _uri('zoho/v1/quotes/${_seg(quoteId)}');
-  Uri zohoDeleteQuote(String quoteId) =>
+  Uri retailGetQuote(String quoteId) => _uri('zoho/v1/quotes/${_seg(quoteId)}');
+
+  Uri retailCreateQuote() => _uri('zoho/v1/quotes');
+
+  Uri retailUpdateQuote(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}');
 
-  Uri zohoQuotePdf(String quoteId) =>
+  Uri retailDeleteQuote(String quoteId) =>
+      _uri('zoho/v1/quotes/${_seg(quoteId)}');
+
+  Uri retailQuotePdf(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}/pdf');
-  Uri zohoSendQuote(String quoteId) =>
+
+  Uri retailSendQuote(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}/email');
-  Uri zohoMarkQuoteSent(String quoteId) =>
+
+  Uri retailMarkQuoteSent(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}/status/sent');
-  Uri zohoConvertQuoteToInvoice(String quoteId) =>
+
+  Uri retailConvertQuoteToInvoice(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}/convert-to-invoice');
 
   // ─────────────────────────────────────────────
-  // 💼 Zoho Invoices
+  // Invoices
   // ─────────────────────────────────────────────
 
-  /// List invoices.
-  /// - q: optional search string
-  /// - accountNumber: optional member hard-scope
-  Uri zohoListInvoices({
+  Uri retailListInvoices({
     int limit = 50,
     int page = 1,
     String? q,
@@ -118,27 +118,26 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     },
   );
 
-  Uri zohoGetInvoice(String invoiceId) =>
+  Uri retailGetInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
 
-  Uri zohoUpdateInvoice(String invoiceId) =>
+  Uri retailUpdateInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
 
-  Uri zohoInvoicePdf(String invoiceId) =>
+  Uri retailInvoicePdf(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}/pdf');
 
-  Uri zohoSendInvoice(String invoiceId) =>
+  Uri retailSendInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}/email');
 
-  Uri zohoMarkInvoiceSent(String invoiceId) =>
+  Uri retailMarkInvoiceSent(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}/status/sent');
 
   // ─────────────────────────────────────────────
-  // 💳 Zoho Payments
+  // Payments
   // ─────────────────────────────────────────────
 
-  /// GET /zoho/v1/payments?invoice_id=...&per_page=...&page=...
-  Uri zohoInvoicePayments(
+  Uri retailInvoicePayments(
     String invoiceId, {
     int perPage = 200,
     int page = 1,
@@ -151,9 +150,7 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     },
   );
 
-  /// Payments list (optionally filtered)
-  /// GET /zoho/v1/payments?per_page=&page=&invoice_id=&q=&accountNumber=
-  Uri zohoPaymentsList({
+  Uri retailPaymentsList({
     int perPage = 200,
     int page = 1,
     String? invoiceId,
@@ -172,24 +169,33 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     },
   );
 
-  Uri zohoPaymentsCreate() => _uri('zoho/v1/payments');
+  Uri retailPaymentsCreate() => _uri('zoho/v1/payments');
 
-  Uri zohoPaymentsGet(String paymentId) =>
+  Uri retailPaymentsGet(String paymentId) =>
       _uri('zoho/v1/payments/${_seg(paymentId)}');
 
-  Uri zohoPaymentsUpdate(String paymentId) =>
+  Uri retailPaymentsUpdate(String paymentId) =>
       _uri('zoho/v1/payments/${_seg(paymentId)}');
 
-  Uri zohoPaymentsDelete(String paymentId) =>
+  Uri retailPaymentsDelete(String paymentId) =>
       _uri('zoho/v1/payments/${_seg(paymentId)}');
 
   // ─────────────────────────────────────────────
-  // 🧾 Zoho Meta (tenant-scoped; authenticated)
+  // M-Pesa
   // ─────────────────────────────────────────────
 
-  /// Chart of Accounts
-  /// GET /zoho/v1/meta/accounts?search_text=&type=&active=
-  Uri zohoMetaAccounts({String? search, String? type, bool? active}) => _uri(
+  /// POST /api/:tenantId/mpesa/stk/initiate
+  Uri retailMpesaStkInitiate() => _uri('mpesa/stk/initiate');
+
+  /// GET /api/:tenantId/mpesa/payments/:paymentId
+  Uri retailMpesaPaymentStatus(String paymentId) =>
+      _uri('mpesa/payments/${_seg(paymentId)}');
+
+  // ─────────────────────────────────────────────
+  // Retail meta
+  // ─────────────────────────────────────────────
+
+  Uri retailMetaAccounts({String? search, String? type, bool? active}) => _uri(
     'zoho/v1/meta/accounts',
     query: {
       if (search != null && search.trim().isNotEmpty)
@@ -199,8 +205,6 @@ extension AfyaKitZohoRoutes on AfyaKitRoutes {
     },
   );
 
-  /// Optional: single account
-  /// GET /zoho/v1/meta/accounts/:accountId
-  Uri zohoMetaAccountById(String accountId) =>
+  Uri retailMetaAccountById(String accountId) =>
       _uri('zoho/v1/meta/accounts/${_seg(accountId)}');
 }

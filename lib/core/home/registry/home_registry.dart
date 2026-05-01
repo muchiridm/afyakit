@@ -107,6 +107,21 @@ final class HomeRegistry {
     ),
 
     StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'Patient Profiles',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _patientProfiles,
+      allowed: _requireStaff,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'Prescriptions',
+      iconOverride: Icons.description_outlined,
+      destination: _prescriptions,
+      allowed: _requireStaff,
+    ),
+
+    StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
       iconOverride: Icons.apps,
@@ -115,38 +130,31 @@ final class HomeRegistry {
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
-      labelOverride: 'Patient Profiles',
-      iconOverride: Icons.people_alt_outlined,
-      destination: _patientProfiles,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.retail,
       labelOverride: 'Contacts',
       iconOverride: Icons.people_alt,
       destination: _contacts,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _quotes,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Invoices',
       iconOverride: Icons.receipt_outlined,
       destination: _invoices,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Payments',
       iconOverride: Icons.payments_outlined,
       destination: _payments,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
 
     StaffFeatureDef(
@@ -168,32 +176,32 @@ final class HomeRegistry {
       allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
-      featureKey: FeatureKeys.retail,
+      featureKey: FeatureKeys.clinical,
       labelOverride: 'My Profiles',
       iconOverride: Icons.people_alt_outlined,
       destination: _myProfiles,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowMemberUx,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _myQuotes,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Invoices',
       iconOverride: Icons.receipt_outlined,
       destination: _myInvoices,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Payments',
       iconOverride: Icons.payments_outlined,
       destination: _myPayments,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
   ];
 
@@ -222,6 +230,13 @@ final class HomeRegistry {
   static Widget _patientProfiles(BuildContext _) =>
       const PatientProfilesScreen();
 
+  static Widget _prescriptions(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Prescriptions screen coming next.')),
+    );
+    return const PatientProfilesScreen();
+  }
+
   static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
 
   static Widget _myQuotes(BuildContext _) =>
@@ -243,19 +258,17 @@ final class HomeRegistry {
     return profile.features.enabled(FeatureKeys.retail);
   }
 
-  static bool _allowRetailDocsForStaffRetailTenant(WidgetRef ref, AuthUser u) {
-    if (!u.isStaff) return false;
-    return _allowRetailForTenant(ref, u);
-  }
-
-  static bool _allowRetailDocsForRealMemberRetailTenant(
-    WidgetRef ref,
-    AuthUser u,
-  ) {
+  static bool _allowMemberUx(WidgetRef ref, AuthUser u) {
     if (u.isStaffResolved) return false;
     final acct = (u.accountNumber ?? '').trim();
     if (acct.isEmpty) return false;
-    return _allowRetailForTenant(ref, u);
+
+    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    if (profile == null) return false;
+
+    final retail = profile.features.enabled(FeatureKeys.retail);
+    final clinical = profile.features.enabled(FeatureKeys.clinical);
+    return retail || clinical;
   }
 
   static bool _isAllowedForScope(
@@ -269,6 +282,9 @@ final class HomeRegistry {
       if (k == FeatureKeys.inventory) return false;
       if (k == FeatureKeys.reporting) return false;
       if (k == FeatureKeys.hq) return false;
+      if (k == FeatureKeys.clinical && d.destination != _myProfiles) {
+        return false;
+      }
     }
 
     final allowedFn = d.allowed;

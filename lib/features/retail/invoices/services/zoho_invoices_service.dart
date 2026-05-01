@@ -40,7 +40,7 @@ class ZohoInvoicesService {
     final qq = (q ?? '').trim();
     final acct = (accountNumber ?? '').trim();
 
-    final uri = routes.zohoListInvoices(
+    final uri = routes.retailListInvoices(
       limit: limit,
       page: page,
       q: qq.isEmpty ? null : qq,
@@ -71,7 +71,7 @@ class ZohoInvoicesService {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoGetInvoice(id);
+    final uri = routes.retailGetInvoice(id);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -89,9 +89,7 @@ class ZohoInvoicesService {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoUpdateInvoice(
-      id,
-    ); // ensure routes points to PATCH endpoint
+    final uri = routes.retailUpdateInvoice(id);
     final res = await api.patchUri(uri, data: patch);
 
     return _asJsonMap(res.data);
@@ -106,10 +104,9 @@ class ZohoInvoicesService {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoSendInvoice(id);
+    final uri = routes.retailSendInvoice(id);
 
     final payload = _pruneEmailJson(email.toJson());
-    // If empty, backend resolves recipients server-side
     await api.postUri(uri, data: payload.isEmpty ? null : payload);
   }
 
@@ -117,7 +114,7 @@ class ZohoInvoicesService {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoMarkInvoiceSent(id);
+    final uri = routes.retailMarkInvoiceSent(id);
     await api.postUri(uri);
   }
 
@@ -135,7 +132,7 @@ class ZohoInvoicesService {
     final id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.zohoInvoicePdf(id);
+    final uri = routes.retailInvoicePdf(id);
 
     final res = await api.getUri(
       uri,
@@ -169,7 +166,6 @@ class ZohoInvoicesService {
 
     out.removeWhere((_, v) => v is String && v.trim().isEmpty);
 
-    // prune lists like ["", "   "]
     for (final k in const [
       'to_mail_ids',
       'cc_mail_ids',

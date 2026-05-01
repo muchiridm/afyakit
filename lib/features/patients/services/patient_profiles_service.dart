@@ -43,7 +43,7 @@ class PatientProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final uri = routes.patientsList(
+    final uri = routes.clinicalPatientsList(
       search: search,
       payerContactId: payerContactId,
       insurance: insurance,
@@ -61,14 +61,16 @@ class PatientProfilesService {
   }
 
   Future<PatientProfile> get(String patientId) async {
-    final response = await api.getUri<Object?>(routes.patientGet(patientId));
+    final response = await api.getUri<Object?>(
+      routes.clinicalPatientGet(patientId),
+    );
     final body = _asMap(response.data);
     return PatientProfile.fromJson(_asMap(body['patient']));
   }
 
   Future<PatientProfile> create(PatientProfileUpsertInput input) async {
     final response = await api.postUri<Object?>(
-      routes.patientCreate(),
+      routes.clinicalPatientCreate(),
       data: input.toJson(),
     );
     final body = _asMap(response.data);
@@ -80,7 +82,7 @@ class PatientProfilesService {
     PatientProfileUpsertInput input,
   ) async {
     final response = await api.putUri<Object?>(
-      routes.patientUpdate(patientId),
+      routes.clinicalPatientUpdate(patientId),
       data: input.toJson(),
     );
     final body = _asMap(response.data);
@@ -88,6 +90,6 @@ class PatientProfilesService {
   }
 
   Future<void> delete(String patientId) async {
-    await api.deleteUri<Object?>(routes.patientDelete(patientId));
+    await api.deleteUri<Object?>(routes.clinicalPatientDelete(patientId));
   }
 }

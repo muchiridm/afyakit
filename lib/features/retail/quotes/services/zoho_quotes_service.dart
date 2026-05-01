@@ -40,7 +40,7 @@ class ZohoQuotesService {
     final String qq = (q ?? '').trim();
     final String acct = (accountNumber ?? '').trim();
 
-    final Uri uri = routes.zohoListQuotes(
+    final Uri uri = routes.retailListQuotes(
       limit: limit,
       page: page,
       q: qq.isEmpty ? null : qq,
@@ -55,7 +55,10 @@ class ZohoQuotesService {
     if (raw is List) {
       return raw
           .whereType<Map>()
-          .map((Map<dynamic, dynamic> m) => ZohoQuote.fromJson(m.cast<String, dynamic>()))
+          .map(
+            (Map<dynamic, dynamic> m) =>
+                ZohoQuote.fromJson(m.cast<String, dynamic>()),
+          )
           .toList(growable: false);
     }
 
@@ -66,7 +69,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoGetQuote(id);
+    final Uri uri = routes.retailGetQuote(id);
     final Response<dynamic> res = await api.getUri(uri);
 
     final JsonMap data = _asJsonMap(res.data);
@@ -80,7 +83,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) return null;
 
-    final Uri uri = routes.zohoGetQuote(id);
+    final Uri uri = routes.retailGetQuote(id);
 
     try {
       final Response<dynamic> res = await api.getUri(uri);
@@ -109,7 +112,7 @@ class ZohoQuotesService {
       expiryDate: expiryDate,
     );
 
-    final Uri uri = routes.zohoCreateQuote();
+    final Uri uri = routes.retailCreateQuote();
     final Response<dynamic> res = await api.postUri(uri, data: body);
 
     final JsonMap data = _asJsonMap(res.data);
@@ -135,7 +138,7 @@ class ZohoQuotesService {
       expiryDate: expiryDate,
     );
 
-    final Uri uri = routes.zohoUpdateQuote(id);
+    final Uri uri = routes.retailUpdateQuote(id);
     final Response<dynamic> res = await api.putUri(uri, data: body);
 
     final JsonMap data = _asJsonMap(res.data);
@@ -149,7 +152,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoDeleteQuote(id);
+    final Uri uri = routes.retailDeleteQuote(id);
     await api.deleteUri(uri);
   }
 
@@ -157,7 +160,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoQuotePdf(id);
+    final Uri uri = routes.retailQuotePdf(id);
 
     final Response<dynamic> res = await api.getUri(
       uri,
@@ -178,7 +181,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoSendQuote(id);
+    final Uri uri = routes.retailSendQuote(id);
 
     final Map<String, Object?> payload = _pruneEmailJson(
       email?.toJson() ?? const <String, Object?>{},
@@ -190,12 +193,14 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoMarkQuoteSent(id);
+    final Uri uri = routes.retailMarkQuoteSent(id);
     await api.postUri(uri);
   }
 
   Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? email}) async {
-    email!;
+    if (email != null) {
+      await this.email(quoteId, email: email);
+    }
     await markSent(quoteId);
   }
 
@@ -207,7 +212,7 @@ class ZohoQuotesService {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
-    final Uri uri = routes.zohoConvertQuoteToInvoice(id);
+    final Uri uri = routes.retailConvertQuoteToInvoice(id);
 
     final Map<String, Object?> body = <String, Object?>{
       if (invoiceDate != null)

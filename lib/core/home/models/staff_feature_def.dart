@@ -1,4 +1,4 @@
-// lib/shared/home/models/staff_feature_def.dart
+// lib/core/home/models/staff_feature_def.dart
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:flutter/material.dart';
@@ -49,8 +49,6 @@ class StaffFeatureDef {
   bool isVisible(WidgetRef ref, AuthUser? user) {
     if (user == null) return false;
 
-    // ✅ OWNER OVERRIDE (enum-safe):
-    // We avoid enum identity and check by string, so this works even if there are two StaffRole enums.
     final primary = user.staffRoles.primaryRole;
     final isOwner =
         (primary?.name.toLowerCase() == 'owner') ||

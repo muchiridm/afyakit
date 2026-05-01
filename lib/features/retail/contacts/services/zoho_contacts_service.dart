@@ -20,7 +20,7 @@ final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   return ZohoContactsService(api: api, routes: routes);
 });
 
-/// ✅ One-liner provider for UI: "give me contact by id"
+/// One-liner provider for UI: "give me contact by id"
 final zohoContactByIdProvider = FutureProvider.family
     .autoDispose<ZohoContact, String>((ref, contactId) {
       final id = contactId.trim();
@@ -131,15 +131,12 @@ class ZohoContactsService {
     int perPage = 50,
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
-
-    /// ✅ If present, backend will return ONLY matching contact(s)
-    /// (member hard-scope)
     String? accountNumber,
   }) async {
     final cleanSearch = (search ?? '').trim();
     final cleanAcct = _acctKey(accountNumber);
 
-    final uri0 = routes.zohoListContacts(
+    final uri0 = routes.retailListContacts(
       search: cleanSearch.isEmpty ? null : cleanSearch,
       perPage: perPage,
       page: page,
@@ -170,7 +167,6 @@ class ZohoContactsService {
         ? items
         : items.where((c) => _matchesFilter(c, type)).toList(growable: false);
 
-    // Warm the account cache whenever we are doing an account-scoped fetch.
     if (cleanAcct.isNotEmpty && filtered.isNotEmpty) {
       final best = _pickBestAccountMatch(filtered, accountNumber: cleanAcct);
       _cacheByAccount(best);
@@ -179,8 +175,6 @@ class ZohoContactsService {
     return filtered;
   }
 
-  /// Fast path for member-scoped lookup.
-  /// Returns cached value when available, otherwise fetches once and caches it.
   Future<ZohoContact?> getByAccountNumber(
     String accountNumber, {
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
@@ -211,7 +205,7 @@ class ZohoContactsService {
   }
 
   Future<ZohoContact> get(String contactId) async {
-    final uri = routes.zohoGetContact(contactId);
+    final uri = routes.retailGetContact(contactId);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
@@ -224,7 +218,6 @@ class ZohoContactsService {
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
-  /// ✅ UI-friendly helper: best-effort fetch.
   Future<ZohoContact?> getOrNull(String contactId) async {
     final id = contactId.trim();
     if (id.isEmpty) return null;
@@ -236,7 +229,7 @@ class ZohoContactsService {
   }
 
   Future<ZohoContact> create(ZohoContact input) async {
-    final uri = routes.zohoCreateContact();
+    final uri = routes.retailCreateContact();
     final res = await api.postUri(uri, data: input.toCreateJson());
 
     final data = _asJsonMap(res.data);
@@ -253,7 +246,7 @@ class ZohoContactsService {
     String contactId,
     ContactUpdatePatch patch,
   ) async {
-    final uri = routes.zohoUpdateContact(contactId);
+    final uri = routes.retailUpdateContact(contactId);
 
     final body = patch.toJson();
 
@@ -295,7 +288,6 @@ class ZohoContactsService {
 
     final updated = await updatePatch(contactId, patch);
 
-    // If account number changed, evict stale old mapping and cache the new one.
     final newAcct = _acctKey(updated.accountNumber);
     if (oldAcct.isNotEmpty && oldAcct != newAcct) {
       _evictAccount(oldAcct);
@@ -306,11 +298,10 @@ class ZohoContactsService {
   }
 
   Future<void> delete(String contactId) async {
-    // Best effort: fetch before delete so we can evict any cached account mapping.
     final existing = await getOrNull(contactId);
     final existingAcct = _acctKey(existing?.accountNumber);
 
-    final uri = routes.zohoDeleteContact(contactId);
+    final uri = routes.retailDeleteContact(contactId);
     await api.deleteUri(uri);
 
     if (existingAcct.isNotEmpty) {

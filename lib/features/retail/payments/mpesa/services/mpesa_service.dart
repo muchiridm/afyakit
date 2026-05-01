@@ -22,12 +22,8 @@ class MpesaService {
   final AfyaKitClient _client;
   final AfyaKitRoutes _routes;
 
-  // ─────────────────────────────────────────────
-  // API calls
-  // ─────────────────────────────────────────────
-
   Future<MpesaInitiateResult> initiateStk(MpesaStkInitiateDraft draft) async {
-    final uri = _routes.mpesaStkInitiate();
+    final uri = _routes.retailMpesaStkInitiate();
 
     final res = await _client.postUri<JsonMap>(uri, data: draft.toJson());
     final data = res.data ?? const <String, dynamic>{};
@@ -36,7 +32,7 @@ class MpesaService {
   }
 
   Future<MpesaPayment> getPaymentStatus(String paymentId) async {
-    final uri = _routes.mpesaPaymentStatus(paymentId);
+    final uri = _routes.retailMpesaPaymentStatus(paymentId);
 
     final res = await _client.getUri<JsonMap>(uri);
     final data = res.data ?? const <String, dynamic>{};
@@ -44,12 +40,6 @@ class MpesaService {
     return MpesaStatusResponse.fromJson(data).payment;
   }
 
-  // ─────────────────────────────────────────────
-  // Polling
-  // ─────────────────────────────────────────────
-
-  /// Poll GET /payments/:paymentId until terminal (stk_success|stk_failed)
-  /// or timeout, returning the latest known status.
   Future<MpesaPayment> pollStatusUntilTerminal({
     required String paymentId,
     Duration timeout = const Duration(minutes: 2),
@@ -59,7 +49,6 @@ class MpesaService {
   }) async {
     final deadline = DateTime.now().add(timeout);
 
-    // Small initial delay so callback can land
     await Future<void>.delayed(firstDelay);
 
     while (true) {
@@ -69,7 +58,6 @@ class MpesaService {
       if (p.isTerminal) return p;
 
       if (DateTime.now().isAfter(deadline)) {
-        // timeout -> return latest status we saw
         return p;
       }
 
@@ -77,10 +65,6 @@ class MpesaService {
     }
   }
 
-  /// Convenience: initiate STK then wait for terminal result.
-  ///
-  /// After terminal STK, we optionally wait a short time for Zoho sync
-  /// to become success/failed (trigger is async).
   Future<MpesaPayment> initiateAndWait({
     required MpesaStkInitiateDraft draft,
     Duration timeout = const Duration(minutes: 2),
@@ -92,7 +76,6 @@ class MpesaService {
   }) async {
     final init = await initiateStk(draft);
 
-    // 1) Wait only for terminal STK (success/failed).
     final terminal = await pollStatusUntilTerminal(
       paymentId: init.paymentId,
       timeout: timeout,
@@ -101,15 +84,10 @@ class MpesaService {
       onTick: onTick,
     );
 
-    // Always emit terminal tick
     onTick?.call(terminal);
 
-    // 2) Return immediately once STK is terminal.
-    //    Zoho sync is secondary and MUST NOT block.
     if (!terminal.isSuccess) return terminal;
 
-    // 3) Optional: fire-and-forget short Zoho sync watcher for UI niceness.
-    //    This updates UI via onTick but does not block the returned result.
     // ignore: discarded_futures
     _watchZohoSyncNonBlocking(
       paymentId: terminal.id,
@@ -143,7 +121,6 @@ class MpesaService {
   }
 }
 
-/// ✅ Provider (matches your existing pattern)
 final mpesaServiceProvider = FutureProvider<MpesaService>((ref) async {
   final tenantId = ref.watch(tenantIdProvider);
   final routes = AfyaKitRoutes(tenantId);

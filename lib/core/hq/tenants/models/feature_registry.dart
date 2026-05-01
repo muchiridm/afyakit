@@ -4,21 +4,12 @@ import 'package:flutter/material.dart';
 
 import 'feature_keys.dart';
 
-/// A single "feature" that can be toggled per tenant.
-///
-/// Keep it simple:
-/// - key = stored in tenant.features map
-/// - label/icon/description = used for HQ editor + staff feature tiles
-/// - entry is optional: wire a feature home screen when ready
 @immutable
 class FeatureDef {
   final String key;
   final String label;
   final IconData icon;
   final String? description;
-
-  /// Optional: staff feature home screen builder.
-  /// If null, feature can still be enabled, but navigation should be guarded by the UI.
   final WidgetBuilder? entry;
 
   const FeatureDef({
@@ -30,78 +21,43 @@ class FeatureDef {
   });
 }
 
-/// Extremely simple registry:
-/// - One list
-/// - Order here is the order you’ll show in HQ + staff home
-///
-/// IMPORTANT (Flutter Web):
-/// - Do NOT use *_outlined icons here.
-/// - Use FILLED icons only.
-/// - Outlined icons in const registries are tree-shaken on web.
 final class FeatureRegistry {
   const FeatureRegistry._();
 
-  /// All features that can appear in HQ tenant editor / staff feature tiles.
   static const List<FeatureDef> features = <FeatureDef>[
-    // ───────── Platform / admin ─────────
     FeatureDef(
       key: FeatureKeys.hq,
       label: 'HQ',
       icon: Icons.admin_panel_settings,
       description: 'Admin console for managing users and preferences.',
     ),
-
-    // ───────── Core business ─────────
     FeatureDef(
       key: FeatureKeys.inventory,
       label: 'Inventory',
       icon: Icons.inventory_2,
-      description: 'Stock items, batches, locations, reports, reorder.',
+      description:
+          'Stock items, batches, locations, reports, and reorder workflows.',
     ),
     FeatureDef(
       key: FeatureKeys.retail,
       label: 'Retail',
       icon: Icons.storefront,
-      description: 'Catalog, carts, orders, payments, delivery.',
-    ),
-
-    // ✅ Integrations (tenant-scoped)
-    FeatureDef(
-      key: FeatureKeys.zoho,
-      label: 'Zoho Books',
-      icon: Icons.receipt_long,
-      description: 'Sync customers, invoices, and payments to Zoho Books.',
-    ),
-
-    // ───────── Clinical ─────────
-    FeatureDef(
-      key: FeatureKeys.dispensing,
-      label: 'Dispensing',
-      icon: Icons.medical_services,
-      description: 'Upload and verify prescriptions; dispense workflow.',
+      description:
+          'Catalog, contacts, quotes, invoices, payments, and delivery.',
     ),
     FeatureDef(
-      key: FeatureKeys.labs,
-      label: 'Labs',
-      icon: Icons.science,
-      description: 'Lab requests, results, and reporting.',
+      key: FeatureKeys.clinical,
+      label: 'Clinical',
+      icon: Icons.local_hospital,
+      description:
+          'Patient profiles, prescriptions, encounters, and clinical records.',
     ),
-    FeatureDef(
-      key: FeatureKeys.consultation,
-      label: 'Consultation',
-      icon: Icons.video_call,
-      description: 'Provider consultations and notes.',
-    ),
-
-    // ───────── Logistics ─────────
     FeatureDef(
       key: FeatureKeys.rider,
       label: 'Rider',
       icon: Icons.delivery_dining,
-      description: 'Deliveries, rider jobs, tracking, confirmations.',
+      description: 'Deliveries, rider jobs, tracking, and confirmations.',
     ),
-
-    // ───────── Optional / future ─────────
     FeatureDef(
       key: FeatureKeys.reporting,
       label: 'Reporting',
@@ -112,7 +68,7 @@ final class FeatureRegistry {
       key: FeatureKeys.messaging,
       label: 'Messaging',
       icon: Icons.chat_bubble,
-      description: 'Customer and staff messaging / notifications.',
+      description: 'Customer and staff messaging and notifications.',
     ),
     FeatureDef(
       key: FeatureKeys.backup,
@@ -122,11 +78,9 @@ final class FeatureRegistry {
     ),
   ];
 
-  /// Convenience: keys only (useful for editors/validation).
   static List<String> get keys =>
       features.map((f) => f.key).toList(growable: false);
 
-  /// Find a feature by key.
   static FeatureDef? byKey(String key) {
     for (final f in features) {
       if (f.key == key) return f;
