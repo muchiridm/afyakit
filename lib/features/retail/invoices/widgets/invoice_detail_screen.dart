@@ -242,8 +242,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
           invoiceNumber: inv.invoiceNumber,
           invoiceDate: inv.date,
           invoiceTotal: inv.total,
-          onPaymentSuccess: () =>
-              ref.read(invoiceControllerProvider.notifier).load(inv.invoiceId),
+          onPaymentSuccess: () => _refreshInvoiceAndPayments(inv.invoiceId),
         ),
 
         const SizedBox(height: 24),
@@ -427,6 +426,11 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     })();
 
     return normalizeMpesaPhoneKE(raw);
+  }
+
+  Future<void> _refreshInvoiceAndPayments(String invoiceId) async {
+    await ref.read(invoiceControllerProvider.notifier).load(invoiceId);
+    await ref.read(paymentControllerProvider(invoiceId).notifier).refresh();
   }
 }
 

@@ -95,9 +95,12 @@ class PaymentController extends StateNotifier<PaymentState> {
       loadingPayments: true,
       clearError: true,
 
-      // ✅ allow reseeding after refresh
+      // ✅ after refresh, allow fresh reseeding from latest invoice balance
       clearPendingAmount: true,
       defaultsSeeded: false,
+
+      // ✅ avoid stale M-Pesa success/failure banner/state lingering
+      clearMpesaLastPayment: true,
     );
 
     try {
@@ -110,6 +113,7 @@ class PaymentController extends StateNotifier<PaymentState> {
         invoiceSummary: payRes.invoice,
       );
 
+      // ✅ re-seed amount defaults from latest balance if needed
       // ignore: discarded_futures
       ensureSeededDefaults();
     } catch (e) {
@@ -453,6 +457,7 @@ class PaymentController extends StateNotifier<PaymentState> {
           purposeRef: invId,
           amount: amtInt,
           phone: normalized,
+          clientRequestId: 'stk_${DateTime.now().millisecondsSinceEpoch}',
         ),
         timeout: timeout,
         onTick: (tick) {

@@ -7,13 +7,13 @@ import 'package:dio/dio.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
-import 'catalog_models.dart';
+import 'models/catalog_models.dart';
 
 class CatalogService {
+  const CatalogService({required this.api, required this.routes});
+
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
-
-  CatalogService({required this.api, required this.routes});
 
   static Map<String, Object?> _asMap(Object? v) {
     if (v is Map<String, Object?>) return v;
@@ -35,14 +35,14 @@ class CatalogService {
   }) async {
     final Dio dio = api.dio;
 
-    final uri = routes.diSalesTiles(
+    final Uri uri = routes.diSalesTiles(
       q: query.q.trim().isNotEmpty ? query.q.trim() : null,
       form: query.form.trim().isNotEmpty ? query.form.trim() : null,
       limit: limit,
       offset: offset,
     );
 
-    final res = await dio.getUri(uri);
+    final Response<dynamic> res = await dio.getUri(uri);
 
     final Map<String, Object?> body = switch (res.data) {
       final Map<String, Object?> m => m,
@@ -51,18 +51,20 @@ class CatalogService {
       _ => throw StateError('Unexpected tiles payload'),
     };
 
-    final rawItems = _asListOfMaps(body['items']);
-    final items = rawItems.map(CatalogTile.fromJson).toList(growable: false);
+    final List<Map<String, Object?>> rawItems = _asListOfMaps(body['items']);
+    final List<CatalogTile> items = rawItems
+        .map(CatalogTile.fromJson)
+        .toList(growable: false);
 
-    // DawaIndex payload: nextOffset (camel) from your BE proxy
-    final nextOffset = body['nextOffset'];
-    final int? next = nextOffset is int
-        ? nextOffset
-        : (nextOffset is num
-              ? nextOffset.toInt()
-              : int.tryParse('$nextOffset'));
+    final Object? nextOffset = body['nextOffset'];
+    final int? next = switch (nextOffset) {
+      int v => v,
+      num v => v.toInt(),
+      String v => int.tryParse(v),
+      _ => null,
+    };
 
-    final hasMore = (next != null) && items.isNotEmpty;
+    final bool hasMore = next != null && items.isNotEmpty;
     return (items, hasMore);
   }
 }

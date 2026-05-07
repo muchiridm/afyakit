@@ -1,40 +1,34 @@
-// lib/features/retail/catalog/catalog_models.dart
+// lib/features/retail/catalog/models/catalog_models.dart
 
 import 'package:flutter/foundation.dart';
 
 @immutable
 class CatalogTile {
-  /// Stable identity for cart + quote lines.
-  /// Prefer canon_key/cluster_key; avoid generic "id".
   final String id;
 
   final String brand;
   final String strengthSig;
-
-  /// formulation from BE can be anything now (tablet, syrup, ointment, ...)
   final String form;
 
   final num? bestSellPrice;
   final int? offerCount;
 
-  // extra fields that tiles engine emits
   final int? bestPackCount;
   final String? tileDesc;
 
-  // newer extras
   final String? tileTitle;
   final String? bestSupplier;
   final String? packsFmt;
   final String? volumeSig;
   final String? concentrationSig;
-
-  /// Decorated manufacturer for the tile (aggregated from variants)
-  /// BE field: supplier_manufacturer
   final String? supplierManufacturer;
 
-  /// If true, BE is telling us "do not merge this tile purely by canon_key".
-  /// We use this to salt the id so cart/quote lines don't collapse.
   final bool? hasMergeOverride;
+
+  // NEW
+  final String? uiKey;
+  final String? groupKey;
+  final bool priceRequestRequired;
 
   const CatalogTile({
     required this.id,
@@ -52,12 +46,23 @@ class CatalogTile {
     this.concentrationSig,
     this.supplierManufacturer,
     this.hasMergeOverride,
+    this.uiKey,
+    this.groupKey,
+    this.priceRequestRequired = false,
   });
 
-  // Useful for UI
   String get titleLine => '${brand.trim()} ${strengthSig.trim()}'.trim();
+
   bool get hasSupplierManufacturer =>
       supplierManufacturer != null && supplierManufacturer!.trim().isNotEmpty;
+
+  String get groupingKey {
+    final ui = uiKey?.trim();
+    if (ui != null && ui.isNotEmpty) return ui;
+    return '${brand.trim().toLowerCase()}|'
+        '${strengthSig.trim().toLowerCase()}|'
+        '${form.trim().toLowerCase()}';
+  }
 
   static String _asString(Object? v) {
     if (v == null) return '';
@@ -172,8 +177,9 @@ class CatalogTile {
     final packsFmt = _asString(j['packs_fmt']).trim();
     final volumeSig = _asString(j['volume_sig']).trim();
     final concentrationSig = _asString(j['concentration_sig']).trim();
-
     final supplierMfg = _asString(j['supplier_manufacturer']).trim();
+    final uiKey = _asString(j['ui_key']).trim();
+    final groupKey = _asString(j['group_key']).trim();
 
     return CatalogTile(
       id: baseId,
@@ -191,22 +197,34 @@ class CatalogTile {
       concentrationSig: concentrationSig.isEmpty ? null : concentrationSig,
       supplierManufacturer: supplierMfg.isEmpty ? null : supplierMfg,
       hasMergeOverride: hasMergeOverride,
+      uiKey: uiKey.isEmpty ? null : uiKey,
+      groupKey: groupKey.isEmpty ? null : groupKey,
+      priceRequestRequired: _asBool(j['price_request_required']) ?? false,
     );
   }
 }
 
 @immutable
 class CatalogQuery {
-  final String q; // search
-  final String form; // '', 'tablet', 'syrup', ...
-  final String sort; // reserved
+  final String q;
+  final String form;
+  final String sort;
 
   const CatalogQuery({this.q = '', this.form = '', this.sort = ''});
 
-  CatalogQuery copyWith({String? q, String? form, String? sort}) =>
-      CatalogQuery(
-        q: q ?? this.q,
-        form: form ?? this.form,
-        sort: sort ?? this.sort,
-      );
+  CatalogQuery copyWith({String? q, String? form, String? sort}) {
+    return CatalogQuery(
+      q: q ?? this.q,
+      form: form ?? this.form,
+      sort: sort ?? this.sort,
+    );
+  }
+
+  CatalogQuery get normalized => CatalogQuery(
+    q: q.trim(),
+    form: form.trim().toLowerCase(),
+    sort: sort.trim().toLowerCase(),
+  );
+
+  bool get isDiscoveryMode => normalized.q.isEmpty && normalized.form.isEmpty;
 }
