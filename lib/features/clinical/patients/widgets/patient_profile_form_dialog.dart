@@ -1,12 +1,21 @@
-// lib/features/patients/widgets/patient_profile_form_dialog.dart
+// lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
 
-import 'package:afyakit/features/patients/models/patient_profile.dart';
+import 'package:afyakit/features/clinical/patients/patient_profile.dart';
 import 'package:flutter/material.dart';
 
 class PatientProfileFormDialog extends StatefulWidget {
-  const PatientProfileFormDialog({super.key, this.initial});
+  const PatientProfileFormDialog({
+    super.key,
+    this.initial,
+    this.allowExplicitContactLink = false,
+  });
 
   final PatientProfile? initial;
+
+  /// Staff/admin only.
+  /// For normal self/dependent creation, keep this false and use the
+  /// separate "Link to me / my dependent" flow instead.
+  final bool allowExplicitContactLink;
 
   @override
   State<PatientProfileFormDialog> createState() =>
@@ -18,19 +27,14 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
 
   late final TextEditingController _fullNameCtl;
   late final TextEditingController _dobCtl;
-  late final TextEditingController _memberNumberCtl;
-  late final TextEditingController _insuranceCtl;
-  late final TextEditingController _schemeCtl;
-  late final TextEditingController _payerContactIdCtl;
+  late final TextEditingController _contactIdCtl;
   late final TextEditingController _phoneCtl;
   late final TextEditingController _emailCtl;
   late final TextEditingController _nationalIdCtl;
-  late final TextEditingController _policyNumberCtl;
-  late final TextEditingController _principalMemberNameCtl;
-  late final TextEditingController _relationshipCtl;
-  late final TextEditingController _authorizationNumberCtl;
   late final TextEditingController _notesCtl;
 
+  late ContactPatientRelationship _relationship;
+  late PatientGender _gender;
   late bool _isActive;
 
   @override
@@ -41,24 +45,14 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
 
     _fullNameCtl = TextEditingController(text: p?.fullName ?? '');
     _dobCtl = TextEditingController(text: p?.dob ?? '');
-    _memberNumberCtl = TextEditingController(text: p?.memberNumber ?? '');
-    _insuranceCtl = TextEditingController(text: p?.insurance ?? '');
-    _schemeCtl = TextEditingController(text: p?.scheme ?? '');
-    _payerContactIdCtl = TextEditingController(text: p?.payerContactId ?? '');
+    _contactIdCtl = TextEditingController(text: p?.contactId ?? '');
     _phoneCtl = TextEditingController(text: p?.phone ?? '');
     _emailCtl = TextEditingController(text: p?.email ?? '');
     _nationalIdCtl = TextEditingController(text: p?.nationalId ?? '');
-    _policyNumberCtl = TextEditingController(text: p?.policyNumber ?? '');
-    _principalMemberNameCtl = TextEditingController(
-      text: p?.principalMemberName ?? '',
-    );
-    _relationshipCtl = TextEditingController(
-      text: p?.relationshipToPrincipal ?? '',
-    );
-    _authorizationNumberCtl = TextEditingController(
-      text: p?.authorizationNumber ?? '',
-    );
     _notesCtl = TextEditingController(text: p?.notes ?? '');
+
+    _relationship = p?.relationship ?? ContactPatientRelationship.self;
+    _gender = p?.gender ?? PatientGender.unknown;
     _isActive = p?.isActive ?? true;
   }
 
@@ -66,17 +60,10 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   void dispose() {
     _fullNameCtl.dispose();
     _dobCtl.dispose();
-    _memberNumberCtl.dispose();
-    _insuranceCtl.dispose();
-    _schemeCtl.dispose();
-    _payerContactIdCtl.dispose();
+    _contactIdCtl.dispose();
     _phoneCtl.dispose();
     _emailCtl.dispose();
     _nationalIdCtl.dispose();
-    _policyNumberCtl.dispose();
-    _principalMemberNameCtl.dispose();
-    _relationshipCtl.dispose();
-    _authorizationNumberCtl.dispose();
     _notesCtl.dispose();
     super.dispose();
   }
@@ -89,12 +76,42 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
 
   String? _dateValidator(String? value) {
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'DOB is required';
+    if (trimmed.isEmpty) return null;
 
     final ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
     if (!ok) return 'Use YYYY-MM-DD';
 
     return null;
+  }
+
+  String _relationshipLabel(ContactPatientRelationship value) {
+    switch (value) {
+      case ContactPatientRelationship.self:
+        return 'Self';
+      case ContactPatientRelationship.child:
+        return 'Child';
+      case ContactPatientRelationship.spouse:
+        return 'Spouse';
+      case ContactPatientRelationship.parent:
+        return 'Parent';
+      case ContactPatientRelationship.guardian:
+        return 'Guardian';
+      case ContactPatientRelationship.other:
+        return 'Other';
+    }
+  }
+
+  String _genderLabel(PatientGender value) {
+    switch (value) {
+      case PatientGender.male:
+        return 'Male';
+      case PatientGender.female:
+        return 'Female';
+      case PatientGender.other:
+        return 'Other';
+      case PatientGender.unknown:
+        return 'Unknown';
+    }
   }
 
   void _submit() {
@@ -104,17 +121,14 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     final input = PatientProfileUpsertInput(
       fullName: _fullNameCtl.text.trim(),
       dob: _dobCtl.text.trim(),
-      memberNumber: _memberNumberCtl.text.trim(),
-      insurance: _insuranceCtl.text.trim(),
-      scheme: _schemeCtl.text.trim(),
-      payerContactId: _payerContactIdCtl.text.trim(),
+      gender: _gender,
+      contactId: widget.allowExplicitContactLink
+          ? _contactIdCtl.text.trim()
+          : null,
+      relationship: _relationship,
       phone: _phoneCtl.text.trim(),
       email: _emailCtl.text.trim(),
       nationalId: _nationalIdCtl.text.trim(),
-      policyNumber: _policyNumberCtl.text.trim(),
-      principalMemberName: _principalMemberNameCtl.text.trim(),
-      relationshipToPrincipal: _relationshipCtl.text.trim(),
-      authorizationNumber: _authorizationNumberCtl.text.trim(),
       notes: _notesCtl.text.trim(),
       isActive: _isActive,
     );
@@ -122,9 +136,11 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     Navigator.of(context).pop(input);
   }
 
-  InputDecoration _dec(String label) {
+  InputDecoration _dec(String label, {String? hint, String? helper}) {
     return InputDecoration(
       labelText: label,
+      hintText: hint,
+      helperText: helper,
       border: const OutlineInputBorder(),
       isDense: true,
     );
@@ -145,6 +161,15 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
               runSpacing: 12,
               spacing: 12,
               children: [
+                if (widget.initial?.patientId != null &&
+                    widget.initial!.patientId.trim().isNotEmpty)
+                  SizedBox(
+                    width: 330,
+                    child: InputDecorator(
+                      decoration: _dec('DawaPap patient ID'),
+                      child: SelectableText(widget.initial!.patientId),
+                    ),
+                  ),
                 SizedBox(
                   width: 330,
                   child: TextFormField(
@@ -162,35 +187,22 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                   ),
                 ),
                 SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _memberNumberCtl,
-                    decoration: _dec('Member number'),
-                    validator: (v) => _required(v, 'Member number'),
-                  ),
-                ),
-                SizedBox(
-                  width: 240,
-                  child: TextFormField(
-                    controller: _insuranceCtl,
-                    decoration: _dec('Insurance'),
-                    validator: (v) => _required(v, 'Insurance'),
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _schemeCtl,
-                    decoration: _dec('Scheme'),
-                    validator: (v) => _required(v, 'Scheme'),
-                  ),
-                ),
-                SizedBox(
-                  width: 330,
-                  child: TextFormField(
-                    controller: _payerContactIdCtl,
-                    decoration: _dec('Payer contact ID'),
-                    validator: (v) => _required(v, 'Payer contact ID'),
+                  width: 180,
+                  child: DropdownButtonFormField<PatientGender>(
+                    value: _gender,
+                    decoration: _dec('Gender'),
+                    items: PatientGender.values
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_genderLabel(value)),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _gender = value);
+                    },
                   ),
                 ),
                 SizedBox(
@@ -216,32 +228,39 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                 ),
                 SizedBox(
                   width: 220,
-                  child: TextFormField(
-                    controller: _policyNumberCtl,
-                    decoration: _dec('Policy number'),
+                  child: DropdownButtonFormField<ContactPatientRelationship>(
+                    value: _relationship,
+                    decoration: _dec(
+                      'Relationship',
+                      helper: widget.allowExplicitContactLink
+                          ? 'Used only if an explicit contact association is added.'
+                          : 'Used for self/dependent ownership.',
+                    ),
+                    items: ContactPatientRelationship.values
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_relationshipLabel(value)),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _relationship = value);
+                    },
                   ),
                 ),
-                SizedBox(
-                  width: 330,
-                  child: TextFormField(
-                    controller: _principalMemberNameCtl,
-                    decoration: _dec('Principal member name'),
+                if (widget.allowExplicitContactLink)
+                  SizedBox(
+                    width: 452,
+                    child: TextFormField(
+                      controller: _contactIdCtl,
+                      decoration: _dec(
+                        'Associated contact ID (optional)',
+                        hint: 'Staff/admin explicit contact link only',
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _relationshipCtl,
-                    decoration: _dec('Relationship'),
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _authorizationNumberCtl,
-                    decoration: _dec('Authorization number'),
-                  ),
-                ),
                 SizedBox(
                   width: 672,
                   child: TextFormField(

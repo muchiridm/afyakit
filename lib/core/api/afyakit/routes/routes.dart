@@ -1,3 +1,5 @@
+// lib/core/api/afyakit/routes/routes.dart
+
 import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/shared/uri.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
@@ -8,6 +10,7 @@ part 'routes_inventory.dart';
 part 'routes_misc.dart';
 part 'routes_retail.dart';
 part 'routes_clinical.dart';
+part 'routes_claims.dart';
 
 part 'routes_domains.dart';
 part 'routes_tenants.dart';

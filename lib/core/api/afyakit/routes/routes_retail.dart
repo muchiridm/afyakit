@@ -1,3 +1,5 @@
+// lib/core/api/afyakit/routes/routes_retail.dart
+
 part of 'routes.dart';
 
 extension AfyaKitRetailRoutes on AfyaKitRoutes {
@@ -184,10 +186,8 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   // M-Pesa
   // ─────────────────────────────────────────────
 
-  /// POST /api/:tenantId/mpesa/stk/initiate
   Uri retailMpesaStkInitiate() => _uri('mpesa/stk/initiate');
 
-  /// GET /api/:tenantId/mpesa/payments/:paymentId
   Uri retailMpesaPaymentStatus(String paymentId) =>
       _uri('mpesa/payments/${_seg(paymentId)}');
 
@@ -207,4 +207,23 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
 
   Uri retailMetaAccountById(String accountId) =>
       _uri('zoho/v1/meta/accounts/${_seg(accountId)}');
+
+  // ─────────────────────────────────────────────
+  // DawaIndex retail catalog
+  // ─────────────────────────────────────────────
+
+  Uri retailDiSalesTiles({
+    String? q,
+    String? form,
+    int limit = 50,
+    int offset = 0,
+  }) => _uri(
+    'dawaindex/v1/sales/tiles',
+    query: {
+      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      if (form != null && form.trim().isNotEmpty) 'form': form.trim(),
+      'limit': '$limit',
+      'offset': '$offset',
+    },
+  );
 }

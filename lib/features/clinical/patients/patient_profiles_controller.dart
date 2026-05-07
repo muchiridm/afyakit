@@ -1,7 +1,7 @@
-// lib/features/patients/controllers/patient_profiles_controller.dart
+// lib/features/clinical/patients/patient_profiles_controller.dart
 
-import 'package:afyakit/features/patients/models/patient_profile.dart';
-import 'package:afyakit/features/patients/services/patient_profiles_service.dart';
+import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,8 +13,8 @@ class PatientProfilesState {
     this.isSaving = false,
     this.error,
     this.search = '',
-    this.insurance,
-    this.scheme,
+    this.contactId,
+    this.relationship,
     this.isActive,
   });
 
@@ -24,8 +24,8 @@ class PatientProfilesState {
   final String? error;
 
   final String search;
-  final String? insurance;
-  final String? scheme;
+  final String? contactId;
+  final ContactPatientRelationship? relationship;
   final bool? isActive;
 
   PatientProfilesState copyWith({
@@ -35,11 +35,11 @@ class PatientProfilesState {
     String? error,
     bool clearError = false,
     String? search,
-    String? insurance,
-    String? scheme,
+    String? contactId,
+    ContactPatientRelationship? relationship,
     bool? isActive,
-    bool clearInsurance = false,
-    bool clearScheme = false,
+    bool clearContactId = false,
+    bool clearRelationship = false,
     bool clearIsActive = false,
   }) {
     return PatientProfilesState(
@@ -48,8 +48,10 @@ class PatientProfilesState {
       isSaving: isSaving ?? this.isSaving,
       error: clearError ? null : (error ?? this.error),
       search: search ?? this.search,
-      insurance: clearInsurance ? null : (insurance ?? this.insurance),
-      scheme: clearScheme ? null : (scheme ?? this.scheme),
+      contactId: clearContactId ? null : (contactId ?? this.contactId),
+      relationship: clearRelationship
+          ? null
+          : (relationship ?? this.relationship),
       isActive: clearIsActive ? null : (isActive ?? this.isActive),
     );
   }
@@ -76,8 +78,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     try {
       final items = await _service.list(
         search: state.search.trim().isEmpty ? null : state.search.trim(),
-        insurance: state.insurance,
-        scheme: state.scheme,
+        contactId: state.contactId,
+        relationship: state.relationship,
         isActive: state.isActive,
       );
 
@@ -96,19 +98,20 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(search: value);
   }
 
-  void setInsurance(String? value) {
+  void setContactId(String? value) {
     final trimmed = value?.trim();
+    final empty = trimmed == null || trimmed.isEmpty;
+
     state = state.copyWith(
-      insurance: (trimmed == null || trimmed.isEmpty) ? null : trimmed,
-      clearInsurance: trimmed == null || trimmed.isEmpty,
+      contactId: empty ? null : trimmed,
+      clearContactId: empty,
     );
   }
 
-  void setScheme(String? value) {
-    final trimmed = value?.trim();
+  void setRelationship(ContactPatientRelationship? value) {
     state = state.copyWith(
-      scheme: (trimmed == null || trimmed.isEmpty) ? null : trimmed,
-      clearScheme: trimmed == null || trimmed.isEmpty,
+      relationship: value,
+      clearRelationship: value == null,
     );
   }
 
@@ -118,19 +121,41 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
   Future<void> applyFilters({
     String? search,
-    String? insurance,
-    String? scheme,
+    String? contactId,
+    ContactPatientRelationship? relationship,
     bool? isActive,
+    bool resetContactId = false,
+    bool resetRelationship = false,
     bool resetIsActive = false,
   }) async {
+    final trimmedContactId = contactId?.trim();
+
     state = state.copyWith(
       search: search ?? state.search,
-      insurance: insurance?.trim().isEmpty == true ? null : insurance,
-      scheme: scheme?.trim().isEmpty == true ? null : scheme,
+      contactId: resetContactId
+          ? null
+          : ((trimmedContactId == null || trimmedContactId.isEmpty)
+                ? state.contactId
+                : trimmedContactId),
+      relationship: resetRelationship
+          ? null
+          : (relationship ?? state.relationship),
       isActive: resetIsActive ? null : (isActive ?? state.isActive),
-      clearInsurance: insurance != null && insurance.trim().isEmpty,
-      clearScheme: scheme != null && scheme.trim().isEmpty,
+      clearContactId:
+          resetContactId || (contactId != null && trimmedContactId!.isEmpty),
+      clearRelationship: resetRelationship,
       clearIsActive: resetIsActive,
+    );
+
+    await load();
+  }
+
+  Future<void> clearFilters() async {
+    state = state.copyWith(
+      search: '',
+      clearContactId: true,
+      clearRelationship: true,
+      clearIsActive: true,
     );
 
     await load();
@@ -141,6 +166,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
     try {
       final created = await _service.create(input);
+
       final items = <PatientProfile>[created, ...state.items]
         ..sort(
           (a, b) =>
@@ -157,11 +183,50 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     }
   }
 
+  Future<PatientProfile> linkToSelf(
+    String patientId,
+    PatientProfileLinkToSelfInput input,
+  ) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final linked = await _service.linkToSelf(patientId, input);
+
+      final existingIndex = state.items.indexWhere(
+        (p) => p.patientId == patientId,
+      );
+
+      List<PatientProfile> items;
+      if (existingIndex >= 0) {
+        items = state.items
+            .map((p) => p.patientId == patientId ? linked : p)
+            .toList(growable: false);
+      } else {
+        items = <PatientProfile>[linked, ...state.items];
+      }
+
+      items.sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
+
+      state = state.copyWith(items: items, isSaving: false, clearError: true);
+
+      return linked;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to link patient profile: $e',
+      );
+      rethrow;
+    }
+  }
+
   Future<void> update(String patientId, PatientProfileUpsertInput input) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final updated = await _service.update(patientId, input);
+
       final items =
           state.items
               .map((p) => p.patientId == patientId ? updated : p)

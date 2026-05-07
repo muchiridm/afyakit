@@ -1,9 +1,9 @@
-// lib/features/patients/services/patient_profiles_service.dart
+// lib/features/clinical/patients/patient_profiles_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/features/patients/models/patient_profile.dart';
+import 'package:afyakit/features/clinical/patients/patient_profile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final patientProfilesServiceProvider = Provider<PatientProfilesService>((ref) {
@@ -36,18 +36,16 @@ class PatientProfilesService {
 
   Future<List<PatientProfile>> list({
     String? search,
-    String? payerContactId,
-    String? insurance,
-    String? scheme,
+    String? contactId,
+    ContactPatientRelationship? relationship,
     bool? isActive,
     int perPage = 50,
     int page = 1,
   }) async {
     final uri = routes.clinicalPatientsList(
       search: search,
-      payerContactId: payerContactId,
-      insurance: insurance,
-      scheme: scheme,
+      contactId: contactId,
+      relationship: relationship?.name,
       isActive: isActive,
       perPage: perPage,
       page: page,
@@ -64,6 +62,7 @@ class PatientProfilesService {
     final response = await api.getUri<Object?>(
       routes.clinicalPatientGet(patientId),
     );
+
     final body = _asMap(response.data);
     return PatientProfile.fromJson(_asMap(body['patient']));
   }
@@ -73,6 +72,20 @@ class PatientProfilesService {
       routes.clinicalPatientCreate(),
       data: input.toJson(),
     );
+
+    final body = _asMap(response.data);
+    return PatientProfile.fromJson(_asMap(body['patient']));
+  }
+
+  Future<PatientProfile> linkToSelf(
+    String patientId,
+    PatientProfileLinkToSelfInput input,
+  ) async {
+    final response = await api.postUri<Object?>(
+      routes.clinicalPatientLinkSelf(patientId),
+      data: input.toJson(),
+    );
+
     final body = _asMap(response.data);
     return PatientProfile.fromJson(_asMap(body['patient']));
   }
@@ -85,6 +98,7 @@ class PatientProfilesService {
       routes.clinicalPatientUpdate(patientId),
       data: input.toJson(),
     );
+
     final body = _asMap(response.data);
     return PatientProfile.fromJson(_asMap(body['patient']));
   }

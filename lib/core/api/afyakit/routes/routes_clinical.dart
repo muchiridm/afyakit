@@ -7,9 +7,8 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
 
   Uri clinicalPatientsList({
     String? search,
-    String? payerContactId,
-    String? insurance,
-    String? scheme,
+    String? contactId,
+    String? relationship,
     bool? isActive,
     int perPage = 50,
     int page = 1,
@@ -19,14 +18,11 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     final s = (search ?? '').trim();
     if (s.isNotEmpty) query['search'] = s;
 
-    final payer = (payerContactId ?? '').trim();
-    if (payer.isNotEmpty) query['payer_contact_id'] = payer;
+    final cid = (contactId ?? '').trim();
+    if (cid.isNotEmpty) query['contact_id'] = cid;
 
-    final ins = (insurance ?? '').trim();
-    if (ins.isNotEmpty) query['insurance'] = ins;
-
-    final sch = (scheme ?? '').trim();
-    if (sch.isNotEmpty) query['scheme'] = sch;
+    final rel = (relationship ?? '').trim();
+    if (rel.isNotEmpty) query['relationship'] = rel;
 
     if (isActive != null) {
       query['is_active'] = isActive ? 'true' : 'false';
@@ -35,14 +31,22 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     return _uri('clinical/patients', query: query);
   }
 
+  /// GET /clinical/patients/:patientId
   Uri clinicalPatientGet(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}');
 
+  /// POST /clinical/patients
   Uri clinicalPatientCreate() => _uri('clinical/patients');
 
+  /// POST /clinical/patients/:patientId/link-self
+  Uri clinicalPatientLinkSelf(String patientId) =>
+      _uri('clinical/patients/${_seg(patientId)}/link-self');
+
+  /// PUT /clinical/patients/:patientId
   Uri clinicalPatientUpdate(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}');
 
+  /// DELETE /clinical/patients/:patientId
   Uri clinicalPatientDelete(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}');
 
@@ -68,14 +72,18 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     return _uri('clinical/prescriptions', query: query);
   }
 
+  /// GET /clinical/prescriptions/:prescriptionId
   Uri clinicalPrescriptionGet(String prescriptionId) =>
       _uri('clinical/prescriptions/${_seg(prescriptionId)}');
 
+  /// POST /clinical/prescriptions
   Uri clinicalPrescriptionCreate() => _uri('clinical/prescriptions');
 
+  /// PUT /clinical/prescriptions/:prescriptionId
   Uri clinicalPrescriptionUpdate(String prescriptionId) =>
       _uri('clinical/prescriptions/${_seg(prescriptionId)}');
 
+  /// DELETE /clinical/prescriptions/:prescriptionId
   Uri clinicalPrescriptionDelete(String prescriptionId) =>
       _uri('clinical/prescriptions/${_seg(prescriptionId)}');
 }

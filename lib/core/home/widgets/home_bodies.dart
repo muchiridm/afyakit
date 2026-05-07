@@ -1,7 +1,7 @@
 // lib/core/home/widgets/home_bodies.dart
 
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
-import 'package:afyakit/features/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';

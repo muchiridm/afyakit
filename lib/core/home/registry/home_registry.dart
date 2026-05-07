@@ -13,7 +13,7 @@ import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.d
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 
-import 'package:afyakit/features/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -105,7 +105,6 @@ final class HomeRegistry {
       destination: _stockReport,
       allowed: _requireStaff,
     ),
-
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'Patient Profiles',
@@ -120,7 +119,6 @@ final class HomeRegistry {
       destination: _prescriptions,
       allowed: _requireStaff,
     ),
-
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
@@ -156,7 +154,6 @@ final class HomeRegistry {
       destination: _payments,
       allowedRef: _allowRetailForTenant,
     ),
-
     StaffFeatureDef(
       featureKey: FeatureKeys.hq,
       labelOverride: 'Admin',
@@ -230,12 +227,8 @@ final class HomeRegistry {
   static Widget _patientProfiles(BuildContext _) =>
       const PatientProfilesScreen();
 
-  static Widget _prescriptions(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Prescriptions screen coming next.')),
-    );
-    return const PatientProfilesScreen();
-  }
+  static Widget _prescriptions(BuildContext _) =>
+      const _ComingSoonScreen(title: 'Prescriptions');
 
   static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
 
@@ -307,5 +300,27 @@ final class HomeRegistry {
     if (key.isEmpty) return false;
 
     return profile.features.enabled(key);
+  }
+}
+
+class _ComingSoonScreen extends StatelessWidget {
+  const _ComingSoonScreen({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '$title screen coming next.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
   }
 }

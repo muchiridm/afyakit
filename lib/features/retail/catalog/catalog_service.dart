@@ -35,7 +35,7 @@ class CatalogService {
   }) async {
     final Dio dio = api.dio;
 
-    final Uri uri = routes.diSalesTiles(
+    final Uri uri = routes.retailDiSalesTiles(
       q: query.q.trim().isNotEmpty ? query.q.trim() : null,
       form: query.form.trim().isNotEmpty ? query.form.trim() : null,
       limit: limit,
