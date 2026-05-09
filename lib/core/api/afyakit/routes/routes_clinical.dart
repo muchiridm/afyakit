@@ -42,6 +42,36 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   Uri clinicalPatientLinkSelf(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}/link-self');
 
+  /// POST /clinical/patients/:patientId/link-requests
+  Uri clinicalPatientLinkRequestCreate(String patientId) =>
+      _uri('clinical/patients/${_seg(patientId)}/link-requests');
+
+  /// GET /clinical/patients/link-requests
+  Uri clinicalPatientLinkRequestsList({
+    String? status,
+    String? patientId,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
+
+    final s = (status ?? '').trim();
+    if (s.isNotEmpty) query['status'] = s;
+
+    final pid = (patientId ?? '').trim();
+    if (pid.isNotEmpty) query['patient_id'] = pid;
+
+    return _uri('clinical/patients/link-requests', query: query);
+  }
+
+  /// POST /clinical/patients/link-requests/:requestId/approve
+  Uri clinicalPatientLinkRequestApprove(String requestId) =>
+      _uri('clinical/patients/link-requests/${_seg(requestId)}/approve');
+
+  /// POST /clinical/patients/link-requests/:requestId/reject
+  Uri clinicalPatientLinkRequestReject(String requestId) =>
+      _uri('clinical/patients/link-requests/${_seg(requestId)}/reject');
+
   /// PUT /clinical/patients/:patientId
   Uri clinicalPatientUpdate(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}');

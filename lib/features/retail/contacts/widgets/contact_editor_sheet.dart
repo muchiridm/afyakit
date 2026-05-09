@@ -1,7 +1,9 @@
+// lib/features/retail/contacts/widgets/contact_editor_sheet.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../shared/models/zoho_contact.dart';
+import '../zoho_contact.dart';
 import 'contact_sheet_models.dart';
 
 enum _ContactKind { person, companyOnly }
@@ -20,11 +22,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
   late final TextEditingController _displayCtl;
   late final TextEditingController _companyCtl;
-
-  // ✅ NEW: Account number (Zoho Books custom field cf_account_number)
   late final TextEditingController _acctCtl;
 
-  // personContact fields
   late final TextEditingController _personCtl;
   late final TextEditingController _emailCtl;
   late final TextEditingController _phoneCtl;
@@ -41,14 +40,13 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   @override
   void initState() {
     super.initState();
+
     final c = widget.initial;
 
-    _editing = c == null; // new contact starts in edit mode
+    _editing = c == null;
 
     _displayCtl = TextEditingController(text: c?.displayName ?? '');
     _companyCtl = TextEditingController(text: c?.companyName ?? '');
-
-    // ✅ account number
     _acctCtl = TextEditingController(text: c?.accountNumber ?? '');
 
     final pc = c?.personContact;
@@ -59,7 +57,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
     _kind = (pc == null) ? _ContactKind.companyOnly : _ContactKind.person;
 
-    // update Save enabled state
     _displayCtl.addListener(() {
       if (!mounted) return;
       setState(() {});
@@ -120,7 +117,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   ZohoContact _buildDraft() {
     final display = _displayCtl.text.trim();
     final company = _companyCtl.text.trim();
-
     final account = _acctCtl.text.trim();
 
     final person = _personCtl.text.trim();
@@ -146,10 +142,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
       companyName: company.isEmpty ? null : company,
       personContact: personContact,
       status: widget.initial?.status,
-
-      // ✅ preserve type + account number in edits
       contactType: widget.initial?.contactType,
       accountNumber: account.isEmpty ? null : account,
+      linkedPatients:
+          widget.initial?.linkedPatients ?? const <ContactLinkedPatient>[],
     );
   }
 
@@ -175,6 +171,72 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Text(text, style: t.labelLarge),
+    );
+  }
+
+  String _relationshipLabel(ContactPatientRelationship value) {
+    switch (value) {
+      case ContactPatientRelationship.self:
+        return 'Self';
+      case ContactPatientRelationship.child:
+        return 'Child';
+      case ContactPatientRelationship.spouse:
+        return 'Spouse';
+      case ContactPatientRelationship.parent:
+        return 'Parent';
+      case ContactPatientRelationship.guardian:
+        return 'Guardian';
+      case ContactPatientRelationship.other:
+        return 'Other';
+    }
+  }
+
+  Widget _linkedPatientsSection(BuildContext context, ZohoContact contact) {
+    final linked = contact.linkedPatients;
+
+    if (linked.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'Linked patients'),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            children: [
+              for (final p in linked) ...[
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.personal_injury_outlined,
+                    color: p.isActive
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
+                  title: Text(p.patientDisplayName),
+                  subtitle: Text(
+                    '${p.patientId} • ${_relationshipLabel(p.relationship)}'
+                    '${p.isActive ? '' : ' • inactive'}',
+                  ),
+                ),
+                if (p != linked.last) const Divider(height: 1),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -229,6 +291,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final contactType = (c?.contactType ?? '').trim();
     final status = (c?.status ?? '').trim();
     final personId = (c?.personContact?.contactPersonId ?? '').trim();
+    final linkedCount = c?.activeLinkedPatientCount ?? 0;
 
     return SafeArea(
       child: Padding(
@@ -236,7 +299,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header row
             Row(
               children: [
                 Text(_title(), style: Theme.of(context).textTheme.titleLarge),
@@ -247,10 +309,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
-            // Body
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(bottom: 88 + bottomInset),
@@ -258,6 +317,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                   key: _formKey,
                   child: Column(
                     children: [
+                      if (c != null) _linkedPatientsSection(context, c),
+
                       _sectionLabel(context, 'Basics'),
                       const SizedBox(height: 6),
 
@@ -293,7 +354,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                         textInputAction: TextInputAction.next,
                       ),
 
-                      // ✅ Account number (cf_account_number)
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _acctCtl,
@@ -402,7 +462,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
                       const SizedBox(height: 16),
 
-                      // ✅ Debug section (only for existing contacts)
                       if (_isExisting) ...[
                         _sectionLabel(context, 'Debug'),
                         const SizedBox(height: 6),
@@ -436,6 +495,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                                 value: contactType,
                               ),
                               _debugRow(label: 'status', value: status),
+                              _debugRow(
+                                label: 'linkedPatients',
+                                value: '$linkedCount',
+                              ),
                             ],
                           ),
                         ),
@@ -448,8 +511,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                 ),
               ),
             ),
-
-            // Sticky action bar
             _ActionBar(
               isExisting: _isExisting,
               editing: _editing,

@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoices_list_controller.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 
 import 'package:afyakit/core/home/widgets/home_shell.dart';

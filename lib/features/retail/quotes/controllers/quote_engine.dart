@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';

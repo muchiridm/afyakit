@@ -5,8 +5,8 @@ import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dar
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/state/paged_query_controller.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
-import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoices_service.dart';
 
 final invoicesListControllerProvider = StateNotifierProvider.autoDispose
     .family<

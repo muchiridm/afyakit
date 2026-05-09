@@ -1,3 +1,5 @@
+// lib/hq/users/all_users/widgets/user_editor_screen.dart
+
 import 'package:afyakit/core/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/core/hq/users/all_users/controllers/user_editor_controller.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -89,10 +91,7 @@ class UserEditorScreen extends ConsumerWidget {
               onChanged: ctrl.setAccessLevel,
             ),
             const SizedBox(height: 12),
-            _PatchPreviewCard(
-              type: ctrl.patchTypePreview,
-              roles: ctrl.patchRolesPreview,
-            ),
+            _PatchPreviewCard(roles: ctrl.patchRolesPreview),
             const SizedBox(height: 12),
             _TenantEmailReadOnly(email: state.tenantEmail),
             const SizedBox(height: 12),
@@ -100,7 +99,7 @@ class UserEditorScreen extends ConsumerWidget {
               contentPadding: EdgeInsets.zero,
               title: const Text('Active'),
               subtitle: const Text(
-                'If inactive, user is in the tenant but blocked.',
+                'If inactive, user remains in the tenant but is blocked.',
               ),
               value: state.active,
               onChanged: ctrl.setActive,
@@ -125,10 +124,12 @@ class UserEditorScreen extends ConsumerWidget {
                   ? null
                   : () async {
                       final ok = await ctrl.save();
+
                       if (!ok) {
                         SnackService.showError('❌ Save failed');
                         return;
                       }
+
                       if (context.mounted) Navigator.of(context).pop(true);
                     },
               child: Text(state.saving ? 'Saving…' : 'Save'),
@@ -141,7 +142,7 @@ class UserEditorScreen extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────
-// Dumb UI widgets (pure rendering)
+// Dumb UI widgets
 // ─────────────────────────────────────────────
 
 class _TargetTenantCard extends StatelessWidget {
@@ -190,6 +191,7 @@ class _TargetTenantCard extends StatelessWidget {
 
 class _UidSection extends StatelessWidget {
   const _UidSection({required this.uid});
+
   final String uid;
 
   @override
@@ -207,7 +209,7 @@ class _UidSection extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'User uid (read-only)',
+          'Read-only global Firebase uid.',
           style: textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
         ),
       ],
@@ -228,29 +230,28 @@ class _AccessLevelPicker extends StatelessWidget {
         labelText: 'Access level',
         border: OutlineInputBorder(),
         helperText:
-            'Maps to backend fields: type = member|staff and staffRoles = [] or [role].',
+            'Staff access is controlled only by staffRoles. Member sends no staff role.',
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<AccessLevel>(
-          isExpanded: true,
-          value: value,
-          items: AccessLevel.values
-              .map((e) => DropdownMenuItem(value: e, child: Text(e.label)))
-              .toList(),
-          onChanged: (v) {
-            if (v == null) return;
-            onChanged(v);
-          },
-        ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: AccessLevel.values.map((level) {
+          final selected = value == level;
+
+          return ChoiceChip(
+            label: Text(level.label),
+            selected: selected,
+            onSelected: (_) => onChanged(level),
+          );
+        }).toList(),
       ),
     );
   }
 }
 
 class _PatchPreviewCard extends StatelessWidget {
-  const _PatchPreviewCard({required this.type, required this.roles});
+  const _PatchPreviewCard({required this.roles});
 
-  final String type;
   final List<String> roles;
 
   @override
@@ -273,15 +274,12 @@ class _PatchPreviewCard extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
-              Text('type: $type'),
               Text('staffRoles: $rolesText'),
               const SizedBox(height: 6),
               Text(
-                type == 'member'
-                    ? 'Member = no staff privileges.'
-                    : (roles.isEmpty
-                          ? 'Staff = staff privileges, no specific role.'
-                          : 'Staff with role = ${roles.first}.'),
+                roles.isEmpty
+                    ? 'Member/client access. No staff role will be sent.'
+                    : 'Staff role: ${roles.first}.',
                 style: TextStyle(color: Colors.grey.shade700),
               ),
             ],
@@ -294,17 +292,19 @@ class _PatchPreviewCard extends StatelessWidget {
 
 class _TenantEmailReadOnly extends StatelessWidget {
   const _TenantEmailReadOnly({required this.email});
+
   final String? email;
 
   @override
   Widget build(BuildContext context) {
     final v = (email ?? '').trim();
+
     return InputDecorator(
       decoration: const InputDecoration(
-        labelText: 'Tenant email (optional)',
+        labelText: 'Tenant email',
         border: OutlineInputBorder(),
         helperText:
-            'Read-only (backend PatchAuthUserSchema does not accept email).',
+            'Read-only. Email comes from tenant auth_user/source-of-truth data.',
       ),
       child: Text(v.isEmpty ? '—' : v),
     );
@@ -320,7 +320,7 @@ class _MembershipsCard extends StatelessWidget {
   });
 
   final bool loading;
-  final Map<String, Map<String, Object?>>? memberships;
+  final Map<String, AllUserMembership> memberships;
   final String targetTenantId;
   final VoidCallback onRefresh;
 
@@ -328,13 +328,8 @@ class _MembershipsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    final entries = memberships != null
-        ? List<MapEntry<String, Map<String, Object?>>>.from(
-            memberships!.entries,
-          )
-        : <MapEntry<String, Map<String, Object?>>>[];
-
-    entries.sort((a, b) => a.key.compareTo(b.key));
+    final entries = memberships.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
 
     return Card(
       elevation: 0,
@@ -347,10 +342,13 @@ class _MembershipsCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Text('Directory memberships'),
+                const Text(
+                  'Tenant memberships',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: 'Refresh this user',
                   icon: loading
                       ? const SizedBox(
                           width: 16,
@@ -382,22 +380,27 @@ class _MembershipsCard extends StatelessWidget {
               )
             else
               Column(
-                children: entries.map((e) {
-                  final role = (e.value['role'] as String?) ?? '—';
-                  final active = e.value['active'] == true;
-                  final email = (e.value['email'] as String?)?.trim();
+                children: entries.map((entry) {
+                  final tenantId = entry.key;
+                  final membership = entry.value;
 
-                  final subtitle = (email == null || email.isEmpty)
+                  final role = membership.role.trim().isEmpty
+                      ? '—'
+                      : membership.role.trim();
+
+                  final email = membership.email?.trim();
+
+                  final subtitle = email == null || email.isEmpty
                       ? 'Role: $role'
                       : 'Role: $role · $email';
 
-                  final isTarget = e.key == targetTenantId;
+                  final isTarget = tenantId == targetTenantId;
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(
-                      e.key,
+                      tenantId,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: isTarget ? Colors.blueGrey.shade900 : null,
@@ -405,9 +408,11 @@ class _MembershipsCard extends StatelessWidget {
                     ),
                     subtitle: Text(subtitle),
                     trailing: Icon(
-                      active ? Icons.check_circle : Icons.cancel,
+                      membership.active ? Icons.check_circle : Icons.cancel,
                       size: 18,
-                      color: active ? Colors.green : Colors.orangeAccent,
+                      color: membership.active
+                          ? Colors.green
+                          : Colors.orangeAccent,
                     ),
                   );
                 }).toList(),

@@ -24,7 +24,11 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     if (t.isNotEmpty) q['type'] = t;
 
     final acct = (accountNumber ?? '').trim();
-    if (acct.isNotEmpty) q['account_number'] = acct;
+    if (acct.isNotEmpty) {
+      // BE requires explicit account scoping for staff.
+      q['scope'] = 'account';
+      q['account_number'] = acct;
+    }
 
     return _uri('zoho/v1/contacts', query: q);
   }
@@ -41,7 +45,11 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     if (s.isNotEmpty) q['search_text'] = s;
 
     final acct = (accountNumber ?? '').trim();
-    if (acct.isNotEmpty) q['account_number'] = acct;
+    if (acct.isNotEmpty) {
+      // BE requires explicit account scoping for staff.
+      q['scope'] = 'account';
+      q['account_number'] = acct;
+    }
 
     return _uri('zoho/v1/contacts/customers', query: q);
   }

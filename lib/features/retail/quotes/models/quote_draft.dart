@@ -1,7 +1,7 @@
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 
 import 'di_sales_tile.dart';
 import 'zoho_quote.dart';

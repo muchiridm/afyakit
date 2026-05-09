@@ -1,3 +1,5 @@
+// lib/core/auth/shared/models/auth_user_model.dart
+
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
@@ -6,6 +8,49 @@ import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
 @immutable
 class AuthUser {
+  const AuthUser({
+    required this.uid,
+    required this.tenantId,
+    required this.status,
+    this.phoneNumber,
+    this.stores = const [],
+    this.firstName,
+    this.lastName,
+    this.displayName,
+    this.avatarUrl,
+    this.email,
+    this.emailLower,
+    this.emailPendingLower,
+    this.emailPendingAt,
+    this.emailVerificationRequestedAt,
+    this.phoneHistory = const [],
+    this.emailHistory = const [],
+    this.phoneVerified = false,
+    this.phoneVerifiedAt,
+    this.phoneClaimed = false,
+    this.phoneClaimedAt,
+    this.phoneSatisfied,
+    this.emailVerified = false,
+    this.emailVerifiedAt,
+    this.isCompany = false,
+    this.companyName,
+    this.accountNumber,
+    this.previousAccountNumbers = const <String>[],
+    this.previousUids = const <String>[],
+    this.recoveredFromAccountNumber,
+    this.recoveredAt,
+    this.zoho,
+    this.claims,
+    this.isSuperAdmin = false,
+    this.staffRoles = const [],
+    this.recoveryRequired = false,
+    this.disabledAt,
+    this.disabledReason,
+    this.disabledByUid,
+    this.createdAt,
+    this.updatedAt,
+  });
+
   final String uid;
   final String? phoneNumber;
   final String tenantId;
@@ -42,7 +87,29 @@ class AuthUser {
   final bool isCompany;
   final String? companyName;
 
+  /// Current account number.
+  ///
+  /// New format:
+  ///   AC-XXXXXX
+  ///
+  /// Legacy numeric values may exist for older/recovered users.
   final String? accountNumber;
+
+  /// Historical account numbers used for recovery/history compatibility.
+  final List<String> previousAccountNumbers;
+
+  /// Historical Firebase UIDs associated with recovered identity.
+  ///
+  /// UID should not be the long-term business identity, but this helps
+  /// debug/reconcile old records.
+  final List<String> previousUids;
+
+  /// The account number the user entered during recovery.
+  final String? recoveredFromAccountNumber;
+
+  /// Recovery success timestamp, ISO string.
+  final String? recoveredAt;
+
   final AuthUserZohoLink? zoho;
 
   final Map<String, dynamic>? claims;
@@ -58,49 +125,15 @@ class AuthUser {
   final String? createdAt;
   final String? updatedAt;
 
-  const AuthUser({
-    required this.uid,
-    required this.tenantId,
-    required this.status,
-    this.phoneNumber,
-    this.stores = const [],
-    this.firstName,
-    this.lastName,
-    this.displayName,
-    this.avatarUrl,
-    this.email,
-    this.emailLower,
-    this.emailPendingLower,
-    this.emailPendingAt,
-    this.emailVerificationRequestedAt,
-    this.phoneHistory = const [],
-    this.emailHistory = const [],
-    this.phoneVerified = false,
-    this.phoneVerifiedAt,
-    this.phoneClaimed = false,
-    this.phoneClaimedAt,
-    this.phoneSatisfied,
-    this.emailVerified = false,
-    this.emailVerifiedAt,
-    this.isCompany = false,
-    this.companyName,
-    this.accountNumber,
-    this.zoho,
-    this.claims,
-    this.isSuperAdmin = false,
-    this.staffRoles = const [],
-    this.recoveryRequired = false,
-    this.disabledAt,
-    this.disabledReason,
-    this.disabledByUid,
-    this.createdAt,
-    this.updatedAt,
-  });
-
   static String _cleanStr(Object? v) => (v ?? '').toString().trim();
 
   static String? _optStr(Object? v) {
     final s = _cleanStr(v);
+    return s.isEmpty ? null : s;
+  }
+
+  static String? _optUpperStr(Object? v) {
+    final s = _cleanStr(v).toUpperCase();
     return s.isEmpty ? null : s;
   }
 
@@ -126,12 +159,29 @@ class AuthUser {
   }
 
   static List<String> _normalizeStringList(Object? raw) {
-    if (raw is! List) return const [];
+    if (raw is! List) return const <String>[];
+
     final out = <String>[];
+
     for (final v in raw) {
       final s = _cleanStr(v);
       if (s.isNotEmpty) out.add(s);
     }
+
+    final seen = <String>{};
+    return out.where(seen.add).toList(growable: false);
+  }
+
+  static List<String> _normalizeUpperStringList(Object? raw) {
+    if (raw is! List) return const <String>[];
+
+    final out = <String>[];
+
+    for (final v in raw) {
+      final s = _cleanStr(v).toUpperCase();
+      if (s.isNotEmpty) out.add(s);
+    }
+
     final seen = <String>{};
     return out.where(seen.add).toList(growable: false);
   }
@@ -140,23 +190,28 @@ class AuthUser {
     if (raw is Map) {
       return raw.map((k, v) => MapEntry(k.toString(), v));
     }
+
     return null;
   }
 
   static List<StaffRole> _normalizeStaffRoles(Object? raw) {
-    if (raw is! List) return const [];
+    if (raw is! List) return const <StaffRole>[];
+
     final out = <StaffRole>[];
+
     for (final v in raw) {
       final name = _cleanStr(v);
       final parsed = StaffRole.tryParse(name);
       if (parsed != null) out.add(parsed);
     }
+
     final seen = <String>{};
     return out.where((r) => seen.add(r.name)).toList(growable: false);
   }
 
   static UserStatus _parseStatus(Object? raw) {
     final s = _cleanStr(raw).toLowerCase();
+
     try {
       return UserStatus.fromString(s.isEmpty ? 'active' : s);
     } catch (_) {
@@ -181,6 +236,27 @@ class AuthUser {
 
   bool get isMemberResolved => !isStaffResolved;
 
+  bool get hasRecoveryTrail {
+    return previousAccountNumbers.isNotEmpty ||
+        previousUids.isNotEmpty ||
+        (recoveredFromAccountNumber ?? '').trim().isNotEmpty ||
+        (recoveredAt ?? '').trim().isNotEmpty ||
+        (zoho?.previousAccountNumbers.isNotEmpty ?? false);
+  }
+
+  List<String> get allKnownAccountNumbers {
+    final out = <String>[
+      if ((accountNumber ?? '').trim().isNotEmpty) accountNumber!.trim(),
+      ...previousAccountNumbers,
+      if ((recoveredFromAccountNumber ?? '').trim().isNotEmpty)
+        recoveredFromAccountNumber!.trim(),
+      ...?zoho?.previousAccountNumbers,
+    ];
+
+    final seen = <String>{};
+    return out.where((x) => seen.add(x)).toList(growable: false);
+  }
+
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (dn.isNotEmpty) return dn;
@@ -204,6 +280,7 @@ class AuthUser {
   bool get isPhoneSatisfiedResolved {
     final explicit = phoneSatisfied;
     if (explicit != null) return explicit;
+
     return _computePhoneSatisfied(
       phoneNumber: phoneNumber,
       phoneVerified: phoneVerified,
@@ -222,6 +299,7 @@ class AuthUser {
   String? get bestVerifiedEmailLower {
     final el = (emailLower ?? '').trim().toLowerCase();
     if (el.isNotEmpty) return el;
+
     final e = (email ?? '').trim().toLowerCase();
     return e.isNotEmpty ? e : null;
   }
@@ -229,6 +307,7 @@ class AuthUser {
   String? get bestEmailForDisplay {
     final verified = bestVerifiedEmailLower;
     if (verified != null) return verified;
+
     final pending = (emailPendingLower ?? '').trim().toLowerCase();
     return pending.isNotEmpty ? pending : null;
   }
@@ -242,11 +321,13 @@ class AuthUser {
   String? get bestEmailLower {
     final v = bestVerifiedEmailLower;
     if (v != null) return v;
+
     final p = (emailPendingLower ?? '').trim().toLowerCase();
     return p.isNotEmpty ? p : null;
   }
 
   bool get isDisabled => status == UserStatus.disabled;
+
   bool get hasRecoveryRequirement => recoveryRequired == true;
 
   factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
@@ -269,7 +350,6 @@ class AuthUser {
     final isCompany = _bool(json['isCompany']);
     final recoveryRequired = _bool(json['recoveryRequired']);
 
-    // Keep existing FE behavior to avoid breaking screens that already rely on it.
     final emailRaw = _optStr(json['email']);
     final emailLowerRaw = _optStr(json['emailLower']);
     final email = emailRaw?.toLowerCase();
@@ -288,11 +368,26 @@ class AuthUser {
         : _bool(phoneSatisfiedRaw);
 
     final accountNumber =
-        _optStr(json['accountNumber']) ?? _optStr(json['account_number']);
+        _optUpperStr(json['accountNumber']) ??
+        _optUpperStr(json['account_number']);
+
+    final previousAccountNumbers = _normalizeUpperStringList(
+      json['previousAccountNumbers'],
+    );
+
+    final previousUids = _normalizeStringList(json['previousUids']);
+
+    final recoveredFromAccountNumber = _optUpperStr(
+      json['recoveredFromAccountNumber'],
+    );
+
+    final recoveredAt = _optStr(json['recoveredAt']);
 
     AuthUserZohoLink? zoho;
+
     if (allowZoho) {
       final rawZoho = json['zoho'];
+
       if (rawZoho is Map) {
         try {
           zoho = AuthUserZohoLink.fromMap(
@@ -333,6 +428,10 @@ class AuthUser {
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
       accountNumber: accountNumber,
+      previousAccountNumbers: previousAccountNumbers,
+      previousUids: previousUids,
+      recoveredFromAccountNumber: recoveredFromAccountNumber,
+      recoveredAt: recoveredAt,
       zoho: zoho,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
@@ -375,6 +474,10 @@ class AuthUser {
     bool? isCompany,
     String? companyName,
     String? accountNumber,
+    List<String>? previousAccountNumbers,
+    List<String>? previousUids,
+    String? recoveredFromAccountNumber,
+    String? recoveredAt,
     AuthUserZohoLink? zoho,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
@@ -414,6 +517,12 @@ class AuthUser {
       isCompany: isCompany ?? this.isCompany,
       companyName: companyName ?? this.companyName,
       accountNumber: accountNumber ?? this.accountNumber,
+      previousAccountNumbers:
+          previousAccountNumbers ?? this.previousAccountNumbers,
+      previousUids: previousUids ?? this.previousUids,
+      recoveredFromAccountNumber:
+          recoveredFromAccountNumber ?? this.recoveredFromAccountNumber,
+      recoveredAt: recoveredAt ?? this.recoveredAt,
       zoho: zoho ?? this.zoho,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
@@ -455,6 +564,12 @@ class AuthUser {
     if (isCompany) 'isCompany': true,
     if (companyName != null) 'companyName': companyName,
     if (accountNumber != null) 'accountNumber': accountNumber,
+    if (previousAccountNumbers.isNotEmpty)
+      'previousAccountNumbers': previousAccountNumbers,
+    if (previousUids.isNotEmpty) 'previousUids': previousUids,
+    if (recoveredFromAccountNumber != null)
+      'recoveredFromAccountNumber': recoveredFromAccountNumber,
+    if (recoveredAt != null) 'recoveredAt': recoveredAt,
     if (zoho != null) 'zoho': zoho!.toMap(),
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,

@@ -10,9 +10,9 @@ import 'package:afyakit/features/retail/invoices/controllers/invoice_action_cont
 import 'package:afyakit/features/retail/invoices/controllers/invoice_controller.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_state.dart';
 
-import 'package:afyakit/features/retail/payments/zoho/controllers/payment_controller.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
@@ -25,10 +25,10 @@ import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
 
-import '../../payments/zoho/widgets/payment_footer.dart';
+import '../../payments/widgets/payment_footer.dart';
 
 // ✅ Already exists in app
-import 'package:afyakit/features/retail/payments/zoho/providers/payment_receipt_providers.dart';
+import 'package:afyakit/features/retail/payments/providers/payment_receipt_providers.dart';
 
 enum _InvoiceMenuAction { send, markSent }
 

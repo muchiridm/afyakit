@@ -17,6 +17,7 @@ final allUsersServiceProvider = FutureProvider.autoDispose<AllUsersService>((
   final tenantId = ref.watch(tenantIdProvider);
   final client = await ref.watch(afyakitClientFutureProvider.future);
   final routes = AfyaKitRoutes(tenantId);
+
   return AllUsersService(dio: client.dio, routes: routes);
 });
 
@@ -39,6 +40,7 @@ class AllUsersService {
     final data = r.data;
 
     String? reason;
+
     if (data is Map) {
       final m = Map<String, dynamic>.from(data);
       final err = m['error'] ?? m['message'];
@@ -57,12 +59,25 @@ class AllUsersService {
   Map<String, dynamic> _asMap(Object? raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return Map<String, dynamic>.from(raw);
+
     final enc = jsonEncode(raw);
     final dec = jsonDecode(enc);
-    return Map<String, dynamic>.from(dec as Map);
+
+    if (dec is! Map) {
+      throw Exception('❌ Expected response object but got ${dec.runtimeType}');
+    }
+
+    return Map<String, dynamic>.from(dec);
   }
 
   /// Normalize unknown API shapes into `List<Map<String, dynamic>>`.
+  ///
+  /// Supported:
+  /// - [...]
+  /// - { users: [...] }
+  /// - { results: [...] }
+  /// - { items: [...] }
+  /// - { data: [...] }
   List<Map<String, dynamic>> _extractList(Object? raw) {
     if (raw == null) return const <Map<String, dynamic>>[];
 
@@ -76,14 +91,9 @@ class AllUsersService {
     if (raw is Map) {
       final m = Map<String, dynamic>.from(raw);
 
-      for (final key in const [
-        'users',
-        'results',
-        'items',
-        'data',
-        'memberships',
-      ]) {
+      for (final key in const ['users', 'results', 'items', 'data']) {
         final v = m[key];
+
         if (v is List) {
           return v
               .whereType<Map>()
@@ -93,6 +103,7 @@ class AllUsersService {
       }
 
       final values = m.values.toList();
+
       if (values.isNotEmpty && values.every((v) => v is Map)) {
         return values
             .cast<Map>()
@@ -105,33 +116,41 @@ class AllUsersService {
   }
 
   static String _normId(Object? v) {
-    final s = v?.toString().trim();
-    return (s == null) ? '' : s;
+    return v?.toString().trim() ?? '';
   }
 
   AllUser _userFromMap(Map<String, dynamic> m) {
     final id = _normId(m['id'] ?? m['uid']);
+
+    if (id.isEmpty) {
+      throw Exception('❌ User row missing id/uid');
+    }
+
     return AllUser.fromJson(id, Map<String, Object?>.from(m));
   }
 
-  /// Backend patch returns: { user: {...}, zoho?: {...} }
+  /// Backend patch returns: { user: {...}, zoho?: {...} }.
   /// Some GETs return the user directly. Normalize both.
   AllUser _userFromResponse(Response<dynamic> r) {
     final top = _asMap(r.data);
 
-    final rawUser = (top['user'] is Map)
+    final rawUser = top['user'] is Map
         ? Map<String, dynamic>.from(top['user'] as Map)
         : top;
 
-    final id = _normId(rawUser['id'] ?? rawUser['uid']);
-    return AllUser.fromJson(id, Map<String, Object?>.from(rawUser));
+    return _userFromMap(rawUser);
   }
 
   // ─────────────────────────────────────────────────────────────
-  // HQ Directory (READ-ONLY)
+  // HQ Directory
   // ─────────────────────────────────────────────────────────────
 
   /// GET /api/users
+  ///
+  /// Should return users WITH memberships already embedded.
+  ///
+  /// The frontend should not call `/api/users/:uid/memberships`
+  /// for every row after this.
   Future<List<AllUser>> fetchAllUsers({
     String? tenantId,
     String search = '',
@@ -140,27 +159,45 @@ class AllUsersService {
     final q = search.trim();
 
     final uri = routes.listGlobalUsers(
-      tenant: (tenantId != null && tenantId.trim().isNotEmpty)
-          ? tenantId.trim()
-          : null,
+      tenant: tenantId?.trim().isNotEmpty == true ? tenantId!.trim() : null,
       search: q.isEmpty ? null : q,
       limit: limit,
     );
 
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
+
     final r = await dio.getUri(uri);
     if (!_ok(r)) _bad(r, 'List users');
 
     final items = _extractList(r.data);
-    if (kDebugMode) debugPrint('✅ $_tag parsed ${items.length} users');
-    return items.map(_userFromMap).toList();
+    final users = items.map(_userFromMap).toList();
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ $_tag parsed ${users.length} users with embedded memberships',
+      );
+    }
+
+    return users;
   }
 
   /// GET /api/users/:uid/memberships
-  Future<Map<String, Map<String, Object?>>> fetchUserMemberships(
+  ///
+  /// Keep this only for:
+  /// - user detail page manual refresh
+  /// - manual repair/debug view
+  /// - fallback if a specific user is opened and memberships are absent
+  Future<Map<String, AllUserMembership>> fetchUserMemberships(
     String uid,
   ) async {
-    final uri = routes.fetchUserMemberships(uid);
+    final cleanUid = uid.trim();
+
+    if (cleanUid.isEmpty) {
+      throw Exception('❌ Fetch memberships: uid is required');
+    }
+
+    final uri = routes.fetchUserMemberships(cleanUid);
+
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
 
     final r = await dio.getUri(uri);
@@ -169,88 +206,152 @@ class AllUsersService {
     final data = _asMap(r.data);
     final raw = data.containsKey('memberships') ? data['memberships'] : r.data;
 
-    final out = <String, Map<String, Object?>>{};
+    final out = <String, AllUserMembership>{};
 
     if (raw is Map) {
       final m = Map<String, dynamic>.from(raw);
-      m.forEach((tid, val) {
-        final v = _asMap(val);
-        out[tid.toString()] = {
-          'role': v['role'],
-          'active': v['active'] == true,
-          if (v['email'] != null) 'email': v['email'],
-        };
+
+      m.forEach((tenantId, value) {
+        if (value is! Map) return;
+
+        final row = Map<String, Object?>.from(value);
+        row['tenantId'] = tenantId.toString();
+
+        final membership = AllUserMembership.fromJson(row);
+
+        if (membership.tenantId.trim().isNotEmpty) {
+          out[membership.tenantId] = membership;
+        }
       });
+
       return out;
     }
 
     if (raw is List) {
-      for (final e in raw.whereType<Map>()) {
-        final v = Map<String, dynamic>.from(e);
-        final tid = (v['tenantId'] ?? v['tenant'] ?? '').toString();
-        if (tid.isEmpty) continue;
-        out[tid] = {
-          'role': v['role'],
-          'active': v['active'] == true,
-          if (v['email'] != null) 'email': v['email'],
-        };
+      for (final item in raw.whereType<Map>()) {
+        final row = Map<String, Object?>.from(item);
+        final membership = AllUserMembership.fromJson(row);
+
+        if (membership.tenantId.trim().isNotEmpty) {
+          out[membership.tenantId] = membership;
+        }
       }
     }
 
     return out;
   }
 
+  /// DELETE /api/users/:uid
+  ///
+  /// Deletes a global unassigned/orphan user.
+  ///
+  /// Backend should refuse this if tenant SOT records still exist:
+  /// - tenants/{tenantId}/auth_users/{uid}
+  ///
+  /// Stale mirror edges under users/{uid}/memberships may be cleaned server-side.
+  Future<void> hqDeleteGlobalUser(String uid) async {
+    final cleanUid = uid.trim();
+
+    if (cleanUid.isEmpty) {
+      throw Exception('❌ Delete global user: uid is required');
+    }
+
+    final uri = routes.deleteGlobalUser(cleanUid);
+
+    if (kDebugMode) debugPrint('🛰️ $_tag DELETE $uri');
+
+    final r = await dio.deleteUri(uri);
+    final ok = r.statusCode == 200 || r.statusCode == 204 || _ok(r);
+
+    if (!ok) _bad(r, 'Delete global user');
+
+    if (kDebugMode) {
+      debugPrint('🗑️ $_tag Deleted global user uid=$cleanUid');
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // HQ Tenant auth_users (cross-tenant management)
+  // HQ Tenant auth_users cross-tenant management
   // ─────────────────────────────────────────────────────────────
 
   /// GET /api/tenants/:tenantId/auth_users
+  ///
+  /// Tenant SOT-facing endpoint. Reads from:
+  /// tenants/{tenantId}/auth_users
   Future<List<AllUser>> hqFetchTenantUsers(
     String targetTenantId, {
     String search = '',
     int limit = 50,
   }) async {
+    final cleanTenantId = targetTenantId.trim();
+
+    if (cleanTenantId.isEmpty) {
+      throw Exception('❌ HQ list tenant users: targetTenantId is required');
+    }
+
     final q = search.trim();
 
     final uri = routes.hqListTenantUsers(
-      targetTenantId,
+      cleanTenantId,
       search: q.isEmpty ? null : q,
       limit: limit,
     );
 
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
+
     final r = await dio.getUri(uri);
     if (!_ok(r)) _bad(r, 'HQ list tenant users');
 
     final items = _extractList(r.data);
-    return items.map(_userFromMap).toList();
+    final users = items.map(_userFromMap).toList();
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ $_tag parsed ${users.length} tenant users for tenant=$cleanTenantId',
+      );
+    }
+
+    return users;
   }
 
-  /// ✅ POST /api/tenants/:tenantId/auth_users
-  /// body: { phoneNumber, displayName? }
+  /// POST /api/tenants/:tenantId/auth_users
   ///
-  /// Returns raw PatchAuthUserResult: { user, zoho? }
+  /// Body:
+  /// { phoneNumber, displayName? }
+  ///
+  /// Returns raw PatchAuthUserResult:
+  /// { user, zoho? }
   Future<Map<String, Object?>> hqCreateTenantUser({
     required String targetTenantId,
     required String phoneNumber,
     String? displayName,
   }) async {
+    final cleanTenantId = targetTenantId.trim();
     final phone = phoneNumber.trim();
     final dn = displayName?.trim();
+
+    if (cleanTenantId.isEmpty) {
+      throw Exception('❌ HQ create tenant user: targetTenantId is required');
+    }
 
     if (phone.isEmpty) {
       throw Exception('❌ HQ create tenant user: phoneNumber is required');
     }
 
-    final uri = routes.hqCreateTenantUser(targetTenantId);
+    final uri = routes.hqCreateTenantUser(cleanTenantId);
+
     if (kDebugMode) debugPrint('🛰️ $_tag POST $uri');
+
+    final body = <String, Object?>{
+      'phoneNumber': phone,
+      if (dn != null && dn.isNotEmpty) 'displayName': dn,
+    };
+
+    if (kDebugMode) debugPrint('📦 $_tag POST payload=$body');
 
     final r = await dio.postUri(
       uri,
-      data: <String, Object?>{
-        'phoneNumber': phone,
-        if (dn != null && dn.isNotEmpty) 'displayName': dn,
-      },
+      data: body,
       options: Options(contentType: Headers.jsonContentType),
     );
 
@@ -261,7 +362,19 @@ class AllUsersService {
 
   /// GET /api/tenants/:tenantId/auth_users/:uid
   Future<AllUser> hqGetTenantUserById(String targetTenantId, String uid) async {
-    final uri = routes.hqGetTenantUserById(targetTenantId, uid);
+    final cleanTenantId = targetTenantId.trim();
+    final cleanUid = uid.trim();
+
+    if (cleanTenantId.isEmpty) {
+      throw Exception('❌ HQ get tenant user: targetTenantId is required');
+    }
+
+    if (cleanUid.isEmpty) {
+      throw Exception('❌ HQ get tenant user: uid is required');
+    }
+
+    final uri = routes.hqGetTenantUserById(cleanTenantId, cleanUid);
+
     if (kDebugMode) debugPrint('🛰️ $_tag GET $uri');
 
     final r = await dio.getUri(uri);
@@ -272,25 +385,49 @@ class AllUsersService {
 
   /// PATCH /api/tenants/:tenantId/auth_users/:uid
   ///
-  /// IMPORTANT:
-  /// - Backend PatchAuthUserSchema supports:
-  ///   status, displayName, avatarUrl, stores, type(member|staff), staffRoles[],
-  ///   isCompany, companyName, firstName, lastName.
+  /// Backend PatchAuthUserSchema supports:
+  /// - status
+  /// - displayName
+  /// - avatarUrl
+  /// - stores
+  /// - staffRoles[]
+  /// - isCompany
+  /// - companyName
+  /// - firstName
+  /// - lastName
+  ///
+  /// Important:
+  /// Do not send legacy `type`. Staff access is controlled only by staffRoles.
   Future<Map<String, Object?>> hqPatchTenantUser({
     required String targetTenantId,
     required String uid,
     required Map<String, Object?> patch,
   }) async {
+    final cleanTenantId = targetTenantId.trim();
+    final cleanUid = uid.trim();
+
+    if (cleanTenantId.isEmpty) {
+      throw Exception('❌ HQ patch tenant user: targetTenantId is required');
+    }
+
+    if (cleanUid.isEmpty) {
+      throw Exception('❌ HQ patch tenant user: uid is required');
+    }
+
     if (patch.isEmpty) {
       throw Exception('❌ HQ patch tenant user: no fields to update');
     }
 
-    final uri = routes.hqPatchTenantUser(targetTenantId, uid);
-    if (kDebugMode) debugPrint('🛰️ $_tag PATCH $uri');
+    final uri = routes.hqPatchTenantUser(cleanTenantId, cleanUid);
+
+    if (kDebugMode) {
+      debugPrint('🛰️ $_tag PATCH $uri');
+      debugPrint('📦 $_tag PATCH payload=$patch');
+    }
 
     final r = await dio.patchUri(
       uri,
-      data: patch, // pass through; allow nullables + empty arrays intentionally
+      data: patch,
       options: Options(contentType: Headers.jsonContentType),
     );
 
@@ -304,15 +441,28 @@ class AllUsersService {
     required String targetTenantId,
     required String uid,
   }) async {
-    final uri = routes.hqDeleteTenantUser(targetTenantId, uid);
+    final cleanTenantId = targetTenantId.trim();
+    final cleanUid = uid.trim();
+
+    if (cleanTenantId.isEmpty) {
+      throw Exception('❌ HQ delete tenant user: targetTenantId is required');
+    }
+
+    if (cleanUid.isEmpty) {
+      throw Exception('❌ HQ delete tenant user: uid is required');
+    }
+
+    final uri = routes.hqDeleteTenantUser(cleanTenantId, cleanUid);
+
     if (kDebugMode) debugPrint('🛰️ $_tag DELETE $uri');
 
     final r = await dio.deleteUri(uri);
-    final ok = (r.statusCode == 204) || _ok(r);
+    final ok = r.statusCode == 204 || _ok(r);
+
     if (!ok) _bad(r, 'HQ delete tenant user');
 
     if (kDebugMode) {
-      debugPrint('🗑️ $_tag Removed uid=$uid from tenant=$targetTenantId');
+      debugPrint('🗑️ $_tag Removed uid=$cleanUid from tenant=$cleanTenantId');
     }
   }
 }

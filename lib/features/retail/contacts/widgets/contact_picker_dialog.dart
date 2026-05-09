@@ -2,15 +2,15 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_search_field.dart';
 
-import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
@@ -43,7 +43,6 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
   bool _autoPicked = false;
 
-  // cache to prevent “null for a moment” scope fetches in member-scoped UX
   String? _memberAcct;
 
   ProviderSubscription<String?>? _scopeSub;
@@ -55,10 +54,8 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     _ctl.addListener(_scheduleSearch);
     _scroll.addListener(_maybeLoadMore);
 
-    // Cache initial scope
     _memberAcct = (ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
 
-    // ✅ Riverpod-safe: listenManual in initState
     _scopeSub = ref.listenManual<String?>(zohoContactsAccountScopeProvider, (
       prev,
       next,
@@ -69,13 +66,11 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
       _memberAcct = a;
 
-      // Only refresh for member-scoped UX (staff should not care)
       if (_isMemberUx) {
         _refresh();
       }
     });
 
-    // initial load
     _refresh();
   }
 
@@ -94,16 +89,14 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
   bool get _isMemberUx => _policy == QuoteContactPolicy.memberScoped;
 
-  /// Member-scoped: accountNumber hard scope (must exist).
-  /// Staff/picker: null => unscoped list.
   String? get _accountNumberScopeIfMember {
     if (!_isMemberUx) return null;
+
     final a = (_memberAcct ?? '').trim();
     return a.isEmpty ? null : a;
   }
 
   void _scheduleSearch() {
-    // Member-scoped: search is irrelevant; do not reload on typing.
     if (_isMemberUx) return;
 
     _debounce?.cancel();
@@ -111,7 +104,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
   }
 
   void _maybeLoadMore() {
-    if (_isMemberUx) return; // member should never paginate
+    if (_isMemberUx) return;
     if (!_hasMore) return;
     if (_loading || _loadingMore) return;
     if (!_scroll.hasClients) return;
@@ -163,9 +156,6 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
       final acct = _accountNumberScopeIfMember;
 
-      // ✅ CRITICAL:
-      // Member UX must NEVER query unscoped contacts.
-      // If scope isn't ready yet, do nothing and wait for listener to refresh.
       if (_isMemberUx && (acct == null || acct.trim().isEmpty)) {
         if (!mounted) return;
         setState(() {
@@ -177,12 +167,11 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
         return;
       }
 
-      // Member UX: ignore search. Staff UX: apply search query.
       final q = _isMemberUx ? '' : _ctl.text.trim();
 
       final items = await svc.list(
         search: q.isEmpty ? null : q,
-        accountNumber: acct, // null in staff => list all
+        accountNumber: acct,
         page: page,
         perPage: _perPage,
       );
@@ -197,7 +186,6 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
         _items = append ? [..._items, ...items] : items;
       });
 
-      // ✅ Member UX: auto-pick deterministically on any match.
       if (_isMemberUx && !_autoPicked && _items.isNotEmpty) {
         _autoPicked = true;
         Future.microtask(() {
@@ -207,6 +195,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
       }
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _error = e.toString();
         _hasMore = false;
@@ -216,9 +205,21 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
   void _clearAndReload() {
     if (_isMemberUx) return;
+
     _debounce?.cancel();
     _ctl.clear();
     _refresh();
+  }
+
+  String _subtitleFor(ZohoContact c) {
+    final parts = <String?>[
+      (c.accountNumber ?? '').trim().isEmpty ? null : c.accountNumber,
+      c.linkedPatientsSummary.trim().isEmpty ? null : c.linkedPatientsSummary,
+      (c.contactType ?? '').trim().isEmpty ? null : c.contactType,
+      c.bestPhone.trim().isEmpty ? null : c.bestPhone,
+    ].whereType<String>().take(3).join(' • ');
+
+    return parts;
   }
 
   @override
@@ -226,7 +227,6 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    // ✅ reactive UX based on policy (no EntryMode checks here)
     final policy = ref.watch(quoteContactPolicyProvider);
     final isMemberUx = policy == QuoteContactPolicy.memberScoped;
 
@@ -279,18 +279,23 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final c = _items[i];
-
-              final subtitle = <String?>[
-                (c.accountNumber ?? '').trim().isEmpty ? null : c.accountNumber,
-                (c.contactType ?? '').trim().isEmpty ? null : c.contactType,
-                c.bestPhone.trim().isEmpty ? null : c.bestPhone,
-              ].whereType<String>().take(2).join(' • ');
-
+              final subtitle = _subtitleFor(c);
               final title = c.displayName.trim();
+              final linkedCount = c.activeLinkedPatientCount;
 
               return ListTile(
                 title: Text(title.isEmpty ? 'Contact' : title),
                 subtitle: subtitle.trim().isEmpty ? null : Text(subtitle),
+                trailing: linkedCount > 0
+                    ? Chip(
+                        visualDensity: VisualDensity.compact,
+                        avatar: const Icon(
+                          Icons.personal_injury_outlined,
+                          size: 16,
+                        ),
+                        label: Text('$linkedCount'),
+                      )
+                    : null,
                 onTap: () => Navigator.of(context).pop(c),
               );
             },

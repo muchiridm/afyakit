@@ -14,7 +14,7 @@ import 'package:afyakit/core/home/widgets/staff/staff_latest_activity_panel.dart
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
-import 'package:afyakit/features/retail/payments/zoho/widgets/payments_list_screen.dart';
+import 'package:afyakit/features/retail/payments/widgets/payments_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 

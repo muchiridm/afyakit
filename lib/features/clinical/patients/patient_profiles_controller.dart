@@ -9,17 +9,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class PatientProfilesState {
   const PatientProfilesState({
     this.items = const <PatientProfile>[],
+    this.linkRequests = const <PatientLinkRequest>[],
     this.isLoading = false,
+    this.isLoadingLinkRequests = false,
     this.isSaving = false,
     this.error,
     this.search = '',
     this.contactId,
     this.relationship,
     this.isActive,
+    this.linkRequestStatus,
   });
 
   final List<PatientProfile> items;
+  final List<PatientLinkRequest> linkRequests;
+
   final bool isLoading;
+  final bool isLoadingLinkRequests;
   final bool isSaving;
   final String? error;
 
@@ -28,9 +34,24 @@ class PatientProfilesState {
   final ContactPatientRelationship? relationship;
   final bool? isActive;
 
+  final PatientLinkRequestStatus? linkRequestStatus;
+
+  bool get hasFilters {
+    return search.trim().isNotEmpty ||
+        contactId != null ||
+        relationship != null ||
+        isActive != null;
+  }
+
+  bool get hasPendingLinkRequests {
+    return linkRequests.any((request) => request.isPending);
+  }
+
   PatientProfilesState copyWith({
     List<PatientProfile>? items,
+    List<PatientLinkRequest>? linkRequests,
     bool? isLoading,
+    bool? isLoadingLinkRequests,
     bool? isSaving,
     String? error,
     bool clearError = false,
@@ -38,13 +59,18 @@ class PatientProfilesState {
     String? contactId,
     ContactPatientRelationship? relationship,
     bool? isActive,
+    PatientLinkRequestStatus? linkRequestStatus,
     bool clearContactId = false,
     bool clearRelationship = false,
     bool clearIsActive = false,
+    bool clearLinkRequestStatus = false,
   }) {
     return PatientProfilesState(
       items: items ?? this.items,
+      linkRequests: linkRequests ?? this.linkRequests,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingLinkRequests:
+          isLoadingLinkRequests ?? this.isLoadingLinkRequests,
       isSaving: isSaving ?? this.isSaving,
       error: clearError ? null : (error ?? this.error),
       search: search ?? this.search,
@@ -53,6 +79,9 @@ class PatientProfilesState {
           ? null
           : (relationship ?? this.relationship),
       isActive: clearIsActive ? null : (isActive ?? this.isActive),
+      linkRequestStatus: clearLinkRequestStatus
+          ? null
+          : (linkRequestStatus ?? this.linkRequestStatus),
     );
   }
 }
@@ -72,18 +101,26 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
   final PatientProfilesService _service;
 
+  // ─────────────────────────────────────────────
+  // Patient profiles
+  // ─────────────────────────────────────────────
+
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final items = await _service.list(
-        search: state.search.trim().isEmpty ? null : state.search.trim(),
+        search: _nullable(state.search),
         contactId: state.contactId,
         relationship: state.relationship,
         isActive: state.isActive,
       );
 
-      state = state.copyWith(items: items, isLoading: false, clearError: true);
+      state = state.copyWith(
+        items: _sortedPatients(items),
+        isLoading: false,
+        clearError: true,
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -94,18 +131,19 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
   Future<void> refresh() => load();
 
+  Future<void> refreshAll() async {
+    await load();
+    await loadLinkRequests();
+  }
+
   void setSearch(String value) {
     state = state.copyWith(search: value);
   }
 
   void setContactId(String? value) {
-    final trimmed = value?.trim();
-    final empty = trimmed == null || trimmed.isEmpty;
+    final trimmed = _nullable(value);
 
-    state = state.copyWith(
-      contactId: empty ? null : trimmed,
-      clearContactId: empty,
-    );
+    state = state.copyWith(contactId: trimmed, clearContactId: trimmed == null);
   }
 
   void setRelationship(ContactPatientRelationship? value) {
@@ -128,21 +166,21 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     bool resetRelationship = false,
     bool resetIsActive = false,
   }) async {
-    final trimmedContactId = contactId?.trim();
+    final trimmedContactId = _nullable(contactId);
 
     state = state.copyWith(
       search: search ?? state.search,
       contactId: resetContactId
           ? null
-          : ((trimmedContactId == null || trimmedContactId.isEmpty)
-                ? state.contactId
-                : trimmedContactId),
+          : contactId == null
+          ? state.contactId
+          : trimmedContactId,
       relationship: resetRelationship
           ? null
           : (relationship ?? state.relationship),
       isActive: resetIsActive ? null : (isActive ?? state.isActive),
       clearContactId:
-          resetContactId || (contactId != null && trimmedContactId!.isEmpty),
+          resetContactId || (contactId != null && trimmedContactId == null),
       clearRelationship: resetRelationship,
       clearIsActive: resetIsActive,
     );
@@ -161,19 +199,16 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     await load();
   }
 
-  Future<void> create(PatientProfileUpsertInput input) async {
+  Future<PatientProfile> create(PatientProfileUpsertInput input) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final created = await _service.create(input);
-
-      final items = <PatientProfile>[created, ...state.items]
-        ..sort(
-          (a, b) =>
-              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
-        );
+      final items = _upsertPatient(state.items, created);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
+
+      return created;
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
@@ -191,23 +226,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
     try {
       final linked = await _service.linkToSelf(patientId, input);
-
-      final existingIndex = state.items.indexWhere(
-        (p) => p.patientId == patientId,
-      );
-
-      List<PatientProfile> items;
-      if (existingIndex >= 0) {
-        items = state.items
-            .map((p) => p.patientId == patientId ? linked : p)
-            .toList(growable: false);
-      } else {
-        items = <PatientProfile>[linked, ...state.items];
-      }
-
-      items.sort(
-        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
-      );
+      final items = _upsertPatient(state.items, linked);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -221,22 +240,19 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     }
   }
 
-  Future<void> update(String patientId, PatientProfileUpsertInput input) async {
+  Future<PatientProfile> update(
+    String patientId,
+    PatientProfileUpsertInput input,
+  ) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final updated = await _service.update(patientId, input);
-
-      final items =
-          state.items
-              .map((p) => p.patientId == patientId ? updated : p)
-              .toList(growable: false)
-            ..sort(
-              (a, b) =>
-                  a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
-            );
+      final items = _upsertPatient(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
+
+      return updated;
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
@@ -250,7 +266,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      await _service.delete(patientId);
+      await _service.remove(patientId);
 
       final items = state.items
           .where((p) => p.patientId != patientId)
@@ -264,5 +280,205 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
       );
       rethrow;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Patient link requests
+  // ─────────────────────────────────────────────
+
+  Future<void> loadLinkRequests({
+    PatientLinkRequestStatus? status,
+    String? patientId,
+    bool resetStatus = false,
+  }) async {
+    state = state.copyWith(
+      isLoadingLinkRequests: true,
+      linkRequestStatus: resetStatus ? null : status,
+      clearLinkRequestStatus: resetStatus,
+      clearError: true,
+    );
+
+    try {
+      final requests = await _service.listLinkRequests(
+        status: resetStatus ? null : (status ?? state.linkRequestStatus),
+        patientId: _nullable(patientId),
+      );
+
+      state = state.copyWith(
+        linkRequests: _sortedLinkRequests(requests),
+        isLoadingLinkRequests: false,
+        clearError: true,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingLinkRequests: false,
+        error: 'Failed to load patient link requests: $e',
+      );
+    }
+  }
+
+  Future<PatientLinkRequest> createLinkRequest(
+    String patientId,
+    PatientLinkRequestCreateInput input,
+  ) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final created = await _service.createLinkRequest(patientId, input);
+      final requests = _upsertLinkRequest(state.linkRequests, created);
+
+      state = state.copyWith(
+        linkRequests: requests,
+        isSaving: false,
+        clearError: true,
+      );
+
+      return created;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to submit link request: $e',
+      );
+      rethrow;
+    }
+  }
+
+  Future<PatientLinkRequest> requestPayerLink(
+    String patientId,
+    PatientLinkRequestCreateInput input,
+  ) {
+    return createLinkRequest(patientId, input);
+  }
+
+  Future<PatientLinkRequest> approveLinkRequest(
+    String requestId,
+    PatientLinkRequestApproveInput input,
+  ) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final approved = await _service.approveLinkRequest(requestId, input);
+      final requests = _upsertLinkRequest(state.linkRequests, approved);
+
+      state = state.copyWith(
+        linkRequests: requests,
+        isSaving: false,
+        clearError: true,
+      );
+
+      await load();
+
+      return approved;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to approve link request: $e',
+      );
+      rethrow;
+    }
+  }
+
+  Future<PatientLinkRequest> rejectLinkRequest(
+    String requestId,
+    PatientLinkRequestRejectInput input,
+  ) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final rejected = await _service.rejectLinkRequest(requestId, input);
+      final requests = _upsertLinkRequest(state.linkRequests, rejected);
+
+      state = state.copyWith(
+        linkRequests: requests,
+        isSaving: false,
+        clearError: true,
+      );
+
+      return rejected;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to reject link request: $e',
+      );
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Sorting / local state helpers
+  // ─────────────────────────────────────────────
+
+  static List<PatientProfile> _upsertPatient(
+    List<PatientProfile> current,
+    PatientProfile patient,
+  ) {
+    final exists = current.any((p) => p.patientId == patient.patientId);
+
+    final items = exists
+        ? current
+              .map((p) => p.patientId == patient.patientId ? patient : p)
+              .toList(growable: false)
+        : <PatientProfile>[patient, ...current];
+
+    return _sortedPatients(items);
+  }
+
+  static List<PatientLinkRequest> _upsertLinkRequest(
+    List<PatientLinkRequest> current,
+    PatientLinkRequest request,
+  ) {
+    final exists = current.any((r) => r.requestId == request.requestId);
+
+    final items = exists
+        ? current
+              .map((r) => r.requestId == request.requestId ? request : r)
+              .toList(growable: false)
+        : <PatientLinkRequest>[request, ...current];
+
+    return _sortedLinkRequests(items);
+  }
+
+  static List<PatientProfile> _sortedPatients(List<PatientProfile> items) {
+    final sorted = [...items];
+
+    sorted.sort((a, b) {
+      final byName = a.fullName.toLowerCase().compareTo(
+        b.fullName.toLowerCase(),
+      );
+
+      if (byName != 0) return byName;
+
+      return a.patientId.compareTo(b.patientId);
+    });
+
+    return sorted;
+  }
+
+  static List<PatientLinkRequest> _sortedLinkRequests(
+    List<PatientLinkRequest> items,
+  ) {
+    final sorted = [...items];
+
+    sorted.sort((a, b) {
+      final aCreated = a.createdAt;
+      final bCreated = b.createdAt;
+
+      if (aCreated != null && bCreated != null) {
+        return bCreated.compareTo(aCreated);
+      }
+
+      if (aCreated != null) return -1;
+      if (bCreated != null) return 1;
+
+      return b.requestId.compareTo(a.requestId);
+    });
+
+    return sorted;
+  }
+
+  static String? _nullable(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
   }
 }

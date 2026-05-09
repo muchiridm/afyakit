@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_state.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
-import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoices_service.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 

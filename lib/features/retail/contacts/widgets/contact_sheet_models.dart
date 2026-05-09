@@ -1,6 +1,6 @@
 // lib/features/retail/contacts/widgets/contact_sheet_models.dart
 
-import '../../shared/models/zoho_contact.dart';
+import '../zoho_contact.dart';
 
 sealed class ContactSheetResult {
   const ContactSheetResult();

@@ -17,7 +17,7 @@ import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_scre
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
-import 'package:afyakit/features/retail/payments/zoho/widgets/payments_list_screen.dart';
+import 'package:afyakit/features/retail/payments/widgets/payments_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 

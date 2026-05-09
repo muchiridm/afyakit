@@ -1,13 +1,13 @@
 // lib/features/retail/quotes/controllers/quote_meta_controller.dart
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 
 @immutable
 class QuoteMetaState {

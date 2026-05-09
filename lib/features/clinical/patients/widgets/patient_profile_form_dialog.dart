@@ -13,8 +13,10 @@ class PatientProfileFormDialog extends StatefulWidget {
   final PatientProfile? initial;
 
   /// Staff/admin only.
-  /// For normal self/dependent creation, keep this false and use the
-  /// separate "Link to me / my dependent" flow instead.
+  ///
+  /// When false, this form creates/edits patient demographics only.
+  /// Member ownership/linking is handled by the separate
+  /// "Link to me / my dependent" flow.
   final bool allowExplicitContactLink;
 
   @override
@@ -37,23 +39,32 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   late PatientGender _gender;
   late bool _isActive;
 
+  bool get _isEdit => widget.initial != null;
+
   @override
   void initState() {
     super.initState();
 
-    final p = widget.initial;
+    final patient = widget.initial;
+    final primaryLink = patient?.primaryLinkedContact;
 
-    _fullNameCtl = TextEditingController(text: p?.fullName ?? '');
-    _dobCtl = TextEditingController(text: p?.dob ?? '');
-    _contactIdCtl = TextEditingController(text: p?.contactId ?? '');
-    _phoneCtl = TextEditingController(text: p?.phone ?? '');
-    _emailCtl = TextEditingController(text: p?.email ?? '');
-    _nationalIdCtl = TextEditingController(text: p?.nationalId ?? '');
-    _notesCtl = TextEditingController(text: p?.notes ?? '');
+    _fullNameCtl = TextEditingController(text: patient?.fullName ?? '');
+    _dobCtl = TextEditingController(text: patient?.dob ?? '');
+    _contactIdCtl = TextEditingController(
+      text: patient?.contactId ?? primaryLink?.contactId ?? '',
+    );
+    _phoneCtl = TextEditingController(text: patient?.phone ?? '');
+    _emailCtl = TextEditingController(text: patient?.email ?? '');
+    _nationalIdCtl = TextEditingController(text: patient?.nationalId ?? '');
+    _notesCtl = TextEditingController(text: patient?.notes ?? '');
 
-    _relationship = p?.relationship ?? ContactPatientRelationship.self;
-    _gender = p?.gender ?? PatientGender.unknown;
-    _isActive = p?.isActive ?? true;
+    _relationship =
+        patient?.relationship ??
+        primaryLink?.relationship ??
+        ContactPatientRelationship.self;
+
+    _gender = patient?.gender ?? PatientGender.unknown;
+    _isActive = patient?.isActive ?? true;
   }
 
   @override
@@ -146,12 +157,92 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     );
   }
 
+  Widget _linkedContactsPreview(PatientProfile patient) {
+    if (patient.linkedContacts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: 672,
+      child: InputDecorator(
+        decoration: _dec(
+          'Existing linked contacts',
+          helper:
+              'Existing associations are shown for review. Adding an associated contact ID creates or updates one link.',
+        ),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: patient.linkedContacts
+              .map((link) {
+                final label = [
+                  link.contactDisplayName?.trim().isNotEmpty == true
+                      ? link.contactDisplayName!.trim()
+                      : link.contactId,
+                  _relationshipLabel(link.relationship),
+                  link.isActive ? 'active' : 'inactive',
+                ].join(' · ');
+
+                return Chip(
+                  label: Text(label),
+                  visualDensity: VisualDensity.compact,
+                );
+              })
+              .toList(growable: false),
+        ),
+      ),
+    );
+  }
+
+  Widget _staffContactLinkField() {
+    if (!widget.allowExplicitContactLink) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: 452,
+      child: TextFormField(
+        controller: _contactIdCtl,
+        decoration: _dec(
+          'Associated Zoho contact ID (optional)',
+          hint: '705213400000...',
+          helper: 'Staff/admin only. Members should use link requests instead.',
+        ),
+      ),
+    );
+  }
+
+  Widget _relationshipField() {
+    return SizedBox(
+      width: 220,
+      child: DropdownButtonFormField<ContactPatientRelationship>(
+        initialValue: _relationship,
+        decoration: _dec(
+          'Relationship',
+          helper: widget.allowExplicitContactLink
+              ? 'Used when an explicit contact association is added.'
+              : 'Used when auto-linking this patient to your own account.',
+        ),
+        items: ContactPatientRelationship.values
+            .map(
+              (value) => DropdownMenuItem(
+                value: value,
+                child: Text(_relationshipLabel(value)),
+              ),
+            )
+            .toList(growable: false),
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() => _relationship = value);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isEdit = widget.initial != null;
-
     return AlertDialog(
-      title: Text(isEdit ? 'Edit patient profile' : 'Add patient profile'),
+      title: Text(_isEdit ? 'Edit patient profile' : 'Add patient profile'),
       content: SizedBox(
         width: 720,
         child: Form(
@@ -161,8 +252,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
               runSpacing: 12,
               spacing: 12,
               children: [
-                if (widget.initial?.patientId != null &&
-                    widget.initial!.patientId.trim().isNotEmpty)
+                if (widget.initial?.patientId.trim().isNotEmpty == true)
                   SizedBox(
                     width: 330,
                     child: InputDecorator(
@@ -189,7 +279,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                 SizedBox(
                   width: 180,
                   child: DropdownButtonFormField<PatientGender>(
-                    value: _gender,
+                    initialValue: _gender,
                     decoration: _dec('Gender'),
                     items: PatientGender.values
                         .map(
@@ -226,41 +316,10 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                     decoration: _dec('National ID'),
                   ),
                 ),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<ContactPatientRelationship>(
-                    value: _relationship,
-                    decoration: _dec(
-                      'Relationship',
-                      helper: widget.allowExplicitContactLink
-                          ? 'Used only if an explicit contact association is added.'
-                          : 'Used for self/dependent ownership.',
-                    ),
-                    items: ContactPatientRelationship.values
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(_relationshipLabel(value)),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _relationship = value);
-                    },
-                  ),
-                ),
-                if (widget.allowExplicitContactLink)
-                  SizedBox(
-                    width: 452,
-                    child: TextFormField(
-                      controller: _contactIdCtl,
-                      decoration: _dec(
-                        'Associated contact ID (optional)',
-                        hint: 'Staff/admin explicit contact link only',
-                      ),
-                    ),
-                  ),
+                _relationshipField(),
+                _staffContactLinkField(),
+                if (widget.allowExplicitContactLink && widget.initial != null)
+                  _linkedContactsPreview(widget.initial!),
                 SizedBox(
                   width: 672,
                   child: TextFormField(
@@ -270,11 +329,17 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                     maxLines: 4,
                   ),
                 ),
-                SwitchListTile(
-                  value: _isActive,
-                  onChanged: (v) => setState(() => _isActive = v),
-                  title: const Text('Active'),
-                  contentPadding: EdgeInsets.zero,
+                SizedBox(
+                  width: 672,
+                  child: SwitchListTile(
+                    value: _isActive,
+                    onChanged: (v) => setState(() => _isActive = v),
+                    title: const Text('Active'),
+                    subtitle: const Text(
+                      'Inactive profiles are hidden from normal active patient lists.',
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
               ],
             ),
@@ -288,7 +353,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         ),
         FilledButton(
           onPressed: _submit,
-          child: Text(isEdit ? 'Save changes' : 'Create'),
+          child: Text(_isEdit ? 'Save changes' : 'Create'),
         ),
       ],
     );
