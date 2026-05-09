@@ -291,16 +291,20 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     String? patientId,
     bool resetStatus = false,
   }) async {
+    final effectiveStatus = resetStatus
+        ? null
+        : (status ?? state.linkRequestStatus);
+
     state = state.copyWith(
       isLoadingLinkRequests: true,
-      linkRequestStatus: resetStatus ? null : status,
+      linkRequestStatus: effectiveStatus,
       clearLinkRequestStatus: resetStatus,
       clearError: true,
     );
 
     try {
       final requests = await _service.listLinkRequests(
-        status: resetStatus ? null : (status ?? state.linkRequestStatus),
+        status: effectiveStatus,
         patientId: _nullable(patientId),
       );
 
@@ -376,6 +380,32 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
       );
       rethrow;
     }
+  }
+
+  Future<PatientLinkRequest> approvePayerLinkRequest(
+    PatientLinkRequest request, {
+    String? contactId,
+    String? accountNumber,
+    String? contactDisplayName,
+    ContactPatientRelationship? relationship,
+  }) {
+    final resolvedContactId = _nullable(contactId) ?? request.targetContactId;
+    final resolvedAccountNumber =
+        _nullable(accountNumber) ?? request.targetAccountNumber;
+    final resolvedDisplayName =
+        _nullable(contactDisplayName) ?? request.targetContactDisplayName;
+
+    return approveLinkRequest(
+      request.requestId,
+      PatientLinkRequestApproveInput(
+        contactId: _nullable(resolvedContactId),
+        accountNumber: _nullable(resolvedContactId) == null
+            ? _nullable(resolvedAccountNumber)
+            : null,
+        contactDisplayName: _nullable(resolvedDisplayName),
+        relationship: relationship ?? request.relationship,
+      ),
+    );
   }
 
   Future<PatientLinkRequest> rejectLinkRequest(

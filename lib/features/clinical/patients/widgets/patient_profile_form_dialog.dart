@@ -1,5 +1,3 @@
-// lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
-
 import 'package:afyakit/features/clinical/patients/patient_profile.dart';
 import 'package:flutter/material.dart';
 
@@ -29,7 +27,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
 
   late final TextEditingController _fullNameCtl;
   late final TextEditingController _dobCtl;
-  late final TextEditingController _contactIdCtl;
+  late final TextEditingController _contactLookupCtl;
   late final TextEditingController _phoneCtl;
   late final TextEditingController _emailCtl;
   late final TextEditingController _nationalIdCtl;
@@ -50,7 +48,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
 
     _fullNameCtl = TextEditingController(text: patient?.fullName ?? '');
     _dobCtl = TextEditingController(text: patient?.dob ?? '');
-    _contactIdCtl = TextEditingController(
+    _contactLookupCtl = TextEditingController(
       text: patient?.contactId ?? primaryLink?.contactId ?? '',
     );
     _phoneCtl = TextEditingController(text: patient?.phone ?? '');
@@ -71,7 +69,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   void dispose() {
     _fullNameCtl.dispose();
     _dobCtl.dispose();
-    _contactIdCtl.dispose();
+    _contactLookupCtl.dispose();
     _phoneCtl.dispose();
     _emailCtl.dispose();
     _nationalIdCtl.dispose();
@@ -93,6 +91,19 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     if (!ok) return 'Use YYYY-MM-DD';
 
     return null;
+  }
+
+  /// Zoho contact IDs are numeric strings.
+  ///
+  /// Account numbers such as AC-K4D7P9Q must not be sent as `contact_id`.
+  String? _contactIdFromLookup(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    final looksLikeZohoContactId = RegExp(r'^\d{8,}$').hasMatch(trimmed);
+    if (!looksLikeZohoContactId) return null;
+
+    return trimmed;
   }
 
   String _relationshipLabel(ContactPatientRelationship value) {
@@ -134,7 +145,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
       dob: _dobCtl.text.trim(),
       gender: _gender,
       contactId: widget.allowExplicitContactLink
-          ? _contactIdCtl.text.trim()
+          ? _contactIdFromLookup(_contactLookupCtl.text)
           : null,
       relationship: _relationship,
       phone: _phoneCtl.text.trim(),
@@ -168,7 +179,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         decoration: _dec(
           'Existing linked contacts',
           helper:
-              'Existing associations are shown for review. Adding an associated contact ID creates or updates one link.',
+              'Existing associations are shown for review. Adding a Zoho contact ID creates or updates one link.',
         ),
         child: Wrap(
           spacing: 8,
@@ -202,11 +213,12 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     return SizedBox(
       width: 452,
       child: TextFormField(
-        controller: _contactIdCtl,
+        controller: _contactLookupCtl,
         decoration: _dec(
           'Associated Zoho contact ID (optional)',
           hint: '705213400000...',
-          helper: 'Staff/admin only. Members should use link requests instead.',
+          helper:
+              'Staff/admin only. Use the numeric Zoho contact ID here. Account-number based linking should use payer link requests.',
         ),
       ),
     );

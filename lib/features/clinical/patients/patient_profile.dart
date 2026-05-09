@@ -791,11 +791,23 @@ class PatientLinkRequestCreateInput {
 class PatientLinkRequestApproveInput {
   const PatientLinkRequestApproveInput({
     this.contactId,
+    this.accountNumber,
     this.contactDisplayName,
     this.relationship,
   });
 
+  /// Canonical Zoho contact ID.
+  ///
+  /// Use this when the selected payer/contact already has a known Zoho
+  /// contact_id.
   final String? contactId;
+
+  /// Human-facing account number.
+  ///
+  /// Use this when the UI has the account number but not the Zoho contact_id.
+  /// The backend resolves this to contact_id before creating the clinical link.
+  final String? accountNumber;
+
   final String? contactDisplayName;
   final ContactPatientRelationship? relationship;
 
@@ -808,6 +820,7 @@ class PatientLinkRequestApproveInput {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'contact_id': _nullable(contactId),
+      'account_number': _nullable(accountNumber),
       'contact_display_name': _nullable(contactDisplayName),
       'relationship': relationship?.name,
     };
