@@ -1,4 +1,6 @@
-import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+// lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
+
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:flutter/material.dart';
 
 class PatientProfileFormDialog extends StatefulWidget {
@@ -33,7 +35,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   late final TextEditingController _nationalIdCtl;
   late final TextEditingController _notesCtl;
 
-  late ContactPatientRelationship _relationship;
+  late PatientContactRelationship _relationship;
   late PatientGender _gender;
   late bool _isActive;
 
@@ -59,7 +61,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     _relationship =
         patient?.relationship ??
         primaryLink?.relationship ??
-        ContactPatientRelationship.self;
+        PatientContactRelationship.self;
 
     _gender = patient?.gender ?? PatientGender.unknown;
     _isActive = patient?.isActive ?? true;
@@ -106,19 +108,21 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     return trimmed;
   }
 
-  String _relationshipLabel(ContactPatientRelationship value) {
+  String _relationshipLabel(PatientContactRelationship value) {
     switch (value) {
-      case ContactPatientRelationship.self:
+      case PatientContactRelationship.self:
         return 'Self';
-      case ContactPatientRelationship.child:
+      case PatientContactRelationship.child:
         return 'Child';
-      case ContactPatientRelationship.spouse:
+      case PatientContactRelationship.spouse:
         return 'Spouse';
-      case ContactPatientRelationship.parent:
+      case PatientContactRelationship.parent:
         return 'Parent';
-      case ContactPatientRelationship.guardian:
+      case PatientContactRelationship.guardian:
         return 'Guardian';
-      case ContactPatientRelationship.other:
+      case PatientContactRelationship.insurance:
+        return 'Insurance';
+      case PatientContactRelationship.other:
         return 'Other';
     }
   }
@@ -227,7 +231,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   Widget _relationshipField() {
     return SizedBox(
       width: 220,
-      child: DropdownButtonFormField<ContactPatientRelationship>(
+      child: DropdownButtonFormField<PatientContactRelationship>(
         initialValue: _relationship,
         decoration: _dec(
           'Relationship',
@@ -235,9 +239,9 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
               ? 'Used when an explicit contact association is added.'
               : 'Used when auto-linking this patient to your own account.',
         ),
-        items: ContactPatientRelationship.values
+        items: PatientContactRelationship.values
             .map(
-              (value) => DropdownMenuItem(
+              (value) => DropdownMenuItem<PatientContactRelationship>(
                 value: value,
                 child: Text(_relationshipLabel(value)),
               ),
@@ -295,7 +299,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                     decoration: _dec('Gender'),
                     items: PatientGender.values
                         .map(
-                          (value) => DropdownMenuItem(
+                          (value) => DropdownMenuItem<PatientGender>(
                             value: value,
                             child: Text(_genderLabel(value)),
                           ),

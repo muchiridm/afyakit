@@ -4,6 +4,7 @@ part of 'all_users_controller.dart';
 
 mixin AllUsersTenantAccessActions
     on StateNotifier<AllUsersState>, AllUsersMembershipActions {
+  @override
   Future<AllUsersService> _ensureSvc();
 
   Future<String?> hqCreateTenantUser({

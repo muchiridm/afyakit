@@ -1,24 +1,52 @@
-import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+// lib/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart
+
+import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
 import 'package:flutter/material.dart';
 
 class PatientProfilesLabels {
   const PatientProfilesLabels._();
 
-  static String relationship(ContactPatientRelationship value) {
+  static const List<PatientContactRelationship> selfLinkRelationships = [
+    PatientContactRelationship.self,
+    PatientContactRelationship.child,
+    PatientContactRelationship.spouse,
+    PatientContactRelationship.parent,
+    PatientContactRelationship.guardian,
+  ];
+
+  static const List<PatientContactRelationship> payerRequestRelationships = [
+    PatientContactRelationship.insurance,
+    PatientContactRelationship.other,
+  ];
+
+  static const List<PatientContactRelationship> staffLinkRelationships = [
+    PatientContactRelationship.self,
+    PatientContactRelationship.child,
+    PatientContactRelationship.spouse,
+    PatientContactRelationship.parent,
+    PatientContactRelationship.guardian,
+    PatientContactRelationship.insurance,
+    PatientContactRelationship.other,
+  ];
+
+  static String relationship(PatientContactRelationship value) {
     switch (value) {
-      case ContactPatientRelationship.self:
+      case PatientContactRelationship.self:
         return 'Self';
-      case ContactPatientRelationship.child:
+      case PatientContactRelationship.child:
         return 'Child';
-      case ContactPatientRelationship.spouse:
+      case PatientContactRelationship.spouse:
         return 'Spouse';
-      case ContactPatientRelationship.parent:
+      case PatientContactRelationship.parent:
         return 'Parent';
-      case ContactPatientRelationship.guardian:
+      case PatientContactRelationship.guardian:
         return 'Guardian';
-      case ContactPatientRelationship.other:
-        return 'Other';
+      case PatientContactRelationship.insurance:
+        return 'Insurance';
+      case PatientContactRelationship.other:
+        return 'Other payer/contact';
     }
   }
 
@@ -82,13 +110,13 @@ class PatientProfilesFilterBar extends StatelessWidget {
 
   final TextEditingController searchController;
   final TextEditingController contactIdController;
-  final ContactPatientRelationship? relationship;
+  final PatientContactRelationship? relationship;
   final bool? isActive;
   final bool allowExplicitContactLink;
 
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<String> onContactIdSubmitted;
-  final ValueChanged<ContactPatientRelationship?> onRelationshipChanged;
+  final ValueChanged<PatientContactRelationship?> onRelationshipChanged;
   final ValueChanged<String?> onStatusChanged;
   final VoidCallback onClearFilters;
 
@@ -127,26 +155,41 @@ class PatientProfilesFilterBar extends StatelessWidget {
               ),
             ),
           SizedBox(
-            width: 200,
-            child: DropdownButtonFormField<ContactPatientRelationship?>(
+            width: 260,
+            child: DropdownButtonFormField<PatientContactRelationship?>(
               initialValue: relationship,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Relationship',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
               items: [
-                const DropdownMenuItem<ContactPatientRelationship?>(
+                const DropdownMenuItem<PatientContactRelationship?>(
                   value: null,
-                  child: Text('All'),
+                  child: Text('All', overflow: TextOverflow.ellipsis),
                 ),
-                ...ContactPatientRelationship.values.map(
-                  (value) => DropdownMenuItem<ContactPatientRelationship?>(
+                ...PatientContactRelationship.values.map(
+                  (value) => DropdownMenuItem<PatientContactRelationship?>(
                     value: value,
-                    child: Text(PatientProfilesLabels.relationship(value)),
+                    child: Text(
+                      PatientProfilesLabels.relationship(value),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
+              selectedItemBuilder: (context) {
+                return [
+                  const Text('All', overflow: TextOverflow.ellipsis),
+                  ...PatientContactRelationship.values.map(
+                    (value) => Text(
+                      PatientProfilesLabels.relationship(value),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ];
+              },
               onChanged: onRelationshipChanged,
             ),
           ),
@@ -156,15 +199,25 @@ class PatientProfilesFilterBar extends StatelessWidget {
               initialValue: isActive == null
                   ? 'all'
                   : (isActive! ? 'active' : 'inactive'),
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Status',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
               items: const [
-                DropdownMenuItem(value: 'all', child: Text('All')),
-                DropdownMenuItem(value: 'active', child: Text('Active')),
-                DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                DropdownMenuItem(
+                  value: 'all',
+                  child: Text('All', overflow: TextOverflow.ellipsis),
+                ),
+                DropdownMenuItem(
+                  value: 'active',
+                  child: Text('Active', overflow: TextOverflow.ellipsis),
+                ),
+                DropdownMenuItem(
+                  value: 'inactive',
+                  child: Text('Inactive', overflow: TextOverflow.ellipsis),
+                ),
               ],
               onChanged: onStatusChanged,
             ),
@@ -221,17 +274,27 @@ class PatientProfileCard extends StatelessWidget {
     super.key,
     required this.patient,
     required this.state,
+    required this.allowExplicitContactLink,
     required this.onLinkToSelf,
     required this.onRequestPayerLink,
+    required this.onLinkContact,
+    required this.onDelinkContact,
     required this.onEdit,
     required this.onDelete,
   });
 
   final PatientProfile patient;
   final PatientProfilesState state;
+  final bool allowExplicitContactLink;
 
+  /// Kept for now because the parent screen still wires this callback.
+  /// The card no longer exposes this as a per-patient action.
   final ValueChanged<PatientProfile> onLinkToSelf;
+
   final ValueChanged<PatientProfile> onRequestPayerLink;
+  final ValueChanged<PatientProfile> onLinkContact;
+  final void Function(PatientProfile patient, PatientLinkedContact link)
+  onDelinkContact;
   final ValueChanged<PatientProfile> onEdit;
   final ValueChanged<PatientProfile> onDelete;
 
@@ -239,7 +302,7 @@ class PatientProfileCard extends StatelessWidget {
     return Text('$label: $value');
   }
 
-  Widget _linkedContactsView() {
+  Widget _linkedContactsView(BuildContext context) {
     if (patient.linkedContacts.isEmpty) {
       final contextualContact = patient.contactDisplayName ?? patient.contactId;
 
@@ -268,14 +331,36 @@ class PatientProfileCard extends StatelessWidget {
                 );
 
                 final status = link.isActive ? 'Active' : 'Inactive';
+                final label = '$title · $relationship · $status';
 
-                return Chip(
-                  label: Text('$title · $relationship · $status'),
+                if (!allowExplicitContactLink || state.isSaving) {
+                  return Chip(
+                    label: Text(label),
+                    visualDensity: VisualDensity.compact,
+                  );
+                }
+
+                return InputChip(
+                  label: Text(label),
                   visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.link_off, size: 16),
+                  tooltip: 'Delink contact',
+                  onPressed: link.isActive
+                      ? () => onDelinkContact(patient, link)
+                      : null,
                 );
               })
               .toList(growable: false),
         ),
+        if (allowExplicitContactLink)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: OutlinedButton.icon(
+              onPressed: state.isSaving ? null : () => onLinkContact(patient),
+              icon: const Icon(Icons.add_link),
+              label: const Text('Link contact/payer'),
+            ),
+          ),
       ],
     );
   }
@@ -301,6 +386,31 @@ class PatientProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actions = <Widget>[
+      if (!allowExplicitContactLink)
+        IconButton(
+          tooltip: 'Request payer',
+          onPressed: state.isSaving ? null : () => onRequestPayerLink(patient),
+          icon: const Icon(Icons.request_quote_outlined),
+        ),
+      if (allowExplicitContactLink)
+        IconButton(
+          tooltip: 'Link contact/payer',
+          onPressed: state.isSaving ? null : () => onLinkContact(patient),
+          icon: const Icon(Icons.add_link),
+        ),
+      IconButton(
+        tooltip: 'Edit',
+        onPressed: state.isSaving ? null : () => onEdit(patient),
+        icon: const Icon(Icons.edit_outlined),
+      ),
+      IconButton(
+        tooltip: 'Delete',
+        onPressed: state.isSaving ? null : () => onDelete(patient),
+        icon: const Icon(Icons.delete_outline),
+      ),
+    ];
+
     return Card(
       child: ListTile(
         title: Text(patient.fullName),
@@ -324,40 +434,14 @@ class PatientProfileCard extends StatelessWidget {
                 PatientProfilesLabels.nullable(patient.nationalId),
               ),
               const SizedBox(height: 6),
-              _linkedContactsView(),
+              _linkedContactsView(context),
               _contextualContactView(context),
               const SizedBox(height: 6),
               _infoLine('Status', patient.isActive ? 'Active' : 'Inactive'),
             ],
           ),
         ),
-        trailing: Wrap(
-          spacing: 8,
-          children: [
-            IconButton(
-              tooltip: 'Link to me / my dependent',
-              onPressed: state.isSaving ? null : () => onLinkToSelf(patient),
-              icon: const Icon(Icons.link),
-            ),
-            IconButton(
-              tooltip: 'Request another payer/contact',
-              onPressed: state.isSaving
-                  ? null
-                  : () => onRequestPayerLink(patient),
-              icon: const Icon(Icons.add_link),
-            ),
-            IconButton(
-              tooltip: 'Edit',
-              onPressed: state.isSaving ? null : () => onEdit(patient),
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: 'Delete',
-              onPressed: state.isSaving ? null : () => onDelete(patient),
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
-        ),
+        trailing: Wrap(spacing: 8, children: actions),
       ),
     );
   }

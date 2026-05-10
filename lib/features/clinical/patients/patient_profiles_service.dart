@@ -1,9 +1,8 @@
-// lib/features/clinical/patients/patient_profiles_service.dart
-
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final patientProfilesServiceProvider = Provider<PatientProfilesService>((ref) {
@@ -71,7 +70,7 @@ class PatientProfilesService {
   Future<List<PatientProfile>> list({
     String? search,
     String? contactId,
-    ContactPatientRelationship? relationship,
+    PatientContactRelationship? relationship,
     bool? isActive,
     int perPage = 50,
     int page = 1,
@@ -145,6 +144,54 @@ class PatientProfilesService {
     PatientProfileLinkToSelfInput input,
   ) {
     return linkToSelf(patientId, input);
+  }
+
+  // ─────────────────────────────────────────────
+  // Staff direct patient-contact links
+  // ─────────────────────────────────────────────
+
+  Future<PatientProfile> linkContact(
+    String patientId,
+    PatientContactLinkInput input,
+  ) async {
+    final id = _requiredId(patientId, 'patientId');
+
+    final response = await api.postUri<Object?>(
+      routes.clinicalPatientLinkedContactCreate(id),
+      data: input.toJson(),
+    );
+
+    final body = _asMap(response.data);
+    return _readPatient(body['patient']);
+  }
+
+  Future<PatientProfile> linkContactToPatient({
+    required String patientId,
+    required PatientContactLinkInput input,
+  }) {
+    return linkContact(patientId, input);
+  }
+
+  Future<PatientProfile> delinkContact({
+    required String patientId,
+    required String contactId,
+  }) async {
+    final pid = _requiredId(patientId, 'patientId');
+    final cid = _requiredId(contactId, 'contactId');
+
+    final response = await api.deleteUri<Object?>(
+      routes.clinicalPatientLinkedContactDelete(patientId: pid, contactId: cid),
+    );
+
+    final body = _asMap(response.data);
+    return _readPatient(body['patient']);
+  }
+
+  Future<PatientProfile> delinkContactFromPatient({
+    required String patientId,
+    required String contactId,
+  }) {
+    return delinkContact(patientId: patientId, contactId: contactId);
   }
 
   Future<void> delete(String patientId) async {

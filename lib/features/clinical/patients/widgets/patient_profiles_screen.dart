@@ -1,8 +1,14 @@
-import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+// lib/features/clinical/patients/widgets/patient_profiles_screen.dart
+
+import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_link_request_dialogs.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_payer_link_dialog.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_payer_self_link_dialog.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,7 +30,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   late final TextEditingController _searchCtl;
   late final TextEditingController _contactIdCtl;
 
-  ContactPatientRelationship? _relationship;
+  PatientContactRelationship? _relationship;
 
   @override
   void initState() {
@@ -144,7 +150,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openLinkToSelfDialog(PatientProfile patient) async {
-    final input = await PatientLinkRequestDialogs.showLinkToSelf(
+    final input = await PatientLinkSelfDialog.show(
       context: context,
       patient: patient,
     );
@@ -168,7 +174,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openRequestPayerLinkDialog(PatientProfile patient) async {
-    final input = await PatientLinkRequestDialogs.showRequestPayerLink(
+    final input = await PatientPayerLinkDialog.showRequest(
       context: context,
       patient: patient,
     );
@@ -191,8 +197,177 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     }
   }
 
+  Future<void> _openLinkContactDialog(PatientProfile patient) async {
+    final contact = await showDialog<ZohoContact>(
+      context: context,
+      builder: (_) => const ContactPickerDialog(),
+    );
+
+    if (contact == null || !mounted) return;
+
+    final relationship = await _pickRelationship(
+      title: 'Link contact to patient',
+      subtitle: '${contact.displayName} will be linked to ${patient.fullName}.',
+      initial: PatientContactRelationship.other,
+    );
+
+    if (relationship == null || !mounted) return;
+
+    try {
+      await ref
+          .read(patientProfilesControllerProvider.notifier)
+          .linkContactToPatient(
+            patientId: patient.patientId,
+            input: PatientContactLinkInput(
+              contactId: contact.contactId,
+              accountNumber: contact.accountNumber,
+              contactDisplayName: contact.displayName,
+              relationship: relationship,
+              isActive: true,
+            ),
+          );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contact linked to patient')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showErrorFromState();
+    }
+  }
+
+  Future<void> _delinkContact(
+    PatientProfile patient,
+    PatientLinkedContact link,
+  ) async {
+    final label = link.contactDisplayName?.trim().isNotEmpty == true
+        ? link.contactDisplayName!.trim()
+        : link.contactId;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delink contact?'),
+        content: Text(
+          'Delink $label from ${patient.fullName}? This will deactivate the link only. It will not delete the patient or Zoho contact.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delink'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref
+          .read(patientProfilesControllerProvider.notifier)
+          .delinkContactFromPatient(
+            patientId: patient.patientId,
+            contactId: link.contactId,
+          );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Contact delinked')));
+    } catch (_) {
+      if (!mounted) return;
+      _showErrorFromState();
+    }
+  }
+
+  Future<PatientContactRelationship?> _pickRelationship({
+    required String title,
+    required String subtitle,
+    required PatientContactRelationship initial,
+  }) async {
+    final selected = ValueNotifier<PatientContactRelationship>(initial);
+
+    try {
+      return await showDialog<PatientContactRelationship>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 420,
+            child: ValueListenableBuilder<PatientContactRelationship>(
+              valueListenable: selected,
+              builder: (_, value, __) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(subtitle),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<PatientContactRelationship>(
+                      initialValue: value,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Relationship',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: PatientProfilesLabels.staffLinkRelationships
+                          .map(
+                            (rel) =>
+                                DropdownMenuItem<PatientContactRelationship>(
+                                  value: rel,
+                                  child: Text(
+                                    PatientProfilesLabels.relationship(rel),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                          )
+                          .toList(growable: false),
+                      selectedItemBuilder: (context) {
+                        return PatientProfilesLabels.staffLinkRelationships
+                            .map(
+                              (rel) => Text(
+                                PatientProfilesLabels.relationship(rel),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )
+                            .toList(growable: false);
+                      },
+                      onChanged: (next) {
+                        if (next != null) selected.value = next;
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(selected.value),
+              child: const Text('Link'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      selected.dispose();
+    }
+  }
+
   Future<void> _openApproveLinkRequestDialog(PatientLinkRequest request) async {
-    final input = await PatientLinkRequestDialogs.showApproveLinkRequest(
+    final input = await PatientPayerLinkDialog.showApprove(
       context: context,
       request: request,
     );
@@ -222,9 +397,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openRejectLinkRequestDialog(PatientLinkRequest request) async {
-    final input = await PatientLinkRequestDialogs.showRejectLinkRequest(
-      context: context,
-    );
+    final input = await PatientPayerLinkDialog.showReject(context: context);
 
     if (input == null || !mounted) return;
 
@@ -282,11 +455,6 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
           ),
         ],
       ),
-
-      /// Important:
-      /// The page body is now one scrollable area with a constrained list inside.
-      /// This avoids the root Column overflow that was happening when errors,
-      /// link requests, filters and cards exceeded the viewport.
       body: Column(
         children: [
           Expanded(
@@ -358,8 +526,12 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                               child: PatientProfileCard(
                                 patient: patient,
                                 state: state,
+                                allowExplicitContactLink:
+                                    widget.allowExplicitContactLink,
                                 onLinkToSelf: _openLinkToSelfDialog,
                                 onRequestPayerLink: _openRequestPayerLinkDialog,
+                                onLinkContact: _openLinkContactDialog,
+                                onDelinkContact: _delinkContact,
                                 onEdit: _openEditDialog,
                                 onDelete: _deletePatient,
                               ),

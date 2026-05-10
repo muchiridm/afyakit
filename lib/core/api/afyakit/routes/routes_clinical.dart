@@ -42,6 +42,10 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   Uri clinicalPatientLinkSelf(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}/link-self');
 
+  // ─────────────────────────────────────────────
+  // 🧾 Clinical / Patient link requests
+  // ─────────────────────────────────────────────
+
   /// POST /clinical/patients/:patientId/link-requests
   Uri clinicalPatientLinkRequestCreate(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}/link-requests');
@@ -71,6 +75,24 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   /// POST /clinical/patients/link-requests/:requestId/reject
   Uri clinicalPatientLinkRequestReject(String requestId) =>
       _uri('clinical/patients/link-requests/${_seg(requestId)}/reject');
+
+  // ─────────────────────────────────────────────
+  // 🔗 Clinical / Staff direct patient-contact links
+  // ─────────────────────────────────────────────
+
+  /// POST /clinical/patients/:patientId/linked-contacts
+  Uri clinicalPatientLinkedContactCreate(String patientId) =>
+      _uri('clinical/patients/${_seg(patientId)}/linked-contacts');
+
+  /// DELETE /clinical/patients/:patientId/linked-contacts/:contactId
+  Uri clinicalPatientLinkedContactDelete({
+    required String patientId,
+    required String contactId,
+  }) {
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/linked-contacts/${_seg(contactId)}',
+    );
+  }
 
   /// PUT /clinical/patients/:patientId
   Uri clinicalPatientUpdate(String patientId) =>

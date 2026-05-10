@@ -1,6 +1,5 @@
-// lib/features/clinical/patients/patient_profiles_controller.dart
-
-import 'package:afyakit/features/clinical/patients/patient_profile.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,7 +30,7 @@ class PatientProfilesState {
 
   final String search;
   final String? contactId;
-  final ContactPatientRelationship? relationship;
+  final PatientContactRelationship? relationship;
   final bool? isActive;
 
   final PatientLinkRequestStatus? linkRequestStatus;
@@ -57,7 +56,7 @@ class PatientProfilesState {
     bool clearError = false,
     String? search,
     String? contactId,
-    ContactPatientRelationship? relationship,
+    PatientContactRelationship? relationship,
     bool? isActive,
     PatientLinkRequestStatus? linkRequestStatus,
     bool clearContactId = false,
@@ -146,7 +145,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(contactId: trimmed, clearContactId: trimmed == null);
   }
 
-  void setRelationship(ContactPatientRelationship? value) {
+  void setRelationship(PatientContactRelationship? value) {
     state = state.copyWith(
       relationship: value,
       clearRelationship: value == null,
@@ -160,7 +159,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   Future<void> applyFilters({
     String? search,
     String? contactId,
-    ContactPatientRelationship? relationship,
+    PatientContactRelationship? relationship,
     bool? isActive,
     bool resetContactId = false,
     bool resetRelationship = false,
@@ -283,6 +282,62 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   }
 
   // ─────────────────────────────────────────────
+  // Staff direct patient-contact links
+  // ─────────────────────────────────────────────
+
+  Future<PatientProfile> linkContactToPatient({
+    required String patientId,
+    required PatientContactLinkInput input,
+  }) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final linked = await _service.linkContactToPatient(
+        patientId: patientId,
+        input: input,
+      );
+
+      final items = _upsertPatient(state.items, linked);
+
+      state = state.copyWith(items: items, isSaving: false, clearError: true);
+
+      return linked;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to link contact to patient: $e',
+      );
+      rethrow;
+    }
+  }
+
+  Future<PatientProfile> delinkContactFromPatient({
+    required String patientId,
+    required String contactId,
+  }) async {
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final updated = await _service.delinkContactFromPatient(
+        patientId: patientId,
+        contactId: contactId,
+      );
+
+      final items = _upsertPatient(state.items, updated);
+
+      state = state.copyWith(items: items, isSaving: false, clearError: true);
+
+      return updated;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to delink contact from patient: $e',
+      );
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // Patient link requests
   // ─────────────────────────────────────────────
 
@@ -387,7 +442,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     String? contactId,
     String? accountNumber,
     String? contactDisplayName,
-    ContactPatientRelationship? relationship,
+    PatientContactRelationship? relationship,
   }) {
     final resolvedContactId = _nullable(contactId) ?? request.targetContactId;
     final resolvedAccountNumber =

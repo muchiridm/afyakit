@@ -225,7 +225,7 @@ final class HomeRegistry {
   static Widget _payments(BuildContext _) => const PaymentsListScreen();
 
   static Widget _patientProfiles(BuildContext _) =>
-      const PatientProfilesScreen();
+      const PatientProfilesScreen(allowExplicitContactLink: true);
 
   static Widget _prescriptions(BuildContext _) =>
       const _ComingSoonScreen(title: 'Prescriptions');
