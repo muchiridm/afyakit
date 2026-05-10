@@ -1,5 +1,7 @@
 // lib/features/retail/quotes/widgets/quotes_list_screen.dart
 
+import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,8 +11,6 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 
 import 'package:afyakit/core/home/widgets/home_shell.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -120,7 +120,7 @@ class QuotesListScreen extends ConsumerWidget {
     WidgetRef ref,
     ZohoQuote q,
   ) async {
-    // Defensive: member scope should never edit
+    // Defensive: member scope should never edit.
     if (_isMine) {
       _toast(context, 'Editing is not available here.');
       return;
@@ -136,7 +136,7 @@ class QuotesListScreen extends ConsumerWidget {
       MaterialPageRoute(builder: (_) => QuoteEditorScreen(editingQuoteId: id)),
     );
 
-    // Defensive refresh
+    // Defensive refresh.
     ref.read(quotesListControllerProvider(scope).notifier).refresh(reset: true);
   }
 
@@ -157,7 +157,7 @@ class QuotesListScreen extends ConsumerWidget {
     if (state.items.isEmpty) {
       return _EmptyState(
         icon: Icons.receipt_long_outlined,
-        title: _isMine ? 'No quotes yet' : 'No quotes yet',
+        title: 'No quotes yet',
         subtitle: _isMine
             ? 'Your quotes will appear here once they are created.'
             : 'Tap “New quote” to build one from the catalog.',
@@ -250,7 +250,6 @@ class _QuoteRow extends StatelessWidget {
           children: [
             SalesDocLeadingIcon(status: q.status),
             const SizedBox(width: AppShape.gap12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,7 +268,6 @@ class _QuoteRow extends StatelessWidget {
                       ),
                       const SizedBox(width: AppShape.gap10),
                       SalesDocStatusChip(status: q.status),
-
                       if (canEdit) ...[
                         const SizedBox(width: AppShape.gap6),
                         IconButton(
@@ -296,9 +294,7 @@ class _QuoteRow extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(width: AppShape.gap12),
-
             Text(
               amount,
               style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -326,6 +322,7 @@ class _QuoteRow extends StatelessWidget {
 
 class _MetaPill extends StatelessWidget {
   const _MetaPill({required this.icon, required this.text});
+
   final IconData icon;
   final String text;
 

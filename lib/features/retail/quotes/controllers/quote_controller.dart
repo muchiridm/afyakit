@@ -3,23 +3,21 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-
-import 'package:afyakit/shared/services/snack_service.dart';
 
 final quoteControllerProvider =
     StateNotifierProvider<QuoteController, QuoteState>(
@@ -119,10 +117,15 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.beginNew();
       state = const QuoteState();
 
+      // Member-scoped quote:
+      // Do not block the editor while resolving the Zoho customer contact.
+      // The UI can show the member's local account immediately while the real
+      // Zoho contact is resolved in the background.
+      //
+      // Submit still calls _ensureMemberContactBound(showError: true), so the
+      // actual Zoho contact requirement remains enforced before quote creation.
       if (_policy == QuoteContactPolicy.memberScoped) {
-        state = state.copyWith(loadingEdit: true, clearError: true);
-        await _ensureMemberContactBound(showError: false);
-        state = state.copyWith(loadingEdit: false);
+        unawaited(_ensureMemberContactBound(showError: false));
       }
 
       await ensureDraftFromLines(requirePrices: requirePrices);

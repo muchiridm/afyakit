@@ -1,6 +1,9 @@
 // lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
 
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:flutter/material.dart';
 
 class PatientProfileFormDialog extends StatefulWidget {
@@ -15,8 +18,7 @@ class PatientProfileFormDialog extends StatefulWidget {
   /// Staff/admin only.
   ///
   /// When false, this form creates/edits patient demographics only.
-  /// Member ownership/linking is handled by the separate
-  /// "Link to me / my dependent" flow.
+  /// Member ownership/linking is handled by the separate self/dependent flow.
   final bool allowExplicitContactLink;
 
   @override
@@ -38,6 +40,8 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   late PatientContactRelationship _relationship;
   late PatientGender _gender;
   late bool _isActive;
+
+  ZohoContact? _selectedContact;
 
   bool get _isEdit => widget.initial != null;
 
@@ -95,9 +99,6 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     return null;
   }
 
-  /// Zoho contact IDs are numeric strings.
-  ///
-  /// Account numbers such as AC-K4D7P9Q must not be sent as `contact_id`.
   String? _contactIdFromLookup(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
@@ -108,23 +109,13 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     return trimmed;
   }
 
-  String _relationshipLabel(PatientContactRelationship value) {
-    switch (value) {
-      case PatientContactRelationship.self:
-        return 'Self';
-      case PatientContactRelationship.child:
-        return 'Child';
-      case PatientContactRelationship.spouse:
-        return 'Spouse';
-      case PatientContactRelationship.parent:
-        return 'Parent';
-      case PatientContactRelationship.guardian:
-        return 'Guardian';
-      case PatientContactRelationship.insurance:
-        return 'Insurance';
-      case PatientContactRelationship.other:
-        return 'Other';
+  String? _effectiveContactId() {
+    final selectedContactId = _selectedContact?.contactId.trim();
+    if (selectedContactId != null && selectedContactId.isNotEmpty) {
+      return selectedContactId;
     }
+
+    return _contactIdFromLookup(_contactLookupCtl.text);
   }
 
   String _genderLabel(PatientGender value) {
@@ -140,6 +131,27 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     }
   }
 
+  Future<void> _pickContact() async {
+    final contact = await showDialog<ZohoContact>(
+      context: context,
+      builder: (_) => const ContactPickerDialog(),
+    );
+
+    if (contact == null || !mounted) return;
+
+    setState(() {
+      _selectedContact = contact;
+      _contactLookupCtl.text = contact.contactId;
+    });
+  }
+
+  void _clearSelectedContact() {
+    setState(() {
+      _selectedContact = null;
+      _contactLookupCtl.clear();
+    });
+  }
+
   void _submit() {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
@@ -148,9 +160,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
       fullName: _fullNameCtl.text.trim(),
       dob: _dobCtl.text.trim(),
       gender: _gender,
-      contactId: widget.allowExplicitContactLink
-          ? _contactIdFromLookup(_contactLookupCtl.text)
-          : null,
+      contactId: widget.allowExplicitContactLink ? _effectiveContactId() : null,
       relationship: _relationship,
       phone: _phoneCtl.text.trim(),
       email: _emailCtl.text.trim(),
@@ -183,7 +193,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         decoration: _dec(
           'Existing linked contacts',
           helper:
-              'Existing associations are shown for review. Adding a Zoho contact ID creates or updates one link.',
+              'Existing associations are shown for review. Picking a contact creates or updates one link.',
         ),
         child: Wrap(
           spacing: 8,
@@ -194,7 +204,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                   link.contactDisplayName?.trim().isNotEmpty == true
                       ? link.contactDisplayName!.trim()
                       : link.contactId,
-                  _relationshipLabel(link.relationship),
+                  PatientProfilesLabels.relationship(link.relationship),
                   link.isActive ? 'active' : 'inactive',
                 ].join(' · ');
 
@@ -209,44 +219,137 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     );
   }
 
-  Widget _staffContactLinkField() {
-    if (!widget.allowExplicitContactLink) {
+  Widget _selectedContactCard() {
+    final selected = _selectedContact;
+    final manualId = _contactIdFromLookup(_contactLookupCtl.text);
+
+    if (selected == null && manualId == null) {
       return const SizedBox.shrink();
     }
 
+    final title = selected?.displayName.trim().isNotEmpty == true
+        ? selected!.displayName.trim()
+        : 'Selected contact';
+
+    final subtitle = selected == null
+        ? manualId!
+        : [
+            selected.contactId,
+            if ((selected.accountNumber ?? '').trim().isNotEmpty)
+              selected.accountNumber!.trim(),
+          ].join(' · ');
+
     return SizedBox(
-      width: 452,
-      child: TextFormField(
-        controller: _contactLookupCtl,
-        decoration: _dec(
-          'Associated Zoho contact ID (optional)',
-          hint: '705213400000...',
-          helper:
-              'Staff/admin only. Use the numeric Zoho contact ID here. Account-number based linking should use payer link requests.',
+      width: 672,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          dense: true,
+          leading: const Icon(Icons.account_circle_outlined),
+          title: Text(title),
+          subtitle: Text(subtitle),
+          trailing: IconButton(
+            tooltip: 'Clear payer/contact',
+            onPressed: _clearSelectedContact,
+            icon: const Icon(Icons.close),
+          ),
         ),
       ),
     );
   }
 
-  Widget _relationshipField() {
+  Widget _staffContactLinkSection() {
+    if (!widget.allowExplicitContactLink) {
+      return const SizedBox.shrink();
+    }
+
     return SizedBox(
-      width: 220,
+      width: 672,
+      child: InputDecorator(
+        decoration: _dec(
+          'Optional payer/contact link',
+          helper:
+              'Staff/admin only. Pick a Zoho contact to link this patient to a payer immediately.',
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 320,
+                  child: TextFormField(
+                    controller: _contactLookupCtl,
+                    decoration: const InputDecoration(
+                      labelText: 'Zoho contact ID',
+                      hintText: '705213400000...',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: _pickContact,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Pick payer/contact'),
+                ),
+                TextButton(
+                  onPressed: _clearSelectedContact,
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _relationshipField(
+              helper:
+                  'Relationship between this patient and the selected payer/contact.',
+            ),
+            const SizedBox(height: 12),
+            _selectedContactCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _relationshipField({String? helper}) {
+    return SizedBox(
+      width: 260,
       child: DropdownButtonFormField<PatientContactRelationship>(
         initialValue: _relationship,
+        isExpanded: true,
         decoration: _dec(
           'Relationship',
-          helper: widget.allowExplicitContactLink
-              ? 'Used when an explicit contact association is added.'
-              : 'Used when auto-linking this patient to your own account.',
+          helper:
+              helper ??
+              (widget.allowExplicitContactLink
+                  ? 'Used when an explicit contact association is added.'
+                  : 'Used when auto-linking this patient to your own account.'),
         ),
-        items: PatientContactRelationship.values
+        items: PatientProfilesLabels.staffLinkRelationships
             .map(
               (value) => DropdownMenuItem<PatientContactRelationship>(
                 value: value,
-                child: Text(_relationshipLabel(value)),
+                child: Text(
+                  PatientProfilesLabels.relationship(value),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             )
             .toList(growable: false),
+        selectedItemBuilder: (context) {
+          return PatientProfilesLabels.staffLinkRelationships
+              .map(
+                (value) => Text(
+                  PatientProfilesLabels.relationship(value),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+              .toList(growable: false);
+        },
         onChanged: (value) {
           if (value == null) return;
           setState(() => _relationship = value);
@@ -261,11 +364,13 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
       title: Text(_isEdit ? 'Edit patient profile' : 'Add patient profile'),
       content: SizedBox(
         width: 720,
+        height: MediaQuery.of(context).size.height * 0.72,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
+            padding: const EdgeInsets.only(top: 14, right: 8, bottom: 8),
             child: Wrap(
-              runSpacing: 12,
+              runSpacing: 14,
               spacing: 12,
               children: [
                 if (widget.initial?.patientId.trim().isNotEmpty == true)
@@ -296,12 +401,16 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                   width: 180,
                   child: DropdownButtonFormField<PatientGender>(
                     initialValue: _gender,
+                    isExpanded: true,
                     decoration: _dec('Gender'),
                     items: PatientGender.values
                         .map(
                           (value) => DropdownMenuItem<PatientGender>(
                             value: value,
-                            child: Text(_genderLabel(value)),
+                            child: Text(
+                              _genderLabel(value),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(growable: false),
@@ -332,8 +441,8 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                     decoration: _dec('National ID'),
                   ),
                 ),
-                _relationshipField(),
-                _staffContactLinkField(),
+                if (!widget.allowExplicitContactLink) _relationshipField(),
+                _staffContactLinkSection(),
                 if (widget.allowExplicitContactLink && widget.initial != null)
                   _linkedContactsPreview(widget.initial!),
                 SizedBox(
