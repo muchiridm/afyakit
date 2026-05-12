@@ -9,6 +9,7 @@ enum ContactPatientRelationship {
   spouse,
   parent,
   guardian,
+  insurance,
   other;
 
   static ContactPatientRelationship fromJson(Object? value) {
@@ -18,6 +19,25 @@ enum ContactPatientRelationship {
       (v) => v.name == raw,
       orElse: () => ContactPatientRelationship.other,
     );
+  }
+
+  String get label {
+    switch (this) {
+      case ContactPatientRelationship.self:
+        return 'Self';
+      case ContactPatientRelationship.child:
+        return 'Child';
+      case ContactPatientRelationship.spouse:
+        return 'Spouse';
+      case ContactPatientRelationship.parent:
+        return 'Parent';
+      case ContactPatientRelationship.guardian:
+        return 'Guardian';
+      case ContactPatientRelationship.insurance:
+        return 'Insurance';
+      case ContactPatientRelationship.other:
+        return 'Other';
+    }
   }
 }
 
@@ -36,6 +56,9 @@ class ContactLinkedPatient {
   final String patientDisplayName;
   final ContactPatientRelationship relationship;
   final bool isActive;
+
+  bool get isInsuranceLink =>
+      relationship == ContactPatientRelationship.insurance;
 
   factory ContactLinkedPatient.fromJson(Object? raw) {
     if (!isRecord(raw)) {
@@ -154,6 +177,7 @@ class ZohoContact {
     this.status,
     this.contactType,
     this.accountNumber,
+    this.isInsurancePayer = false,
     this.linkedPatients = const <ContactLinkedPatient>[],
   });
 
@@ -170,6 +194,10 @@ class ZohoContact {
   /// Wire name from BE: account_number
   final String? accountNumber;
 
+  /// Contact-level flag from Zoho Books custom field cf_is_insurance_payer.
+  /// Wire name from BE: is_insurance_payer
+  final bool isInsurancePayer;
+
   /// Clinical patients linked to this contact/payer.
   ///
   /// Wire name from BE: linked_patients
@@ -184,7 +212,16 @@ class ZohoContact {
     return linkedPatients.where((p) => p.isActive).toList(growable: false);
   }
 
+  List<ContactLinkedPatient> get activeInsuranceLinkedPatients {
+    return activeLinkedPatients
+        .where((p) => p.relationship == ContactPatientRelationship.insurance)
+        .toList(growable: false);
+  }
+
   int get activeLinkedPatientCount => activeLinkedPatients.length;
+
+  int get activeInsuranceLinkedPatientCount =>
+      activeInsuranceLinkedPatients.length;
 
   String get linkedPatientsSummary {
     final active = activeLinkedPatients;
@@ -244,12 +281,14 @@ class ZohoContact {
     final linked = linkedPatientsSummary.trim();
     final type = contactTypeNorm;
 
-    if (acct.isNotEmpty && linked.isNotEmpty) return '$acct • $linked';
-    if (acct.isNotEmpty && type.isNotEmpty) return '$acct • $type';
-    if (acct.isNotEmpty) return acct;
+    final flags = <String>[
+      if (isInsurancePayer) 'Insurance payer',
+      if (acct.isNotEmpty) acct,
+      if (linked.isNotEmpty) linked,
+      if (acct.isEmpty && linked.isEmpty && type.isNotEmpty) type,
+    ];
 
-    if (linked.isNotEmpty) return linked;
-    if (type.isNotEmpty) return type;
+    if (flags.isNotEmpty) return flags.join(' • ');
 
     final p = bestPhone.trim();
     if (p.isNotEmpty) return p;
@@ -278,6 +317,9 @@ class ZohoContact {
     final accountNumberRaw = readStringOrNull(
       j['account_number'] ?? j['accountNumber'],
     );
+
+    final isInsurancePayer =
+        readBool(j['is_insurance_payer'] ?? j['isInsurancePayer']) ?? false;
 
     PersonContact? person;
 
@@ -310,6 +352,7 @@ class ZohoContact {
       status: status,
       contactType: contactType,
       accountNumber: acct.isNotEmpty ? acct : null,
+      isInsurancePayer: isInsurancePayer,
       linkedPatients: _readLinkedPatients(j),
     );
   }
@@ -402,6 +445,7 @@ class ZohoContact {
       'display_name': dn,
       if (company.isNotEmpty) 'company_name': company,
       if (acct.isNotEmpty) 'account_number': acct,
+      if (isInsurancePayer) 'is_insurance_payer': true,
       if (personContact != null)
         'person_contact': personContact!.toJsonForUpsert(),
     };
@@ -415,6 +459,7 @@ class ZohoContact {
     String? status,
     String? contactType,
     String? accountNumber,
+    bool? isInsurancePayer,
     List<ContactLinkedPatient>? linkedPatients,
   }) {
     return ZohoContact(
@@ -425,6 +470,7 @@ class ZohoContact {
       status: status ?? this.status,
       contactType: contactType ?? this.contactType,
       accountNumber: accountNumber ?? this.accountNumber,
+      isInsurancePayer: isInsurancePayer ?? this.isInsurancePayer,
       linkedPatients: linkedPatients ?? this.linkedPatients,
     );
   }
@@ -437,6 +483,7 @@ class ContactUpdatePatch {
     this.companyName,
     this.personContact,
     this.accountNumber,
+    this.isInsurancePayer,
   });
 
   final String? displayName;
@@ -445,6 +492,9 @@ class ContactUpdatePatch {
 
   /// BE expects: account_number, which writes to Zoho cf_account_number.
   final String? accountNumber;
+
+  /// BE expects: is_insurance_payer, which writes to Zoho cf_is_insurance_payer.
+  final bool? isInsurancePayer;
 
   Map<String, Object?> toJson() {
     final out = <String, Object?>{};
@@ -465,6 +515,10 @@ class ContactUpdatePatch {
       final acct = accountNumber!.trim();
       // empty string => explicit clear
       out['account_number'] = acct.isEmpty ? '' : acct;
+    }
+
+    if (isInsurancePayer != null) {
+      out['is_insurance_payer'] = isInsurancePayer;
     }
 
     if (personContact != null) {

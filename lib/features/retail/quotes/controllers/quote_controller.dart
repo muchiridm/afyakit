@@ -28,9 +28,12 @@ class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
 
-    _ref.listen<String?>(zohoContactsAccountScopeProvider, (prev, next) {
-      final p = (prev ?? '').trim();
-      final n = (next ?? '').trim();
+    _ref.listen<ZohoMemberCustomerScope?>(zohoMemberCustomerScopeProvider, (
+      prev,
+      next,
+    ) {
+      final p = prev?.bindKey ?? '';
+      final n = next?.bindKey ?? '';
       if (p == n) return;
 
       if (_policy != QuoteContactPolicy.memberScoped) return;
@@ -119,8 +122,8 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       // Member-scoped quote:
       // Do not block the editor while resolving the Zoho customer contact.
-      // The UI can show the member's local account immediately while the real
-      // Zoho contact is resolved in the background.
+      // The UI can render immediately while the real Zoho contact is resolved
+      // in the background.
       //
       // Submit still calls _ensureMemberContactBound(showError: true), so the
       // actual Zoho contact requirement remains enforced before quote creation.
@@ -156,8 +159,19 @@ class QuoteController extends StateNotifier<QuoteState> {
     final bool isMemberScoped = policy == QuoteContactPolicy.memberScoped;
     if (!isMemberScoped) return;
 
-    final String acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
-        .trim();
+    final scope = _ref.read(zohoMemberCustomerScopeProvider);
+
+    final String acct = (scope?.accountNumber ?? '').trim();
+    final String contactId = (scope?.contactId ?? '').trim();
+
+    if (kDebugMode) {
+      debugPrint(
+        '[QuoteController.memberBind] '
+        'acct=$acct '
+        'contactId=$contactId '
+        'scope=${scope?.debugLabel ?? 'null'}',
+      );
+    }
 
     if (acct.isEmpty) {
       if (showError) {
@@ -168,40 +182,219 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     final ZohoContact? current = _meta.contact;
     final String currentAcct = (current?.accountNumber ?? '').trim();
+    final String currentContactId = (current?.contactId ?? '').trim();
 
-    if (current != null && currentAcct == acct) return;
+    if (current != null) {
+      if (contactId.isNotEmpty && currentContactId == contactId) {
+        if (kDebugMode) {
+          debugPrint(
+            '[QuoteController.memberBind] already bound by contactId=$contactId',
+          );
+        }
+        return;
+      }
+
+      if (currentAcct == acct) {
+        if (kDebugMode) {
+          debugPrint(
+            '[QuoteController.memberBind] already bound by accountNumber=$acct',
+          );
+        }
+        return;
+      }
+    }
+
+    final String bindKey = contactId.isNotEmpty
+        ? 'id:$contactId'
+        : 'acct:$acct';
 
     final Future<void>? inFlight = _memberContactBindFuture;
-    if (inFlight != null && _memberContactBindAcct == acct) {
+    if (inFlight != null && _memberContactBindAcct == bindKey) {
+      if (kDebugMode) {
+        debugPrint(
+          '[QuoteController.memberBind] reusing in-flight bind $bindKey',
+        );
+      }
       await inFlight;
       return;
     }
 
     late final Future<void> bindFuture;
+
     bindFuture = () async {
       try {
         final ZohoContactsService svc = await _ref.read(
           zohoContactsServiceProvider.future,
         );
 
-        final ZohoContact? best = await svc.getByAccountNumber(
-          acct,
-          type: ZohoContactTypeFilter.customerOnly,
-        );
+        ZohoContact? best;
+
+        // Fastest path:
+        // Build a local customer contact from /auth/session/me immediately.
+        // This avoids waiting for Zoho at screen open.
+        if (contactId.isNotEmpty) {
+          final ZohoContact? local = _ref.read(
+            currentMemberZohoContactProvider,
+          );
+
+          if (local != null) {
+            final String localAcct = (local.accountNumber ?? '').trim();
+            final String localContactId = local.contactId.trim();
+
+            if (localContactId == contactId && localAcct == acct) {
+              best = local;
+
+              if (kDebugMode) {
+                debugPrint(
+                  '[QuoteController.memberBind] optimistic local bind '
+                  'contactId=${local.contactId} '
+                  'acct=${local.accountNumber ?? ''} '
+                  'title=${local.title}',
+                );
+              }
+
+              // Refresh quietly; do not block the user.
+              unawaited(
+                _refreshMemberContactInBackground(
+                  contactId: contactId,
+                  accountNumber: acct,
+                ),
+              );
+            }
+          }
+
+          // Network fast path:
+          // Used only if local optimistic contact is unavailable.
+          if (best == null) {
+            if (kDebugMode) {
+              debugPrint(
+                '[QuoteController.memberBind] fast path LIGHT GET contactId=$contactId',
+              );
+            }
+
+            final ZohoContact byId = await svc.getLight(contactId);
+
+            final String byIdAcct = (byId.accountNumber ?? '').trim();
+            final String byIdContactId = byId.contactId.trim();
+
+            if (kDebugMode) {
+              debugPrint(
+                '[QuoteController.memberBind] fast path light result '
+                'byIdContactId=$byIdContactId '
+                'byIdAcct=$byIdAcct '
+                'title=${byId.title}',
+              );
+            }
+
+            if (byIdContactId != contactId) {
+              if (showError) {
+                SnackService.showError('Customer profile link is invalid.');
+              }
+
+              if (kDebugMode) {
+                debugPrint(
+                  '[QuoteController.memberBind] fast path rejected: '
+                  'expected contactId=$contactId got=$byIdContactId',
+                );
+              }
+
+              return;
+            }
+
+            if (byIdAcct.isNotEmpty && byIdAcct != acct) {
+              if (showError) {
+                SnackService.showError(
+                  'Customer profile does not match your account.',
+                );
+              }
+
+              if (kDebugMode) {
+                debugPrint(
+                  '[QuoteController.memberBind] fast path rejected: '
+                  'expected acct=$acct got=$byIdAcct',
+                );
+              }
+
+              return;
+            }
+
+            best = byId;
+          }
+        }
+
+        // Fallback:
+        // Only use the slow account-number lookup when /me has no zoho.contactId.
+        if (best == null) {
+          if (kDebugMode) {
+            debugPrint(
+              '[QuoteController.memberBind] fallback GET by accountNumber=$acct',
+            );
+          }
+
+          best = await svc.getByAccountNumber(
+            acct,
+            type: ZohoContactTypeFilter.customerOnly,
+          );
+        }
 
         if (best == null) {
           if (showError) {
             SnackService.showError('Your customer profile is missing.');
           }
+
+          if (kDebugMode) {
+            debugPrint(
+              '[QuoteController.memberBind] no customer profile found',
+            );
+          }
+
+          return;
+        }
+
+        final String bestAcct = (best.accountNumber ?? '').trim();
+
+        if (bestAcct.isNotEmpty && bestAcct != acct) {
+          if (showError) {
+            SnackService.showError(
+              'Customer profile does not match your account.',
+            );
+          }
+
+          if (kDebugMode) {
+            debugPrint(
+              '[QuoteController.memberBind] final account mismatch: '
+              'expected acct=$acct got=$bestAcct',
+            );
+          }
+
           return;
         }
 
         final ZohoContact? latest = _meta.contact;
         final String latestAcct = (latest?.accountNumber ?? '').trim();
-        if (latest != null && latestAcct == acct) return;
+        final String latestContactId = (latest?.contactId ?? '').trim();
+
+        if (latest != null) {
+          if (contactId.isNotEmpty && latestContactId == contactId) return;
+          if (latestAcct == acct) return;
+        }
 
         _metaCtl.setContact(best);
-      } catch (_) {
+
+        if (kDebugMode) {
+          debugPrint(
+            '[QuoteController.memberBind] bound customer '
+            'contactId=${best.contactId} '
+            'acct=${best.accountNumber ?? ''} '
+            'title=${best.title}',
+          );
+        }
+      } catch (e, st) {
+        if (kDebugMode) {
+          debugPrint('[QuoteController.memberBind] failed: $e');
+          debugPrint('$st');
+        }
+
         if (showError) {
           SnackService.showError('Failed to resolve customer profile.');
         }
@@ -213,10 +406,59 @@ class QuoteController extends StateNotifier<QuoteState> {
       }
     }();
 
-    _memberContactBindAcct = acct;
+    _memberContactBindAcct = bindKey;
     _memberContactBindFuture = bindFuture;
 
     await bindFuture;
+  }
+
+  Future<void> _refreshMemberContactInBackground({
+    required String contactId,
+    required String accountNumber,
+  }) async {
+    final String id = contactId.trim();
+    final String acct = accountNumber.trim();
+
+    if (id.isEmpty || acct.isEmpty) return;
+
+    try {
+      final ZohoContactsService svc = await _ref.read(
+        zohoContactsServiceProvider.future,
+      );
+
+      final ZohoContact fresh = await svc.getLight(id);
+
+      final String freshId = fresh.contactId.trim();
+      final String freshAcct = (fresh.accountNumber ?? '').trim();
+
+      if (freshId != id) return;
+      if (freshAcct.isNotEmpty && freshAcct != acct) return;
+
+      final ZohoContact? latest = _meta.contact;
+      final String latestId = (latest?.contactId ?? '').trim();
+      final String latestAcct = (latest?.accountNumber ?? '').trim();
+
+      // Only patch if the same member contact is still selected.
+      if (latestId == id || latestAcct == acct) {
+        _metaCtl.setContact(fresh);
+
+        if (kDebugMode) {
+          debugPrint(
+            '[QuoteController.memberBind] background refresh patched '
+            'contactId=${fresh.contactId} '
+            'acct=${fresh.accountNumber ?? ''} '
+            'title=${fresh.title}',
+          );
+        }
+      }
+    } catch (e) {
+      // Silent by design: optimistic contact is enough for UI.
+      if (kDebugMode) {
+        debugPrint(
+          '[QuoteController.memberBind] background refresh failed: $e',
+        );
+      }
+    }
   }
 
   Future<String?> submit({required bool requirePrices}) async {
@@ -400,10 +642,12 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<bool> emailQuote(String quoteId) async {
     if (_busy) return false;
+
     final id = quoteId.trim();
     if (id.isEmpty) return false;
 
     state = state.copyWith(sending: true, clearError: true);
+
     try {
       await _engine.email(id);
 
@@ -421,10 +665,12 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<bool> markQuoteSent(String quoteId) async {
     if (_busy) return false;
+
     final id = quoteId.trim();
     if (id.isEmpty) return false;
 
     state = state.copyWith(sending: true, clearError: true);
+
     try {
       await _engine.markSent(id);
 
@@ -446,10 +692,12 @@ class QuoteController extends StateNotifier<QuoteState> {
     DateTime? dueDate,
   }) async {
     if (_busy) return null;
+
     final id = quoteId.trim();
     if (id.isEmpty) return null;
 
     state = state.copyWith(converting: true, clearError: true);
+
     try {
       final res = await _engine.convertToInvoice(
         id,

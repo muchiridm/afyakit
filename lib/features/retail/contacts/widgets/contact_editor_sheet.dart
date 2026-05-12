@@ -30,6 +30,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   late final TextEditingController _mobileCtl;
 
   bool _editing = false;
+  bool _isInsurancePayer = false;
   late _ContactKind _kind;
 
   bool get _isExisting => widget.initial != null;
@@ -44,6 +45,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final c = widget.initial;
 
     _editing = c == null;
+    _isInsurancePayer = c?.isInsurancePayer ?? false;
 
     _displayCtl = TextEditingController(text: c?.displayName ?? '');
     _companyCtl = TextEditingController(text: c?.companyName ?? '');
@@ -90,6 +92,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     _phoneCtl.text = pc?.phone ?? '';
     _mobileCtl.text = pc?.mobile ?? '';
 
+    _isInsurancePayer = c?.isInsurancePayer ?? false;
     _kind = (pc == null) ? _ContactKind.companyOnly : _ContactKind.person;
   }
 
@@ -97,6 +100,18 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     if (_readOnly) return;
     setState(() {
       _kind = next;
+    });
+  }
+
+  void _setInsurancePayer(bool value) {
+    if (_readOnly) return;
+
+    setState(() {
+      _isInsurancePayer = value;
+
+      if (value && _kind != _ContactKind.companyOnly) {
+        _kind = _ContactKind.companyOnly;
+      }
     });
   }
 
@@ -144,6 +159,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
       status: widget.initial?.status,
       contactType: widget.initial?.contactType,
       accountNumber: account.isEmpty ? null : account,
+      isInsurancePayer: _isInsurancePayer,
       linkedPatients:
           widget.initial?.linkedPatients ?? const <ContactLinkedPatient>[],
     );
@@ -186,6 +202,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
         return 'Parent';
       case ContactPatientRelationship.guardian:
         return 'Guardian';
+      case ContactPatientRelationship.insurance:
+        return 'Insurance';
       case ContactPatientRelationship.other:
         return 'Other';
     }
@@ -219,7 +237,9 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
-                    Icons.personal_injury_outlined,
+                    p.relationship == ContactPatientRelationship.insurance
+                        ? Icons.verified_user_outlined
+                        : Icons.personal_injury_outlined,
                     color: p.isActive
                         ? scheme.primary
                         : scheme.onSurfaceVariant,
@@ -233,6 +253,44 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                 if (p != linked.last) const Divider(height: 1),
               ],
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _insurancePayerSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'Insurance'),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+            color: _isInsurancePayer
+                ? scheme.primaryContainer.withOpacity(0.35)
+                : null,
+          ),
+          child: SwitchListTile(
+            value: _isInsurancePayer,
+            onChanged: _readOnly ? null : _setInsurancePayer,
+            secondary: Icon(
+              Icons.verified_user_outlined,
+              color: _isInsurancePayer ? scheme.primary : null,
+            ),
+            title: const Text('Insurance payer'),
+            subtitle: Text(
+              _isInsurancePayer
+                  ? 'This contact can be selected as an insurer/payer for memberships and claims.'
+                  : 'Turn on for insurers such as Britam, CIC, AAR, Jubilee, etc.',
+              style: theme.textTheme.bodySmall,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -292,6 +350,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final status = (c?.status ?? '').trim();
     final personId = (c?.personContact?.contactPersonId ?? '').trim();
     final linkedCount = c?.activeLinkedPatientCount ?? 0;
+    final insuranceLinkedCount = c?.activeInsuranceLinkedPatientCount ?? 0;
 
     return SafeArea(
       child: Padding(
@@ -360,13 +419,15 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                         readOnly: _readOnly,
                         decoration: const InputDecoration(
                           labelText: 'Account No. (optional)',
-                          hintText: 'e.g. DP-000123',
+                          hintText: 'e.g. AC-K4D7-P9Q',
                           prefixIcon: Icon(Icons.confirmation_number_outlined),
                         ),
                         textInputAction: TextInputAction.next,
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
+                      _insurancePayerSection(context),
+
                       _sectionLabel(context, 'Contact type'),
                       const SizedBox(height: 6),
 
@@ -487,6 +548,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                                 value: accountNo,
                               ),
                               _debugRow(
+                                label: 'isInsurancePayer',
+                                value: _isInsurancePayer ? 'true' : 'false',
+                              ),
+                              _debugRow(
                                 label: 'contactPersonId',
                                 value: personId,
                               ),
@@ -498,6 +563,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                               _debugRow(
                                 label: 'linkedPatients',
                                 value: '$linkedCount',
+                              ),
+                              _debugRow(
+                                label: 'insuranceLinks',
+                                value: '$insuranceLinkedCount',
                               ),
                             ],
                           ),

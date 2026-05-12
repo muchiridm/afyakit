@@ -1,0 +1,232 @@
+// lib/features/insurance/claims/controllers/insurance_claims_controller.dart
+
+import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claims/services/insurance_claims_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final insuranceClaimsControllerProvider =
+    StateNotifierProvider<InsuranceClaimsController, InsuranceClaimsState>(
+      (ref) => InsuranceClaimsController(ref),
+    );
+
+class InsuranceClaimsState {
+  const InsuranceClaimsState({
+    this.items = const <InsuranceClaim>[],
+    this.selected,
+    this.isLoading = false,
+    this.isSaving = false,
+    this.error,
+  });
+
+  final List<InsuranceClaim> items;
+  final InsuranceClaim? selected;
+  final bool isLoading;
+  final bool isSaving;
+  final String? error;
+
+  InsuranceClaimsState copyWith({
+    List<InsuranceClaim>? items,
+    InsuranceClaim? selected,
+    bool clearSelected = false,
+    bool? isLoading,
+    bool? isSaving,
+    String? error,
+    bool clearError = false,
+  }) {
+    return InsuranceClaimsState(
+      items: items ?? this.items,
+      selected: clearSelected ? null : selected ?? this.selected,
+      isLoading: isLoading ?? this.isLoading,
+      isSaving: isSaving ?? this.isSaving,
+      error: clearError ? null : error ?? this.error,
+    );
+  }
+}
+
+class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
+  InsuranceClaimsController(this.ref) : super(const InsuranceClaimsState());
+
+  final Ref ref;
+
+  Future<InsuranceClaimsService> get _service async {
+    return ref.read(insuranceClaimsServiceProvider.future);
+  }
+
+  Future<void> load({
+    String? search,
+    String? membershipId,
+    String? patientId,
+    String? patientNo,
+    String? payerContactId,
+    String? invoiceId,
+    String? memberNumber,
+    String? scheme,
+    String? authorizationNumber,
+    String? claimNumber,
+    String? visitNumber,
+    String? prescriptionNumber,
+    InsuranceClaimStatus? status,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) async {
+    if (state.isLoading) return;
+
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final svc = await _service;
+
+      final items = await svc.list(
+        search: search,
+        membershipId: membershipId,
+        patientId: patientId,
+        patientNo: patientNo,
+        payerContactId: payerContactId,
+        invoiceId: invoiceId,
+        memberNumber: memberNumber,
+        scheme: scheme,
+        authorizationNumber: authorizationNumber,
+        claimNumber: claimNumber,
+        visitNumber: visitNumber,
+        prescriptionNumber: prescriptionNumber,
+        status: status,
+        isActive: isActive,
+        perPage: perPage,
+        page: page,
+      );
+
+      state = state.copyWith(items: items, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> loadForInvoice(String invoiceId) {
+    return load(invoiceId: invoiceId);
+  }
+
+  Future<void> loadForMembership(String membershipId) {
+    return load(membershipId: membershipId);
+  }
+
+  Future<InsuranceClaim?> get(String claimId) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      final claim = await svc.get(id);
+
+      state = state.copyWith(selected: claim, isLoading: false);
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<InsuranceClaim?> create(InsuranceClaimUpsertInput input) async {
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+
+      // Backend:
+      // - resolves membership_id
+      // - snapshots patient/payer/member details
+      // - saves claim
+      // - patches Zoho invoice custom fields
+      final claim = await svc.create(input);
+
+      state = state.copyWith(
+        isSaving: false,
+        selected: claim,
+        items: [claim, ...state.items],
+      );
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<InsuranceClaim?> update(
+    String claimId,
+    InsuranceClaimUpsertInput input,
+  ) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+
+      final claim = await svc.update(id, input);
+
+      final updatedItems = state.items
+          .map((item) => item.claimId == claim.claimId ? claim : item)
+          .toList(growable: false);
+
+      state = state.copyWith(
+        isSaving: false,
+        selected: claim,
+        items: updatedItems,
+      );
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<bool> delete(String claimId) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return false;
+    }
+
+    if (state.isSaving) return false;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      await svc.delete(id);
+
+      final updatedItems = state.items
+          .where((item) => item.claimId != id)
+          .toList(growable: false);
+
+      state = state.copyWith(
+        isSaving: false,
+        items: updatedItems,
+        clearSelected: state.selected?.claimId == id,
+      );
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return false;
+    }
+  }
+}

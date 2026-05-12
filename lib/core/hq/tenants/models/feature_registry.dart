@@ -53,6 +53,13 @@ final class FeatureRegistry {
           'Patient profiles, prescriptions, encounters, and clinical records.',
     ),
     FeatureDef(
+      key: FeatureKeys.insurance,
+      label: 'Insurance',
+      icon: Icons.verified_user,
+      description:
+          'Insurance memberships, claim invoices, payer links, and claim tracking.',
+    ),
+    FeatureDef(
       key: FeatureKeys.rider,
       label: 'Rider',
       icon: Icons.delivery_dining,

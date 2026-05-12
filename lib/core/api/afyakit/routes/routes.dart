@@ -10,7 +10,7 @@ part 'routes_inventory.dart';
 part 'routes_misc.dart';
 part 'routes_retail.dart';
 part 'routes_clinical.dart';
-part 'routes_claims.dart';
+part 'routes_insurance.dart';
 
 part 'routes_domains.dart';
 part 'routes_tenants.dart';

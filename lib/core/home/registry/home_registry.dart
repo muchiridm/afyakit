@@ -14,6 +14,8 @@ import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/insurance/claims/widgets/insurance_claims_screen.dart';
+import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -105,6 +107,10 @@ final class HomeRegistry {
       destination: _stockReport,
       allowed: _requireStaff,
     ),
+
+    // ─────────────────────────────────────────────
+    // Clinical
+    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'Patient Profiles',
@@ -119,6 +125,28 @@ final class HomeRegistry {
       destination: _prescriptions,
       allowed: _requireStaff,
     ),
+
+    // ─────────────────────────────────────────────
+    // Insurance
+    // ─────────────────────────────────────────────
+    StaffFeatureDef(
+      featureKey: FeatureKeys.insurance,
+      labelOverride: 'Insurance Memberships',
+      iconOverride: Icons.verified_user_outlined,
+      destination: _insuranceMemberships,
+      allowedRef: _allowInsuranceForTenant,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.insurance,
+      labelOverride: 'Insurance Claims',
+      iconOverride: Icons.assignment_outlined,
+      destination: _insuranceClaims,
+      allowedRef: _allowInsuranceForTenant,
+    ),
+
+    // ─────────────────────────────────────────────
+    // Retail
+    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
@@ -230,6 +258,12 @@ final class HomeRegistry {
   static Widget _prescriptions(BuildContext _) =>
       const _ComingSoonScreen(title: 'Prescriptions');
 
+  static Widget _insuranceMemberships(BuildContext _) =>
+      const InsuranceMembershipsScreen();
+
+  static Widget _insuranceClaims(BuildContext _) =>
+      const InsuranceClaimsScreen();
+
   static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
 
   static Widget _myQuotes(BuildContext _) =>
@@ -249,6 +283,15 @@ final class HomeRegistry {
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
     if (profile == null) return false;
     return profile.features.enabled(FeatureKeys.retail);
+  }
+
+  static bool _allowInsuranceForTenant(WidgetRef ref, AuthUser u) {
+    if (!u.isStaff) return false;
+
+    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    if (profile == null) return false;
+
+    return profile.features.enabled(FeatureKeys.insurance);
   }
 
   static bool _allowMemberUx(WidgetRef ref, AuthUser u) {
@@ -273,6 +316,7 @@ final class HomeRegistry {
     if (scope == HomeScope.member) {
       final k = d.featureKey;
       if (k == FeatureKeys.inventory) return false;
+      if (k == FeatureKeys.insurance) return false;
       if (k == FeatureKeys.reporting) return false;
       if (k == FeatureKeys.hq) return false;
       if (k == FeatureKeys.clinical && d.destination != _myProfiles) {

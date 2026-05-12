@@ -11,6 +11,7 @@ abstract class FeatureKeys {
   static const String inventory = 'inventory';
   static const String retail = 'retail';
   static const String clinical = 'clinical';
+  static const String insurance = 'insurance';
   static const String rider = 'rider';
 
   // ───────── Optional / future groups ─────────

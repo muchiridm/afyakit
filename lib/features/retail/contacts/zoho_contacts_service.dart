@@ -90,6 +90,15 @@ class ZohoContactsService {
     return uri.replace(queryParameters: qp);
   }
 
+  Uri _withInsurancePayerFilter(Uri uri, bool? isInsurancePayer) {
+    if (isInsurancePayer == null) return uri;
+
+    final qp = Map<String, String>.from(uri.queryParameters);
+    qp['is_insurance_payer'] = isInsurancePayer ? 'true' : 'false';
+
+    return uri.replace(queryParameters: qp);
+  }
+
   String _acctKey(String? accountNumber) => (accountNumber ?? '').trim();
 
   void _cacheByAccount(ZohoContact contact) {
@@ -133,6 +142,7 @@ class ZohoContactsService {
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
     String? accountNumber,
+    bool? isInsurancePayer,
   }) async {
     final cleanSearch = (search ?? '').trim();
     final cleanAcct = _acctKey(accountNumber);
@@ -145,11 +155,15 @@ class ZohoContactsService {
       accountNumber: cleanAcct.isEmpty ? null : cleanAcct,
     );
 
-    final uri = _withSearchText(uri0, cleanSearch);
+    final uri = _withInsurancePayerFilter(
+      _withSearchText(uri0, cleanSearch),
+      isInsurancePayer,
+    );
 
     if (_debug) {
       debugPrint(
-        '[ZohoContactsService.list] q="$cleanSearch" account="$cleanAcct" uri=$uri',
+        '[ZohoContactsService.list] q="$cleanSearch" '
+        'account="$cleanAcct" insurancePayer="$isInsurancePayer" uri=$uri',
       );
     }
 
@@ -164,9 +178,15 @@ class ZohoContactsService {
         .map((m) => ZohoContact.fromJson(m.cast<String, Object?>()))
         .toList(growable: false);
 
-    final filtered = type == ZohoContactTypeFilter.any
+    final filteredByType = type == ZohoContactTypeFilter.any
         ? items
         : items.where((c) => _matchesFilter(c, type)).toList(growable: false);
+
+    final filtered = isInsurancePayer == null
+        ? filteredByType
+        : filteredByType
+              .where((c) => c.isInsurancePayer == isInsurancePayer)
+              .toList(growable: false);
 
     for (final contact in filtered) {
       _cacheByAccount(contact);
@@ -178,6 +198,20 @@ class ZohoContactsService {
     }
 
     return filtered;
+  }
+
+  Future<List<ZohoContact>> listInsurancePayers({
+    String? search,
+    int perPage = 100,
+    int page = 1,
+  }) {
+    return list(
+      search: search,
+      perPage: perPage,
+      page: page,
+      type: ZohoContactTypeFilter.customerOnly,
+      isInsurancePayer: true,
+    );
   }
 
   Future<ZohoContact?> getByAccountNumber(
@@ -230,12 +264,63 @@ class ZohoContactsService {
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
+  /// Lightweight contact fetch.
+  ///
+  /// This calls:
+  ///   GET /zoho/v1/contacts/:contactId?light=true
+  ///
+  /// Use this for fast member quote binding where we only need identity/scope
+  /// fields and do not need linked patients or contact-person enrichment.
+  Future<ZohoContact> getLight(String contactId) async {
+    final id = contactId.trim();
+
+    if (id.isEmpty) {
+      throw StateError('contactId is empty');
+    }
+
+    final base = routes.retailGetContact(id);
+    final uri = base.replace(
+      queryParameters: <String, String>{
+        ...base.queryParameters,
+        'light': 'true',
+      },
+    );
+
+    if (_debug) {
+      debugPrint('[ZohoContactsService.getLight] uri=$uri');
+    }
+
+    final res = await api.getUri<Object?>(uri);
+
+    final data = _asJsonMap(res.data);
+    final raw = data['contact'];
+
+    if (raw is Map) {
+      final contact = ZohoContact.fromJson(raw.cast<String, Object?>());
+      _cacheByAccount(contact);
+      return contact;
+    }
+
+    throw StateError('Unexpected response shape: missing "contact"');
+  }
+
   Future<ZohoContact?> getOrNull(String contactId) async {
     final id = contactId.trim();
     if (id.isEmpty) return null;
 
     try {
       return await get(id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<ZohoContact?> getLightOrNull(String contactId) async {
+    final id = contactId.trim();
+    if (id.isEmpty) return null;
+
+    try {
+      return await getLight(id);
     } catch (_) {
       return null;
     }
@@ -298,6 +383,7 @@ class ZohoContactsService {
       displayName: input.displayName,
       companyName: input.companyName,
       accountNumber: input.accountNumber,
+      isInsurancePayer: input.isInsurancePayer,
       personContact: input.personContact == null
           ? const PersonContactPatch(delete: true)
           : PersonContactPatch(
