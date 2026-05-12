@@ -16,7 +16,13 @@ import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_e
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 
 class ContactPickerDialog extends ConsumerStatefulWidget {
-  const ContactPickerDialog({super.key});
+  const ContactPickerDialog({super.key, this.forcePickerMode = false});
+
+  /// Use true when this dialog is opened from staff/admin flows.
+  ///
+  /// It prevents quote/member scoping from auto-picking the current member
+  /// contact when staff need to search all contacts.
+  final bool forcePickerMode;
 
   @override
   ConsumerState<ContactPickerDialog> createState() =>
@@ -87,7 +93,10 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
 
   QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
 
-  bool get _isMemberUx => _policy == QuoteContactPolicy.memberScoped;
+  bool get _isMemberUx {
+    if (widget.forcePickerMode) return false;
+    return _policy == QuoteContactPolicy.memberScoped;
+  }
 
   String? get _accountNumberScopeIfMember {
     if (!_isMemberUx) return null;
@@ -228,7 +237,8 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
     final scheme = theme.colorScheme;
 
     final policy = ref.watch(quoteContactPolicyProvider);
-    final isMemberUx = policy == QuoteContactPolicy.memberScoped;
+    final isMemberUx =
+        !widget.forcePickerMode && policy == QuoteContactPolicy.memberScoped;
 
     final acct = ref.watch(zohoContactsAccountScopeProvider);
     final acctReady = (acct ?? '').trim().isNotEmpty;

@@ -1,5 +1,8 @@
 // lib/features/clinical/patients/widgets/patient_profiles_screen.dart
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
@@ -9,8 +12,9 @@ import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class PatientProfilesScreen extends ConsumerStatefulWidget {
   const PatientProfilesScreen({
@@ -31,6 +35,12 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   late final TextEditingController _contactIdCtl;
 
   PatientContactRelationship? _relationship;
+
+  double get _maxWidth {
+    return widget.allowExplicitContactLink
+        ? AppLayout.pageMaxW
+        : AppLayout.memberPageMaxW;
+  }
 
   @override
   void initState() {
@@ -200,7 +210,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   Future<void> _openLinkContactDialog(PatientProfile patient) async {
     final contact = await showDialog<ZohoContact>(
       context: context,
-      builder: (_) => const ContactPickerDialog(),
+      builder: (_) => const ContactPickerDialog(forcePickerMode: true),
     );
 
     if (contact == null || !mounted) return;
@@ -436,25 +446,27 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     final state = ref.watch(patientProfilesControllerProvider);
     final controller = ref.read(patientProfilesControllerProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Patient profiles'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: state.isLoading ? null : controller.refreshAll,
-            icon: const Icon(Icons.refresh),
+    return AppPage(
+      title: 'Patient profiles',
+      showBack: true,
+      maxWidth: _maxWidth,
+      padding: AppLayout.pagePadding,
+      scrollable: false,
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: state.isLoading ? null : controller.refreshAll,
+          icon: const Icon(Icons.refresh),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: state.isSaving ? null : _openCreateDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('Add patient'),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.icon(
-              onPressed: state.isSaving ? null : _openCreateDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Add patient'),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
       body: Column(
         children: [
           Expanded(
@@ -517,7 +529,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                   )
                 else
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Column(
                       children: state.items
                           .map(

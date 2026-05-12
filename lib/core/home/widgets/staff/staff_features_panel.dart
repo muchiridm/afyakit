@@ -3,15 +3,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
-import 'package:afyakit/core/home/registry/home_registry.dart'; // ✅ use unified registry
+import 'package:afyakit/core/home/registry/home_registry.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
+import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
-import 'package:afyakit/shared/theme/app_shape.dart';
 
 class StaffFeaturesPanel extends ConsumerWidget {
   const StaffFeaturesPanel({super.key});
@@ -23,11 +23,10 @@ class StaffFeaturesPanel extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
     if (user == null) return const SizedBox.shrink();
 
-    final features = HomeRegistry.featureTiles(
-      ref,
-      user,
-      scope: HomeScope.staff,
+    final features = _orderedFeatures(
+      HomeRegistry.featureTiles(ref, user, scope: HomeScope.staff),
     );
+
     if (features.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
@@ -87,6 +86,162 @@ class StaffFeaturesPanel extends ConsumerWidget {
       ),
     );
   }
+
+  static List<StaffFeatureDef> _orderedFeatures(
+    List<StaffFeatureDef> features,
+  ) {
+    final ordered = [...features];
+
+    ordered.sort((a, b) {
+      final byGroup = _featureGroupRank(a).compareTo(_featureGroupRank(b));
+      if (byGroup != 0) return byGroup;
+
+      final byLabel = a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      if (byLabel != 0) return byLabel;
+
+      return _featureKeyText(a).compareTo(_featureKeyText(b));
+    });
+
+    return ordered;
+  }
+
+  static int _featureGroupRank(StaffFeatureDef feature) {
+    final haystack = [
+      _featureKeyText(feature),
+      feature.label,
+      feature.description ?? '',
+    ].join(' ').toLowerCase();
+
+    // 1. Clinical first.
+    if (_containsAny(haystack, const [
+      'clinical',
+      'patient',
+      'patients',
+      'prescription',
+      'prescriptions',
+      'doctor',
+      'consult',
+    ])) {
+      return 10;
+    }
+
+    // 2. Messaging / contacts.
+    // Contacts/customers live here, not Retail.
+    if (_containsAny(haystack, const [
+      'messaging',
+      'message',
+      'messages',
+      'chat',
+      'chats',
+      'conversation',
+      'conversations',
+      'contact',
+      'contacts',
+      'customer',
+      'customers',
+      'whatsapp',
+      'sms',
+      'email',
+      'inbox',
+    ])) {
+      return 20;
+    }
+
+    // 3. Retail / sales / commerce.
+    if (_containsAny(haystack, const [
+      'retail',
+      'catalog',
+      'sales',
+      'quote',
+      'quotes',
+      'invoice',
+      'invoices',
+      'payment',
+      'payments',
+      'delivery',
+      'address',
+      'addresses',
+      'order',
+      'orders',
+      'cart',
+      'checkout',
+    ])) {
+      return 30;
+    }
+
+    // 4. Insurance.
+    if (_containsAny(haystack, const [
+      'insurance',
+      'claim',
+      'claims',
+      'membership',
+      'memberships',
+      'payer',
+      'payers',
+      'scheme',
+      'schemes',
+      'policy',
+      'policies',
+    ])) {
+      return 40;
+    }
+
+    // 5. Inventory / stock / stores.
+    if (_containsAny(haystack, const [
+      'inventory',
+      'stock',
+      'store',
+      'stores',
+      'batch',
+      'batches',
+      'issue',
+      'issues',
+      'delivery note',
+      'reorder',
+      'supplier',
+      'suppliers',
+      'medication',
+      'consumable',
+      'equipment',
+    ])) {
+      return 50;
+    }
+
+    // 6. Admin / HQ / users / settings.
+    if (_containsAny(haystack, const [
+      'admin',
+      'hq',
+      'user',
+      'users',
+      'tenant',
+      'tenants',
+      'setting',
+      'settings',
+      'profile',
+      'profiles',
+      'role',
+      'roles',
+      'permission',
+      'permissions',
+    ])) {
+      return 60;
+    }
+
+    // Everything else last.
+    return 90;
+  }
+
+  static bool _containsAny(String value, List<String> needles) {
+    for (final needle in needles) {
+      if (value.contains(needle)) return true;
+    }
+
+    return false;
+  }
+
+  static String _featureKeyText(StaffFeatureDef feature) {
+    return feature.featureKey.toString().trim().toLowerCase();
+  }
 }
 
 class _FeatureTile extends ConsumerWidget {
@@ -134,6 +289,7 @@ class _FeatureTile extends ConsumerWidget {
 
 class _FeatureHeader extends StatelessWidget {
   const _FeatureHeader({required this.feature});
+
   final StaffFeatureDef feature;
 
   @override
@@ -160,6 +316,7 @@ class _FeatureHeader extends StatelessWidget {
 
 class _FeatureDesc extends StatelessWidget {
   const _FeatureDesc({required this.feature});
+
   final StaffFeatureDef feature;
 
   @override
@@ -180,6 +337,7 @@ class _FeatureDesc extends StatelessWidget {
 
 class _ActionChip extends StatelessWidget {
   const _ActionChip({required this.action});
+
   final StaffFeatureDef action;
 
   @override
@@ -195,6 +353,7 @@ class _ActionChip extends StatelessWidget {
             SnackService.showError('🚧 ${action.label} is not wired yet.');
             return;
           }
+
           Navigator.of(context).push(MaterialPageRoute(builder: dest));
         },
       ),

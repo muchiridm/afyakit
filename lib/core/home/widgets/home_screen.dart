@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/widgets/home_bodies.dart';
+import 'package:afyakit/core/home/widgets/guest/home_guest_body.dart';
+import 'package:afyakit/core/home/widgets/member/home_member_body.dart';
+import 'package:afyakit/core/home/widgets/staff/home_staff_body.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 
@@ -24,6 +26,14 @@ class HomeScreen extends ConsumerWidget {
   /// but keep nullable for safety/future reuse.
   final AuthUser? user;
 
+  double get _maxWidth {
+    return switch (effectiveEntry) {
+      EntryMode.staff => AppLayout.staffPageMaxW,
+      EntryMode.member => AppLayout.memberPageMaxW,
+      EntryMode.guest => AppLayout.pageMaxW,
+    };
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return AppPage(
@@ -32,7 +42,7 @@ class HomeScreen extends ConsumerWidget {
         preferredSize: Size.fromHeight(0),
         child: SizedBox.shrink(),
       ),
-      maxWidth: AppLayout.pageMaxW,
+      maxWidth: _maxWidth,
       padding: AppLayout.pagePadding,
       body: switch (effectiveEntry) {
         EntryMode.guest => const HomeGuestBody(),

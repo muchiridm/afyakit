@@ -31,6 +31,20 @@ enum HomeScope { staff, member }
 final class HomeRegistry {
   const HomeRegistry._();
 
+  /// Synthetic staff-home group for contact/customer communication.
+  ///
+  /// Contacts are still backed by the Retail/Zoho module, but UX-wise they sit
+  /// better under Messaging. Keep this as a string so this file does not depend
+  /// on FeatureKeys.messaging existing yet.
+  static const String _messagingFeatureKey = 'messaging';
+
+  static const StaffFeatureDef _messagingFeatureTile = StaffFeatureDef(
+    featureKey: _messagingFeatureKey,
+    labelOverride: 'Messaging',
+    iconOverride: Icons.chat_bubble_outline_rounded,
+    enabledByTenantFeature: false,
+  );
+
   static List<StaffFeatureDef> featureTiles(
     WidgetRef ref,
     AuthUser user, {
@@ -38,11 +52,36 @@ final class HomeRegistry {
   }) {
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
-    return FeatureRegistry.features
+    final registryTiles = FeatureRegistry.features
         .map((f) => StaffFeatureDef(featureKey: f.key, destination: f.entry))
         .where((d) => _isVisibleForTenant(profile, d))
         .where((d) => _isAllowedForScope(ref, user, d, scope))
-        .toList(growable: false);
+        .toList(growable: true);
+
+    if (scope == HomeScope.staff && _shouldShowMessagingTile(ref, user)) {
+      final alreadyHasMessaging = registryTiles.any(
+        (d) => d.featureKey.trim().toLowerCase() == _messagingFeatureKey,
+      );
+
+      if (!alreadyHasMessaging) {
+        registryTiles.add(_messagingFeatureTile);
+      }
+    }
+
+    return registryTiles.toList(growable: false);
+  }
+
+  static bool _shouldShowMessagingTile(WidgetRef ref, AuthUser user) {
+    return _staffQuickActions
+        .where((d) => d.featureKey == _messagingFeatureKey)
+        .where(
+          (d) => _isVisibleForTenant(
+            ref.watch(tenantProfileProvider).valueOrNull,
+            d,
+          ),
+        )
+        .where((d) => _isAllowedForScope(ref, user, d, HomeScope.staff))
+        .isNotEmpty;
   }
 
   static List<StaffFeatureDef> quickActions(
@@ -66,7 +105,11 @@ final class HomeRegistry {
     required HomeScope scope,
   }) {
     final all = quickActions(ref, user, scope: scope);
-    return all.where((a) => a.featureKey == featureKey).toList(growable: false);
+
+    final key = featureKey.trim().toLowerCase();
+    return all
+        .where((a) => a.featureKey.trim().toLowerCase() == key)
+        .toList(growable: false);
   }
 
   static List<StaffFeatureDef> _actionsForScope(HomeScope scope) {
@@ -79,6 +122,9 @@ final class HomeRegistry {
   }
 
   static const List<StaffFeatureDef> _staffQuickActions = [
+    // ─────────────────────────────────────────────
+    // Inventory
+    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock In',
@@ -127,6 +173,23 @@ final class HomeRegistry {
     ),
 
     // ─────────────────────────────────────────────
+    // Messaging
+    // ─────────────────────────────────────────────
+    StaffFeatureDef(
+      featureKey: _messagingFeatureKey,
+      labelOverride: 'Contacts',
+      iconOverride: Icons.people_alt,
+      destination: _contacts,
+
+      // Contacts are still powered by Retail/Zoho, but displayed under
+      // Messaging on the staff home.
+      allowedRef: _allowRetailForTenant,
+
+      // Do not require a tenant feature named "messaging".
+      enabledByTenantFeature: false,
+    ),
+
+    // ─────────────────────────────────────────────
     // Insurance
     // ─────────────────────────────────────────────
     StaffFeatureDef(
@@ -156,13 +219,6 @@ final class HomeRegistry {
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
-      labelOverride: 'Contacts',
-      iconOverride: Icons.people_alt,
-      destination: _contacts,
-      allowedRef: _allowRetailForTenant,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.retail,
       labelOverride: 'Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _quotes,
@@ -182,6 +238,10 @@ final class HomeRegistry {
       destination: _payments,
       allowedRef: _allowRetailForTenant,
     ),
+
+    // ─────────────────────────────────────────────
+    // Admin
+    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.hq,
       labelOverride: 'Admin',
@@ -296,6 +356,7 @@ final class HomeRegistry {
 
   static bool _allowMemberUx(WidgetRef ref, AuthUser u) {
     if (u.isStaffResolved) return false;
+
     final acct = (u.accountNumber ?? '').trim();
     if (acct.isEmpty) return false;
 
@@ -304,6 +365,7 @@ final class HomeRegistry {
 
     final retail = profile.features.enabled(FeatureKeys.retail);
     final clinical = profile.features.enabled(FeatureKeys.clinical);
+
     return retail || clinical;
   }
 
@@ -315,10 +377,12 @@ final class HomeRegistry {
   ) {
     if (scope == HomeScope.member) {
       final k = d.featureKey;
+
       if (k == FeatureKeys.inventory) return false;
       if (k == FeatureKeys.insurance) return false;
       if (k == FeatureKeys.reporting) return false;
       if (k == FeatureKeys.hq) return false;
+
       if (k == FeatureKeys.clinical && d.destination != _myProfiles) {
         return false;
       }

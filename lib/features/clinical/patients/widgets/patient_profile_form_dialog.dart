@@ -1,19 +1,39 @@
 // lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
 
+import 'package:flutter/material.dart';
+
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
-import 'package:flutter/material.dart';
 
 class PatientProfileFormDialog extends StatefulWidget {
   const PatientProfileFormDialog({
     super.key,
     this.initial,
+    this.initialContact,
+    this.initialRelationship,
+    this.prefillFromContact = true,
     this.allowExplicitContactLink = false,
   });
 
   final PatientProfile? initial;
+
+  /// Optional contact seed.
+  ///
+  /// Useful for staff flows where a patient is being created from an existing
+  /// Zoho contact. For self-patients, this can prefill name/phone/email.
+  /// For dependents, this only seeds the payer/contact link unless
+  /// [prefillFromContact] is true and the relationship is self.
+  final ZohoContact? initialContact;
+
+  /// Optional initial relationship between the patient and selected contact.
+  final PatientContactRelationship? initialRelationship;
+
+  /// Whether to copy contact name/phone/email into patient fields.
+  ///
+  /// This only applies when the relationship is self.
+  final bool prefillFromContact;
 
   /// Staff/admin only.
   ///
@@ -52,20 +72,58 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     final patient = widget.initial;
     final primaryLink = patient?.primaryLinkedContact;
 
-    _fullNameCtl = TextEditingController(text: patient?.fullName ?? '');
-    _dobCtl = TextEditingController(text: patient?.dob ?? '');
-    _contactLookupCtl = TextEditingController(
-      text: patient?.contactId ?? primaryLink?.contactId ?? '',
-    );
-    _phoneCtl = TextEditingController(text: patient?.phone ?? '');
-    _emailCtl = TextEditingController(text: patient?.email ?? '');
-    _nationalIdCtl = TextEditingController(text: patient?.nationalId ?? '');
-    _notesCtl = TextEditingController(text: patient?.notes ?? '');
+    final seedContact = widget.allowExplicitContactLink
+        ? widget.initialContact
+        : null;
+
+    _selectedContact = seedContact;
 
     _relationship =
         patient?.relationship ??
         primaryLink?.relationship ??
+        widget.initialRelationship ??
         PatientContactRelationship.self;
+
+    final shouldPrefillFromContact =
+        seedContact != null &&
+        widget.prefillFromContact &&
+        _relationship == PatientContactRelationship.self;
+
+    final seedName = shouldPrefillFromContact
+        ? _contactDisplayName(seedContact)
+        : '';
+    final seedPhone = shouldPrefillFromContact
+        ? _contactPhone(seedContact)
+        : '';
+    final seedEmail = shouldPrefillFromContact
+        ? _contactEmail(seedContact)
+        : '';
+    final seedContactId = _clean(seedContact?.contactId);
+
+    _fullNameCtl = TextEditingController(
+      text: _firstNonEmpty([patient?.fullName, seedName]),
+    );
+
+    _dobCtl = TextEditingController(text: patient?.dob ?? '');
+
+    _contactLookupCtl = TextEditingController(
+      text: _firstNonEmpty([
+        patient?.contactId,
+        primaryLink?.contactId,
+        seedContactId,
+      ]),
+    );
+
+    _phoneCtl = TextEditingController(
+      text: _firstNonEmpty([patient?.phone, seedPhone]),
+    );
+
+    _emailCtl = TextEditingController(
+      text: _firstNonEmpty([patient?.email, seedEmail]),
+    );
+
+    _nationalIdCtl = TextEditingController(text: patient?.nationalId ?? '');
+    _notesCtl = TextEditingController(text: patient?.notes ?? '');
 
     _gender = patient?.gender ?? PatientGender.unknown;
     _isActive = patient?.isActive ?? true;
@@ -81,6 +139,41 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     _nationalIdCtl.dispose();
     _notesCtl.dispose();
     super.dispose();
+  }
+
+  static String _clean(String? value) {
+    return (value ?? '').trim();
+  }
+
+  static String _firstNonEmpty(List<String?> values) {
+    for (final value in values) {
+      final clean = _clean(value);
+      if (clean.isNotEmpty) return clean;
+    }
+
+    return '';
+  }
+
+  static String _contactDisplayName(ZohoContact? contact) {
+    if (contact == null) return '';
+
+    final displayName = contact.displayName.trim();
+    if (displayName.isNotEmpty) return displayName;
+
+    final title = contact.title.trim();
+    if (title.isNotEmpty) return title;
+
+    return '';
+  }
+
+  static String _contactPhone(ZohoContact? contact) {
+    if (contact == null) return '';
+    return contact.bestPhone.trim();
+  }
+
+  static String _contactEmail(ZohoContact? contact) {
+    if (contact == null) return '';
+    return contact.bestEmail.trim();
   }
 
   String? _required(String? value, String label) {
@@ -131,10 +224,31 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     }
   }
 
+  void _prefillMissingPatientFieldsFromContact(
+    ZohoContact contact, {
+    bool overwrite = false,
+  }) {
+    final name = _contactDisplayName(contact);
+    final phone = _contactPhone(contact);
+    final email = _contactEmail(contact);
+
+    if (overwrite || _fullNameCtl.text.trim().isEmpty) {
+      _fullNameCtl.text = name;
+    }
+
+    if (overwrite || _phoneCtl.text.trim().isEmpty) {
+      _phoneCtl.text = phone;
+    }
+
+    if (overwrite || _emailCtl.text.trim().isEmpty) {
+      _emailCtl.text = email;
+    }
+  }
+
   Future<void> _pickContact() async {
     final contact = await showDialog<ZohoContact>(
       context: context,
-      builder: (_) => const ContactPickerDialog(),
+      builder: (_) => const ContactPickerDialog(forcePickerMode: true),
     );
 
     if (contact == null || !mounted) return;
@@ -142,6 +256,20 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     setState(() {
       _selectedContact = contact;
       _contactLookupCtl.text = contact.contactId;
+
+      if (_relationship == PatientContactRelationship.self) {
+        _prefillMissingPatientFieldsFromContact(contact);
+      }
+    });
+  }
+
+  void _useSelectedContactAsPatient() {
+    final selected = _selectedContact;
+    if (selected == null) return;
+
+    setState(() {
+      _relationship = PatientContactRelationship.self;
+      _prefillMissingPatientFieldsFromContact(selected, overwrite: true);
     });
   }
 
@@ -248,10 +376,21 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
           leading: const Icon(Icons.account_circle_outlined),
           title: Text(title),
           subtitle: Text(subtitle),
-          trailing: IconButton(
-            tooltip: 'Clear payer/contact',
-            onPressed: _clearSelectedContact,
-            icon: const Icon(Icons.close),
+          trailing: Wrap(
+            spacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (selected != null)
+                TextButton(
+                  onPressed: _useSelectedContactAsPatient,
+                  child: const Text('Use as patient'),
+                ),
+              IconButton(
+                tooltip: 'Clear payer/contact',
+                onPressed: _clearSelectedContact,
+                icon: const Icon(Icons.close),
+              ),
+            ],
           ),
         ),
       ),
@@ -269,7 +408,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         decoration: _dec(
           'Optional payer/contact link',
           helper:
-              'Staff/admin only. Pick a Zoho contact to link this patient to a payer immediately.',
+              'Staff/admin only. Pick a Zoho contact to link this patient to a payer immediately. If the contact is the patient, use relationship “Self”.',
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,7 +491,15 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         },
         onChanged: (value) {
           if (value == null) return;
-          setState(() => _relationship = value);
+
+          setState(() {
+            _relationship = value;
+
+            if (value == PatientContactRelationship.self &&
+                _selectedContact != null) {
+              _prefillMissingPatientFieldsFromContact(_selectedContact!);
+            }
+          });
         },
       ),
     );
