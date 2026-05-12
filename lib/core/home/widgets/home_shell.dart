@@ -41,25 +41,26 @@ class HomeShell extends ConsumerWidget {
       data: (user) {
         final realEntry = _entryModeFor(user);
 
-        // Staff-only: allow "view as member"
-        final staffView = ref.watch(staffViewModeProvider);
-
-        var effectiveEntry = realEntry;
-        if (realEntry == EntryMode.staff) {
-          effectiveEntry = (staffView == EntryMode.member)
-              ? EntryMode.member
-              : EntryMode.staff;
-        }
-
         if (realEntry == EntryMode.guest) {
           if (retailEnabled) return const CatalogScreen();
           return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName));
         }
 
+        // Authenticated users land in member mode by default.
+        // Staff can still switch to staff mode explicitly through staffViewModeProvider.
+        final staffView = ref.watch(staffViewModeProvider);
+
+        final effectiveEntry = switch (realEntry) {
+          EntryMode.guest => EntryMode.guest,
+          EntryMode.member => EntryMode.member,
+          EntryMode.staff =>
+            staffView == EntryMode.staff ? EntryMode.staff : EntryMode.member,
+        };
+
         return HomeScreen(
           realEntry: realEntry,
           effectiveEntry: effectiveEntry,
-          user: user, // non-null here
+          user: user,
         );
       },
     );
