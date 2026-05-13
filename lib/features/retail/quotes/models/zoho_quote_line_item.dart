@@ -1,3 +1,5 @@
+// lib/features/retail/quotes/models/zoho_quote_line_item.dart
+
 import 'package:afyakit/shared/utils/parse/primitives.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 
@@ -41,5 +43,43 @@ class ZohoQuoteLineItem {
       lineItemId: id,
       itemTotal: itemTotal,
     );
+  }
+
+  JsonMap toJson() {
+    return <String, dynamic>{
+      'name': name,
+      'description': description,
+      'quantity': quantity,
+      'rate': rate,
+      'line_item_id': lineItemId,
+      'item_total': itemTotal,
+    }..removeWhere(_removeEmpty);
+  }
+
+  ZohoQuoteLineItem copyWith({
+    String? name,
+    String? description,
+    bool clearDescription = false,
+    double? quantity,
+    num? rate,
+    String? lineItemId,
+    bool clearLineItemId = false,
+    num? itemTotal,
+    bool clearItemTotal = false,
+  }) {
+    return ZohoQuoteLineItem(
+      name: name ?? this.name,
+      description: clearDescription ? null : (description ?? this.description),
+      quantity: quantity ?? this.quantity,
+      rate: rate ?? this.rate,
+      lineItemId: clearLineItemId ? null : (lineItemId ?? this.lineItemId),
+      itemTotal: clearItemTotal ? null : (itemTotal ?? this.itemTotal),
+    );
+  }
+
+  static bool _removeEmpty(Object? _, Object? value) {
+    if (value == null) return true;
+    if (value is String && value.trim().isEmpty) return true;
+    return false;
   }
 }

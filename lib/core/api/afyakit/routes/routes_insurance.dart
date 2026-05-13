@@ -13,7 +13,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? patientId,
     String? patientNo,
     String? payerContactId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
     bool? isActive,
     int perPage = 50,
@@ -30,7 +30,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('patient_id', patientId);
     add('patient_no', patientNo);
     add('payer_contact_id', payerContactId);
-    add('member_number', memberNumber);
+    add('member_no', memberNo);
     add('scheme', scheme);
 
     if (isActive != null) {
@@ -67,12 +67,12 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? patientNo,
     String? payerContactId,
     String? invoiceId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? prescriptionNumber,
+    String? authCode,
+    String? claimNo,
+    String? visitNo,
+    String? prescriptionNo,
     String? status,
     bool? isActive,
     int perPage = 50,
@@ -91,12 +91,12 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('patient_no', patientNo);
     add('payer_contact_id', payerContactId);
     add('invoice_id', invoiceId);
-    add('member_number', memberNumber);
+    add('member_no', memberNo);
     add('scheme', scheme);
-    add('authorization_number', authorizationNumber);
-    add('claim_number', claimNumber);
-    add('visit_number', visitNumber);
-    add('prescription_number', prescriptionNumber);
+    add('auth_code', authCode);
+    add('claim_no', claimNo);
+    add('visit_no', visitNo);
+    add('prescription_no', prescriptionNo);
     add('status', status);
 
     if (isActive != null) {
@@ -124,13 +124,6 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
   // Backward-compatible aliases during refactor
   // ─────────────────────────────────────────────
-  //
-  // These keep older FE services compiling while you migrate from:
-  // claimsInsuranceX(...)
-  // to:
-  // insuranceClaimX(...)
-  //
-  // Delete these aliases once all callers are updated.
 
   @Deprecated('Use insuranceClaimsList instead.')
   Uri claimsInsuranceList({
@@ -140,12 +133,12 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? patientNo,
     String? payerContactId,
     String? invoiceId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? prescriptionNumber,
+    String? authCode,
+    String? claimNo,
+    String? visitNo,
+    String? prescriptionNo,
     String? status,
     bool? isActive,
     int perPage = 50,
@@ -158,12 +151,12 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       patientNo: patientNo,
       payerContactId: payerContactId,
       invoiceId: invoiceId,
-      memberNumber: memberNumber,
+      memberNo: memberNo,
       scheme: scheme,
-      authorizationNumber: authorizationNumber,
-      claimNumber: claimNumber,
-      visitNumber: visitNumber,
-      prescriptionNumber: prescriptionNumber,
+      authCode: authCode,
+      claimNo: claimNo,
+      visitNo: visitNo,
+      prescriptionNo: prescriptionNo,
       status: status,
       isActive: isActive,
       perPage: perPage,

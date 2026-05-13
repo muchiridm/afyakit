@@ -1,4 +1,4 @@
-// lib/features/retail/sales/quotes/widgets/quote_detail_screen.dart
+// lib/features/retail/quotes/widgets/quote_detail_screen.dart
 // UPDATED: dumb UI (delegates to QuoteActionController), capability-gated via AuthUserX
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
@@ -26,6 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QuoteDetailScreen extends ConsumerStatefulWidget {
   const QuoteDetailScreen({super.key, required this.quoteId});
+
   final String quoteId;
 
   @override
@@ -37,7 +38,9 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
   Future<void> _run(Future<void> Function() fn) async {
     if (_acting) return;
+
     setState(() => _acting = true);
+
     try {
       await fn();
     } finally {
@@ -70,6 +73,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final quoteId = widget.quoteId.trim();
+
     if (quoteId.isEmpty) {
       return const AppPage(
         title: 'Quote',
@@ -95,6 +99,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       scrollable: false,
       actions: _buildActions(
         context,
+        quoteAsync: quoteAsync,
         actionsCtl: actionsCtl,
         canManage: canManage,
         quoteId: quoteId,
@@ -123,10 +128,14 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
   List<Widget> _buildActions(
     BuildContext context, {
+    required AsyncValue<ZohoQuote> quoteAsync,
     required QuoteActionController actionsCtl,
     required bool canManage,
     required String quoteId,
   }) {
+    final quote = quoteAsync.valueOrNull;
+    final hasInsuranceContext = quote?.hasInsuranceContext == true;
+
     final actions = <Widget>[
       IconButton(
         tooltip: _acting ? 'Working…' : 'PDF',
@@ -158,16 +167,23 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
               break;
           }
         },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: QuoteAction.send, child: Text('Send quote')),
-          PopupMenuItem(
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: QuoteAction.send,
+            child: Text('Send quote'),
+          ),
+          const PopupMenuItem(
             value: QuoteAction.markSent,
             child: Text('Mark as sent'),
           ),
-          PopupMenuDivider(),
+          const PopupMenuDivider(),
           PopupMenuItem(
             value: QuoteAction.invoice,
-            child: Text('Convert to invoice'),
+            child: Text(
+              hasInsuranceContext
+                  ? 'Convert to invoice + claim'
+                  : 'Convert to invoice',
+            ),
           ),
         ],
         icon: const Icon(Icons.more_vert),
@@ -197,6 +213,10 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
         ),
+        if (q.hasPatientContext || q.hasInsuranceContext) ...[
+          const Divider(height: 1),
+          _PatientInsuranceCard(q: q),
+        ],
         if (q.deliveryAddress != null && q.deliveryAddress!.isUsable) ...[
           const Divider(height: 1),
           _DeliveryAddressCard(q: q),
@@ -266,20 +286,137 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   static String _lineTitle(ZohoQuoteLineItem li) {
     final name = _cleanZohoLineText(li.name);
     final v = (name ?? '').trim();
+
     return v.isEmpty ? 'Item' : v;
   }
 
   static String? _lineSubtitle(ZohoQuoteLineItem li) {
     final desc = _cleanZohoLineText(li.description);
     final v = (desc ?? '').trim();
+
     return v.isEmpty ? null : v;
   }
 
   static String? _cleanZohoLineText(Object? v) {
     final t = (v ?? '').toString().trim();
+
     if (t.isEmpty) return null;
     if (t.toLowerCase() == 'item') return null;
+
     return t;
+  }
+}
+
+class _PatientInsuranceCard extends StatelessWidget {
+  const _PatientInsuranceCard({required this.q});
+
+  final ZohoQuote q;
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context);
+    final patient = q.patientSnapshot;
+
+    final patientName = (patient?.fullName ?? '').trim();
+    final patientNo = (patient?.patientNo ?? '').trim();
+    final relationship = (patient?.relationship ?? '').trim();
+
+    final payerName = (patient?.payerName ?? '').trim();
+    final memberNo = (patient?.memberNo ?? '').trim();
+    final scheme = (patient?.scheme ?? '').trim();
+    final membershipId = (q.resolvedMembershipId ?? '').trim();
+
+    final hasPatient = patientName.isNotEmpty || patientNo.isNotEmpty;
+    final hasInsurance =
+        payerName.isNotEmpty ||
+        memberNo.isNotEmpty ||
+        scheme.isNotEmpty ||
+        membershipId.isNotEmpty;
+
+    if (!hasPatient && !hasInsurance) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Wrap(
+        spacing: 18,
+        runSpacing: 12,
+        children: [
+          if (hasPatient)
+            _InfoBlock(
+              icon: Icons.person_outline,
+              title: 'Patient',
+              primary: patientName.isNotEmpty ? patientName : patientNo,
+              secondary: _joinClean([
+                if (patientNo.isNotEmpty && patientName.isNotEmpty) patientNo,
+                if (relationship.isNotEmpty) relationship,
+              ]),
+            ),
+          if (hasInsurance)
+            _InfoBlock(
+              icon: Icons.health_and_safety_outlined,
+              title: 'Insurance',
+              primary: payerName.isNotEmpty ? payerName : 'Insurance claim',
+              secondary: _joinClean([
+                if (memberNo.isNotEmpty) 'Member $memberNo',
+                if (scheme.isNotEmpty) scheme,
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _joinClean(List<String> parts) {
+    return parts.map((e) => e.trim()).where((e) => e.isNotEmpty).join(' · ');
+  }
+}
+
+class _InfoBlock extends StatelessWidget {
+  const _InfoBlock({
+    required this.icon,
+    required this.title,
+    required this.primary,
+    required this.secondary,
+  });
+
+  final IconData icon;
+  final String title;
+  final String primary;
+  final String secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 240, maxWidth: 420),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(primary, style: theme.textTheme.bodyMedium),
+                if (secondary.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(secondary, style: theme.textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -355,6 +492,7 @@ class _DeliveryAddressCard extends StatelessWidget {
 
 class _HeaderStatusPill extends StatelessWidget {
   const _HeaderStatusPill({required this.status});
+
   final String status;
 
   @override

@@ -205,12 +205,12 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
       patientDisplayName: claim.patientDisplayName,
       payerContactId: claim.payerContactId,
       payerDisplayName: claim.payerDisplayName,
-      memberNumber: claim.memberNumber,
+      memberNo: claim.memberNo,
       memberName: claim.memberName,
       principalName: claim.principalName,
       scheme: claim.scheme,
-      medicalCardNumber: claim.medicalCardNumber,
-      policyNumber: claim.policyNumber,
+      medicalCardNo: claim.medicalCardNo,
+      policyNo: claim.policyNo,
       isActive: claim.isActive,
     );
 
@@ -390,12 +390,14 @@ class _ClaimCard extends StatelessWidget {
     final subtitleParts = <String>[
       if ((claim.payerDisplayName ?? '').trim().isNotEmpty)
         claim.payerDisplayName!.trim(),
-      'Member: ${claim.memberNumber}',
+      'Member: ${claim.memberNo}',
       if ((claim.scheme ?? '').trim().isNotEmpty) claim.scheme!.trim(),
-      if ((claim.authorizationNumber ?? '').trim().isNotEmpty)
-        'Auth: ${claim.authorizationNumber!.trim()}',
-      if ((claim.claimNumber ?? '').trim().isNotEmpty)
-        'Claim: ${claim.claimNumber!.trim()}',
+      if ((claim.authCode ?? '').trim().isNotEmpty)
+        'Auth: ${claim.authCode!.trim()}',
+      if ((claim.claimNo ?? '').trim().isNotEmpty)
+        'Claim: ${claim.claimNo!.trim()}',
+      if ((claim.etimsNo ?? '').trim().isNotEmpty)
+        'eTIMS: ${claim.etimsNo!.trim()}',
     ];
 
     return Card.outlined(

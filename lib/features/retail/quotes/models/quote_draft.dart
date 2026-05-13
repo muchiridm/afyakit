@@ -1,9 +1,12 @@
+// lib/features/retail/quotes/models/quote_draft.dart
+
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 
-import 'di_sales_tile.dart';
+import '../../catalog/models/di_sales_tile.dart';
 import 'zoho_quote.dart';
 
 @immutable
@@ -82,6 +85,9 @@ class QuoteDraft {
     this.customerNotes,
     this.reference,
     this.deliveryAddress,
+    this.patientId,
+    this.patientSnapshot,
+    this.membershipId,
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
@@ -97,6 +103,17 @@ class QuoteDraft {
 
   final SalesDocumentAddress? deliveryAddress;
 
+  /// App-level patient context.
+  ///
+  /// The Zoho customer remains the payer/contact.
+  /// This is the person receiving care/medicine.
+  final String? patientId;
+  final SalesDocumentPatientSnapshot? patientSnapshot;
+
+  /// Insurance membership context used later for:
+  /// quote → invoice → insurance claim.
+  final String? membershipId;
+
   final String? currencyCode;
 
   final List<QuoteLineDraft> lines;
@@ -105,6 +122,26 @@ class QuoteDraft {
       (contactId ?? contact?.contactId ?? '').trim();
 
   bool get hasCustomer => customerIdResolved.isNotEmpty;
+
+  String? get resolvedPatientId {
+    final direct = (patientId ?? '').trim();
+    if (direct.isNotEmpty) return direct;
+
+    final snap = (patientSnapshot?.patientId ?? '').trim();
+    return snap.isEmpty ? null : snap;
+  }
+
+  String? get resolvedMembershipId {
+    final direct = (membershipId ?? '').trim();
+    if (direct.isNotEmpty) return direct;
+
+    final snap = (patientSnapshot?.membershipId ?? '').trim();
+    return snap.isEmpty ? null : snap;
+  }
+
+  bool get hasPatientContext => resolvedPatientId != null;
+
+  bool get hasInsuranceContext => resolvedMembershipId != null;
 
   num get total =>
       lines.fold<num>(0, (num s, QuoteLineDraft l) => s + l.amount);
@@ -132,6 +169,12 @@ class QuoteDraft {
     bool clearReference = false,
     SalesDocumentAddress? deliveryAddress,
     bool clearDeliveryAddress = false,
+    String? patientId,
+    bool clearPatientId = false,
+    SalesDocumentPatientSnapshot? patientSnapshot,
+    bool clearPatientSnapshot = false,
+    String? membershipId,
+    bool clearMembershipId = false,
     List<QuoteLineDraft>? lines,
     bool clearLines = false,
     String? currencyCode,
@@ -148,6 +191,13 @@ class QuoteDraft {
       deliveryAddress: clearDeliveryAddress
           ? null
           : (deliveryAddress ?? this.deliveryAddress),
+      patientId: clearPatientId ? null : (patientId ?? this.patientId),
+      patientSnapshot: clearPatientSnapshot
+          ? null
+          : (patientSnapshot ?? this.patientSnapshot),
+      membershipId: clearMembershipId
+          ? null
+          : (membershipId ?? this.membershipId),
       lines: clearLines ? const <QuoteLineDraft>[] : (lines ?? this.lines),
       currencyCode: clearCurrencyCode
           ? null
@@ -180,10 +230,13 @@ class QuoteDraft {
   QuoteDraft removeLineByKey(String key) {
     final String k = key.trim();
     if (k.isEmpty) return this;
+
     final int idx = lines.indexWhere((QuoteLineDraft l) => l.key == k);
     if (idx < 0) return this;
+
     final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
       ..removeAt(idx);
+
     return copyWith(lines: copy);
   }
 
@@ -192,6 +245,22 @@ class QuoteDraft {
       clearContact: true,
       clearContactId: true,
       clearContactName: true,
+    );
+  }
+
+  QuoteDraft clearPatientContext() {
+    return copyWith(
+      clearPatientId: true,
+      clearPatientSnapshot: true,
+      clearMembershipId: true,
+    );
+  }
+
+  QuoteDraft withPatientSnapshot(SalesDocumentPatientSnapshot snapshot) {
+    return copyWith(
+      patientId: snapshot.patientId,
+      patientSnapshot: snapshot,
+      membershipId: snapshot.membershipId,
     );
   }
 
@@ -231,6 +300,9 @@ class QuoteDraft {
       customerNotes: q.notes,
       reference: q.accountNumber,
       deliveryAddress: q.deliveryAddress,
+      patientId: q.resolvedPatientId,
+      patientSnapshot: q.patientSnapshot,
+      membershipId: q.resolvedMembershipId,
       currencyCode: q.currencyCode,
       lines: hydratedLines,
     );

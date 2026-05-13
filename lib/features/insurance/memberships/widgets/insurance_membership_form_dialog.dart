@@ -32,12 +32,12 @@ class _InsuranceMembershipFormDialogState
 
   late final TextEditingController _payerContactIdCtl;
   late final TextEditingController _payerDisplayNameCtl;
-  late final TextEditingController _memberNumberCtl;
+  late final TextEditingController _memberNoCtl;
   late final TextEditingController _memberNameCtl;
   late final TextEditingController _principalNameCtl;
   late final TextEditingController _schemeCtl;
-  late final TextEditingController _medicalCardNumberCtl;
-  late final TextEditingController _policyNumberCtl;
+  late final TextEditingController _medicalCardNoCtl;
+  late final TextEditingController _policyNoCtl;
   late final TextEditingController _providerCodeCtl;
   late final TextEditingController _providerNameCtl;
   late final TextEditingController _effectiveFromCtl;
@@ -60,16 +60,16 @@ class _InsuranceMembershipFormDialogState
     _payerDisplayNameCtl = TextEditingController(
       text: initial?.payerDisplayName ?? widget.payerDisplayName ?? '',
     );
-    _memberNumberCtl = TextEditingController(text: initial?.memberNumber ?? '');
+    _memberNoCtl = TextEditingController(text: initial?.memberNo ?? '');
     _memberNameCtl = TextEditingController(text: initial?.memberName ?? '');
     _principalNameCtl = TextEditingController(
       text: initial?.principalName ?? '',
     );
     _schemeCtl = TextEditingController(text: initial?.scheme ?? '');
-    _medicalCardNumberCtl = TextEditingController(
-      text: initial?.medicalCardNumber ?? '',
+    _medicalCardNoCtl = TextEditingController(
+      text: initial?.medicalCardNo ?? '',
     );
-    _policyNumberCtl = TextEditingController(text: initial?.policyNumber ?? '');
+    _policyNoCtl = TextEditingController(text: initial?.policyNo ?? '');
     _providerCodeCtl = TextEditingController(text: initial?.providerCode ?? '');
     _providerNameCtl = TextEditingController(text: initial?.providerName ?? '');
     _effectiveFromCtl = TextEditingController(
@@ -85,12 +85,12 @@ class _InsuranceMembershipFormDialogState
   void dispose() {
     _payerContactIdCtl.dispose();
     _payerDisplayNameCtl.dispose();
-    _memberNumberCtl.dispose();
+    _memberNoCtl.dispose();
     _memberNameCtl.dispose();
     _principalNameCtl.dispose();
     _schemeCtl.dispose();
-    _medicalCardNumberCtl.dispose();
-    _policyNumberCtl.dispose();
+    _medicalCardNoCtl.dispose();
+    _policyNoCtl.dispose();
     _providerCodeCtl.dispose();
     _providerNameCtl.dispose();
     _effectiveFromCtl.dispose();
@@ -185,12 +185,12 @@ class _InsuranceMembershipFormDialogState
       patientId: widget.patientId,
       payerContactId: _payerContactIdCtl.text.trim(),
       payerDisplayName: _nullable(_payerDisplayNameCtl),
-      memberNumber: _memberNumberCtl.text.trim(),
+      memberNo: _memberNoCtl.text.trim(),
       memberName: _nullable(_memberNameCtl),
       principalName: _nullable(_principalNameCtl),
       scheme: _nullable(_schemeCtl),
-      medicalCardNumber: _nullable(_medicalCardNumberCtl),
-      policyNumber: _nullable(_policyNumberCtl),
+      medicalCardNo: _nullable(_medicalCardNoCtl),
+      policyNo: _nullable(_policyNoCtl),
       providerCode: _nullable(_providerCodeCtl),
       providerName: _nullable(_providerNameCtl),
       effectiveFrom: _nullable(_effectiveFromCtl),
@@ -234,7 +234,7 @@ class _InsuranceMembershipFormDialogState
                 ),
                 _field(
                   width: 220,
-                  controller: _memberNumberCtl,
+                  controller: _memberNoCtl,
                   label: 'Member No',
                   validator: (v) => _required(v, 'Member No'),
                 ),
@@ -251,12 +251,12 @@ class _InsuranceMembershipFormDialogState
                 _field(width: 220, controller: _schemeCtl, label: 'Scheme'),
                 _field(
                   width: 220,
-                  controller: _policyNumberCtl,
+                  controller: _policyNoCtl,
                   label: 'Policy No',
                 ),
                 _field(
                   width: 220,
-                  controller: _medicalCardNumberCtl,
+                  controller: _medicalCardNoCtl,
                   label: 'Medical Card No',
                 ),
                 _field(

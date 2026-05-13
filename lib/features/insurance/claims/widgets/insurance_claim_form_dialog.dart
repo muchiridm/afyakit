@@ -30,17 +30,25 @@ class InsuranceClaimFormDialog extends StatefulWidget {
 class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _authorizationNumberCtl;
-  late final TextEditingController _claimNumberCtl;
-  late final TextEditingController _visitNumberCtl;
+  late final TextEditingController _authCodeCtl;
+  late final TextEditingController _claimNoCtl;
+  late final TextEditingController _visitNoCtl;
   late final TextEditingController _serviceDateCtl;
-  late final TextEditingController _prescriptionNumberCtl;
+  late final TextEditingController _prescriptionNoCtl;
   late final TextEditingController _prescriberNameCtl;
   late final TextEditingController _diagnosisCtl;
   late final TextEditingController _icd10CodeCtl;
   late final TextEditingController _investigationsCtl;
   late final TextEditingController _treatmentRecommendationsCtl;
   late final TextEditingController _notesCtl;
+
+  late ClaimFormStatus _claimFormStatus;
+  late EtimsStatus _etimsStatus;
+
+  late final TextEditingController _claimFormUrlCtl;
+  late final TextEditingController _invoicePdfUrlCtl;
+  late final TextEditingController _etimsNoCtl;
+  late final TextEditingController _etimsUrlCtl;
 
   String? _membershipId;
   InsuranceClaimStatus _status = InsuranceClaimStatus.draft;
@@ -54,14 +62,12 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
 
     final initial = widget.initial;
 
-    _authorizationNumberCtl = TextEditingController(
-      text: initial?.authorizationNumber ?? '',
-    );
-    _claimNumberCtl = TextEditingController(text: initial?.claimNumber ?? '');
-    _visitNumberCtl = TextEditingController(text: initial?.visitNumber ?? '');
+    _authCodeCtl = TextEditingController(text: initial?.authCode ?? '');
+    _claimNoCtl = TextEditingController(text: initial?.claimNo ?? '');
+    _visitNoCtl = TextEditingController(text: initial?.visitNo ?? '');
     _serviceDateCtl = TextEditingController(text: initial?.serviceDate ?? '');
-    _prescriptionNumberCtl = TextEditingController(
-      text: initial?.prescriptionNumber ?? '',
+    _prescriptionNoCtl = TextEditingController(
+      text: initial?.prescriptionNo ?? '',
     );
     _prescriberNameCtl = TextEditingController(
       text: initial?.prescriberName ?? '',
@@ -75,6 +81,16 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
       text: initial?.treatmentRecommendations ?? '',
     );
     _notesCtl = TextEditingController(text: initial?.notes ?? '');
+
+    _claimFormStatus = initial?.claimFormStatus ?? ClaimFormStatus.pending;
+    _etimsStatus = initial?.etimsStatus ?? EtimsStatus.pending;
+
+    _claimFormUrlCtl = TextEditingController(text: initial?.claimFormUrl ?? '');
+    _invoicePdfUrlCtl = TextEditingController(
+      text: initial?.invoicePdfUrl ?? '',
+    );
+    _etimsNoCtl = TextEditingController(text: initial?.etimsNo ?? '');
+    _etimsUrlCtl = TextEditingController(text: initial?.etimsUrl ?? '');
 
     _status = initial?.status ?? InsuranceClaimStatus.draft;
     _isActive = initial?.isActive ?? true;
@@ -91,17 +107,22 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
 
   @override
   void dispose() {
-    _authorizationNumberCtl.dispose();
-    _claimNumberCtl.dispose();
-    _visitNumberCtl.dispose();
+    _authCodeCtl.dispose();
+    _claimNoCtl.dispose();
+    _visitNoCtl.dispose();
     _serviceDateCtl.dispose();
-    _prescriptionNumberCtl.dispose();
+    _prescriptionNoCtl.dispose();
     _prescriberNameCtl.dispose();
     _diagnosisCtl.dispose();
     _icd10CodeCtl.dispose();
     _investigationsCtl.dispose();
     _treatmentRecommendationsCtl.dispose();
     _notesCtl.dispose();
+
+    _claimFormUrlCtl.dispose();
+    _invoicePdfUrlCtl.dispose();
+    _etimsNoCtl.dispose();
+    _etimsUrlCtl.dispose();
 
     super.dispose();
   }
@@ -162,7 +183,7 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
   String _membershipLabel(InsuranceMembership membership) {
     final patient = membership.patientDisplayName?.trim() ?? '';
     final payer = membership.payerDisplayName?.trim() ?? '';
-    final memberNo = membership.memberNumber.trim();
+    final memberNo = membership.memberNo.trim();
     final scheme = membership.scheme?.trim() ?? '';
 
     final parts = <String>[
@@ -208,17 +229,23 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
       membershipId: membershipId,
       invoiceId: widget.invoiceId,
       invoiceNumber: widget.invoiceNumber,
-      authorizationNumber: _nullable(_authorizationNumberCtl),
-      claimNumber: _nullable(_claimNumberCtl),
-      visitNumber: _nullable(_visitNumberCtl),
+      authCode: _nullable(_authCodeCtl),
+      claimNo: _nullable(_claimNoCtl),
+      visitNo: _nullable(_visitNoCtl),
       serviceDate: _nullable(_serviceDateCtl),
-      prescriptionNumber: _nullable(_prescriptionNumberCtl),
+      prescriptionNo: _nullable(_prescriptionNoCtl),
       prescriberName: _nullable(_prescriberNameCtl),
       diagnosis: _nullable(_diagnosisCtl),
       icd10Code: _nullable(_icd10CodeCtl),
       investigations: _nullable(_investigationsCtl),
       treatmentRecommendations: _nullable(_treatmentRecommendationsCtl),
       notes: _nullable(_notesCtl),
+      claimFormStatus: _claimFormStatus,
+      claimFormUrl: _nullable(_claimFormUrlCtl),
+      invoicePdfUrl: _nullable(_invoicePdfUrlCtl),
+      etimsStatus: _etimsStatus,
+      etimsNo: _nullable(_etimsNoCtl),
+      etimsUrl: _nullable(_etimsUrlCtl),
       status: _status,
       isActive: _isActive,
     );
@@ -278,19 +305,11 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                 ),
                 _field(
                   width: 220,
-                  controller: _authorizationNumberCtl,
+                  controller: _authCodeCtl,
                   label: 'Auth Code',
                 ),
-                _field(
-                  width: 220,
-                  controller: _claimNumberCtl,
-                  label: 'Claim No',
-                ),
-                _field(
-                  width: 220,
-                  controller: _visitNumberCtl,
-                  label: 'Visit No',
-                ),
+                _field(width: 220, controller: _claimNoCtl, label: 'Claim No'),
+                _field(width: 220, controller: _visitNoCtl, label: 'Visit No'),
                 _field(
                   width: 220,
                   controller: _serviceDateCtl,
@@ -300,7 +319,7 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                 ),
                 _field(
                   width: 220,
-                  controller: _prescriptionNumberCtl,
+                  controller: _prescriptionNoCtl,
                   label: 'Prescription No',
                 ),
                 _field(
@@ -333,6 +352,64 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                   minLines: 2,
                   maxLines: 4,
                 ),
+                const SizedBox(width: 720, child: Divider()),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<ClaimFormStatus>(
+                    initialValue: _claimFormStatus,
+                    isExpanded: true,
+                    decoration: _dec('Claim Form'),
+                    items: ClaimFormStatus.values
+                        .map(
+                          (status) => DropdownMenuItem(
+                            value: status,
+                            child: Text(status.label),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _claimFormStatus = value);
+                    },
+                  ),
+                ),
+                _field(
+                  width: 480,
+                  controller: _claimFormUrlCtl,
+                  label: 'Claim Form URL',
+                ),
+                _field(
+                  width: 480,
+                  controller: _invoicePdfUrlCtl,
+                  label: 'Invoice PDF URL',
+                ),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<EtimsStatus>(
+                    initialValue: _etimsStatus,
+                    isExpanded: true,
+                    decoration: _dec('eTIMS Status'),
+                    items: EtimsStatus.values
+                        .map(
+                          (status) => DropdownMenuItem(
+                            value: status,
+                            child: Text(status.label),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _etimsStatus = value);
+                    },
+                  ),
+                ),
+                _field(width: 220, controller: _etimsNoCtl, label: 'eTIMS No'),
+                _field(
+                  width: 480,
+                  controller: _etimsUrlCtl,
+                  label: 'eTIMS URL',
+                ),
+                const SizedBox(width: 720, child: Divider()),
                 _field(
                   width: 720,
                   controller: _notesCtl,

@@ -60,7 +60,7 @@ class InsuranceMembershipsController
     String? patientId,
     String? patientNo,
     String? payerContactId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
     bool? isActive,
     int perPage = 50,
@@ -78,7 +78,7 @@ class InsuranceMembershipsController
         patientId: patientId,
         patientNo: patientNo,
         payerContactId: payerContactId,
-        memberNumber: memberNumber,
+        memberNo: memberNo,
         scheme: scheme,
         isActive: isActive,
         perPage: perPage,
@@ -89,6 +89,31 @@ class InsuranceMembershipsController
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  @Deprecated('Use load(memberNo: ...) instead.')
+  Future<void> loadLegacy({
+    String? search,
+    String? patientId,
+    String? patientNo,
+    String? payerContactId,
+    String? memberNumber,
+    String? scheme,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    return load(
+      search: search,
+      patientId: patientId,
+      patientNo: patientNo,
+      payerContactId: payerContactId,
+      memberNo: memberNumber,
+      scheme: scheme,
+      isActive: isActive,
+      perPage: perPage,
+      page: page,
+    );
   }
 
   Future<void> loadForPatient(String patientId) {

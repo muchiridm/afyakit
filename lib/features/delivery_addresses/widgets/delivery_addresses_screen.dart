@@ -1,3 +1,5 @@
+// lib/features/delivery_addresses/widgets/delivery_addresses_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,9 @@ import 'package:afyakit/features/delivery_addresses/controllers/delivery_address
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_pin_picker_screen.dart';
+
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class DeliveryAddressesScreen extends ConsumerWidget {
   const DeliveryAddressesScreen({super.key, this.pickerMode = false});
@@ -17,13 +22,22 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     final controller = ref.read(deliveryAddressControllerProvider.notifier);
     final launcher = ref.read(deliveryNavigationLauncherProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          pickerMode ? 'Select Delivery Address' : 'Delivery Addresses',
+    final title = pickerMode ? 'Select Delivery Address' : 'Delivery Addresses';
+
+    return AppPage(
+      title: title,
+      showBack: true,
+      maxWidth: AppLayout.memberPageMaxW,
+      padding: AppLayout.pagePadding,
+      scrollable: false,
+      actions: [
+        IconButton(
+          tooltip: 'Add address',
+          onPressed: () => _showAddressSheet(context, existing: null),
+          icon: const Icon(Icons.add),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
+      ],
+      fab: FloatingActionButton(
         onPressed: () => _showAddressSheet(context, existing: null),
         child: const Icon(Icons.add),
       ),
@@ -41,7 +55,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.zero,
             itemCount: state.activeItems.length,
             itemBuilder: (context, index) {
               final address = state.activeItems[index];
@@ -104,6 +118,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _AddressFormSheet(existing: existing),
     );
   }
@@ -319,102 +334,108 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
     final controller = ref.read(deliveryAddressControllerProvider.notifier);
     final title = _isEdit ? 'Edit Address' : 'Add Address';
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppLayout.memberPageMaxW),
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: _labelController,
+                      label: 'Label',
+                      hint: 'Home, Office, Mum\'s place',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _recipientNameController,
+                      label: 'Recipient Name',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _recipientPhoneController,
+                      label: 'Recipient Phone',
+                      keyboardType: TextInputType.phone,
+                      required: true,
+                    ),
+                    _field(
+                      controller: _line1Controller,
+                      label: 'Address Line 1',
+                      hint: 'Building, house, road, street',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _line2Controller,
+                      label: 'Address Line 2',
+                      hint: 'Apartment, floor, unit',
+                    ),
+                    _field(
+                      controller: _areaController,
+                      label: 'Area / Estate',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _cityController,
+                      label: 'City / Town',
+                      required: true,
+                    ),
+                    _field(controller: _countyController, label: 'County'),
+                    _field(controller: _landmarkController, label: 'Landmark'),
+                    _field(
+                      controller: _instructionsController,
+                      label: 'Delivery Instructions',
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 4),
+                    _PinTile(
+                      pinLocation: _pinLocation,
+                      busy: busy,
+                      onPick: () => _pickPin(context),
+                      onClear: _pinLocation == null
+                          ? null
+                          : () => setState(() => _pinLocation = null),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _isDefault,
+                      onChanged: busy
+                          ? null
+                          : (value) => setState(() => _isDefault = value),
+                      title: const Text('Set as default'),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: busy ? null : () => _submit(controller),
+                      child: busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(_isEdit ? 'Save Changes' : 'Save Address'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _field(
-                  controller: _labelController,
-                  label: 'Label',
-                  hint: 'Home, Office, Mum\'s place',
-                  required: true,
-                ),
-                _field(
-                  controller: _recipientNameController,
-                  label: 'Recipient Name',
-                  required: true,
-                ),
-                _field(
-                  controller: _recipientPhoneController,
-                  label: 'Recipient Phone',
-                  keyboardType: TextInputType.phone,
-                  required: true,
-                ),
-                _field(
-                  controller: _line1Controller,
-                  label: 'Address Line 1',
-                  hint: 'Building, house, road, street',
-                  required: true,
-                ),
-                _field(
-                  controller: _line2Controller,
-                  label: 'Address Line 2',
-                  hint: 'Apartment, floor, unit',
-                ),
-                _field(
-                  controller: _areaController,
-                  label: 'Area / Estate',
-                  required: true,
-                ),
-                _field(
-                  controller: _cityController,
-                  label: 'City / Town',
-                  required: true,
-                ),
-                _field(controller: _countyController, label: 'County'),
-                _field(controller: _landmarkController, label: 'Landmark'),
-                _field(
-                  controller: _instructionsController,
-                  label: 'Delivery Instructions',
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 4),
-                _PinTile(
-                  pinLocation: _pinLocation,
-                  busy: busy,
-                  onPick: () => _pickPin(context),
-                  onClear: _pinLocation == null
-                      ? null
-                      : () => setState(() => _pinLocation = null),
-                ),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _isDefault,
-                  onChanged: busy
-                      ? null
-                      : (value) => setState(() => _isDefault = value),
-                  title: const Text('Set as default'),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: busy ? null : () => _submit(controller),
-                  child: busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isEdit ? 'Save Changes' : 'Save Address'),
-                ),
-              ],
+              ),
             ),
           ),
         ),

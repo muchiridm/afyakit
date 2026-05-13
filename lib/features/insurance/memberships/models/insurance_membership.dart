@@ -9,12 +9,12 @@ class InsuranceMembership {
     required this.payerContactId,
     this.payerAccountNumber,
     this.payerDisplayName,
-    required this.memberNumber,
+    required this.memberNo,
     this.memberName,
     this.principalName,
     this.scheme,
-    this.medicalCardNumber,
-    this.policyNumber,
+    this.medicalCardNo,
+    this.policyNo,
     this.providerCode,
     this.providerName,
     this.effectiveFrom,
@@ -35,13 +35,13 @@ class InsuranceMembership {
   final String? payerAccountNumber;
   final String? payerDisplayName;
 
-  final String memberNumber;
+  final String memberNo;
   final String? memberName;
   final String? principalName;
 
   final String? scheme;
-  final String? medicalCardNumber;
-  final String? policyNumber;
+  final String? medicalCardNo;
+  final String? policyNo;
 
   final String? providerCode;
   final String? providerName;
@@ -55,9 +55,19 @@ class InsuranceMembership {
   final String? createdAt;
   final String? updatedAt;
 
+  /// Temporary compatibility for older widgets/controllers.
+  @Deprecated('Use memberNo instead.')
+  String get memberNumber => memberNo;
+
+  @Deprecated('Use medicalCardNo instead.')
+  String? get medicalCardNumber => medicalCardNo;
+
+  @Deprecated('Use policyNo instead.')
+  String? get policyNumber => policyNo;
+
   String get displayTitle {
     final patient = patientDisplayName?.trim() ?? '';
-    final member = memberNumber.trim();
+    final member = memberNo.trim();
 
     if (patient.isNotEmpty && member.isNotEmpty) {
       return '$patient · $member';
@@ -84,12 +94,14 @@ class InsuranceMembership {
       payerContactId: _s(json['payer_contact_id']),
       payerAccountNumber: _sn(json['payer_account_number']),
       payerDisplayName: _sn(json['payer_display_name']),
-      memberNumber: _s(json['member_number']),
+      memberNo: _s(json['member_no'] ?? json['member_number']),
       memberName: _sn(json['member_name']),
       principalName: _sn(json['principal_name']),
       scheme: _sn(json['scheme']),
-      medicalCardNumber: _sn(json['medical_card_number']),
-      policyNumber: _sn(json['policy_number']),
+      medicalCardNo: _sn(
+        json['medical_card_no'] ?? json['medical_card_number'],
+      ),
+      policyNo: _sn(json['policy_no'] ?? json['policy_number']),
       providerCode: _sn(json['provider_code']),
       providerName: _sn(json['provider_name']),
       effectiveFrom: _sn(json['effective_from']),
@@ -110,12 +122,12 @@ class InsuranceMembership {
       'payer_contact_id': payerContactId,
       'payer_account_number': payerAccountNumber,
       'payer_display_name': payerDisplayName,
-      'member_number': memberNumber,
+      'member_no': memberNo,
       'member_name': memberName,
       'principal_name': principalName,
       'scheme': scheme,
-      'medical_card_number': medicalCardNumber,
-      'policy_number': policyNumber,
+      'medical_card_no': medicalCardNo,
+      'policy_no': policyNo,
       'provider_code': providerCode,
       'provider_name': providerName,
       'effective_from': effectiveFrom,
@@ -147,12 +159,12 @@ class InsuranceMembershipUpsertInput {
     required this.payerContactId,
     this.payerAccountNumber,
     this.payerDisplayName,
-    required this.memberNumber,
+    required this.memberNo,
     this.memberName,
     this.principalName,
     this.scheme,
-    this.medicalCardNumber,
-    this.policyNumber,
+    this.medicalCardNo,
+    this.policyNo,
     this.providerCode,
     this.providerName,
     this.effectiveFrom,
@@ -167,13 +179,13 @@ class InsuranceMembershipUpsertInput {
   final String? payerAccountNumber;
   final String? payerDisplayName;
 
-  final String memberNumber;
+  final String memberNo;
   final String? memberName;
   final String? principalName;
 
   final String? scheme;
-  final String? medicalCardNumber;
-  final String? policyNumber;
+  final String? medicalCardNo;
+  final String? policyNo;
 
   final String? providerCode;
   final String? providerName;
@@ -184,18 +196,58 @@ class InsuranceMembershipUpsertInput {
   final String? notes;
   final bool? isActive;
 
+  /// Temporary compatibility factory for older callers.
+  @Deprecated('Use memberNo, medicalCardNo and policyNo instead.')
+  factory InsuranceMembershipUpsertInput.legacy({
+    required String patientId,
+    required String payerContactId,
+    String? payerAccountNumber,
+    String? payerDisplayName,
+    required String memberNumber,
+    String? memberName,
+    String? principalName,
+    String? scheme,
+    String? medicalCardNumber,
+    String? policyNumber,
+    String? providerCode,
+    String? providerName,
+    String? effectiveFrom,
+    String? effectiveTo,
+    String? notes,
+    bool? isActive,
+  }) {
+    return InsuranceMembershipUpsertInput(
+      patientId: patientId,
+      payerContactId: payerContactId,
+      payerAccountNumber: payerAccountNumber,
+      payerDisplayName: payerDisplayName,
+      memberNo: memberNumber,
+      memberName: memberName,
+      principalName: principalName,
+      scheme: scheme,
+      medicalCardNo: medicalCardNumber,
+      policyNo: policyNumber,
+      providerCode: providerCode,
+      providerName: providerName,
+      effectiveFrom: effectiveFrom,
+      effectiveTo: effectiveTo,
+      notes: notes,
+      isActive: isActive,
+    );
+  }
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'patient_id': patientId,
       'payer_contact_id': payerContactId,
       'payer_account_number': payerAccountNumber,
       'payer_display_name': payerDisplayName,
-      'member_number': memberNumber,
+      'member_no': memberNo,
       'member_name': memberName,
       'principal_name': principalName,
       'scheme': scheme,
-      'medical_card_number': medicalCardNumber,
-      'policy_number': policyNumber,
+      'medical_card_no': medicalCardNo,
+      'policy_no': policyNo,
       'provider_code': providerCode,
       'provider_name': providerName,
       'effective_from': effectiveFrom,

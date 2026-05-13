@@ -1,9 +1,10 @@
-// lib/features/retail/sales/quotes/widgets/quote_editor_meta_section.dart
+// lib/features/retail/quotes/widgets/quote_editor_meta_section.dart
 
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
@@ -52,6 +53,33 @@ Future<void> pickQuoteDeliveryAddress(
   if (result == null) return;
 
   metaCtl.setDeliveryAddress(SalesDocumentAddress.fromDeliveryAddress(result));
+}
+
+Future<void> pickQuotePatientContext(
+  BuildContext context, {
+  required Future<bool> Function() ensureAuthed,
+  required QuoteMetaState meta,
+  required QuoteMetaController metaCtl,
+}) async {
+  final bool ok = await ensureAuthed();
+  if (!ok) return;
+  if (!context.mounted) return;
+
+  final selected = await showDialog<QuotePatientContextSelection>(
+    context: context,
+    builder: (_) => QuotePatientMembershipPickerDialog(
+      initialPatientId: meta.resolvedPatientId,
+      initialMembershipId: meta.resolvedMembershipId,
+    ),
+  );
+
+  if (selected == null) return;
+
+  metaCtl.setPatientContext(
+    patientSnapshot: selected.patientSnapshot,
+    membershipId: selected.membershipId,
+    payerContact: selected.payerContact,
+  );
 }
 
 SalesDocMetaVm buildQuoteMetaVm({
@@ -125,6 +153,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
         initial: initialQuoteDate,
         helpText: 'Select quote date',
       );
+
       if (picked == null) return;
 
       metaCtl.setQuoteDate(picked);
@@ -146,6 +175,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
         firstDate: base,
         helpText: 'Select expiry date',
       );
+
       if (picked == null) return;
 
       metaCtl.setExpiryDate(picked);
@@ -235,7 +265,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
                     metaCtl: metaCtl,
                   );
                 },
-                child: Text('Change'),
+                child: const Text('Change'),
               ),
             ],
           );
@@ -336,6 +366,18 @@ class QuoteEditorMetaSection extends StatelessWidget {
       ),
     );
 
+    final Widget patientField = _PatientContextTile(
+      busy: busy,
+      meta: meta,
+      onPick: () => pickQuotePatientContext(
+        context,
+        ensureAuthed: onEnsureAuthed,
+        meta: meta,
+        metaCtl: metaCtl,
+      ),
+      onClear: meta.hasPatientContext ? metaCtl.clearPatientContext : null,
+    );
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isWide = constraints.maxWidth >= 860;
@@ -383,6 +425,8 @@ class QuoteEditorMetaSection extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
+                      patientField,
+                      const SizedBox(height: 6),
                       addressField,
                     ],
                   ),
@@ -422,6 +466,8 @@ class QuoteEditorMetaSection extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
+              patientField,
+              const SizedBox(height: 6),
               addressField,
               const SizedBox(height: 6),
               Row(
@@ -435,6 +481,101 @@ class QuoteEditorMetaSection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PatientContextTile extends StatelessWidget {
+  const _PatientContextTile({
+    required this.busy,
+    required this.meta,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final bool busy;
+  final QuoteMetaState meta;
+  final VoidCallback onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasContext = meta.hasPatientContext;
+
+    final title = hasContext ? meta.patientLabel : 'Select patient';
+    final patientSubtitle = meta.patientSubtitle;
+    final insuranceSubtitle = meta.insuranceSubtitle;
+
+    final subtitle = [
+      if ((patientSubtitle ?? '').trim().isNotEmpty) patientSubtitle!.trim(),
+      if ((insuranceSubtitle ?? '').trim().isNotEmpty)
+        insuranceSubtitle!.trim(),
+    ].join('\n');
+
+    return InkWell(
+      onTap: busy ? null : onPick,
+      borderRadius: BorderRadius.circular(10),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: hasContext ? 'Patient context' : 'Patient',
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (onClear != null)
+                IconButton(
+                  tooltip: 'Clear patient',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: busy ? null : onClear,
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              const Padding(
+                padding: EdgeInsets.only(right: 10),
+                child: Icon(Icons.chevron_right, size: 18),
+              ),
+            ],
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              meta.hasInsuranceContext
+                  ? Icons.health_and_safety_outlined
+                  : Icons.person_outline,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  if (subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

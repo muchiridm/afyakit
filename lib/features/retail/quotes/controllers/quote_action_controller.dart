@@ -105,11 +105,13 @@ class QuoteActionController {
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
       final svc = await _svc();
       await svc.email(id);
+
       SnackService.showSuccess('Quote sent');
       _refreshQuote(id);
     } catch (_) {
@@ -131,11 +133,13 @@ class QuoteActionController {
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
       final svc = await _svc();
       await svc.markSent(id);
+
       SnackService.showSuccess('Marked as sent');
       _refreshQuote(id);
     } catch (_) {
@@ -152,28 +156,63 @@ class QuoteActionController {
 
     if (!_requireCanManageQuotes()) return;
 
+    final quote = await _readQuoteOrNull(id);
+
+    final membershipId = quote?.resolvedMembershipId;
+    final hasInsuranceContext = (membershipId ?? '').trim().isNotEmpty;
+
     final ok = await SalesDocDialogs.confirm(
       context,
-      title: 'Convert to invoice?',
-      message: 'This will create an invoice from this quote in Zoho Books.',
+      title: hasInsuranceContext
+          ? 'Convert to invoice and create claim?'
+          : 'Convert to invoice?',
+      message: hasInsuranceContext
+          ? 'This will create an invoice from this quote in Zoho Books and create an insurance claim linked to that invoice.'
+          : 'This will create an invoice from this quote in Zoho Books.',
       okLabel: 'Convert',
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
       final svc = await _svc();
-      final res = await svc.convertToInvoice(id);
 
-      final invoiceId = (res['invoice_id'] ?? res['invoiceId'] ?? '')
-          .toString();
-      final invoiceNumber =
-          (res['invoice_number'] ?? res['invoiceNumber'] ?? '').toString();
+      final result = await svc.convertToInvoice(
+        id,
+        membershipId: membershipId,
+        patientSnapshot: quote?.patientSnapshot,
+        createInsuranceClaim: hasInsuranceContext,
+      );
 
-      if (invoiceNumber.trim().isNotEmpty) {
+      final invoiceId = _readInvoiceString(
+        result.invoice,
+        'invoice_id',
+        fallbackKey: 'invoiceId',
+      );
+
+      final invoiceNumber = _readInvoiceString(
+        result.invoice,
+        'invoice_number',
+        fallbackKey: 'invoiceNumber',
+      );
+
+      if (result.claim != null) {
+        if (invoiceNumber != null) {
+          SnackService.showSuccess(
+            'Converted → Invoice $invoiceNumber and claim created',
+          );
+        } else if (invoiceId != null) {
+          SnackService.showSuccess(
+            'Converted → Invoice $invoiceId and claim created',
+          );
+        } else {
+          SnackService.showSuccess('Converted to invoice and claim created');
+        }
+      } else if (invoiceNumber != null) {
         SnackService.showSuccess('Converted → Invoice $invoiceNumber');
-      } else if (invoiceId.trim().isNotEmpty) {
+      } else if (invoiceId != null) {
         SnackService.showSuccess('Converted → Invoice $invoiceId');
       } else {
         SnackService.showSuccess('Converted to invoice');
@@ -192,5 +231,27 @@ class QuoteActionController {
 
     _refreshQuote(id);
     await _ref.read(zohoQuoteProvider(id).future);
+  }
+
+  Future<dynamic> _readQuoteOrNull(String quoteId) async {
+    final id = quoteId.trim();
+    if (id.isEmpty) return null;
+
+    try {
+      return await _ref.read(zohoQuoteProvider(id).future);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _readInvoiceString(
+    Map<String, Object?> invoice,
+    String key, {
+    required String fallbackKey,
+  }) {
+    final value = invoice[key] ?? invoice[fallbackKey];
+    final text = (value ?? '').toString().trim();
+
+    return text.isEmpty ? null : text;
   }
 }

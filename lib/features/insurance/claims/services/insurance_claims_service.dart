@@ -30,12 +30,12 @@ class InsuranceClaimsService {
     String? patientNo,
     String? payerContactId,
     String? invoiceId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? prescriptionNumber,
+    String? authCode,
+    String? claimNo,
+    String? visitNo,
+    String? prescriptionNo,
     InsuranceClaimStatus? status,
     bool? isActive,
     int perPage = 50,
@@ -48,12 +48,12 @@ class InsuranceClaimsService {
       patientNo: _nullable(patientNo),
       payerContactId: _nullable(payerContactId),
       invoiceId: _nullable(invoiceId),
-      memberNumber: _nullable(memberNumber),
+      memberNo: _nullable(memberNo),
       scheme: _nullable(scheme),
-      authorizationNumber: _nullable(authorizationNumber),
-      claimNumber: _nullable(claimNumber),
-      visitNumber: _nullable(visitNumber),
-      prescriptionNumber: _nullable(prescriptionNumber),
+      authCode: _nullable(authCode),
+      claimNo: _nullable(claimNo),
+      visitNo: _nullable(visitNo),
+      prescriptionNo: _nullable(prescriptionNo),
       status: status?.wire,
       isActive: isActive,
       perPage: perPage,
@@ -79,6 +79,7 @@ class InsuranceClaimsService {
   ///
   /// Backend responsibility:
   /// - resolves membership_id
+  /// - verifies invoice belongs to the insurance payer
   /// - saves claim snapshot
   /// - maps claim fields to Zoho custom fields
   /// - updates the linked Zoho invoice

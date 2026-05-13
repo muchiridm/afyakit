@@ -1,7 +1,6 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
@@ -13,8 +12,10 @@ import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
+import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,13 +121,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.beginNew();
       state = const QuoteState();
 
-      // Member-scoped quote:
-      // Do not block the editor while resolving the Zoho customer contact.
-      // The UI can render immediately while the real Zoho contact is resolved
-      // in the background.
-      //
-      // Submit still calls _ensureMemberContactBound(showError: true), so the
-      // actual Zoho contact requirement remains enforced before quote creation.
       if (_policy == QuoteContactPolicy.memberScoped) {
         unawaited(_ensureMemberContactBound(showError: false));
       }
@@ -229,9 +223,6 @@ class QuoteController extends StateNotifier<QuoteState> {
 
         ZohoContact? best;
 
-        // Fastest path:
-        // Build a local customer contact from /auth/session/me immediately.
-        // This avoids waiting for Zoho at screen open.
         if (contactId.isNotEmpty) {
           final ZohoContact? local = _ref.read(
             currentMemberZohoContactProvider,
@@ -253,7 +244,6 @@ class QuoteController extends StateNotifier<QuoteState> {
                 );
               }
 
-              // Refresh quietly; do not block the user.
               unawaited(
                 _refreshMemberContactInBackground(
                   contactId: contactId,
@@ -263,8 +253,6 @@ class QuoteController extends StateNotifier<QuoteState> {
             }
           }
 
-          // Network fast path:
-          // Used only if local optimistic contact is unavailable.
           if (best == null) {
             if (kDebugMode) {
               debugPrint(
@@ -322,8 +310,6 @@ class QuoteController extends StateNotifier<QuoteState> {
           }
         }
 
-        // Fallback:
-        // Only use the slow account-number lookup when /me has no zoho.contactId.
         if (best == null) {
           if (kDebugMode) {
             debugPrint(
@@ -438,7 +424,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       final String latestId = (latest?.contactId ?? '').trim();
       final String latestAcct = (latest?.accountNumber ?? '').trim();
 
-      // Only patch if the same member contact is still selected.
       if (latestId == id || latestAcct == acct) {
         _metaCtl.setContact(fresh);
 
@@ -452,7 +437,6 @@ class QuoteController extends StateNotifier<QuoteState> {
         }
       }
     } catch (e) {
-      // Silent by design: optimistic contact is enough for UI.
       if (kDebugMode) {
         debugPrint(
           '[QuoteController.memberBind] background refresh failed: $e',
@@ -479,6 +463,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       requirePrices: requirePrices,
       isEditing: state.isEditing,
     );
+
     if (err != null) {
       SnackService.showError(err);
       return null;
@@ -686,10 +671,13 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  Future<Map<String, dynamic>?> convertToInvoice(
+  Future<QuoteConversionResult?> convertToInvoice(
     String quoteId, {
     DateTime? invoiceDate,
     DateTime? dueDate,
+    String? membershipId,
+    bool createInsuranceClaim = false,
+    SalesDocumentPatientSnapshot? patientSnapshot,
   }) async {
     if (_busy) return null;
 
@@ -699,17 +687,26 @@ class QuoteController extends StateNotifier<QuoteState> {
     state = state.copyWith(converting: true, clearError: true);
 
     try {
-      final res = await _engine.convertToInvoice(
+      final result = await _engine.convertToInvoice(
         id,
         invoiceDate: invoiceDate,
         dueDate: dueDate,
+        membershipId: membershipId,
+        createInsuranceClaim: createInsuranceClaim,
+        patientSnapshot: patientSnapshot,
       );
 
       _invalidateQuoteCaches(id);
 
       state = state.copyWith(converting: false);
-      SnackService.showSuccess('Converted to invoice');
-      return res;
+
+      if (result.claim != null) {
+        SnackService.showSuccess('Converted to invoice and claim created');
+      } else {
+        SnackService.showSuccess('Converted to invoice');
+      }
+
+      return result;
     } catch (e) {
       state = state.copyWith(converting: false, error: e.toString());
       SnackService.showError('Failed to convert to invoice');

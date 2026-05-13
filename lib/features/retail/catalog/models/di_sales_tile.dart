@@ -1,4 +1,4 @@
-// lib/features/retail/sales/quotes/models/di_sales_tile.dart
+// lib/features/retail/catalog/models/di_sales_tile.dart
 
 class DiSalesTile {
   const DiSalesTile({

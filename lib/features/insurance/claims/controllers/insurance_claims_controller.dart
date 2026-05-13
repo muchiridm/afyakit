@@ -59,12 +59,12 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
     String? patientNo,
     String? payerContactId,
     String? invoiceId,
-    String? memberNumber,
+    String? memberNo,
     String? scheme,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? prescriptionNumber,
+    String? authCode,
+    String? claimNo,
+    String? visitNo,
+    String? prescriptionNo,
     InsuranceClaimStatus? status,
     bool? isActive,
     int perPage = 50,
@@ -84,12 +84,12 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
         patientNo: patientNo,
         payerContactId: payerContactId,
         invoiceId: invoiceId,
-        memberNumber: memberNumber,
+        memberNo: memberNo,
         scheme: scheme,
-        authorizationNumber: authorizationNumber,
-        claimNumber: claimNumber,
-        visitNumber: visitNumber,
-        prescriptionNumber: prescriptionNumber,
+        authCode: authCode,
+        claimNo: claimNo,
+        visitNo: visitNo,
+        prescriptionNo: prescriptionNo,
         status: status,
         isActive: isActive,
         perPage: perPage,
@@ -100,6 +100,45 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  @Deprecated('Use load(memberNo: ...) instead.')
+  Future<void> loadLegacy({
+    String? search,
+    String? membershipId,
+    String? patientId,
+    String? patientNo,
+    String? payerContactId,
+    String? invoiceId,
+    String? memberNumber,
+    String? scheme,
+    String? authorizationNumber,
+    String? claimNumber,
+    String? visitNumber,
+    String? prescriptionNumber,
+    InsuranceClaimStatus? status,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    return load(
+      search: search,
+      membershipId: membershipId,
+      patientId: patientId,
+      patientNo: patientNo,
+      payerContactId: payerContactId,
+      invoiceId: invoiceId,
+      memberNo: memberNumber,
+      scheme: scheme,
+      authCode: authorizationNumber,
+      claimNo: claimNumber,
+      visitNo: visitNumber,
+      prescriptionNo: prescriptionNumber,
+      status: status,
+      isActive: isActive,
+      perPage: perPage,
+      page: page,
+    );
   }
 
   Future<void> loadForInvoice(String invoiceId) {
@@ -142,6 +181,7 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
 
       // Backend:
       // - resolves membership_id
+      // - verifies invoice belongs to payer
       // - snapshots patient/payer/member details
       // - saves claim
       // - patches Zoho invoice custom fields

@@ -1,6 +1,11 @@
+// lib/features/retail/quotes/services/zoho_quotes_service.dart
+
 import 'dart:typed_data';
 
+import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,8 +25,35 @@ final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
   final String tenantId = ref.watch(tenantIdProvider);
   final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
   final AfyaKitClient api = await ref.watch(afyakitClientFutureProvider.future);
+
   return ZohoQuotesService(api: api, routes: routes);
 });
+
+class QuoteConversionResult {
+  const QuoteConversionResult({required this.invoice, this.claim});
+
+  final JsonMap invoice;
+  final InsuranceClaim? claim;
+
+  bool get hasClaim => claim != null;
+
+  factory QuoteConversionResult.fromJson(JsonMap json) {
+    final Object? rawInvoice = json['invoice'];
+    if (rawInvoice is! Map) {
+      throw StateError('Unexpected response: missing "invoice"');
+    }
+
+    final Object? rawClaim = json['claim'];
+    final InsuranceClaim? claim = rawClaim is Map
+        ? InsuranceClaim.fromJson(rawClaim.cast<String, Object?>())
+        : null;
+
+    return QuoteConversionResult(
+      invoice: rawInvoice.cast<String, dynamic>(),
+      claim: claim,
+    );
+  }
+}
 
 class ZohoQuotesService {
   ZohoQuotesService({required this.api, required this.routes});
@@ -74,6 +106,7 @@ class ZohoQuotesService {
 
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
+
     if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
     throw StateError('Unexpected response: missing "quote"');
@@ -90,6 +123,7 @@ class ZohoQuotesService {
 
       final JsonMap data = _asJsonMap(res.data);
       final Object? raw = data['quote'];
+
       if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
       throw StateError('Unexpected response: missing "quote"');
@@ -117,6 +151,7 @@ class ZohoQuotesService {
 
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
+
     if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
     throw StateError('Unexpected response: missing "quote"');
@@ -143,6 +178,7 @@ class ZohoQuotesService {
 
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
+
     if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
 
     throw StateError('Unexpected response: missing "quote"');
@@ -186,6 +222,7 @@ class ZohoQuotesService {
     final Map<String, Object?> payload = _pruneEmailJson(
       email?.toJson() ?? const <String, Object?>{},
     );
+
     await api.postUri(uri, data: payload.isEmpty ? null : payload);
   }
 
@@ -201,30 +238,64 @@ class ZohoQuotesService {
     if (email != null) {
       await this.email(quoteId, email: email);
     }
+
     await markSent(quoteId);
   }
 
-  Future<JsonMap> convertToInvoice(
+  Future<QuoteConversionResult> convertToInvoice(
     String quoteId, {
     DateTime? invoiceDate,
     DateTime? dueDate,
+    String? membershipId,
+    bool createInsuranceClaim = false,
+    SalesDocumentPatientSnapshot? patientSnapshot,
+    SalesDocumentAddress? deliveryAddress,
   }) async {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
     final Uri uri = routes.retailConvertQuoteToInvoice(id);
 
+    final String? cleanMembershipId = asCleanStringOrNull(membershipId);
+
     final Map<String, Object?> body = <String, Object?>{
       if (invoiceDate != null)
         'invoice_date': _zohoDateFmt.format(_dateOnly(invoiceDate)),
       if (dueDate != null) 'due_date': _zohoDateFmt.format(_dateOnly(dueDate)),
+      if (deliveryAddress != null) 'delivery_address': deliveryAddress.toJson(),
+      if (patientSnapshot != null) ...<String, Object?>{
+        'patient_id': patientSnapshot.patientId,
+        'patient_snapshot': patientSnapshot.toJson(),
+      },
+      if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
+      if (createInsuranceClaim) 'create_insurance_claim': true,
     };
 
     final Response<dynamic> res = await api.postUri(
       uri,
       data: body.isEmpty ? null : body,
     );
-    return _asJsonMap(res.data);
+
+    return QuoteConversionResult.fromJson(_asJsonMap(res.data));
+  }
+
+  Future<QuoteConversionResult> convertDraftToInvoice(
+    String quoteId,
+    QuoteDraft draft, {
+    DateTime? invoiceDate,
+    DateTime? dueDate,
+    bool createInsuranceClaim = false,
+  }) {
+    return convertToInvoice(
+      quoteId,
+      invoiceDate: invoiceDate,
+      dueDate: dueDate,
+      membershipId: draft.resolvedMembershipId,
+      createInsuranceClaim:
+          createInsuranceClaim && draft.resolvedMembershipId != null,
+      patientSnapshot: draft.patientSnapshot,
+      deliveryAddress: draft.deliveryAddress,
+    );
   }
 
   JsonMap _buildDraftPayload(
@@ -251,6 +322,11 @@ class ZohoQuotesService {
         ? null
         : _zohoDateFmt.format(_dateOnly(expiryDate));
 
+    final String? cleanPatientId = asCleanStringOrNull(draft.resolvedPatientId);
+    final String? cleanMembershipId = asCleanStringOrNull(
+      draft.resolvedMembershipId,
+    );
+
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
       if (quoteDateStr != null) 'date': quoteDateStr,
@@ -261,6 +337,10 @@ class ZohoQuotesService {
         'notes': asCleanStringOrNull(draft.customerNotes),
       if (draft.deliveryAddress != null)
         'delivery_address': draft.deliveryAddress!.toJson(),
+      if (cleanPatientId != null) 'patient_id': cleanPatientId,
+      if (draft.patientSnapshot != null)
+        'patient_snapshot': draft.patientSnapshot!.toJson(),
+      if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
       'line_items': draft.lines
           .map((QuoteLineDraft l) {
             final String? lineItemId = asCleanStringOrNull(l.lineItemId);
@@ -334,12 +414,14 @@ class ZohoQuotesService {
   static String _truncate(String v, int max) {
     final String s = v.trim();
     if (s.length <= max) return s;
+
     return s.substring(0, max - 1).trimRight();
   }
 
   static JsonMap _asJsonMap(Object? v) {
     if (v is Map<String, dynamic>) return v;
     if (v is Map) return v.cast<String, dynamic>();
+
     throw StateError('Expected JSON object but got ${v.runtimeType}');
   }
 }

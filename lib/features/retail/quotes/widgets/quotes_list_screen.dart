@@ -180,6 +180,7 @@ class QuotesListScreen extends ConsumerWidget {
               n.metrics.maxScrollExtent - _loadMoreThresholdPx) {
             ctl.loadMore();
           }
+
           return false;
         },
         child: ListView(
@@ -240,6 +241,15 @@ class _QuoteRow extends StatelessWidget {
     final currency = (q.currencyCode ?? '').trim();
     final amount = _formatMoney(q.total, currencyCode: currency);
 
+    final patientName = (q.patientSnapshot?.fullName ?? '').trim();
+    final patientNo = (q.patientSnapshot?.patientNo ?? '').trim();
+    final memberNo = (q.patientSnapshot?.memberNo ?? '').trim();
+    final scheme = (q.patientSnapshot?.scheme ?? '').trim();
+    final membershipId = (q.resolvedMembershipId ?? '').trim();
+
+    final hasInsurance = membershipId.isNotEmpty || memberNo.isNotEmpty;
+    final hasPatient = patientName.isNotEmpty || patientNo.isNotEmpty;
+
     return InkWell(
       onTap: onOpen,
       borderRadius: AppShape.tileRadius,
@@ -289,6 +299,22 @@ class _QuoteRow extends StatelessWidget {
                       ),
                       if (acct.isNotEmpty)
                         _MetaPill(icon: Icons.badge_outlined, text: acct),
+                      if (hasPatient)
+                        _MetaPill(
+                          icon: Icons.person_outline,
+                          text: patientName.isNotEmpty
+                              ? patientName
+                              : patientNo,
+                        ),
+                      if (hasInsurance)
+                        _MetaPill(
+                          icon: Icons.health_and_safety_outlined,
+                          text: _insuranceText(
+                            memberNo: memberNo,
+                            scheme: scheme,
+                            membershipId: membershipId,
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -305,17 +331,34 @@ class _QuoteRow extends StatelessWidget {
     );
   }
 
+  static String _insuranceText({
+    required String memberNo,
+    required String scheme,
+    required String membershipId,
+  }) {
+    final parts = <String>[
+      if (memberNo.isNotEmpty) 'Member $memberNo',
+      if (scheme.isNotEmpty) scheme,
+    ];
+
+    if (parts.isNotEmpty) return parts.join(' · ');
+    return membershipId.isNotEmpty ? 'Insurance quote' : 'Insurance';
+  }
+
   static String _formatDate(DateTime? d) {
     if (d == null) return '—';
+
     final y = d.year.toString().padLeft(4, '0');
     final m = d.month.toString().padLeft(2, '0');
     final day = d.day.toString().padLeft(2, '0');
+
     return '$y-$m-$day';
   }
 
   static String _formatMoney(num v, {required String currencyCode}) {
     final nf = NumberFormat.decimalPattern();
     final code = currencyCode.isEmpty ? 'Total' : currencyCode;
+
     return '$code ${nf.format(v)}';
   }
 }

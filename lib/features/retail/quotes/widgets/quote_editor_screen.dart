@@ -1,4 +1,4 @@
-// lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
+// lib/features/retail/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
@@ -58,6 +58,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final String oldId = (oldWidget.editingQuoteId ?? '').trim();
     final String newId = (widget.editingQuoteId ?? '').trim();
+
     if (oldId == newId) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
@@ -95,6 +96,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final QuoteMetaController metaCtl = ref.read(
       quoteMetaControllerProvider.notifier,
     );
+
     final String id = (widget.editingQuoteId ?? '').trim();
 
     if (id.isNotEmpty) {
@@ -102,6 +104,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     }
 
     final QuoteController ctl = ref.read(quoteControllerProvider.notifier);
+
     await ctl.ensureReady(
       editingQuoteId: widget.editingQuoteId,
       requirePrices: widget.requirePrices,
@@ -162,6 +165,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       thing: 'quote',
       message: 'This will delete the quote in Zoho Books.',
     );
+
     if (!ok) return;
 
     final String id = (meta.editingQuoteId ?? '').trim();

@@ -1,14 +1,17 @@
+// lib/features/retail/quotes/controllers/quote_engine.dart
+
 import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
-import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 
-import 'package:afyakit/features/retail/quotes/models/di_sales_tile.dart';
+import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
@@ -58,6 +61,7 @@ class QuoteEngine {
   Future<ZohoQuote> loadQuote(String quoteId) async {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
+
     return (await _svc).get(id);
   }
 
@@ -112,6 +116,8 @@ class QuoteEngine {
       quoteDate: quoteDate,
       expiryDate: expiryDate,
       deliveryAddress: q.deliveryAddress,
+      patientSnapshot: q.patientSnapshot,
+      membershipId: q.resolvedMembershipId,
     );
   }
 
@@ -165,6 +171,9 @@ class QuoteEngine {
           ? meta.customerNotes!.trim()
           : null,
       deliveryAddress: meta.deliveryAddress,
+      patientId: meta.resolvedPatientId,
+      patientSnapshot: meta.patientSnapshot,
+      membershipId: meta.resolvedMembershipId,
       lines: lineDrafts,
     );
   }
@@ -279,14 +288,34 @@ class QuoteEngine {
   Future<void> emailAndMarkSent(String quoteId) async =>
       (await _svc).emailAndMarkSent(quoteId);
 
-  Future<Map<String, dynamic>> convertToInvoice(
+  Future<QuoteConversionResult> convertToInvoice(
     String quoteId, {
     DateTime? invoiceDate,
     DateTime? dueDate,
+    String? membershipId,
+    bool createInsuranceClaim = false,
+    SalesDocumentPatientSnapshot? patientSnapshot,
   }) async => (await _svc).convertToInvoice(
     quoteId,
     invoiceDate: invoiceDate,
     dueDate: dueDate,
+    membershipId: membershipId,
+    createInsuranceClaim: createInsuranceClaim,
+    patientSnapshot: patientSnapshot,
+  );
+
+  Future<QuoteConversionResult> convertDraftToInvoice(
+    String quoteId,
+    QuoteDraft draft, {
+    DateTime? invoiceDate,
+    DateTime? dueDate,
+    bool createInsuranceClaim = false,
+  }) async => (await _svc).convertDraftToInvoice(
+    quoteId,
+    draft,
+    invoiceDate: invoiceDate,
+    dueDate: dueDate,
+    createInsuranceClaim: createInsuranceClaim,
   );
 
   static DiSalesTile _toDiSalesTileFromCatalogLine(
