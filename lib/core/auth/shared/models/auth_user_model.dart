@@ -257,6 +257,12 @@ class AuthUser {
     return out.where((x) => seen.add(x)).toList(growable: false);
   }
 
+  String? get contactId {
+    final id = zoho?.contactId.trim();
+    if (id == null || id.isEmpty) return null;
+    return id;
+  }
+
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (dn.isNotEmpty) return dn;

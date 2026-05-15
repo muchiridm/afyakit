@@ -19,8 +19,14 @@ import 'package:afyakit/shared/layout/app_page.dart';
 class PatientProfilesScreen extends ConsumerStatefulWidget {
   const PatientProfilesScreen({
     super.key,
+    this.contactId,
     this.allowExplicitContactLink = false,
   });
+
+  /// When provided, this screen is hard-scoped to patients linked to this contact.
+  ///
+  /// Member mode must pass this so members never see all tenant patient profiles.
+  final String? contactId;
 
   /// Staff/admin mode only.
   final bool allowExplicitContactLink;
@@ -36,10 +42,29 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
 
   PatientContactRelationship? _relationship;
 
-  double get _maxWidth {
-    return widget.allowExplicitContactLink
-        ? AppLayout.pageMaxW
-        : AppLayout.memberPageMaxW;
+  double get _maxWidth => AppLayout.contentMaxWidth;
+
+  String? get _contactScope {
+    final id = widget.contactId?.trim();
+    if (id == null || id.isEmpty) return null;
+    return id;
+  }
+
+  PatientProfilesScope get _scope {
+    return PatientProfilesScope(
+      contactId: _contactScope,
+      allowExplicitContactLink: widget.allowExplicitContactLink,
+    );
+  }
+
+  bool get _isContactScoped => _contactScope != null;
+
+  PatientProfilesController get _controller {
+    return ref.read(patientProfilesControllerProvider(_scope).notifier);
+  }
+
+  PatientProfilesState get _currentState {
+    return ref.read(patientProfilesControllerProvider(_scope));
   }
 
   @override
@@ -47,20 +72,42 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     super.initState();
 
     _searchCtl = TextEditingController();
-    _contactIdCtl = TextEditingController();
+    _contactIdCtl = TextEditingController(text: _contactScope ?? '');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final controller = _controller;
+
+      await controller.load();
+
+      if (!mounted) return;
+
+      if (widget.allowExplicitContactLink) {
+        await controller.loadLinkRequests(
+          status: PatientLinkRequestStatus.pendingStaffApproval,
+        );
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PatientProfilesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final oldContactId = oldWidget.contactId?.trim();
+    final newContactId = widget.contactId?.trim();
+
+    if (oldContactId == newContactId &&
+        oldWidget.allowExplicitContactLink == widget.allowExplicitContactLink) {
+      return;
+    }
+
+    _contactIdCtl.text = _contactScope ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-
-      final controller = ref.read(patientProfilesControllerProvider.notifier);
-
-      if (widget.allowExplicitContactLink) {
-        controller.loadLinkRequests(
-          status: PatientLinkRequestStatus.pendingStaffApproval,
-        );
-      } else {
-        controller.loadLinkRequests();
-      }
+      _controller.refreshAll();
     });
   }
 
@@ -82,7 +129,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await ref.read(patientProfilesControllerProvider.notifier).create(input);
+      await _controller.create(input);
 
       if (!mounted) return;
 
@@ -107,9 +154,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .update(patient.patientId, input);
+      await _controller.update(patient.patientId, input);
 
       if (!mounted) return;
 
@@ -126,8 +171,16 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete patient profile'),
-        content: Text('Delete ${patient.fullName}?'),
+        title: Text(
+          widget.allowExplicitContactLink
+              ? 'Delete patient profile'
+              : 'Remove patient profile',
+        ),
+        content: Text(
+          widget.allowExplicitContactLink
+              ? 'Delete ${patient.fullName}?'
+              : 'Remove ${patient.fullName} from your linked profiles?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -135,7 +188,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(widget.allowExplicitContactLink ? 'Delete' : 'Remove'),
           ),
         ],
       ),
@@ -144,15 +197,19 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .remove(patient.patientId);
+      await _controller.remove(patient.patientId);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Patient profile deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.allowExplicitContactLink
+                ? 'Patient profile deleted'
+                : 'Patient profile removed',
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       _showErrorFromState();
@@ -168,9 +225,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .linkToSelf(patient.patientId, input);
+      await _controller.linkToSelf(patient.patientId, input);
 
       if (!mounted) return;
 
@@ -192,9 +247,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .requestPayerLink(patient.patientId, input);
+      await _controller.requestPayerLink(patient.patientId, input);
 
       if (!mounted) return;
 
@@ -208,6 +261,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openLinkContactDialog(PatientProfile patient) async {
+    if (!widget.allowExplicitContactLink) return;
+
     final contact = await showDialog<ZohoContact>(
       context: context,
       builder: (_) => const ContactPickerDialog(forcePickerMode: true),
@@ -224,18 +279,16 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (relationship == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .linkContactToPatient(
-            patientId: patient.patientId,
-            input: PatientContactLinkInput(
-              contactId: contact.contactId,
-              accountNumber: contact.accountNumber,
-              contactDisplayName: contact.displayName,
-              relationship: relationship,
-              isActive: true,
-            ),
-          );
+      await _controller.linkContactToPatient(
+        patientId: patient.patientId,
+        input: PatientContactLinkInput(
+          contactId: contact.contactId,
+          accountNumber: contact.accountNumber,
+          contactDisplayName: contact.displayName,
+          relationship: relationship,
+          isActive: true,
+        ),
+      );
 
       if (!mounted) return;
 
@@ -252,6 +305,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     PatientProfile patient,
     PatientLinkedContact link,
   ) async {
+    if (!widget.allowExplicitContactLink) return;
+
     final label = link.contactDisplayName?.trim().isNotEmpty == true
         ? link.contactDisplayName!.trim()
         : link.contactId;
@@ -279,12 +334,10 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .delinkContactFromPatient(
-            patientId: patient.patientId,
-            contactId: link.contactId,
-          );
+      await _controller.delinkContactFromPatient(
+        patientId: patient.patientId,
+        contactId: link.contactId,
+      );
 
       if (!mounted) return;
 
@@ -377,6 +430,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openApproveLinkRequestDialog(PatientLinkRequest request) async {
+    if (!widget.allowExplicitContactLink) return;
+
     final input = await PatientPayerLinkDialog.showApprove(
       context: context,
       request: request,
@@ -385,15 +440,13 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .approvePayerLinkRequest(
-            request,
-            contactId: input.contactId,
-            accountNumber: input.accountNumber,
-            contactDisplayName: input.contactDisplayName,
-            relationship: input.relationship,
-          );
+      await _controller.approvePayerLinkRequest(
+        request,
+        contactId: input.contactId,
+        accountNumber: input.accountNumber,
+        contactDisplayName: input.contactDisplayName,
+        relationship: input.relationship,
+      );
 
       if (!mounted) return;
 
@@ -407,14 +460,14 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   Future<void> _openRejectLinkRequestDialog(PatientLinkRequest request) async {
+    if (!widget.allowExplicitContactLink) return;
+
     final input = await PatientPayerLinkDialog.showReject(context: context);
 
     if (input == null || !mounted) return;
 
     try {
-      await ref
-          .read(patientProfilesControllerProvider.notifier)
-          .rejectLinkRequest(request.requestId, input);
+      await _controller.rejectLinkRequest(request.requestId, input);
 
       if (!mounted) return;
 
@@ -428,7 +481,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 
   void _showErrorFromState() {
-    final error = ref.read(patientProfilesControllerProvider).error;
+    final error = _currentState.error;
     if (error == null || error.trim().isEmpty) return;
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
@@ -436,18 +489,31 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
 
   void _clearFilters(PatientProfilesController controller) {
     _searchCtl.clear();
-    _contactIdCtl.clear();
+
+    if (widget.allowExplicitContactLink && !_isContactScoped) {
+      _contactIdCtl.clear();
+    } else {
+      _contactIdCtl.text = _contactScope ?? '';
+    }
+
     setState(() => _relationship = null);
     controller.clearFilters();
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(patientProfilesControllerProvider);
-    final controller = ref.read(patientProfilesControllerProvider.notifier);
+    final scope = _scope;
+    final state = ref.watch(patientProfilesControllerProvider(scope));
+    final controller = ref.read(
+      patientProfilesControllerProvider(scope).notifier,
+    );
+
+    final title = widget.allowExplicitContactLink
+        ? 'Patient profiles'
+        : 'My patient profiles';
 
     return AppPage(
-      title: 'Patient profiles',
+      title: title,
       showBack: true,
       maxWidth: _maxWidth,
       padding: AppLayout.pagePadding,
@@ -497,6 +563,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                     controller.applyFilters(search: value);
                   },
                   onContactIdSubmitted: (value) {
+                    if (!widget.allowExplicitContactLink) return;
                     controller.applyFilters(contactId: value);
                   },
                   onRelationshipChanged: (value) {

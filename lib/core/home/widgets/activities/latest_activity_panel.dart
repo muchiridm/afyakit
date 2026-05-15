@@ -1,11 +1,11 @@
-// lib/core/home/widgets/latest_activity_panel.dart
+// lib/core/home/widgets/activities/latest_activity_panel.dart
 
-import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/shared/widgets/app_card.dart';
+import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
+import 'package:afyakit/shared/widgets/app_card.dart';
 
 class LatestActivityPanel extends StatelessWidget {
   const LatestActivityPanel({
@@ -16,7 +16,9 @@ class LatestActivityPanel extends StatelessWidget {
     required this.hasError,
     required this.entries,
     this.emptyText = 'No recent activity yet.',
+    this.errorText = 'Could not load activity.',
     this.maxItems = 5,
+    this.showTitle = true,
   });
 
   final String title;
@@ -27,14 +29,19 @@ class LatestActivityPanel extends StatelessWidget {
   final List<ActivityEntry> entries;
 
   final String emptyText;
+  final String errorText;
   final int maxItems;
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
+    final cardTitle = showTitle ? title : null;
+    final cardIcon = showTitle ? icon : null;
+
     if (loading) {
       return AppCard(
-        title: title,
-        icon: icon,
+        title: cardTitle,
+        icon: cardIcon,
         child: const Center(
           child: SizedBox(
             width: 18,
@@ -47,11 +54,11 @@ class LatestActivityPanel extends StatelessWidget {
 
     if (hasError) {
       return AppCard(
-        title: title,
-        icon: icon,
-        child: const Text(
-          'Could not load activity.',
-          style: TextStyle(fontSize: 12, color: Colors.redAccent),
+        title: cardTitle,
+        icon: cardIcon,
+        child: Text(
+          errorText,
+          style: const TextStyle(fontSize: 12, color: Colors.redAccent),
         ),
       );
     }
@@ -63,15 +70,15 @@ class LatestActivityPanel extends StatelessWidget {
 
     if (latest.isEmpty) {
       return AppCard(
-        title: title,
-        icon: icon,
+        title: cardTitle,
+        icon: cardIcon,
         child: Text(emptyText, style: const TextStyle(fontSize: 12)),
       );
     }
 
     return AppCard(
-      title: title,
-      icon: icon,
+      title: cardTitle,
+      icon: cardIcon,
       child: Column(
         children: [
           for (int i = 0; i < latest.length; i++) ...[

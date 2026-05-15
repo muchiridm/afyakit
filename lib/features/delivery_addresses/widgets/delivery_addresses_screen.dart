@@ -27,7 +27,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     return AppPage(
       title: title,
       showBack: true,
-      maxWidth: AppLayout.memberPageMaxW,
+      maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
       scrollable: false,
       actions: [
@@ -337,7 +337,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
     return Align(
       alignment: Alignment.bottomCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppLayout.memberPageMaxW),
+        constraints: const BoxConstraints(maxWidth: AppLayout.contentMaxWidth),
         child: Padding(
           padding: EdgeInsets.only(
             left: 16,

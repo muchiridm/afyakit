@@ -5,6 +5,32 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
+class PatientProfilesScope {
+  const PatientProfilesScope({
+    this.contactId,
+    this.allowExplicitContactLink = false,
+  });
+
+  final String? contactId;
+  final bool allowExplicitContactLink;
+
+  String? get cleanContactId => PatientProfilesController.nullable(contactId);
+
+  bool get isContactScoped => cleanContactId != null;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is PatientProfilesScope &&
+            other.cleanContactId == cleanContactId &&
+            other.allowExplicitContactLink == allowExplicitContactLink;
+  }
+
+  @override
+  int get hashCode => Object.hash(cleanContactId, allowExplicitContactLink);
+}
+
+@immutable
 class PatientProfilesState {
   const PatientProfilesState({
     this.items = const <PatientProfile>[],
@@ -85,20 +111,29 @@ class PatientProfilesState {
   }
 }
 
-final patientProfilesControllerProvider =
-    StateNotifierProvider.autoDispose<
+final patientProfilesControllerProvider = StateNotifierProvider.autoDispose
+    .family<
       PatientProfilesController,
-      PatientProfilesState
-    >((ref) {
-      final service = ref.watch(patientProfilesServiceProvider);
-      return PatientProfilesController(service)..load();
+      PatientProfilesState,
+      PatientProfilesScope
+    >((ref, scope) {
+      return PatientProfilesController(
+        () => ref.read(patientProfilesServiceProvider),
+        fixedContactId: scope.cleanContactId,
+      );
     });
 
 class PatientProfilesController extends StateNotifier<PatientProfilesState> {
-  PatientProfilesController(this._service)
-    : super(const PatientProfilesState());
+  PatientProfilesController(this._readService, {String? fixedContactId})
+    : _fixedContactId = nullable(fixedContactId),
+      super(PatientProfilesState(contactId: nullable(fixedContactId)));
 
-  final PatientProfilesService _service;
+  final PatientProfilesService Function() _readService;
+  final String? _fixedContactId;
+
+  PatientProfilesService get _service => _readService();
+
+  bool get isContactScoped => _fixedContactId != null;
 
   // ─────────────────────────────────────────────
   // Patient profiles
@@ -109,8 +144,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
     try {
       final items = await _service.list(
-        search: _nullable(state.search),
-        contactId: state.contactId,
+        search: nullable(state.search),
+        contactId: _fixedContactId ?? state.contactId,
         relationship: state.relationship,
         isActive: state.isActive,
       );
@@ -140,7 +175,9 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   }
 
   void setContactId(String? value) {
-    final trimmed = _nullable(value);
+    if (isContactScoped) return;
+
+    final trimmed = nullable(value);
 
     state = state.copyWith(contactId: trimmed, clearContactId: trimmed == null);
   }
@@ -165,11 +202,13 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     bool resetRelationship = false,
     bool resetIsActive = false,
   }) async {
-    final trimmedContactId = _nullable(contactId);
+    final trimmedContactId = nullable(contactId);
 
     state = state.copyWith(
       search: search ?? state.search,
-      contactId: resetContactId
+      contactId: isContactScoped
+          ? _fixedContactId
+          : resetContactId
           ? null
           : contactId == null
           ? state.contactId
@@ -178,8 +217,9 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
           ? null
           : (relationship ?? state.relationship),
       isActive: resetIsActive ? null : (isActive ?? state.isActive),
-      clearContactId:
-          resetContactId || (contactId != null && trimmedContactId == null),
+      clearContactId: isContactScoped
+          ? false
+          : resetContactId || (contactId != null && trimmedContactId == null),
       clearRelationship: resetRelationship,
       clearIsActive: resetIsActive,
     );
@@ -190,7 +230,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   Future<void> clearFilters() async {
     state = state.copyWith(
       search: '',
-      clearContactId: true,
+      contactId: _fixedContactId,
+      clearContactId: _fixedContactId == null,
       clearRelationship: true,
       clearIsActive: true,
     );
@@ -202,7 +243,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final created = await _service.create(input);
+      final effectiveInput = _withFixedContact(input);
+      final created = await _service.create(effectiveInput);
       final items = _upsertPatient(state.items, created);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -246,7 +288,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final updated = await _service.update(patientId, input);
+      final effectiveInput = _withFixedContact(input);
+      final updated = await _service.update(patientId, effectiveInput);
       final items = _upsertPatient(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -289,6 +332,10 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     required String patientId,
     required PatientContactLinkInput input,
   }) async {
+    if (isContactScoped) {
+      throw StateError('Scoped member views cannot link arbitrary contacts.');
+    }
+
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -315,6 +362,10 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     required String patientId,
     required String contactId,
   }) async {
+    if (isContactScoped) {
+      throw StateError('Scoped member views cannot delink arbitrary contacts.');
+    }
+
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -360,7 +411,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     try {
       final requests = await _service.listLinkRequests(
         status: effectiveStatus,
-        patientId: _nullable(patientId),
+        patientId: nullable(patientId),
       );
 
       state = state.copyWith(
@@ -413,6 +464,10 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     String requestId,
     PatientLinkRequestApproveInput input,
   ) async {
+    if (isContactScoped) {
+      throw StateError('Scoped member views cannot approve link requests.');
+    }
+
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -444,20 +499,20 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     String? contactDisplayName,
     PatientContactRelationship? relationship,
   }) {
-    final resolvedContactId = _nullable(contactId) ?? request.targetContactId;
+    final resolvedContactId = nullable(contactId) ?? request.targetContactId;
     final resolvedAccountNumber =
-        _nullable(accountNumber) ?? request.targetAccountNumber;
+        nullable(accountNumber) ?? request.targetAccountNumber;
     final resolvedDisplayName =
-        _nullable(contactDisplayName) ?? request.targetContactDisplayName;
+        nullable(contactDisplayName) ?? request.targetContactDisplayName;
 
     return approveLinkRequest(
       request.requestId,
       PatientLinkRequestApproveInput(
-        contactId: _nullable(resolvedContactId),
-        accountNumber: _nullable(resolvedContactId) == null
-            ? _nullable(resolvedAccountNumber)
+        contactId: nullable(resolvedContactId),
+        accountNumber: nullable(resolvedContactId) == null
+            ? nullable(resolvedAccountNumber)
             : null,
-        contactDisplayName: _nullable(resolvedDisplayName),
+        contactDisplayName: nullable(resolvedDisplayName),
         relationship: relationship ?? request.relationship,
       ),
     );
@@ -467,6 +522,10 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     String requestId,
     PatientLinkRequestRejectInput input,
   ) async {
+    if (isContactScoped) {
+      throw StateError('Scoped member views cannot reject link requests.');
+    }
+
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -487,6 +546,27 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
       );
       rethrow;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Input scope helpers
+  // ─────────────────────────────────────────────
+
+  PatientProfileUpsertInput _withFixedContact(PatientProfileUpsertInput input) {
+    if (_fixedContactId == null) return input;
+
+    return PatientProfileUpsertInput(
+      fullName: input.fullName,
+      dob: input.dob,
+      gender: input.gender,
+      contactId: _fixedContactId,
+      relationship: input.relationship,
+      phone: input.phone,
+      email: input.email,
+      nationalId: input.nationalId,
+      notes: input.notes,
+      isActive: input.isActive,
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -561,7 +641,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     return sorted;
   }
 
-  static String? _nullable(String? value) {
+  static String? nullable(String? value) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;

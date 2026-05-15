@@ -24,7 +24,7 @@ class GroupedRecordsScreen<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxW = maxContentWidth ?? AppLayout.pageMaxW;
+    final maxW = maxContentWidth ?? AppLayout.contentMaxWidth;
 
     return recordsAsync.when(
       loading: () => AppPage(

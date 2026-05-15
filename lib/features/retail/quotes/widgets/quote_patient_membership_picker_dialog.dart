@@ -52,6 +52,14 @@ class _QuotePatientMembershipPickerDialogState
   final _patientSearchCtl = TextEditingController();
   final _membershipSearchCtl = TextEditingController();
 
+  /// Staff quote flow: show all tenant patient profiles.
+  ///
+  /// Member/customer quote flows should use a member-scoped picker later,
+  /// passing the authenticated contactId into PatientProfilesScope.
+  static const PatientProfilesScope _patientScope = PatientProfilesScope(
+    allowExplicitContactLink: true,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -59,8 +67,12 @@ class _QuotePatientMembershipPickerDialogState
     _tabCtl = TabController(length: 2, vsync: this);
 
     Future<void>.microtask(() async {
-      ref.read(patientProfilesControllerProvider.notifier).setIsActive(true);
-      await ref.read(patientProfilesControllerProvider.notifier).load();
+      final patientsController = ref.read(
+        patientProfilesControllerProvider(_patientScope).notifier,
+      );
+
+      patientsController.setIsActive(true);
+      await patientsController.load();
 
       await ref
           .read(insuranceMembershipsControllerProvider.notifier)
@@ -220,7 +232,9 @@ class _QuotePatientMembershipPickerDialogState
 
   @override
   Widget build(BuildContext context) {
-    final patientsState = ref.watch(patientProfilesControllerProvider);
+    final patientsState = ref.watch(
+      patientProfilesControllerProvider(_patientScope),
+    );
     final membershipsState = ref.watch(insuranceMembershipsControllerProvider);
 
     final patients = _filteredPatients(patientsState.items);
@@ -258,7 +272,11 @@ class _QuotePatientMembershipPickerDialogState
                     selectedPatientId: widget.initialPatientId,
                     onSearchChanged: (_) => setState(() {}),
                     onRefresh: () => ref
-                        .read(patientProfilesControllerProvider.notifier)
+                        .read(
+                          patientProfilesControllerProvider(
+                            _patientScope,
+                          ).notifier,
+                        )
                         .load(),
                     onSelect: _selectPatient,
                   ),

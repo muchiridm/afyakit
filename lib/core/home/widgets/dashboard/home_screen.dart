@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/widgets/guest/home_guest_body.dart';
-import 'package:afyakit/core/home/widgets/member/home_member_body.dart';
-import 'package:afyakit/core/home/widgets/staff/home_staff_body.dart';
+import 'package:afyakit/core/home/widgets/dashboard/home_guest_body.dart';
+import 'package:afyakit/core/home/widgets/dashboard/home_member_body.dart';
+import 'package:afyakit/core/home/widgets/dashboard/home_staff_body.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 
@@ -28,9 +28,9 @@ class HomeScreen extends ConsumerWidget {
 
   double get _maxWidth {
     return switch (effectiveEntry) {
-      EntryMode.staff => AppLayout.staffPageMaxW,
-      EntryMode.member => AppLayout.memberPageMaxW,
-      EntryMode.guest => AppLayout.pageMaxW,
+      EntryMode.staff => AppLayout.dashboardMaxWidth,
+      EntryMode.member => AppLayout.dashboardMaxWidth,
+      EntryMode.guest => AppLayout.contentMaxWidth,
     };
   }
 

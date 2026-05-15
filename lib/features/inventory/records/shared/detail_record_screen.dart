@@ -14,7 +14,7 @@ class DetailRecordScreen extends StatelessWidget {
     required this.header,
     required this.contentSections,
     this.actionButtons,
-    this.maxContentWidth = AppLayout.pageMaxW,
+    this.maxContentWidth = AppLayout.contentMaxWidth,
   });
 
   @override

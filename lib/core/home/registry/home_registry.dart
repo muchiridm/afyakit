@@ -7,7 +7,7 @@ import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
 
-import 'package:afyakit/core/home/widgets/admin_dashboard_screen.dart';
+import 'package:afyakit/core/home/widgets/admin_dashboard/admin_dashboard_screen.dart';
 import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
