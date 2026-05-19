@@ -9,14 +9,22 @@ class ZohoQuoteLineItem {
     required this.quantity,
     required this.rate,
     this.description,
+    this.unit,
     this.lineItemId,
     this.itemTotal,
   });
 
   final String name;
   final String? description;
+
+  /// Zoho usually returns this as a number. Internally we keep it as double
+  /// because existing Zoho payloads may not always be typed consistently.
   final double quantity;
+
   final num rate;
+
+  /// Optional display/sales unit.
+  final String? unit;
 
   /// Used for update. If present, send it back as line_item_id.
   final String? lineItemId;
@@ -24,14 +32,16 @@ class ZohoQuoteLineItem {
   final num? itemTotal;
 
   factory ZohoQuoteLineItem.fromJson(JsonMap j) {
-    final name = asTrimmedString(j['name']);
-    final desc = asCleanStringOrNull(j['description']);
+    final String name = asTrimmedString(j['name']);
+    final String? desc = asCleanStringOrNull(j['description']);
 
-    final qty = asDouble(j['quantity']);
-    final rate = asNum(j['rate']);
+    final double qty = asDouble(j['quantity']);
+    final num rate = asNum(j['rate']);
 
-    final id = asCleanStringOrNull(j['line_item_id']);
-    final itemTotal = j.containsKey('item_total')
+    final String? unit = asCleanStringOrNull(j['unit']);
+    final String? id = asCleanStringOrNull(j['line_item_id']);
+
+    final num? itemTotal = j.containsKey('item_total')
         ? asNum(j['item_total'], fallback: 0)
         : null;
 
@@ -40,6 +50,7 @@ class ZohoQuoteLineItem {
       description: desc,
       quantity: qty,
       rate: rate,
+      unit: unit,
       lineItemId: id,
       itemTotal: itemTotal,
     );
@@ -51,6 +62,7 @@ class ZohoQuoteLineItem {
       'description': description,
       'quantity': quantity,
       'rate': rate,
+      'unit': unit,
       'line_item_id': lineItemId,
       'item_total': itemTotal,
     }..removeWhere(_removeEmpty);
@@ -62,6 +74,8 @@ class ZohoQuoteLineItem {
     bool clearDescription = false,
     double? quantity,
     num? rate,
+    String? unit,
+    bool clearUnit = false,
     String? lineItemId,
     bool clearLineItemId = false,
     num? itemTotal,
@@ -72,6 +86,7 @@ class ZohoQuoteLineItem {
       description: clearDescription ? null : (description ?? this.description),
       quantity: quantity ?? this.quantity,
       rate: rate ?? this.rate,
+      unit: clearUnit ? null : (unit ?? this.unit),
       lineItemId: clearLineItemId ? null : (lineItemId ?? this.lineItemId),
       itemTotal: clearItemTotal ? null : (itemTotal ?? this.itemTotal),
     );

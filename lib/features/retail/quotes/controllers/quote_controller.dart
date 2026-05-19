@@ -1,28 +1,29 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_member_binding_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final quoteControllerProvider =
     StateNotifierProvider<QuoteController, QuoteState>(
-      (ref) => QuoteController(ref),
+      (Ref ref) => QuoteController(ref),
     );
 
 class QuoteController extends StateNotifier<QuoteState> {
@@ -30,23 +31,26 @@ class QuoteController extends StateNotifier<QuoteState> {
     _engine = QuoteEngine(_ref);
 
     _ref.listen<ZohoMemberCustomerScope?>(zohoMemberCustomerScopeProvider, (
-      prev,
-      next,
+      ZohoMemberCustomerScope? previous,
+      ZohoMemberCustomerScope? next,
     ) {
-      final p = prev?.bindKey ?? '';
-      final n = next?.bindKey ?? '';
-      if (p == n) return;
+      final String prevKey = previous?.bindKey ?? '';
+      final String nextKey = next?.bindKey ?? '';
 
+      if (prevKey == nextKey) return;
       if (_policy != QuoteContactPolicy.memberScoped) return;
 
-      unawaited(_ensureMemberContactBound(showError: false));
+      unawaited(_memberBinding.resolve(showError: false));
     });
 
-    _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (prev, next) {
-      if (prev == next) return;
+    _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (
+      QuoteContactPolicy? previous,
+      QuoteContactPolicy next,
+    ) {
+      if (previous == next) return;
 
       if (next == QuoteContactPolicy.memberScoped) {
-        unawaited(_ensureMemberContactBound(showError: false));
+        unawaited(_memberBinding.resolve(showError: false));
       }
     });
   }
@@ -66,18 +70,19 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
 
-  Future<void>? _memberContactBindFuture;
-  String? _memberContactBindAcct;
+  QuoteMemberBindingController get _memberBinding =>
+      _ref.read(quoteMemberBindingControllerProvider);
 
-  // ───────────────────────── Public API ─────────────────────────
+  // ───────────────────────── Public state helpers ─────────────────────────
 
   void setError(String? message) {
-    final msg = (message ?? '').trim();
+    final String msg = (message ?? '').trim();
     state = state.copyWith(error: msg.isEmpty ? null : msg);
   }
 
   void reset() {
     if (_busy) return;
+
     state = const QuoteState();
     _linesCtl.clear();
     _metaCtl.clearAll();
@@ -85,9 +90,11 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   void cancelEdit() {
     if (_busy) return;
+
     state = const QuoteState();
     _linesCtl.clear();
     _metaCtl.clearAll();
+
     SnackService.showSuccess('Edits cancelled');
   }
 
@@ -101,17 +108,37 @@ class QuoteController extends StateNotifier<QuoteState> {
     _metaCtl.clearDeliveryAddress();
   }
 
+  void patchDraft({
+    ZohoContact? contact,
+    String? reference,
+    String? customerNotes,
+    DateTime? quoteDate,
+    DateTime? expiryDate,
+    SalesDocumentAddress? deliveryAddress,
+  }) {
+    if (_busy) return;
+
+    if (contact != null) _metaCtl.setContact(contact);
+    if (reference != null) _metaCtl.setReference(reference);
+    if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
+    if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
+    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
+    if (deliveryAddress != null) _metaCtl.setDeliveryAddress(deliveryAddress);
+  }
+
+  // ───────────────────────── Screen/session readiness ─────────────────────────
+
   Future<void> ensureReady({
     String? editingQuoteId,
     required bool requirePrices,
   }) async {
     if (_busy) return;
 
-    final nextId = (editingQuoteId ?? '').trim();
-    final prevEditingId = (state.editingQuoteId ?? '').trim();
-    final prevLoadedId = (state.loadedEditId ?? '').trim();
+    final String nextId = (editingQuoteId ?? '').trim();
+    final String prevEditingId = (state.editingQuoteId ?? '').trim();
+    final String prevLoadedId = (state.loadedEditId ?? '').trim();
 
-    final shouldClearLines = _engine.shouldClearLinesOnSwitch(
+    final bool shouldClearLines = _engine.shouldClearLinesOnSwitch(
       prevEditingId: prevEditingId.isEmpty ? null : prevEditingId,
       prevLoadedId: prevLoadedId.isEmpty ? null : prevLoadedId,
       nextEditingId: nextId,
@@ -122,14 +149,15 @@ class QuoteController extends StateNotifier<QuoteState> {
       state = const QuoteState();
 
       if (_policy == QuoteContactPolicy.memberScoped) {
-        unawaited(_ensureMemberContactBound(showError: false));
+        unawaited(_memberBinding.resolve(showError: false));
       }
 
       await ensureDraftFromLines(requirePrices: requirePrices);
       return;
     }
 
-    final switchingTarget = prevEditingId != nextId || prevLoadedId != nextId;
+    final bool switchingTarget =
+        prevEditingId != nextId || prevLoadedId != nextId;
 
     if (switchingTarget) {
       _linesCtl.clear();
@@ -140,6 +168,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
       }
+
       _metaCtl.beginEdit(nextId);
     }
 
@@ -148,330 +177,87 @@ class QuoteController extends StateNotifier<QuoteState> {
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
-  Future<void> _ensureMemberContactBound({bool showError = false}) async {
-    final QuoteContactPolicy policy = _ref.read(quoteContactPolicyProvider);
-    final bool isMemberScoped = policy == QuoteContactPolicy.memberScoped;
-    if (!isMemberScoped) return;
+  Future<void> ensureDraftFromLines({required bool requirePrices}) async {
+    if (_busy) return;
+    if (!requirePrices) return;
 
-    final scope = _ref.read(zohoMemberCustomerScopeProvider);
-
-    final String acct = (scope?.accountNumber ?? '').trim();
-    final String contactId = (scope?.contactId ?? '').trim();
-
-    if (kDebugMode) {
-      debugPrint(
-        '[QuoteController.memberBind] '
-        'acct=$acct '
-        'contactId=$contactId '
-        'scope=${scope?.debugLabel ?? 'null'}',
+    final int missing = _engine.missingPriceLineCount();
+    if (missing > 0) {
+      SnackService.showInfo(
+        '$missing item(s) missing price — you can enter prices manually.',
       );
     }
-
-    if (acct.isEmpty) {
-      if (showError) {
-        SnackService.showError('Missing account scope.');
-      }
-      return;
-    }
-
-    final ZohoContact? current = _meta.contact;
-    final String currentAcct = (current?.accountNumber ?? '').trim();
-    final String currentContactId = (current?.contactId ?? '').trim();
-
-    if (current != null) {
-      if (contactId.isNotEmpty && currentContactId == contactId) {
-        if (kDebugMode) {
-          debugPrint(
-            '[QuoteController.memberBind] already bound by contactId=$contactId',
-          );
-        }
-        return;
-      }
-
-      if (currentAcct == acct) {
-        if (kDebugMode) {
-          debugPrint(
-            '[QuoteController.memberBind] already bound by accountNumber=$acct',
-          );
-        }
-        return;
-      }
-    }
-
-    final String bindKey = contactId.isNotEmpty
-        ? 'id:$contactId'
-        : 'acct:$acct';
-
-    final Future<void>? inFlight = _memberContactBindFuture;
-    if (inFlight != null && _memberContactBindAcct == bindKey) {
-      if (kDebugMode) {
-        debugPrint(
-          '[QuoteController.memberBind] reusing in-flight bind $bindKey',
-        );
-      }
-      await inFlight;
-      return;
-    }
-
-    late final Future<void> bindFuture;
-
-    bindFuture = () async {
-      try {
-        final ZohoContactsService svc = await _ref.read(
-          zohoContactsServiceProvider.future,
-        );
-
-        ZohoContact? best;
-
-        if (contactId.isNotEmpty) {
-          final ZohoContact? local = _ref.read(
-            currentMemberZohoContactProvider,
-          );
-
-          if (local != null) {
-            final String localAcct = (local.accountNumber ?? '').trim();
-            final String localContactId = local.contactId.trim();
-
-            if (localContactId == contactId && localAcct == acct) {
-              best = local;
-
-              if (kDebugMode) {
-                debugPrint(
-                  '[QuoteController.memberBind] optimistic local bind '
-                  'contactId=${local.contactId} '
-                  'acct=${local.accountNumber ?? ''} '
-                  'title=${local.title}',
-                );
-              }
-
-              unawaited(
-                _refreshMemberContactInBackground(
-                  contactId: contactId,
-                  accountNumber: acct,
-                ),
-              );
-            }
-          }
-
-          if (best == null) {
-            if (kDebugMode) {
-              debugPrint(
-                '[QuoteController.memberBind] fast path LIGHT GET contactId=$contactId',
-              );
-            }
-
-            final ZohoContact byId = await svc.getLight(contactId);
-
-            final String byIdAcct = (byId.accountNumber ?? '').trim();
-            final String byIdContactId = byId.contactId.trim();
-
-            if (kDebugMode) {
-              debugPrint(
-                '[QuoteController.memberBind] fast path light result '
-                'byIdContactId=$byIdContactId '
-                'byIdAcct=$byIdAcct '
-                'title=${byId.title}',
-              );
-            }
-
-            if (byIdContactId != contactId) {
-              if (showError) {
-                SnackService.showError('Customer profile link is invalid.');
-              }
-
-              if (kDebugMode) {
-                debugPrint(
-                  '[QuoteController.memberBind] fast path rejected: '
-                  'expected contactId=$contactId got=$byIdContactId',
-                );
-              }
-
-              return;
-            }
-
-            if (byIdAcct.isNotEmpty && byIdAcct != acct) {
-              if (showError) {
-                SnackService.showError(
-                  'Customer profile does not match your account.',
-                );
-              }
-
-              if (kDebugMode) {
-                debugPrint(
-                  '[QuoteController.memberBind] fast path rejected: '
-                  'expected acct=$acct got=$byIdAcct',
-                );
-              }
-
-              return;
-            }
-
-            best = byId;
-          }
-        }
-
-        if (best == null) {
-          if (kDebugMode) {
-            debugPrint(
-              '[QuoteController.memberBind] fallback GET by accountNumber=$acct',
-            );
-          }
-
-          best = await svc.getByAccountNumber(
-            acct,
-            type: ZohoContactTypeFilter.customerOnly,
-          );
-        }
-
-        if (best == null) {
-          if (showError) {
-            SnackService.showError('Your customer profile is missing.');
-          }
-
-          if (kDebugMode) {
-            debugPrint(
-              '[QuoteController.memberBind] no customer profile found',
-            );
-          }
-
-          return;
-        }
-
-        final String bestAcct = (best.accountNumber ?? '').trim();
-
-        if (bestAcct.isNotEmpty && bestAcct != acct) {
-          if (showError) {
-            SnackService.showError(
-              'Customer profile does not match your account.',
-            );
-          }
-
-          if (kDebugMode) {
-            debugPrint(
-              '[QuoteController.memberBind] final account mismatch: '
-              'expected acct=$acct got=$bestAcct',
-            );
-          }
-
-          return;
-        }
-
-        final ZohoContact? latest = _meta.contact;
-        final String latestAcct = (latest?.accountNumber ?? '').trim();
-        final String latestContactId = (latest?.contactId ?? '').trim();
-
-        if (latest != null) {
-          if (contactId.isNotEmpty && latestContactId == contactId) return;
-          if (latestAcct == acct) return;
-        }
-
-        _metaCtl.setContact(best);
-
-        if (kDebugMode) {
-          debugPrint(
-            '[QuoteController.memberBind] bound customer '
-            'contactId=${best.contactId} '
-            'acct=${best.accountNumber ?? ''} '
-            'title=${best.title}',
-          );
-        }
-      } catch (e, st) {
-        if (kDebugMode) {
-          debugPrint('[QuoteController.memberBind] failed: $e');
-          debugPrint('$st');
-        }
-
-        if (showError) {
-          SnackService.showError('Failed to resolve customer profile.');
-        }
-      } finally {
-        if (identical(_memberContactBindFuture, bindFuture)) {
-          _memberContactBindFuture = null;
-          _memberContactBindAcct = null;
-        }
-      }
-    }();
-
-    _memberContactBindAcct = bindKey;
-    _memberContactBindFuture = bindFuture;
-
-    await bindFuture;
   }
 
-  Future<void> _refreshMemberContactInBackground({
-    required String contactId,
-    required String accountNumber,
+  Future<void> ensureLoadedForEdit(
+    String quoteId, {
+    required bool requirePrices,
   }) async {
-    final String id = contactId.trim();
-    final String acct = accountNumber.trim();
+    final String id = quoteId.trim();
+    if (id.isEmpty) return;
+    if (_busy) return;
+    if ((state.loadedEditId ?? '').trim() == id) return;
 
-    if (id.isEmpty || acct.isEmpty) return;
+    state = state.copyWith(
+      loadingEdit: true,
+      clearError: true,
+      editingQuoteId: id,
+    );
 
     try {
-      final ZohoContactsService svc = await _ref.read(
-        zohoContactsServiceProvider.future,
+      final q = await _engine.loadQuote(id);
+
+      _engine.setLinesFromZoho(q);
+
+      final QuoteMetaState meta = _engine.metaFromZoho(q);
+
+      _metaCtl.applyZohoMeta(
+        editingQuoteId: id,
+        contact: meta.contact,
+        reference: meta.reference,
+        customerNotes: meta.customerNotes,
+        quoteDate: meta.quoteDate,
+        expiryDate: meta.expiryDate,
+        deliveryAddress: meta.deliveryAddress,
+        patientSnapshot: meta.patientSnapshot,
+        membershipId: meta.membershipId,
       );
 
-      final ZohoContact fresh = await svc.getLight(id);
+      state = state.copyWith(loadingEdit: false, loadedEditId: id);
 
-      final String freshId = fresh.contactId.trim();
-      final String freshAcct = (fresh.accountNumber ?? '').trim();
-
-      if (freshId != id) return;
-      if (freshAcct.isNotEmpty && freshAcct != acct) return;
-
-      final ZohoContact? latest = _meta.contact;
-      final String latestId = (latest?.contactId ?? '').trim();
-      final String latestAcct = (latest?.accountNumber ?? '').trim();
-
-      if (latestId == id || latestAcct == acct) {
-        _metaCtl.setContact(fresh);
-
-        if (kDebugMode) {
-          debugPrint(
-            '[QuoteController.memberBind] background refresh patched '
-            'contactId=${fresh.contactId} '
-            'acct=${fresh.accountNumber ?? ''} '
-            'title=${fresh.title}',
-          );
-        }
-      }
+      await ensureDraftFromLines(requirePrices: requirePrices);
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-          '[QuoteController.memberBind] background refresh failed: $e',
-        );
-      }
+      _failLoadingEdit(e);
     }
   }
+
+  // ───────────────────────── Quote submit/update ─────────────────────────
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
 
     if (_policy == QuoteContactPolicy.memberScoped) {
-      await _ensureMemberContactBound(showError: true);
-      if (_meta.contact == null) {
+      final ZohoContact? contact = await _memberBinding.resolve(
+        showError: true,
+      );
+
+      if (contact == null) {
         SnackService.showError('Could not resolve your customer profile.');
         return null;
       }
     }
 
-    final meta = _meta;
+    final QuoteMetaState meta = _meta;
 
-    final err = _engine.validateForSubmitV2(
+    final String? validationError = _engine.validateForSubmitV2(
       meta: meta,
       requirePrices: requirePrices,
       isEditing: state.isEditing,
     );
 
-    if (err != null) {
-      SnackService.showError(err);
+    if (validationError != null) {
+      SnackService.showError(validationError);
       return null;
-    }
-
-    final missing = _engine.missingPriceLineCount();
-    if (requirePrices && missing > 0) {
-      SnackService.showInfo('$missing item(s) missing price.');
     }
 
     state = state.copyWith(
@@ -481,105 +267,102 @@ class QuoteController extends StateNotifier<QuoteState> {
     );
 
     try {
-      final payload = _engine.buildPayloadDraftFromMeta(
+      final QuoteDraft payload = _engine.buildPayloadDraftFromMeta(
         meta: meta,
         requirePrices: requirePrices,
       );
 
       if (state.isEditing) {
-        final id = (state.editingQuoteId ?? '').trim();
-        if (id.isEmpty) {
-          state = state.copyWith(submitting: false);
-          SnackService.showError('Missing quote id');
-          return null;
-        }
-
-        await _engine.update(
-          id,
+        return await _updateCurrentQuote(
           payload,
           quoteDate: meta.quoteDate,
           expiryDate: meta.expiryDate,
         );
-
-        _invalidateQuoteCaches(id);
-
-        state = state.copyWith(submitting: false);
-        SnackService.showSuccess('Quote updated');
-        return id;
       }
 
-      final created = await _engine.create(
+      return await _createQuote(
         payload,
         quoteDate: meta.quoteDate,
         expiryDate: meta.expiryDate,
       );
-
-      final createdId = created.quoteId.trim();
-
-      _linesCtl.clear();
-      _metaCtl.clearAll();
-
-      if (createdId.isNotEmpty) {
-        _invalidateQuoteCaches(createdId);
-      } else {
-        _invalidateQuotesList();
-      }
-
-      state = state.copyWith(
-        submitting: false,
-        lastCreatedQuoteId: createdId.isEmpty ? null : createdId,
-      );
-
-      SnackService.showSuccess('Quote created');
-      return createdId.isEmpty ? null : createdId;
     } catch (e) {
-      state = state.copyWith(submitting: false, error: e.toString());
-      SnackService.showError(
-        state.isEditing ? 'Failed to update quote' : 'Failed to create quote',
+      _failSubmitting(
+        e,
+        fallback: state.isEditing
+            ? 'Failed to update quote'
+            : 'Failed to create quote',
       );
+
       return null;
     }
   }
 
-  void patchDraft({
-    dynamic contact,
-    String? reference,
-    String? customerNotes,
+  Future<String?> _updateCurrentQuote(
+    QuoteDraft payload, {
     DateTime? quoteDate,
     DateTime? expiryDate,
-    SalesDocumentAddress? deliveryAddress,
-  }) {
-    if (_busy) return;
+  }) async {
+    final String id = (state.editingQuoteId ?? '').trim();
 
-    try {
-      _metaCtl.setContact(contact as dynamic);
-    } catch (_) {}
-
-    if (reference != null) _metaCtl.setReference(reference);
-    if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
-    if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
-    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
-    if (deliveryAddress != null) {
-      _metaCtl.setDeliveryAddress(deliveryAddress);
+    if (id.isEmpty) {
+      state = state.copyWith(submitting: false);
+      SnackService.showError('Missing quote id');
+      return null;
     }
+
+    await _engine.update(
+      id,
+      payload,
+      quoteDate: quoteDate,
+      expiryDate: expiryDate,
+    );
+
+    _invalidateQuoteCaches(id);
+
+    state = state.copyWith(submitting: false);
+    SnackService.showSuccess('Quote updated');
+
+    return id;
   }
 
-  void _invalidateQuotesList() {
-    for (final s in RetailDocScope.values) {
-      _ref.invalidate(quotesListControllerProvider(s));
+  Future<String?> _createQuote(
+    QuoteDraft payload, {
+    DateTime? quoteDate,
+    DateTime? expiryDate,
+  }) async {
+    final created = await _engine.create(
+      payload,
+      quoteDate: quoteDate,
+      expiryDate: expiryDate,
+    );
+
+    final String createdId = created.quoteId.trim();
+
+    _linesCtl.clear();
+    _metaCtl.clearAll();
+
+    if (createdId.isNotEmpty) {
+      _invalidateQuoteCaches(createdId);
+    } else {
+      _invalidateQuotesList();
     }
+
+    state = state.copyWith(
+      submitting: false,
+      lastCreatedQuoteId: createdId.isEmpty ? null : createdId,
+    );
+
+    SnackService.showSuccess('Quote created');
+
+    return createdId.isEmpty ? null : createdId;
   }
 
-  void _invalidateQuoteCaches(String quoteId) {
-    final id = quoteId.trim();
-    if (id.isEmpty) return;
-    _invalidateQuotesList();
-  }
+  // ───────────────────────── Quote actions ─────────────────────────
 
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
 
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return false;
 
     state = state.copyWith(submitting: true, clearError: true);
@@ -600,8 +383,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       SnackService.showSuccess('Quote deleted');
       return true;
     } catch (e) {
-      state = state.copyWith(submitting: false, error: e.toString());
-      SnackService.showError('Failed to delete quote');
+      _failSubmitting(e, fallback: 'Failed to delete quote');
       return false;
     }
   }
@@ -609,18 +391,17 @@ class QuoteController extends StateNotifier<QuoteState> {
   Future<Uint8List?> getPdfBytes(String quoteId) async {
     if (_busy) return null;
 
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return null;
 
     state = state.copyWith(downloadingPdf: true, clearError: true);
 
     try {
-      final bytes = await _engine.getPdf(id);
+      final Uint8List bytes = await _engine.getPdf(id);
       state = state.copyWith(downloadingPdf: false);
       return bytes;
     } catch (e) {
-      state = state.copyWith(downloadingPdf: false, error: e.toString());
-      SnackService.showError('Failed to load PDF');
+      _failDownloadingPdf(e);
       return null;
     }
   }
@@ -628,7 +409,7 @@ class QuoteController extends StateNotifier<QuoteState> {
   Future<bool> emailQuote(String quoteId) async {
     if (_busy) return false;
 
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return false;
 
     state = state.copyWith(sending: true, clearError: true);
@@ -640,10 +421,10 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Quote sent');
+
       return true;
     } catch (e) {
-      state = state.copyWith(sending: false, error: e.toString());
-      SnackService.showError('Failed to send quote');
+      _failSending(e, fallback: 'Failed to send quote');
       return false;
     }
   }
@@ -651,7 +432,7 @@ class QuoteController extends StateNotifier<QuoteState> {
   Future<bool> markQuoteSent(String quoteId) async {
     if (_busy) return false;
 
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return false;
 
     state = state.copyWith(sending: true, clearError: true);
@@ -663,10 +444,10 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Marked as sent');
+
       return true;
     } catch (e) {
-      state = state.copyWith(sending: false, error: e.toString());
-      SnackService.showError('Failed to mark as sent');
+      _failSending(e, fallback: 'Failed to mark as sent');
       return false;
     }
   }
@@ -678,91 +459,114 @@ class QuoteController extends StateNotifier<QuoteState> {
     String? membershipId,
     bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
+    SalesDocumentAddress? deliveryAddress,
   }) async {
     if (_busy) return null;
 
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return null;
 
     state = state.copyWith(converting: true, clearError: true);
 
     try {
-      final result = await _engine.convertToInvoice(
+      final QuoteConversionResult result = await _engine.convertToInvoice(
         id,
         invoiceDate: invoiceDate,
         dueDate: dueDate,
         membershipId: membershipId,
         createInsuranceClaim: createInsuranceClaim,
         patientSnapshot: patientSnapshot,
+        deliveryAddress: deliveryAddress,
       );
 
       _invalidateQuoteCaches(id);
 
       state = state.copyWith(converting: false);
 
-      if (result.claim != null) {
-        SnackService.showSuccess('Converted to invoice and claim created');
-      } else {
-        SnackService.showSuccess('Converted to invoice');
-      }
+      SnackService.showSuccess(
+        result.claim != null
+            ? 'Converted to invoice and claim created'
+            : 'Converted to invoice',
+      );
 
       return result;
     } catch (e) {
-      state = state.copyWith(converting: false, error: e.toString());
-      SnackService.showError('Failed to convert to invoice');
+      _failConverting(e);
       return null;
     }
   }
 
-  Future<void> ensureDraftFromLines({required bool requirePrices}) async {
-    if (_busy) return;
-    if (!requirePrices) return;
+  // ───────────────────────── Cache invalidation ─────────────────────────
 
-    final missing = _engine.missingPriceLineCount();
-    if (missing > 0) {
-      SnackService.showInfo(
-        '$missing item(s) missing price — you can enter prices manually.',
-      );
+  void _invalidateQuotesList() {
+    for (final RetailDocScope scope in RetailDocScope.values) {
+      _ref.invalidate(quotesListControllerProvider(scope));
     }
   }
 
-  Future<void> ensureLoadedForEdit(
-    String quoteId, {
-    required bool requirePrices,
-  }) async {
-    final id = quoteId.trim();
+  void _invalidateQuoteCaches(String quoteId) {
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
-    if (_busy) return;
-    if ((state.loadedEditId ?? '').trim() == id) return;
 
-    state = state.copyWith(
-      loadingEdit: true,
-      clearError: true,
-      editingQuoteId: id,
+    _invalidateQuotesList();
+  }
+
+  // ───────────────────────── Error helpers ─────────────────────────
+
+  String _friendlyError(Object error, {required String fallback}) {
+    final String raw = error.toString().trim();
+    if (raw.isEmpty) return fallback;
+
+    final String cleaned = raw
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceFirst(RegExp(r'^StateError:\s*'), '')
+        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .trim();
+
+    return cleaned.isEmpty ? fallback : cleaned;
+  }
+
+  void _failSubmitting(Object error, {required String fallback}) {
+    final String message = _friendlyError(error, fallback: fallback);
+
+    state = state.copyWith(submitting: false, error: message);
+    SnackService.showError(message);
+  }
+
+  void _failLoadingEdit(Object error) {
+    final String message = _friendlyError(
+      error,
+      fallback: 'Failed to load quote',
     );
 
-    try {
-      final q = await _engine.loadQuote(id);
+    state = state.copyWith(loadingEdit: false, error: message);
+    SnackService.showError(message);
+  }
 
-      _engine.setLinesFromZoho(q);
+  void _failDownloadingPdf(Object error) {
+    final String message = _friendlyError(
+      error,
+      fallback: 'Failed to load PDF',
+    );
 
-      final meta = _engine.metaFromZoho(q);
-      _metaCtl.applyZohoMeta(
-        editingQuoteId: id,
-        contact: meta.contact,
-        reference: meta.reference,
-        customerNotes: meta.customerNotes,
-        quoteDate: meta.quoteDate,
-        expiryDate: meta.expiryDate,
-        deliveryAddress: meta.deliveryAddress,
-      );
+    state = state.copyWith(downloadingPdf: false, error: message);
+    SnackService.showError(message);
+  }
 
-      state = state.copyWith(loadingEdit: false, loadedEditId: id);
+  void _failSending(Object error, {required String fallback}) {
+    final String message = _friendlyError(error, fallback: fallback);
 
-      await ensureDraftFromLines(requirePrices: requirePrices);
-    } catch (e) {
-      state = state.copyWith(loadingEdit: false, error: e.toString());
-      SnackService.showError('Failed to load quote');
-    }
+    state = state.copyWith(sending: false, error: message);
+    SnackService.showError(message);
+  }
+
+  void _failConverting(Object error) {
+    final String message = _friendlyError(
+      error,
+      fallback: 'Failed to convert to invoice',
+    );
+
+    state = state.copyWith(converting: false, error: message);
+    SnackService.showError(message);
   }
 }

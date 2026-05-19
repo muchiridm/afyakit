@@ -142,6 +142,9 @@ class ZohoQuotesService {
     final JsonMap body = _buildDraftPayload(
       draft,
       requireCustomer: true,
+      requireQuoteDate: true,
+      requirePatient: true,
+      requireDeliveryAddress: true,
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
@@ -169,6 +172,9 @@ class ZohoQuotesService {
     final JsonMap body = _buildDraftPayload(
       draft,
       requireCustomer: false,
+      requireQuoteDate: false,
+      requirePatient: false,
+      requireDeliveryAddress: false,
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
@@ -301,17 +307,22 @@ class ZohoQuotesService {
   JsonMap _buildDraftPayload(
     QuoteDraft draft, {
     required bool requireCustomer,
+    required bool requireQuoteDate,
+    required bool requirePatient,
+    required bool requireDeliveryAddress,
     DateTime? quoteDate,
     DateTime? expiryDate,
   }) {
     final String customerId = draft.customerIdResolved.trim();
 
     if (requireCustomer && customerId.isEmpty) {
-      throw StateError('customer_id is required');
+      throw StateError('Please select a customer before requesting a quote.');
     }
 
     if (draft.lines.isEmpty) {
-      throw StateError('quote must have at least one line');
+      throw StateError(
+        'Please add at least one item before requesting a quote.',
+      );
     }
 
     final String? quoteDateStr = quoteDate == null
@@ -322,19 +333,42 @@ class ZohoQuotesService {
         ? null
         : _zohoDateFmt.format(_dateOnly(expiryDate));
 
+    if (requireQuoteDate && quoteDateStr == null) {
+      throw StateError('Please select a quote date before requesting a quote.');
+    }
+
     final String? cleanPatientId = asCleanStringOrNull(draft.resolvedPatientId);
     final String? cleanMembershipId = asCleanStringOrNull(
       draft.resolvedMembershipId,
     );
 
+    if (requirePatient && cleanPatientId == null) {
+      throw StateError(
+        'Please select a patient profile before requesting a quote.',
+      );
+    }
+
+    if (requirePatient && draft.patientSnapshot == null) {
+      throw StateError(
+        'Please select a patient profile before requesting a quote.',
+      );
+    }
+
+    if (requireDeliveryAddress && draft.deliveryAddress?.isUsable != true) {
+      throw StateError(
+        'Please select a delivery address before requesting a quote.',
+      );
+    }
+
+    final String? reference = asCleanStringOrNull(draft.reference);
+    final String? notes = asCleanStringOrNull(draft.customerNotes);
+
     return <String, Object?>{
       if (customerId.isNotEmpty) 'customer_id': customerId,
       if (quoteDateStr != null) 'date': quoteDateStr,
       if (expiryDateStr != null) 'expiry_date': expiryDateStr,
-      if (asCleanStringOrNull(draft.reference) != null)
-        'reference_number': asCleanStringOrNull(draft.reference),
-      if (asCleanStringOrNull(draft.customerNotes) != null)
-        'notes': asCleanStringOrNull(draft.customerNotes),
+      if (reference != null) 'reference_number': reference,
+      if (notes != null) 'notes': notes,
       if (draft.deliveryAddress != null)
         'delivery_address': draft.deliveryAddress!.toJson(),
       if (cleanPatientId != null) 'patient_id': cleanPatientId,

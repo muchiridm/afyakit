@@ -24,7 +24,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
     required this.onEnsureAuthed,
   });
 
-  static const double _kTrailH = 36;
+  static const double _trailHeight = 36;
 
   final bool isEdit;
   final bool busy;
@@ -37,17 +37,17 @@ class QuoteEditorHeaderActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
 
     final ButtonStyle pickStyle = OutlinedButton.styleFrom(
-      minimumSize: const Size(0, _kTrailH),
+      minimumSize: const Size(0, _trailHeight),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 
     final ButtonStyle iconStyle = IconButton.styleFrom(
-      minimumSize: const Size(_kTrailH, _kTrailH),
+      minimumSize: const Size(_trailHeight, _trailHeight),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -66,11 +66,12 @@ class QuoteEditorHeaderActions extends StatelessWidget {
       );
 
       if (picked == null) return;
+
       onContactPicked(picked);
     }
 
     return SizedBox(
-      height: _kTrailH,
+      height: _trailHeight,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
@@ -93,7 +94,11 @@ class QuoteEditorHeaderActions extends StatelessWidget {
             IconButton(
               tooltip: 'Delete quote',
               style: iconStyle,
-              icon: Icon(Icons.delete_outline, size: 20, color: cs.error),
+              icon: Icon(
+                Icons.delete_outline,
+                size: 20,
+                color: colorScheme.error,
+              ),
               onPressed: busy ? null : onDelete,
             ),
           ],
@@ -127,15 +132,45 @@ class QuoteEditorFooterBar extends ConsumerWidget {
   final Future<bool> Function() onEnsureAuthed;
   final Future<void> Function() onSubmit;
 
+  String? _submitBlockReason() {
+    if (busy) return null;
+
+    if (linesState.lines.isEmpty) {
+      return 'Add at least one item';
+    }
+
+    if (requirePrices && !linesState.hasAllPrices) {
+      return 'Some items are missing prices';
+    }
+
+    if (meta.customerIdResolved.isEmpty) {
+      return isMemberScoped
+          ? 'Customer profile is still loading'
+          : 'Pick a customer';
+    }
+
+    if (meta.quoteDate == null) {
+      return 'Select a quote date';
+    }
+
+    if (!meta.hasPatientContext) {
+      return 'Select a patient profile';
+    }
+
+    if (!meta.hasDeliveryAddress) {
+      return 'Select a delivery address';
+    }
+
+    return null;
+  }
+
   String _safeName(String value) {
     final String trimmed = value.trim();
     return trimmed.isEmpty ? 'Item' : trimmed;
   }
 
   num _safeRate(num value) {
-    if (value.isNaN || value.isInfinite || value < 0) {
-      return 0;
-    }
+    if (value.isNaN || value.isInfinite || value < 0) return 0;
     return value;
   }
 
@@ -220,12 +255,10 @@ class QuoteEditorFooterBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme cs = theme.colorScheme;
+    final ColorScheme colorScheme = theme.colorScheme;
 
-    final bool canSubmit =
-        linesState.lines.isNotEmpty &&
-        (!requirePrices || linesState.hasAllPrices) &&
-        (!isMemberScoped || meta.contact != null);
+    final String? submitBlockReason = _submitBlockReason();
+    final bool canSubmit = submitBlockReason == null && !busy;
 
     Future<void> openCatalog() async {
       final bool ok = await onEnsureAuthed();
@@ -248,8 +281,8 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       label: _buttonText('Add from Catalog'),
       onPressed: busy ? null : openCatalog,
       style: compactStyle.copyWith(
-        foregroundColor: WidgetStateProperty.all(cs.primary),
-        side: WidgetStateProperty.all(BorderSide(color: cs.primary)),
+        foregroundColor: WidgetStateProperty.all(colorScheme.primary),
+        side: WidgetStateProperty.all(BorderSide(color: colorScheme.primary)),
       ),
     );
 
@@ -271,71 +304,25 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       style: compactStyle,
     );
 
-    final Widget submitButton = FilledButton.icon(
-      icon: busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(isEdit ? Icons.save : Icons.send),
-      label: _buttonText(
-        busy ? 'Submitting…' : (isEdit ? 'Save' : 'Request quote'),
+    final Widget submitButton = Tooltip(
+      message: submitBlockReason ?? '',
+      child: FilledButton.icon(
+        icon: busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(isEdit ? Icons.save : Icons.send),
+        label: _buttonText(
+          busy ? 'Submitting…' : (isEdit ? 'Save' : 'Request quote'),
+        ),
+        onPressed: canSubmit ? onSubmit : null,
+        style: compactStyle,
       ),
-      onPressed: (!canSubmit || busy) ? null : onSubmit,
-      style: compactStyle,
     );
 
-    final Widget totalBlock = LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool wideEnough = constraints.maxWidth > 220;
-
-        if (wideEnough) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                'Estimated total',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                amountText,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              'Estimated total',
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              amountText,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        );
-      },
-    );
+    final Widget totalBlock = _EstimatedTotalBlock(amountText: amountText);
 
     final List<Widget> actionButtons = <Widget>[
       addFromCatalogButton,
@@ -347,7 +334,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: colorScheme.surface,
         border: Border(
           top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
         ),
@@ -412,7 +399,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                     runSpacing: 10,
                     children: actionButtons
                         .map(
-                          (button) => SizedBox(
+                          (Widget button) => SizedBox(
                             width: constraints.maxWidth >= 520
                                 ? (constraints.maxWidth - 10) / 2
                                 : constraints.maxWidth,
@@ -429,6 +416,68 @@ class QuoteEditorFooterBar extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EstimatedTotalBlock extends StatelessWidget {
+  const _EstimatedTotalBlock({required this.amountText});
+
+  final String amountText;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool wideEnough = constraints.maxWidth > 220;
+
+        if (wideEnough) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'Estimated total',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                amountText,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              'Estimated total',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              amountText,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+      },
     );
   }
 }

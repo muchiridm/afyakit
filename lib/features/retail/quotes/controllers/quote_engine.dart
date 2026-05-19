@@ -3,18 +3,17 @@
 import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
+import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
-import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
-import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-
-import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
+import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QuoteEngine {
   QuoteEngine(this.ref);
@@ -26,37 +25,36 @@ class QuoteEngine {
 
   QuoteLinesState get _lines => ref.read(quoteLinesControllerProvider);
 
-  Future<ZohoQuotesService> get _svc async =>
-      ref.read(zohoQuotesServiceProvider.future);
+  Future<ZohoQuotesService> get _svc async {
+    return ref.read(zohoQuotesServiceProvider.future);
+  }
 
-  bool isEditingId(String? id) => (id ?? '').trim().isNotEmpty;
+  // ───────────────────────── Session helpers ─────────────────────────
+
+  bool isEditingId(String? id) => _cleanNullable(id) != null;
 
   bool shouldClearLinesOnSwitch({
     required String? prevEditingId,
     required String? prevLoadedId,
     required String nextEditingId,
   }) {
-    final bool hadEditSession =
-        (prevEditingId ?? '').trim().isNotEmpty ||
-        (prevLoadedId ?? '').trim().isNotEmpty;
+    final String prevEdit = _cleanNullable(prevEditingId) ?? '';
+    final String prevLoaded = _cleanNullable(prevLoadedId) ?? '';
+    final String next = nextEditingId.trim();
 
-    final bool wantEdit = nextEditingId.trim().isNotEmpty;
+    final bool hadEditSession = prevEdit.isNotEmpty || prevLoaded.isNotEmpty;
 
-    if (!wantEdit && hadEditSession) return true;
+    if (next.isEmpty && hadEditSession) return true;
 
-    if (wantEdit &&
-        ((prevEditingId ?? '').trim() != nextEditingId.trim() ||
-            (prevLoadedId ?? '').trim() != nextEditingId.trim())) {
-      return true;
-    }
-
-    return false;
+    return next.isNotEmpty && (prevEdit != next || prevLoaded != next);
   }
 
-  DateTime? normalizeDate(DateTime? d) {
-    if (d == null) return null;
-    return DateTime(d.year, d.month, d.day);
+  DateTime? normalizeDate(DateTime? date) {
+    if (date == null) return null;
+    return DateTime(date.year, date.month, date.day);
   }
+
+  // ───────────────────────── Quote loading / hydration ─────────────────────────
 
   Future<ZohoQuote> loadQuote(String quoteId) async {
     final String id = quoteId.trim();
@@ -65,64 +63,95 @@ class QuoteEngine {
     return (await _svc).get(id);
   }
 
-  void setLinesFromZoho(ZohoQuote q) {
-    final List<ManualQuoteLine> lines = q.lineItems
-        .map((ZohoQuoteLineItem li) {
-          final int qty = li.quantity.round().clamp(1, 9999);
-
-          final num rate = (li.rate.isNaN || li.rate.isInfinite || li.rate < 0)
-              ? 0
-              : li.rate;
-
-          final String name = li.name.trim().isEmpty ? 'Item' : li.name.trim();
-          final String? desc = (li.description ?? '').trim().isEmpty
-              ? null
-              : li.description!.trim();
-
-          final String zohoLineId = (li.lineItemId ?? '').trim();
-          final String manualId = zohoLineId.isNotEmpty
-              ? 'z_$zohoLineId'
-              : 'm_${DateTime.now().microsecondsSinceEpoch}';
-
-          return ManualQuoteLine(
-            manualId: manualId,
-            name: name,
-            description: desc,
-            rate: rate,
-            qty: qty,
-            zohoLineItemId: zohoLineId.isEmpty ? null : zohoLineId,
-            zohoItemId: null,
-          );
-        })
+  void setLinesFromZoho(ZohoQuote quote) {
+    final List<ManualQuoteLine> lines = quote.lineItems
+        .map(_manualLineFromZohoLine)
         .toList(growable: false);
 
     _linesCtl.replaceAll(lines);
   }
 
-  QuoteMetaState metaFromZoho(ZohoQuote q) {
-    final DateTime? quoteDate = normalizeDate(q.date);
-    final DateTime? expiryDate = normalizeDate(q.expiryDate);
+  ManualQuoteLine _manualLineFromZohoLine(ZohoQuoteLineItem line) {
+    final String zohoLineId = _cleanNullable(line.lineItemId) ?? '';
 
-    final QuoteDraft draft = QuoteDraft.fromZohoQuote(q);
-
-    return QuoteMetaState(
-      contact: draft.contact,
-      reference: (draft.reference ?? '').trim().isEmpty
-          ? null
-          : draft.reference!.trim(),
-      customerNotes: (draft.customerNotes ?? '').trim().isEmpty
-          ? null
-          : draft.customerNotes!.trim(),
-      quoteDate: quoteDate,
-      expiryDate: expiryDate,
-      deliveryAddress: q.deliveryAddress,
-      patientSnapshot: q.patientSnapshot,
-      membershipId: q.resolvedMembershipId,
+    return ManualQuoteLine(
+      manualId: zohoLineId.isNotEmpty ? 'z_$zohoLineId' : _manualLineId(),
+      name: _cleanLineName(line.name),
+      description: _cleanNullable(line.description),
+      rate: _safeRate(line.rate),
+      qty: _safeQty(line.quantity.round()),
+      zohoLineItemId: zohoLineId.isEmpty ? null : zohoLineId,
+      zohoItemId: null,
     );
   }
 
+  QuoteMetaState metaFromZoho(ZohoQuote quote) {
+    final QuoteDraft draft = QuoteDraft.fromZohoQuote(quote);
+
+    return QuoteMetaState(
+      contact: _contactFromQuote(quote),
+      reference: _cleanNullable(draft.reference),
+      customerNotes: _cleanNullable(draft.customerNotes),
+      quoteDate: normalizeDate(quote.date),
+      expiryDate: normalizeDate(quote.expiryDate),
+      deliveryAddress: quote.deliveryAddress,
+      patientSnapshot: quote.patientSnapshot,
+      membershipId: quote.resolvedMembershipId,
+    );
+  }
+
+  ZohoContact? _contactFromQuote(ZohoQuote quote) {
+    final String customerId = _cleanNullable(quote.customerId) ?? '';
+    final String customerName = _cleanNullable(quote.customerName) ?? '';
+
+    if (customerId.isEmpty && customerName.isEmpty) return null;
+
+    return ZohoContact.fromJson(<String, Object?>{
+      if (customerId.isNotEmpty) 'contact_id': customerId,
+      if (customerId.isNotEmpty) 'contactId': customerId,
+      'contact_type': 'customer',
+      'contactType': 'customer',
+      'display_name': customerName.isNotEmpty ? customerName : 'Customer',
+      'contact_name': customerName.isNotEmpty ? customerName : 'Customer',
+      'customer_name': customerName.isNotEmpty ? customerName : 'Customer',
+      'company_name': customerName.isNotEmpty ? customerName : 'Customer',
+    });
+  }
+
+  // ───────────────────────── Validation ─────────────────────────
+
   String? validateForSubmitV2({
     required QuoteMetaState meta,
+    required bool requirePrices,
+    required bool isEditing,
+  }) {
+    final String? lineError = _validateLines(
+      requirePrices: requirePrices,
+      isEditing: isEditing,
+    );
+
+    if (lineError != null) return lineError;
+
+    if (!isEditing && meta.customerIdResolved.trim().isEmpty) {
+      return 'Please pick a customer';
+    }
+
+    if (meta.quoteDate == null) {
+      return 'Please select a quote date';
+    }
+
+    if (!_hasPatientContext(meta)) {
+      return 'Please select a patient profile';
+    }
+
+    if (!_hasDeliveryAddress(meta.deliveryAddress)) {
+      return 'Please select a delivery address';
+    }
+
+    return null;
+  }
+
+  String? _validateLines({
     required bool requirePrices,
     required bool isEditing,
   }) {
@@ -130,163 +159,173 @@ class QuoteEngine {
       return isEditing ? 'Quote has no items' : 'Add at least one item';
     }
 
-    if (!isEditing && meta.customerIdResolved.isEmpty) {
-      return 'Please pick a customer';
+    final bool hasUnnamedManual = _lines.lines.whereType<ManualQuoteLine>().any(
+      (ManualQuoteLine line) => line.name.trim().isEmpty,
+    );
+
+    if (hasUnnamedManual) {
+      return 'Some items are missing a name. Please edit them.';
     }
 
-    final List<ManualQuoteLine> unnamedManual = _lines.lines
-        .whereType<ManualQuoteLine>()
-        .where((ManualQuoteLine l) => l.name.trim().isEmpty)
-        .toList();
-
-    if (unnamedManual.isNotEmpty) {
-      return 'Some items are missing a name. Please edit them.';
+    final int missingPrices = _lines.missingPriceLineCount;
+    if (requirePrices && missingPrices > 0) {
+      return '$missingPrices item(s) missing price.';
     }
 
     return null;
   }
 
+  bool _hasPatientContext(QuoteMetaState meta) {
+    final String patientId = _cleanNullable(meta.resolvedPatientId) ?? '';
+    return patientId.isNotEmpty && meta.patientSnapshot != null;
+  }
+
+  bool _hasDeliveryAddress(SalesDocumentAddress? address) {
+    return address?.isUsable == true;
+  }
+
   int missingPriceLineCount() => _lines.missingPriceLineCount;
+
+  // ───────────────────────── Payload building ─────────────────────────
 
   QuoteDraft buildPayloadDraftFromMeta({
     required QuoteMetaState meta,
     required bool requirePrices,
   }) {
-    final List<QuoteLineDraft> lineDrafts = _buildLineDrafts(
-      requirePrices: requirePrices,
-    );
-
     final ZohoContact? contact = meta.contact;
-    final String customerId = (contact?.contactId ?? '').trim();
-    final String customerName = (contact?.title ?? '').trim();
+
+    final String customerId = _cleanNullable(contact?.contactId) ?? '';
+    final String customerName = _cleanNullable(contact?.title) ?? '';
 
     return QuoteDraft(
       contact: contact,
       contactId: customerId.isEmpty ? null : customerId,
       contactName: customerName.isEmpty ? null : customerName,
-      reference: (meta.reference ?? '').trim().isEmpty
-          ? null
-          : meta.reference!.trim(),
-      customerNotes: (meta.customerNotes ?? '').trim().isNotEmpty
-          ? meta.customerNotes!.trim()
-          : null,
+      reference: _cleanNullable(meta.reference),
+      customerNotes: _cleanNullable(meta.customerNotes),
       deliveryAddress: meta.deliveryAddress,
       patientId: meta.resolvedPatientId,
       patientSnapshot: meta.patientSnapshot,
       membershipId: meta.resolvedMembershipId,
-      lines: lineDrafts,
+      lines: _buildLineDrafts(requirePrices: requirePrices),
     );
   }
 
   List<QuoteLineDraft> _buildLineDrafts({required bool requirePrices}) {
     return _lines.lines
-        .map((QuoteLine l) {
-          if (l is CatalogQuoteLine) {
-            final int qty = (l.qty < 1 ? 1 : l.qty).clamp(1, 9999);
-
-            final String name = l.effectiveName.trim().isEmpty
-                ? 'Item'
-                : l.effectiveName.trim();
-
-            final String? desc = (l.effectiveDescription ?? '').trim().isEmpty
-                ? null
-                : l.effectiveDescription!.trim();
-
-            final num rate = requirePrices ? l.effectiveRate : 0;
-            final num safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
-                ? 0
-                : rate;
-
-            final DiSalesTile tile = _toDiSalesTileFromCatalogLine(
-              l,
-              name: name,
-              desc: desc,
-            );
-
-            return QuoteLineDraft(
-              tile: tile,
-              quantity: qty,
-              rate: safeRate,
-              description: name,
-              lineItemId: null,
-              zohoItemId: null,
-            );
-          }
-
-          final ManualQuoteLine m = l as ManualQuoteLine;
-
-          final int qty = (m.qty < 1 ? 1 : m.qty).clamp(1, 9999);
-
-          final num rate = requirePrices ? m.rate : 0;
-          final num safeRate = (rate.isNaN || rate.isInfinite || rate < 0)
-              ? 0
-              : rate;
-
-          final String name = m.name.trim().isEmpty ? 'Item' : m.name.trim();
-          final String? desc = (m.description ?? '').trim().isEmpty
-              ? null
-              : m.description!.trim();
-
-          final DiSalesTile tile = DiSalesTile.fallbackFromName(
-            name: name,
-            description: desc,
-            canonKey: m.manualId,
-            groupKey: m.manualId,
-          );
-
-          final String? lineItemId = (m.zohoLineItemId ?? '').trim().isEmpty
-              ? null
-              : m.zohoLineItemId!.trim();
-
-          final String? zohoItemId = (m.zohoItemId ?? '').trim().isEmpty
-              ? null
-              : m.zohoItemId!.trim();
-
-          return QuoteLineDraft(
-            tile: tile,
-            quantity: qty,
-            rate: safeRate,
-            description: name,
-            lineItemId: lineItemId,
-            zohoItemId: zohoItemId,
-          );
-        })
+        .map(
+          (QuoteLine line) => switch (line) {
+            CatalogQuoteLine catalogLine => _draftFromCatalogLine(
+              catalogLine,
+              requirePrices: requirePrices,
+            ),
+            ManualQuoteLine manualLine => _draftFromManualLine(
+              manualLine,
+              requirePrices: requirePrices,
+            ),
+          },
+        )
         .toList(growable: false);
   }
+
+  QuoteLineDraft _draftFromCatalogLine(
+    CatalogQuoteLine line, {
+    required bool requirePrices,
+  }) {
+    final String name = _cleanLineName(line.effectiveName);
+    final String? description = _cleanNullable(line.effectiveDescription);
+    final int quantity = _safeQty(line.qty);
+    final num rate = requirePrices ? _safeRate(line.effectiveRate) : 0;
+
+    final DiSalesTile tile = _toDiSalesTileFromCatalogLine(
+      line,
+      name: name,
+      description: description,
+    );
+
+    return QuoteLineDraft(
+      tile: tile,
+      quantity: quantity,
+      rate: rate,
+      description: name,
+      lineItemId: null,
+      zohoItemId: null,
+    );
+  }
+
+  QuoteLineDraft _draftFromManualLine(
+    ManualQuoteLine line, {
+    required bool requirePrices,
+  }) {
+    final String name = _cleanLineName(line.name);
+    final String? description = _cleanNullable(line.description);
+    final int quantity = _safeQty(line.qty);
+    final num rate = requirePrices ? _safeRate(line.rate) : 0;
+
+    final DiSalesTile tile = DiSalesTile.fallbackFromName(
+      name: name,
+      description: description,
+      canonKey: line.manualId,
+      groupKey: line.manualId,
+    );
+
+    return QuoteLineDraft(
+      tile: tile,
+      quantity: quantity,
+      rate: rate,
+      description: name,
+      lineItemId: _cleanNullable(line.zohoLineItemId),
+      zohoItemId: _cleanNullable(line.zohoItemId),
+    );
+  }
+
+  // ───────────────────────── Service calls ─────────────────────────
 
   Future<ZohoQuote> create(
     QuoteDraft payload, {
     DateTime? quoteDate,
     DateTime? expiryDate,
-  }) async => (await _svc).createFromDraft(
-    payload,
-    quoteDate: quoteDate,
-    expiryDate: expiryDate,
-  );
+  }) async {
+    return (await _svc).createFromDraft(
+      payload,
+      quoteDate: quoteDate,
+      expiryDate: expiryDate,
+    );
+  }
 
   Future<ZohoQuote> update(
     String quoteId,
     QuoteDraft payload, {
     DateTime? quoteDate,
     DateTime? expiryDate,
-  }) async => (await _svc).updateFromDraft(
-    quoteId,
-    payload,
-    quoteDate: quoteDate,
-    expiryDate: expiryDate,
-  );
+  }) async {
+    return (await _svc).updateFromDraft(
+      quoteId,
+      payload,
+      quoteDate: quoteDate,
+      expiryDate: expiryDate,
+    );
+  }
 
-  Future<void> delete(String quoteId) async => (await _svc).delete(quoteId);
+  Future<void> delete(String quoteId) async {
+    return (await _svc).delete(quoteId);
+  }
 
-  Future<Uint8List> getPdf(String quoteId) async =>
-      (await _svc).getPdf(quoteId);
+  Future<Uint8List> getPdf(String quoteId) async {
+    return (await _svc).getPdf(quoteId);
+  }
 
-  Future<void> email(String quoteId) async => (await _svc).email(quoteId);
+  Future<void> email(String quoteId) async {
+    return (await _svc).email(quoteId);
+  }
 
-  Future<void> markSent(String quoteId) async => (await _svc).markSent(quoteId);
+  Future<void> markSent(String quoteId) async {
+    return (await _svc).markSent(quoteId);
+  }
 
-  Future<void> emailAndMarkSent(String quoteId) async =>
-      (await _svc).emailAndMarkSent(quoteId);
+  Future<void> emailAndMarkSent(String quoteId) async {
+    return (await _svc).emailAndMarkSent(quoteId);
+  }
 
   Future<QuoteConversionResult> convertToInvoice(
     String quoteId, {
@@ -295,14 +334,18 @@ class QuoteEngine {
     String? membershipId,
     bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
-  }) async => (await _svc).convertToInvoice(
-    quoteId,
-    invoiceDate: invoiceDate,
-    dueDate: dueDate,
-    membershipId: membershipId,
-    createInsuranceClaim: createInsuranceClaim,
-    patientSnapshot: patientSnapshot,
-  );
+    SalesDocumentAddress? deliveryAddress,
+  }) async {
+    return (await _svc).convertToInvoice(
+      quoteId,
+      invoiceDate: invoiceDate,
+      dueDate: dueDate,
+      membershipId: membershipId,
+      createInsuranceClaim: createInsuranceClaim,
+      patientSnapshot: patientSnapshot,
+      deliveryAddress: deliveryAddress,
+    );
+  }
 
   Future<QuoteConversionResult> convertDraftToInvoice(
     String quoteId,
@@ -310,35 +353,61 @@ class QuoteEngine {
     DateTime? invoiceDate,
     DateTime? dueDate,
     bool createInsuranceClaim = false,
-  }) async => (await _svc).convertDraftToInvoice(
-    quoteId,
-    draft,
-    invoiceDate: invoiceDate,
-    dueDate: dueDate,
-    createInsuranceClaim: createInsuranceClaim,
-  );
+  }) async {
+    return (await _svc).convertDraftToInvoice(
+      quoteId,
+      draft,
+      invoiceDate: invoiceDate,
+      dueDate: dueDate,
+      createInsuranceClaim: createInsuranceClaim,
+    );
+  }
+
+  // ───────────────────────── Mapping helpers ─────────────────────────
 
   static DiSalesTile _toDiSalesTileFromCatalogLine(
-    CatalogQuoteLine l, {
+    CatalogQuoteLine line, {
     required String name,
-    required String? desc,
+    required String? description,
   }) {
-    final CatalogTile t = l.tile;
-    final String key = t.id;
+    final CatalogTile tile = line.tile;
+    final String key = tile.id;
 
     return DiSalesTile(
       canonKey: key,
       groupKey: key,
       tileTitle: name,
-      tileDesc: (desc ?? '').trim().isEmpty ? null : desc!.trim(),
-      form: t.form.trim().isEmpty ? null : t.form,
-      bestPackCount: t.bestPackCount,
-      offerCount: t.offerCount ?? 0,
-      bestSellPrice: l.effectiveRate,
-      bestSupplier: (t.bestSupplier ?? '').trim().isNotEmpty
-          ? t.bestSupplier!.trim()
-          : null,
+      tileDesc: _cleanNullable(description),
+      form: _cleanNullable(tile.form),
+      bestPackCount: tile.bestPackCount,
+      offerCount: tile.offerCount ?? 0,
+      bestSellPrice: line.effectiveRate,
+      bestSupplier: _cleanNullable(tile.bestSupplier),
       priceRequestRequired: null,
     );
+  }
+
+  static String _manualLineId() {
+    return 'm_${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  static String _cleanLineName(String? value) {
+    return _cleanNullable(value) ?? 'Item';
+  }
+
+  static String? _cleanNullable(String? value) {
+    final String cleaned = (value ?? '').trim();
+    return cleaned.isEmpty ? null : cleaned;
+  }
+
+  static int _safeQty(int value) {
+    if (value < 1) return 1;
+    if (value > 9999) return 9999;
+    return value;
+  }
+
+  static num _safeRate(num value) {
+    if (value.isNaN || value.isInfinite || value < 0) return 0;
+    return value;
   }
 }

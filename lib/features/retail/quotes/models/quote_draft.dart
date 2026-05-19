@@ -18,6 +18,7 @@ class QuoteLineDraft {
     this.description,
     this.lineItemId,
     this.zohoItemId,
+    this.unit,
   });
 
   final DiSalesTile tile;
@@ -32,6 +33,9 @@ class QuoteLineDraft {
 
   /// Zoho `item_id` (links to a product/service item)
   final String? zohoItemId;
+
+  /// Optional Zoho line unit.
+  final String? unit;
 
   /// Stable identity for upsert/remove.
   /// If Zoho line_item_id exists, it MUST win.
@@ -49,7 +53,12 @@ class QuoteLineDraft {
     return t.isNotEmpty ? t : 'line';
   }
 
-  int get safeQty => quantity < 0 ? 0 : quantity;
+  int get safeQty {
+    if (quantity < 0) return 0;
+    if (quantity > 9999) return 9999;
+    return quantity;
+  }
+
   num get safeRate => (rate.isNaN || rate.isInfinite || rate < 0) ? 0 : rate;
 
   num get amount => safeRate * safeQty;
@@ -64,6 +73,8 @@ class QuoteLineDraft {
     bool clearLineItemId = false,
     String? zohoItemId,
     bool clearZohoItemId = false,
+    String? unit,
+    bool clearUnit = false,
   }) {
     return QuoteLineDraft(
       tile: tile ?? this.tile,
@@ -72,6 +83,7 @@ class QuoteLineDraft {
       description: clearDescription ? null : (description ?? this.description),
       lineItemId: clearLineItemId ? null : (lineItemId ?? this.lineItemId),
       zohoItemId: clearZohoItemId ? null : (zohoItemId ?? this.zohoItemId),
+      unit: clearUnit ? null : (unit ?? this.unit),
     );
   }
 }
@@ -123,25 +135,33 @@ class QuoteDraft {
 
   bool get hasCustomer => customerIdResolved.isNotEmpty;
 
+  bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
+
+  bool get hasLines => lines.any((QuoteLineDraft l) => l.safeQty > 0);
+
   String? get resolvedPatientId {
-    final direct = (patientId ?? '').trim();
+    final String direct = (patientId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final snap = (patientSnapshot?.patientId ?? '').trim();
+    final String snap = (patientSnapshot?.patientId ?? '').trim();
     return snap.isEmpty ? null : snap;
   }
 
   String? get resolvedMembershipId {
-    final direct = (membershipId ?? '').trim();
+    final String direct = (membershipId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final snap = (patientSnapshot?.membershipId ?? '').trim();
+    final String snap = (patientSnapshot?.membershipId ?? '').trim();
     return snap.isEmpty ? null : snap;
   }
 
   bool get hasPatientContext => resolvedPatientId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
+
+  bool get canCreateQuote {
+    return hasCustomer && hasPatientContext && hasDeliveryAddress && hasLines;
+  }
 
   num get total =>
       lines.fold<num>(0, (num s, QuoteLineDraft l) => s + l.amount);
@@ -290,6 +310,7 @@ class QuoteDraft {
                 : li.description,
             lineItemId: stableKey.isEmpty ? null : stableKey,
             zohoItemId: null,
+            unit: (li.unit ?? '').trim().isEmpty ? null : li.unit,
           );
         })
         .toList(growable: false);

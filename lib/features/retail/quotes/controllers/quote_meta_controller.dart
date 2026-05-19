@@ -28,10 +28,10 @@ class QuoteMetaState {
   final String? reference;
   final String? customerNotes;
 
-  /// Zoho: `date` / `estimate_date`
+  /// Zoho: `date` / `estimate_date`.
   final DateTime? quoteDate;
 
-  /// Zoho: `expiry_date`
+  /// Zoho: `expiry_date`.
   final DateTime? expiryDate;
 
   final SalesDocumentAddress? deliveryAddress;
@@ -39,70 +39,61 @@ class QuoteMetaState {
   /// Person receiving care/medicine.
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
-  /// Insurance membership used later for:
-  /// quote → invoice → claim.
+  /// Insurance membership used later for quote → invoice → claim.
   final String? membershipId;
 
-  bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
+  bool get isEditing => _clean(editingQuoteId) != null;
 
   String get customerIdResolved => (contact?.contactId ?? '').trim();
 
   String get displayContactName {
-    final t = (contact?.title ?? '').trim();
-    return t.isNotEmpty ? t : 'Customer';
+    final String? title = _clean(contact?.title);
+    return title ?? 'Customer';
   }
 
-  String? get resolvedPatientId {
-    final id = (patientSnapshot?.patientId ?? '').trim();
-    return id.isEmpty ? null : id;
-  }
+  String? get resolvedPatientId => _clean(patientSnapshot?.patientId);
 
   String? get resolvedMembershipId {
-    final direct = (membershipId ?? '').trim();
-    if (direct.isNotEmpty) return direct;
-
-    final snap = (patientSnapshot?.membershipId ?? '').trim();
-    return snap.isEmpty ? null : snap;
+    return _clean(membershipId) ?? _clean(patientSnapshot?.membershipId);
   }
 
   bool get hasPatientContext => resolvedPatientId != null;
+
   bool get hasInsuranceContext => resolvedMembershipId != null;
 
-  String get patientLabel {
-    final name = (patientSnapshot?.fullName ?? '').trim();
-    if (name.isNotEmpty) return name;
+  bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
 
-    final id = (patientSnapshot?.patientId ?? '').trim();
-    return id.isNotEmpty ? id : 'Patient';
+  bool get hasQuoteDate => quoteDate != null;
+
+  String get patientLabel {
+    return _clean(patientSnapshot?.fullName) ??
+        _clean(patientSnapshot?.patientNo) ??
+        _clean(patientSnapshot?.patientId) ??
+        'Patient';
   }
 
   String? get patientSubtitle {
-    final p = patientSnapshot;
-    if (p == null) return null;
+    final SalesDocumentPatientSnapshot? patient = patientSnapshot;
+    if (patient == null) return null;
 
-    final parts = <String>[
-      if ((p.patientNo ?? '').trim().isNotEmpty) p.patientNo!.trim(),
-      if ((p.dob ?? '').trim().isNotEmpty) 'DOB ${p.dob!.trim()}',
-      if ((p.gender ?? '').trim().isNotEmpty) p.gender!.trim(),
-      if ((p.relationship ?? '').trim().isNotEmpty) p.relationship!.trim(),
-    ];
-
-    final text = parts.join(' · ').trim();
-    return text.isEmpty ? null : text;
+    return _joinParts(<String>[
+      if (_clean(patient.patientNo) != null) patient.patientNo!.trim(),
+      if (_clean(patient.dob) != null) 'DOB ${patient.dob!.trim()}',
+      if (_clean(patient.gender) != null) patient.gender!.trim(),
+      if (_clean(patient.relationship) != null) patient.relationship!.trim(),
+    ]);
   }
 
   String? get insuranceSubtitle {
-    final p = patientSnapshot;
-    if (p == null) return null;
+    final SalesDocumentPatientSnapshot? patient = patientSnapshot;
+    if (patient == null) return null;
 
-    final parts = <String>[
-      if ((p.payerName ?? '').trim().isNotEmpty) p.payerName!.trim(),
-      if ((p.memberNo ?? '').trim().isNotEmpty) 'Member ${p.memberNo!.trim()}',
-      if ((p.scheme ?? '').trim().isNotEmpty) p.scheme!.trim(),
-    ];
-
-    final text = parts.join(' · ').trim();
-    return text.isEmpty ? null : text;
+    return _joinParts(<String>[
+      if (_clean(patient.payerName) != null) patient.payerName!.trim(),
+      if (_clean(patient.memberNo) != null)
+        'Member ${patient.memberNo!.trim()}',
+      if (_clean(patient.scheme) != null) patient.scheme!.trim(),
+    ]);
   }
 
   QuoteMetaState copyWith({
@@ -148,9 +139,24 @@ class QuoteMetaState {
     );
   }
 
-  static DateTime? normalizeDate(DateTime? d) {
-    if (d == null) return null;
-    return DateTime(d.year, d.month, d.day);
+  static DateTime? normalizeDate(DateTime? date) {
+    if (date == null) return null;
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static String? _joinParts(List<String> values) {
+    final String text = values
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .join(' · ')
+        .trim();
+
+    return text.isEmpty ? null : text;
   }
 }
 
@@ -159,48 +165,59 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 
   final Ref _ref;
 
-  static DateTime _normalize(DateTime d) => DateTime(d.year, d.month, d.day);
-
   QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
 
-  String get _acct =>
-      (_ref.read(zohoMemberCustomerScopeProvider)?.accountNumber ?? '').trim();
+  String get _accountNumber {
+    return (_ref.read(zohoMemberCustomerScopeProvider)?.accountNumber ?? '')
+        .trim();
+  }
 
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
 
   void beginNew() {
-    final wasEditing = (state.editingQuoteId ?? '').trim().isNotEmpty;
+    final DateTime quoteDate = state.quoteDate ?? _today();
+    final DateTime expiryDate = state.expiryDate ?? _defaultExpiry(quoteDate);
 
     if (_isMemberScoped) {
-      state = state.copyWith(clearEditingQuoteId: true);
+      state = state.copyWith(
+        clearEditingQuoteId: true,
+        quoteDate: quoteDate,
+        expiryDate: expiryDate,
+      );
       return;
     }
 
-    if (wasEditing) {
-      state = state.copyWith(clearEditingQuoteId: true);
-    }
+    final bool wasEditing = state.isEditing;
+
+    state = state.copyWith(
+      clearEditingQuoteId: true,
+      quoteDate: quoteDate,
+      expiryDate: expiryDate,
+      clearContact: wasEditing,
+      clearPatientSnapshot: wasEditing,
+      clearMembershipId: wasEditing,
+      clearDeliveryAddress: wasEditing,
+    );
   }
 
   void beginEdit(String quoteId) {
-    final id = quoteId.trim();
-    state = state.copyWith(editingQuoteId: id.isEmpty ? null : id);
+    final String? id = _clean(quoteId);
+    state = state.copyWith(editingQuoteId: id, clearEditingQuoteId: id == null);
   }
 
-  void clearAll() => state = const QuoteMetaState();
+  void clearAll() {
+    state = const QuoteMetaState();
+  }
 
-  void setContact(ZohoContact? c) {
-    if (_isMemberScoped) {
-      if (c == null) return;
+  void setContact(ZohoContact? contact) {
+    final ZohoContact? safeContact = _safeContactForPolicy(contact);
 
-      final nextAcct = (c.accountNumber ?? '').trim();
-      final acct = _acct;
+    if (_isMemberScoped && safeContact == null) return;
 
-      if (acct.isNotEmpty && nextAcct.isNotEmpty && nextAcct != acct) {
-        return;
-      }
-    }
-
-    state = state.copyWith(contact: c);
+    state = state.copyWith(
+      contact: safeContact,
+      clearContact: safeContact == null,
+    );
   }
 
   void clearContact() {
@@ -208,34 +225,53 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(clearContact: true);
   }
 
-  void setReference(String v) {
-    final t = v.trim();
-    state = state.copyWith(reference: t.isEmpty ? null : t);
+  void setReference(String value) {
+    final String? cleanValue = _clean(value);
+
+    state = state.copyWith(
+      reference: cleanValue,
+      clearReference: cleanValue == null,
+    );
   }
 
-  void setCustomerNotes(String v) {
-    final t = v.trim();
-    state = state.copyWith(customerNotes: t.isEmpty ? null : t);
+  void setCustomerNotes(String value) {
+    final String? cleanValue = _clean(value);
+
+    state = state.copyWith(
+      customerNotes: cleanValue,
+      clearCustomerNotes: cleanValue == null,
+    );
   }
 
-  void setQuoteDate(DateTime d) {
-    state = state.copyWith(quoteDate: _normalize(d));
+  void setQuoteDate(DateTime date) {
+    final DateTime normalized = _normalize(date);
+    final DateTime? currentExpiry = state.expiryDate;
+
+    state = state.copyWith(
+      quoteDate: normalized,
+      expiryDate: currentExpiry == null
+          ? _defaultExpiry(normalized)
+          : _normalize(currentExpiry),
+    );
   }
 
   void clearQuoteDate() {
     state = state.copyWith(clearQuoteDate: true);
   }
 
-  void setExpiryDate(DateTime d) {
-    state = state.copyWith(expiryDate: _normalize(d));
+  void setExpiryDate(DateTime date) {
+    state = state.copyWith(expiryDate: _normalize(date));
   }
 
   void clearExpiryDate() {
     state = state.copyWith(clearExpiryDate: true);
   }
 
-  void setDeliveryAddress(SalesDocumentAddress? a) {
-    state = state.copyWith(deliveryAddress: a);
+  void setDeliveryAddress(SalesDocumentAddress? address) {
+    state = state.copyWith(
+      deliveryAddress: address,
+      clearDeliveryAddress: address == null,
+    );
   }
 
   void clearDeliveryAddress() {
@@ -247,24 +283,21 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     String? membershipId,
     ZohoContact? payerContact,
   }) {
-    final cleanMembershipId = (membershipId ?? '').trim();
-    final snapMembershipId = (patientSnapshot.membershipId ?? '').trim();
+    final String? resolvedMembershipId = _resolveMembershipId(
+      membershipId: membershipId,
+      patientSnapshot: patientSnapshot,
+    );
 
-    final resolvedMembershipId = cleanMembershipId.isNotEmpty
-        ? cleanMembershipId
-        : (snapMembershipId.isNotEmpty ? snapMembershipId : null);
-
-    final payerContactId = (payerContact?.contactId ?? '').trim();
+    final ZohoContact? safePayerContact = _safeContactForPolicy(payerContact);
 
     state = state.copyWith(
-      // Insurance membership selected:
-      // bill quote/invoice to the payer contact.
-      //
-      // Normal patient selected:
-      // payerContact is null, so existing customer remains unchanged.
-      contact: payerContactId.isNotEmpty ? payerContact : null,
+      // Critical:
+      // - if an insurance payer contact is selected, switch billing to payer;
+      // - if no payerContact is selected, preserve the existing customer.
+      contact: safePayerContact ?? state.contact,
       patientSnapshot: patientSnapshot,
       membershipId: resolvedMembershipId,
+      clearMembershipId: resolvedMembershipId == null,
     );
   }
 
@@ -283,43 +316,67 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     SalesDocumentPatientSnapshot? patientSnapshot,
     String? membershipId,
   }) {
-    final id = editingQuoteId.trim();
+    final String? id = _clean(editingQuoteId);
+    final ZohoContact? safeContact = _safeContactForPolicy(contact);
 
-    ZohoContact? safeContact = contact;
-
-    if (_isMemberScoped) {
-      final acct = _acct;
-      final contactAcct = (contact?.accountNumber ?? '').trim();
-
-      if (acct.isNotEmpty && contactAcct.isNotEmpty && contactAcct != acct) {
-        safeContact = null;
-      }
-    }
-
-    final cleanMembershipId = (membershipId ?? '').trim();
-    final snapMembershipId = (patientSnapshot?.membershipId ?? '').trim();
+    final String? resolvedMembershipId = patientSnapshot == null
+        ? _clean(membershipId)
+        : _resolveMembershipId(
+            membershipId: membershipId,
+            patientSnapshot: patientSnapshot,
+          );
 
     state = QuoteMetaState(
-      editingQuoteId: id.isEmpty ? null : id,
+      editingQuoteId: id,
       contact: safeContact,
-      reference: (reference ?? '').trim().isEmpty ? null : reference!.trim(),
-      customerNotes: (customerNotes ?? '').trim().isNotEmpty
-          ? customerNotes!.trim()
-          : null,
+      reference: _clean(reference),
+      customerNotes: _clean(customerNotes),
       quoteDate: QuoteMetaState.normalizeDate(quoteDate),
       expiryDate: QuoteMetaState.normalizeDate(expiryDate),
       deliveryAddress: deliveryAddress,
       patientSnapshot: patientSnapshot,
-      membershipId: cleanMembershipId.isNotEmpty
-          ? cleanMembershipId
-          : (snapMembershipId.isNotEmpty ? snapMembershipId : null),
+      membershipId: resolvedMembershipId,
     );
+  }
+
+  ZohoContact? _safeContactForPolicy(ZohoContact? contact) {
+    if (contact == null) return null;
+    if (!_isMemberScoped) return contact;
+
+    final String expected = _accountNumber;
+    final String actual = (contact.accountNumber ?? '').trim();
+
+    if (expected.isEmpty || actual.isEmpty) return contact;
+
+    return actual == expected ? contact : null;
+  }
+
+  String? _resolveMembershipId({
+    required String? membershipId,
+    required SalesDocumentPatientSnapshot patientSnapshot,
+  }) {
+    return _clean(membershipId) ?? _clean(patientSnapshot.membershipId);
+  }
+
+  static DateTime _normalize(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  static DateTime _today() {
+    return _normalize(DateTime.now());
+  }
+
+  static DateTime _defaultExpiry(DateTime quoteDate) {
+    return _normalize(quoteDate.add(const Duration(days: 30)));
+  }
+
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
+    return text.isEmpty ? null : text;
   }
 }
 
-/// IMPORTANT: do NOT autoDispose.
-/// This keeps customer/patient selection alive across Catalog ↔ QuoteEditor navigation.
 final quoteMetaControllerProvider =
     StateNotifierProvider<QuoteMetaController, QuoteMetaState>(
-      (ref) => QuoteMetaController(ref),
+      (Ref ref) => QuoteMetaController(ref),
     );

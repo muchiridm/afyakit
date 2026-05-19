@@ -18,7 +18,6 @@ class QuoteState {
 
   final bool submitting;
   final bool loadingEdit;
-
   final bool downloadingPdf;
   final bool sending;
   final bool converting;
@@ -31,8 +30,32 @@ class QuoteState {
 
   bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
 
-  bool get busy =>
-      submitting || loadingEdit || downloadingPdf || sending || converting;
+  bool get hasLoadedEdit {
+    final String editing = (editingQuoteId ?? '').trim();
+    final String loaded = (loadedEditId ?? '').trim();
+
+    return editing.isNotEmpty && loaded == editing;
+  }
+
+  bool get hasError => (error ?? '').trim().isNotEmpty;
+
+  bool get hasLastCreatedQuote {
+    return (lastCreatedQuoteId ?? '').trim().isNotEmpty;
+  }
+
+  bool get busy {
+    return submitting || loadingEdit || downloadingPdf || sending || converting;
+  }
+
+  bool get canSubmit => !busy;
+
+  bool get canEdit => !busy;
+
+  bool get canDownloadPdf => !busy;
+
+  bool get canSend => !busy;
+
+  bool get canConvert => !busy;
 
   QuoteState copyWith({
     bool? submitting,
