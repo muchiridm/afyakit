@@ -1,7 +1,6 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
@@ -19,6 +18,7 @@ import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dar
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final quoteControllerProvider =
@@ -38,7 +38,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       final String nextKey = next?.bindKey ?? '';
 
       if (prevKey == nextKey) return;
-      if (_policy != QuoteContactPolicy.memberScoped) return;
+      if (!_shouldAutoBindMemberCustomer) return;
 
       unawaited(_memberBinding.resolve(showError: false));
     });
@@ -48,10 +48,9 @@ class QuoteController extends StateNotifier<QuoteState> {
       QuoteContactPolicy next,
     ) {
       if (previous == next) return;
+      if (!_shouldAutoBindMemberCustomer) return;
 
-      if (next == QuoteContactPolicy.memberScoped) {
-        unawaited(_memberBinding.resolve(showError: false));
-      }
+      unawaited(_memberBinding.resolve(showError: false));
     });
   }
 
@@ -73,7 +72,15 @@ class QuoteController extends StateNotifier<QuoteState> {
   QuoteMemberBindingController get _memberBinding =>
       _ref.read(quoteMemberBindingControllerProvider);
 
-  // ───────────────────────── Public state helpers ─────────────────────────
+  bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
+
+  bool get _shouldAutoBindMemberCustomer {
+    if (!_isMemberScoped) return false;
+
+    // Insurance is special: the quote customer must remain the insurer/payer
+    // selected from the membership, not the logged-in member/customer.
+    return !_meta.isInsurancePayment;
+  }
 
   void setError(String? message) {
     final String msg = (message ?? '').trim();
@@ -126,8 +133,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (deliveryAddress != null) _metaCtl.setDeliveryAddress(deliveryAddress);
   }
 
-  // ───────────────────────── Screen/session readiness ─────────────────────────
-
   Future<void> ensureReady({
     String? editingQuoteId,
     required bool requirePrices,
@@ -148,7 +153,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.beginNew();
       state = const QuoteState();
 
-      if (_policy == QuoteContactPolicy.memberScoped) {
+      if (_shouldAutoBindMemberCustomer) {
         unawaited(_memberBinding.resolve(showError: false));
       }
 
@@ -163,7 +168,11 @@ class QuoteController extends StateNotifier<QuoteState> {
       _linesCtl.clear();
       _metaCtl.clearAll();
       _metaCtl.beginEdit(nextId);
-      state = const QuoteState().copyWith(editingQuoteId: nextId);
+
+      state = const QuoteState().copyWith(
+        editingQuoteId: nextId,
+        loadingEdit: true,
+      );
     } else {
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
@@ -195,7 +204,7 @@ class QuoteController extends StateNotifier<QuoteState> {
   }) async {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
-    if (_busy) return;
+    if (_busy && !state.loadingEdit) return;
     if ((state.loadedEditId ?? '').trim() == id) return;
 
     state = state.copyWith(
@@ -216,6 +225,8 @@ class QuoteController extends StateNotifier<QuoteState> {
         contact: meta.contact,
         reference: meta.reference,
         customerNotes: meta.customerNotes,
+        saleContext: meta.saleContext,
+        paymentContext: meta.paymentContext,
         quoteDate: meta.quoteDate,
         expiryDate: meta.expiryDate,
         deliveryAddress: meta.deliveryAddress,
@@ -231,12 +242,15 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  // ───────────────────────── Quote submit/update ─────────────────────────
-
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
 
-    if (_policy == QuoteContactPolicy.memberScoped) {
+    final QuoteMetaState metaBeforeBinding = _meta;
+
+    final bool shouldBindMemberCustomer =
+        _isMemberScoped && !metaBeforeBinding.isInsurancePayment;
+
+    if (shouldBindMemberCustomer) {
       final ZohoContact? contact = await _memberBinding.resolve(
         showError: true,
       );
@@ -259,6 +273,16 @@ class QuoteController extends StateNotifier<QuoteState> {
       SnackService.showError(validationError);
       return null;
     }
+
+    debugPrint(
+      '[QuoteSubmit] '
+      'sale=${meta.saleContext.apiValue} '
+      'payment=${meta.effectivePaymentContext.apiValue} '
+      'customerId=${meta.customerIdResolved} '
+      'customer=${meta.contact?.title ?? ''} '
+      'patient=${meta.resolvedPatientId ?? ''} '
+      'membership=${meta.resolvedMembershipId ?? ''}',
+    );
 
     state = state.copyWith(
       submitting: true,
@@ -356,8 +380,6 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     return createdId.isEmpty ? null : createdId;
   }
-
-  // ───────────────────────── Quote actions ─────────────────────────
 
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
@@ -496,8 +518,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  // ───────────────────────── Cache invalidation ─────────────────────────
-
   void _invalidateQuotesList() {
     for (final RetailDocScope scope in RetailDocScope.values) {
       _ref.invalidate(quotesListControllerProvider(scope));
@@ -510,8 +530,6 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     _invalidateQuotesList();
   }
-
-  // ───────────────────────── Error helpers ─────────────────────────
 
   String _friendlyError(Object error, {required String fallback}) {
     final String raw = error.toString().trim();

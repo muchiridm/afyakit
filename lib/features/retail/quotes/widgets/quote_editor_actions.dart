@@ -85,7 +85,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
             OutlinedButton.icon(
               style: pickStyle,
               icon: const Icon(Icons.person_outline, size: 18),
-              label: Text(hasContact ? 'Change' : 'Pick'),
+              label: Text(hasContact ? 'Change payer' : 'Pick payer'),
               onPressed: busy ? null : pickContact,
             ),
           ],
@@ -146,19 +146,27 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     if (meta.customerIdResolved.isEmpty) {
       return isMemberScoped
           ? 'Customer profile is still loading'
-          : 'Pick a customer';
+          : 'Pick a payer/customer';
     }
 
     if (meta.quoteDate == null) {
       return 'Select a quote date';
     }
 
-    if (!meta.hasPatientContext) {
+    if (meta.requiresPatient && !meta.hasPatientContext) {
       return 'Select a patient profile';
     }
 
-    if (!meta.hasDeliveryAddress) {
+    if (meta.requiresDeliveryAddress && !meta.hasDeliveryAddress) {
       return 'Select a delivery address';
+    }
+
+    if (meta.requiresMembership && !meta.hasInsuranceContext) {
+      return 'Select an insurance membership';
+    }
+
+    if (meta.isGeneral && meta.isInsurancePayment) {
+      return 'Insurance payment requires a clinical quote';
     }
 
     return null;

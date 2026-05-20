@@ -5,6 +5,7 @@ import 'package:afyakit/features/clinical/patients/patient_profiles_controller.d
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,17 +13,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class QuotePatientContextSelection {
   const QuotePatientContextSelection({
     required this.patientSnapshot,
+    this.paymentContext = QuotePaymentContext.directPay,
     this.membershipId,
     this.payerContact,
   });
 
   final SalesDocumentPatientSnapshot patientSnapshot;
+
+  /// Direct-pay means the selected quote customer/contact pays.
+  /// Insurance means the payerContact should become the quote customer.
+  final QuotePaymentContext paymentContext;
+
   final String? membershipId;
 
   /// Present only when the selected context came from an insurance membership.
   ///
   /// Insurance quotes must be billed to the payer/insurer, not the patient.
   final ZohoContact? payerContact;
+
+  bool get isInsurance => paymentContext == QuotePaymentContext.insurance;
 
   bool get hasMembership => (membershipId ?? '').trim().isNotEmpty;
 
@@ -34,10 +43,12 @@ class QuotePatientMembershipPickerDialog extends ConsumerStatefulWidget {
     super.key,
     this.initialPatientId,
     this.initialMembershipId,
+    this.initialPaymentContext = QuotePaymentContext.directPay,
   });
 
   final String? initialPatientId;
   final String? initialMembershipId;
+  final QuotePaymentContext initialPaymentContext;
 
   @override
   ConsumerState<QuotePatientMembershipPickerDialog> createState() =>
@@ -52,10 +63,6 @@ class _QuotePatientMembershipPickerDialogState
   final _patientSearchCtl = TextEditingController();
   final _membershipSearchCtl = TextEditingController();
 
-  /// Staff quote flow: show all tenant patient profiles.
-  ///
-  /// Member/customer quote flows should use a member-scoped picker later,
-  /// passing the authenticated contactId into PatientProfilesScope.
   static const PatientProfilesScope _patientScope = PatientProfilesScope(
     allowExplicitContactLink: true,
   );
@@ -80,10 +87,11 @@ class _QuotePatientMembershipPickerDialogState
 
       if (!mounted) return;
 
-      final initialMembershipId = (widget.initialMembershipId ?? '').trim();
-      if (initialMembershipId.isNotEmpty) {
-        _tabCtl.index = 1;
-      }
+      final bool openInsurance =
+          widget.initialPaymentContext == QuotePaymentContext.insurance ||
+          (widget.initialMembershipId ?? '').trim().isNotEmpty;
+
+      if (openInsurance) _tabCtl.index = 1;
     });
   }
 
@@ -123,6 +131,7 @@ class _QuotePatientMembershipPickerDialogState
     final relationship = patient.relationship?.name;
 
     return QuotePatientContextSelection(
+      paymentContext: QuotePaymentContext.directPay,
       patientSnapshot: SalesDocumentPatientSnapshot(
         patientId: patient.patientId,
         patientNo: patient.patientId,
@@ -156,6 +165,7 @@ class _QuotePatientMembershipPickerDialogState
     );
 
     return QuotePatientContextSelection(
+      paymentContext: QuotePaymentContext.insurance,
       membershipId: membership.membershipId,
       payerContact: payerContact,
       patientSnapshot: SalesDocumentPatientSnapshot(
@@ -243,7 +253,7 @@ class _QuotePatientMembershipPickerDialogState
     final isLoading = patientsState.isLoading || membershipsState.isLoading;
 
     return AlertDialog(
-      title: const Text('Select patient'),
+      title: const Text('Select patient / insurance'),
       content: SizedBox(
         width: 760,
         height: MediaQuery.of(context).size.height * 0.72,
@@ -253,7 +263,7 @@ class _QuotePatientMembershipPickerDialogState
             TabBar(
               controller: _tabCtl,
               tabs: const [
-                Tab(icon: Icon(Icons.person_outline), text: 'Patient'),
+                Tab(icon: Icon(Icons.person_outline), text: 'Direct pay'),
                 Tab(
                   icon: Icon(Icons.health_and_safety_outlined),
                   text: 'Insurance',
@@ -332,6 +342,12 @@ class _PatientTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        _TabHint(
+          icon: Icons.payments_outlined,
+          text:
+              'Use this when the payer is the patient, parent, guardian, company, or any direct-pay customer.',
+        ),
+        const SizedBox(height: 8),
         _SearchBox(
           controller: searchCtl,
           label: 'Search patients',
@@ -427,6 +443,12 @@ class _MembershipTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        _TabHint(
+          icon: Icons.health_and_safety_outlined,
+          text:
+              'Use this only when the insurer is paying. The quote customer will become the insurance payer.',
+        ),
+        const SizedBox(height: 8),
         _SearchBox(
           controller: searchCtl,
           label: 'Search memberships',
@@ -481,6 +503,27 @@ class _MembershipTab extends StatelessWidget {
                   },
                 ),
         ),
+      ],
+    );
+  }
+}
+
+class _TabHint extends StatelessWidget {
+  const _TabHint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
       ],
     );
   }

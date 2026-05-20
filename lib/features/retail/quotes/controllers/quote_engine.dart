@@ -8,6 +8,7 @@ import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
@@ -92,6 +93,8 @@ class QuoteEngine {
       contact: _contactFromQuote(quote),
       reference: _cleanNullable(draft.reference),
       customerNotes: _cleanNullable(draft.customerNotes),
+      saleContext: quote.saleContext,
+      paymentContext: quote.paymentContext,
       quoteDate: normalizeDate(quote.date),
       expiryDate: normalizeDate(quote.expiryDate),
       deliveryAddress: quote.deliveryAddress,
@@ -140,12 +143,21 @@ class QuoteEngine {
       return 'Please select a quote date';
     }
 
-    if (!_hasPatientContext(meta)) {
+    if (meta.requiresPatient && !_hasPatientContext(meta)) {
       return 'Please select a patient profile';
     }
 
-    if (!_hasDeliveryAddress(meta.deliveryAddress)) {
+    if (meta.requiresDeliveryAddress &&
+        !_hasDeliveryAddress(meta.deliveryAddress)) {
       return 'Please select a delivery address';
+    }
+
+    if (meta.requiresMembership && !meta.hasInsuranceContext) {
+      return 'Please select an insurance membership';
+    }
+
+    if (meta.isGeneral && meta.isInsurancePayment) {
+      return 'Insurance payment requires a clinical quote';
     }
 
     return null;
@@ -197,12 +209,19 @@ class QuoteEngine {
     final String customerId = _cleanNullable(contact?.contactId) ?? '';
     final String customerName = _cleanNullable(contact?.title) ?? '';
 
+    final QuotePaymentContext paymentContext =
+        meta.saleContext == QuoteSaleContext.general
+        ? QuotePaymentContext.directPay
+        : meta.effectivePaymentContext;
+
     return QuoteDraft(
       contact: contact,
       contactId: customerId.isEmpty ? null : customerId,
       contactName: customerName.isEmpty ? null : customerName,
       reference: _cleanNullable(meta.reference),
       customerNotes: _cleanNullable(meta.customerNotes),
+      saleContext: meta.saleContext,
+      paymentContext: paymentContext,
       deliveryAddress: meta.deliveryAddress,
       patientId: meta.resolvedPatientId,
       patientSnapshot: meta.patientSnapshot,

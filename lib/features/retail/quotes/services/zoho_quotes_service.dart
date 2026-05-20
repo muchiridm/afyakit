@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
@@ -87,10 +88,9 @@ class ZohoQuotesService {
     if (raw is List) {
       return raw
           .whereType<Map>()
-          .map(
-            (Map<dynamic, dynamic> m) =>
-                ZohoQuote.fromJson(m.cast<String, dynamic>()),
-          )
+          .map((Map<dynamic, dynamic> map) {
+            return ZohoQuote.fromJson(map.cast<String, dynamic>());
+          })
           .toList(growable: false);
     }
 
@@ -107,7 +107,9 @@ class ZohoQuotesService {
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
 
-    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    if (raw is Map) {
+      return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    }
 
     throw StateError('Unexpected response: missing "quote"');
   }
@@ -124,7 +126,9 @@ class ZohoQuotesService {
       final JsonMap data = _asJsonMap(res.data);
       final Object? raw = data['quote'];
 
-      if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+      if (raw is Map) {
+        return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+      }
 
       throw StateError('Unexpected response: missing "quote"');
     } on DioException catch (e) {
@@ -143,8 +147,8 @@ class ZohoQuotesService {
       draft,
       requireCustomer: true,
       requireQuoteDate: true,
-      requirePatient: true,
-      requireDeliveryAddress: true,
+      requirePatient: draft.requiresPatient,
+      requireDeliveryAddress: draft.requiresDeliveryAddress,
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
@@ -155,7 +159,9 @@ class ZohoQuotesService {
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
 
-    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    if (raw is Map) {
+      return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    }
 
     throw StateError('Unexpected response: missing "quote"');
   }
@@ -185,7 +191,9 @@ class ZohoQuotesService {
     final JsonMap data = _asJsonMap(res.data);
     final Object? raw = data['quote'];
 
-    if (raw is Map) return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    if (raw is Map) {
+      return ZohoQuote.fromJson(raw.cast<String, dynamic>());
+    }
 
     throw StateError('Unexpected response: missing "quote"');
   }
@@ -219,14 +227,14 @@ class ZohoQuotesService {
     throw StateError('Expected PDF bytes but got ${data.runtimeType}');
   }
 
-  Future<void> email(String quoteId, {ZohoEmailDraft? email}) async {
+  Future<void> email(String quoteId, {ZohoEmailDraft? draft}) async {
     final String id = quoteId.trim();
     if (id.isEmpty) throw StateError('quoteId is empty');
 
     final Uri uri = routes.retailSendQuote(id);
 
     final Map<String, Object?> payload = _pruneEmailJson(
-      email?.toJson() ?? const <String, Object?>{},
+      draft?.toJson() ?? const <String, Object?>{},
     );
 
     await api.postUri(uri, data: payload.isEmpty ? null : payload);
@@ -240,12 +248,16 @@ class ZohoQuotesService {
     await api.postUri(uri);
   }
 
-  Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? email}) async {
-    if (email != null) {
-      await this.email(quoteId, email: email);
+  Future<void> emailAndMarkSent(String quoteId, {ZohoEmailDraft? draft}) async {
+    if (draft != null) {
+      await email(quoteId, draft: draft);
     }
 
     await markSent(quoteId);
+  }
+
+  Future<void> emailQuote(String quoteId, {ZohoEmailDraft? draft}) {
+    return email(quoteId, draft: draft);
   }
 
   Future<QuoteConversionResult> convertToInvoice(
@@ -292,13 +304,17 @@ class ZohoQuotesService {
     DateTime? dueDate,
     bool createInsuranceClaim = false,
   }) {
+    final bool shouldCreateInsuranceClaim =
+        createInsuranceClaim && draft.canCreateInsuranceClaim;
+
     return convertToInvoice(
       quoteId,
       invoiceDate: invoiceDate,
       dueDate: dueDate,
-      membershipId: draft.resolvedMembershipId,
-      createInsuranceClaim:
-          createInsuranceClaim && draft.resolvedMembershipId != null,
+      membershipId: shouldCreateInsuranceClaim
+          ? draft.resolvedMembershipId
+          : null,
+      createInsuranceClaim: shouldCreateInsuranceClaim,
       patientSnapshot: draft.patientSnapshot,
       deliveryAddress: draft.deliveryAddress,
     );
@@ -319,7 +335,7 @@ class ZohoQuotesService {
       throw StateError('Please select a customer before requesting a quote.');
     }
 
-    if (draft.lines.isEmpty) {
+    if (!draft.hasLines) {
       throw StateError(
         'Please add at least one item before requesting a quote.',
       );
@@ -342,6 +358,11 @@ class ZohoQuotesService {
       draft.resolvedMembershipId,
     );
 
+    if (draft.saleContext == QuoteSaleContext.general &&
+        draft.paymentContext == QuotePaymentContext.insurance) {
+      throw StateError('Insurance payment requires a clinical quote.');
+    }
+
     if (requirePatient && cleanPatientId == null) {
       throw StateError(
         'Please select a patient profile before requesting a quote.',
@@ -360,10 +381,21 @@ class ZohoQuotesService {
       );
     }
 
+    if (draft.requiresMembership && cleanMembershipId == null) {
+      throw StateError('Please select an insurance membership.');
+    }
+
     final String? reference = asCleanStringOrNull(draft.reference);
     final String? notes = asCleanStringOrNull(draft.customerNotes);
 
+    final QuotePaymentContext effectivePaymentContext =
+        draft.saleContext == QuoteSaleContext.general
+        ? QuotePaymentContext.directPay
+        : draft.paymentContext;
+
     return <String, Object?>{
+      'sale_context': draft.saleContext.apiValue,
+      'payment_context': effectivePaymentContext.apiValue,
       if (customerId.isNotEmpty) 'customer_id': customerId,
       if (quoteDateStr != null) 'date': quoteDateStr,
       if (expiryDateStr != null) 'expiry_date': expiryDateStr,
@@ -376,33 +408,39 @@ class ZohoQuotesService {
         'patient_snapshot': draft.patientSnapshot!.toJson(),
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
       'line_items': draft.lines
-          .map((QuoteLineDraft l) {
-            final String? lineItemId = asCleanStringOrNull(l.lineItemId);
-            final String? itemId = asCleanStringOrNull(l.zohoItemId);
-            final String name = _safeLineName(l);
-            final String? description = _safeLineDescription(l);
+          .where((QuoteLineDraft line) => line.safeQty > 0)
+          .map((QuoteLineDraft line) {
+            final String? lineItemId = asCleanStringOrNull(line.lineItemId);
+            final String? itemId = asCleanStringOrNull(line.zohoItemId);
+            final String? unit = asCleanStringOrNull(line.unit);
+
+            final String name = _safeLineName(line);
+            final String? description = _safeLineDescription(line);
 
             return <String, Object?>{
               if (lineItemId != null) 'line_item_id': lineItemId,
               if (itemId != null) 'item_id': itemId,
               'name': name,
               if (description != null) 'description': description,
-              'quantity': _safeQty(l.quantity),
-              'rate': _safeRate(l.rate),
+              'quantity': _safeQty(line.quantity),
+              'rate': _safeRate(line.rate),
+              if (unit != null) 'unit': unit,
             };
           })
           .toList(growable: false),
     };
   }
 
-  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  static DateTime _dateOnly(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
 
   static Map<String, Object?> _pruneEmailJson(Map<String, Object?> input) {
     final Map<String, Object?> out = <String, Object?>{...input};
 
     void dropEmptyList(String key) {
-      final Object? v = out[key];
-      if (v is List && v.isEmpty) out.remove(key);
+      final Object? value = out[key];
+      if (value is List && value.isEmpty) out.remove(key);
     }
 
     dropEmptyList('to_mail_ids');
@@ -410,27 +448,33 @@ class ZohoQuotesService {
     dropEmptyList('bcc_mail_ids');
     dropEmptyList('contact_person_ids');
 
-    out.removeWhere((String k, Object? v) => v is String && v.trim().isEmpty);
+    out.removeWhere((String key, Object? value) {
+      return value is String && value.trim().isEmpty;
+    });
 
     return out;
   }
 
-  static String? asCleanStringOrNull(String? v) {
-    final String t = (v ?? '').trim();
-    return t.isEmpty ? null : t;
+  static String? asCleanStringOrNull(String? value) {
+    final String text = (value ?? '').trim();
+    return text.isEmpty ? null : text;
   }
 
-  static int _safeQty(int q) => q < 1 ? 1 : (q > 9999 ? 9999 : q);
+  static int _safeQty(int quantity) {
+    if (quantity < 1) return 1;
+    if (quantity > 9999) return 9999;
+    return quantity;
+  }
 
-  static num _safeRate(num r) {
-    if (r.isNaN || r.isInfinite) return 0;
-    if (r < 0) return 0;
-    return r;
+  static num _safeRate(num rate) {
+    if (rate.isNaN || rate.isInfinite) return 0;
+    if (rate < 0) return 0;
+    return rate;
   }
 
   static String _safeLineName(QuoteLineDraft line) {
-    final String d = (line.description ?? '').trim();
-    if (d.isNotEmpty) return _truncate(d, 120);
+    final String description = (line.description ?? '').trim();
+    if (description.isNotEmpty) return _truncate(description, 120);
 
     final String title = line.tile.tileTitle.trim();
     if (title.isNotEmpty) return _truncate(title, 120);
@@ -440,22 +484,23 @@ class ZohoQuotesService {
   }
 
   static String? _safeLineDescription(QuoteLineDraft line) {
-    final String desc = (line.tile.tileDesc ?? '').trim();
-    if (desc.isEmpty) return null;
-    return _truncate(desc, 500);
+    final String description = (line.tile.tileDesc ?? '').trim();
+    if (description.isEmpty) return null;
+
+    return _truncate(description, 500);
   }
 
-  static String _truncate(String v, int max) {
-    final String s = v.trim();
-    if (s.length <= max) return s;
+  static String _truncate(String value, int max) {
+    final String text = value.trim();
+    if (text.length <= max) return text;
 
-    return s.substring(0, max - 1).trimRight();
+    return text.substring(0, max - 1).trimRight();
   }
 
-  static JsonMap _asJsonMap(Object? v) {
-    if (v is Map<String, dynamic>) return v;
-    if (v is Map) return v.cast<String, dynamic>();
+  static JsonMap _asJsonMap(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return value.cast<String, dynamic>();
 
-    throw StateError('Expected JSON object but got ${v.runtimeType}');
+    throw StateError('Expected JSON object but got ${value.runtimeType}');
   }
 }

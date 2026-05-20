@@ -4,6 +4,7 @@ import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
@@ -73,6 +74,7 @@ Future<void> pickQuotePatientContext(
         builder: (_) => QuotePatientMembershipPickerDialog(
           initialPatientId: meta.resolvedPatientId,
           initialMembershipId: meta.resolvedMembershipId,
+          initialPaymentContext: meta.effectivePaymentContext,
         ),
       );
 
@@ -82,6 +84,7 @@ Future<void> pickQuotePatientContext(
     patientSnapshot: selected.patientSnapshot,
     membershipId: selected.membershipId,
     payerContact: selected.payerContact,
+    paymentContext: selected.paymentContext,
   );
 }
 
@@ -136,6 +139,13 @@ class QuoteEditorMetaSection extends StatelessWidget {
     final DateTime expiryDate =
         meta.expiryDate ?? _defaultExpiry(meta.quoteDate);
 
+    final Widget saleAndPaymentSelector = _SaleAndPaymentSelector(
+      busy: busy,
+      meta: meta,
+      onSaleChanged: metaCtl.setSaleContext,
+      onPaymentChanged: metaCtl.setPaymentContext,
+    );
+
     final Widget dateColumn = _DateColumn(
       busy: busy,
       quoteDate: meta.quoteDate,
@@ -177,6 +187,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
     final Widget patientField = _PatientContextTile(
       busy: busy,
       meta: meta,
+      requiredForSubmit: meta.requiresPatient,
       onPick: () => pickQuotePatientContext(
         context,
         ensureAuthed: onEnsureAuthed,
@@ -189,6 +200,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
     final Widget addressField = _DeliveryAddressTile(
       busy: busy,
       address: meta.deliveryAddress,
+      requiredForSubmit: meta.requiresDeliveryAddress,
       onPick: () => pickQuoteDeliveryAddress(
         context,
         ensureAuthed: onEnsureAuthed,
@@ -209,7 +221,16 @@ class QuoteEditorMetaSection extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Expanded(flex: 2, child: dateColumn),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: <Widget>[
+                      saleAndPaymentSelector,
+                      const SizedBox(height: 6),
+                      dateColumn,
+                    ],
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 4,
@@ -232,6 +253,8 @@ class QuoteEditorMetaSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
           child: Column(
             children: <Widget>[
+              saleAndPaymentSelector,
+              const SizedBox(height: 6),
               dateColumn,
               const SizedBox(height: 6),
               patientField,
@@ -283,6 +306,105 @@ class QuoteEditorMetaSection extends StatelessWidget {
   static DateTime _defaultExpiry(DateTime? quoteDate) {
     final DateTime base = quoteDate ?? quoteDateOnly(DateTime.now());
     return quoteDateOnly(base.add(const Duration(days: 30)));
+  }
+}
+
+class _SaleAndPaymentSelector extends StatelessWidget {
+  const _SaleAndPaymentSelector({
+    required this.busy,
+    required this.meta,
+    required this.onSaleChanged,
+    required this.onPaymentChanged,
+  });
+
+  final bool busy;
+  final QuoteMetaState meta;
+  final ValueChanged<QuoteSaleContext> onSaleChanged;
+  final ValueChanged<QuotePaymentContext> onPaymentChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return InputDecorator(
+      decoration: _denseDecoration(labelText: 'Sale & payment'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SegmentedButton<QuoteSaleContext>(
+            showSelectedIcon: false,
+            style: _segmentedStyle(),
+            segments: const <ButtonSegment<QuoteSaleContext>>[
+              ButtonSegment<QuoteSaleContext>(
+                value: QuoteSaleContext.clinical,
+                icon: Icon(Icons.medical_services_outlined, size: 18),
+                label: Text('Clinical'),
+              ),
+              ButtonSegment<QuoteSaleContext>(
+                value: QuoteSaleContext.general,
+                icon: Icon(Icons.storefront_outlined, size: 18),
+                label: Text('General'),
+              ),
+            ],
+            selected: <QuoteSaleContext>{meta.saleContext},
+            onSelectionChanged: busy
+                ? null
+                : (Set<QuoteSaleContext> selected) {
+                    onSaleChanged(selected.first);
+                  },
+          ),
+          if (meta.isClinical) ...<Widget>[
+            const SizedBox(height: 8),
+            SegmentedButton<QuotePaymentContext>(
+              showSelectedIcon: false,
+              style: _segmentedStyle(),
+              segments: const <ButtonSegment<QuotePaymentContext>>[
+                ButtonSegment<QuotePaymentContext>(
+                  value: QuotePaymentContext.directPay,
+                  icon: Icon(Icons.payments_outlined, size: 18),
+                  label: Text('Direct pay'),
+                ),
+                ButtonSegment<QuotePaymentContext>(
+                  value: QuotePaymentContext.insurance,
+                  icon: Icon(Icons.health_and_safety_outlined, size: 18),
+                  label: Text('Insurance'),
+                ),
+              ],
+              selected: <QuotePaymentContext>{meta.effectivePaymentContext},
+              onSelectionChanged: busy
+                  ? null
+                  : (Set<QuotePaymentContext> selected) {
+                      onPaymentChanged(selected.first);
+                    },
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(_helperText(meta), style: theme.textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  static ButtonStyle _segmentedStyle() {
+    return ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      ),
+    );
+  }
+
+  static String _helperText(QuoteMetaState meta) {
+    if (meta.isGeneral) {
+      return 'OTC / B2B / general sale. Patient and delivery address are optional.';
+    }
+
+    if (meta.isInsurancePayment) {
+      return 'Insurance sale. Patient, membership, and delivery address are required. Customer should be the insurer.';
+    }
+
+    return 'Direct-pay clinical sale. Patient and delivery address are required. Customer can be the patient, parent, guardian, company, or other payer.';
   }
 }
 
@@ -394,12 +516,14 @@ class _DeliveryAddressTile extends StatelessWidget {
   const _DeliveryAddressTile({
     required this.busy,
     required this.address,
+    required this.requiredForSubmit,
     required this.onPick,
     required this.onClear,
   });
 
   final bool busy;
   final SalesDocumentAddress? address;
+  final bool requiredForSubmit;
   final Future<void> Function() onPick;
   final VoidCallback? onClear;
 
@@ -466,7 +590,9 @@ class _DeliveryAddressTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: InputDecorator(
         decoration: _denseDecoration(
-          labelText: 'Delivery address *',
+          labelText: requiredForSubmit
+              ? 'Delivery address *'
+              : 'Delivery address optional',
           suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
         ),
         child: _TileBody(
@@ -517,12 +643,14 @@ class _PatientContextTile extends StatelessWidget {
   const _PatientContextTile({
     required this.busy,
     required this.meta,
+    required this.requiredForSubmit,
     required this.onPick,
     required this.onClear,
   });
 
   final bool busy;
   final QuoteMetaState meta;
+  final bool requiredForSubmit;
   final Future<void> Function() onPick;
   final VoidCallback? onClear;
 
@@ -533,7 +661,8 @@ class _PatientContextTile extends StatelessWidget {
     final String title = hasContext ? meta.patientLabel : 'Select patient';
     final String subtitle = _join(<String?>[
       meta.patientSubtitle,
-      meta.insuranceSubtitle,
+      meta.isInsurancePayment ? meta.insuranceSubtitle : null,
+      meta.paymentSubtitle,
     ], sep: '\n');
 
     return InkWell(
@@ -541,11 +670,11 @@ class _PatientContextTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: InputDecorator(
         decoration: _denseDecoration(
-          labelText: hasContext ? 'Patient context *' : 'Patient *',
+          labelText: _labelText(hasContext),
           suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
         ),
         child: _TileBody(
-          icon: meta.hasInsuranceContext
+          icon: meta.isInsurancePayment
               ? Icons.health_and_safety_outlined
               : Icons.person_outline,
           title: title,
@@ -553,6 +682,16 @@ class _PatientContextTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _labelText(bool hasContext) {
+    if (!requiredForSubmit) return 'Patient optional';
+
+    if (meta.requiresMembership) {
+      return hasContext ? 'Patient + insurance *' : 'Patient + insurance *';
+    }
+
+    return hasContext ? 'Patient context *' : 'Patient *';
   }
 }
 
@@ -597,7 +736,7 @@ class _TileBody extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   cleanSubtitle,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall,
                 ),
