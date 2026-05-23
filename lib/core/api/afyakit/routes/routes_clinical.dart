@@ -106,9 +106,12 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   // 📄 Clinical / Prescriptions
   // ─────────────────────────────────────────────
 
+  /// Staff global list:
+  /// GET /clinical/prescriptions?patient_id=...
   Uri clinicalPrescriptionsList({
     String? patientId,
     bool? isActive,
+    String? status,
     int perPage = 50,
     int page = 1,
   }) {
@@ -117,6 +120,9 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     final pid = (patientId ?? '').trim();
     if (pid.isNotEmpty) query['patient_id'] = pid;
 
+    final st = (status ?? '').trim();
+    if (st.isNotEmpty) query['status'] = st;
+
     if (isActive != null) {
       query['is_active'] = isActive ? 'true' : 'false';
     }
@@ -124,18 +130,61 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     return _uri('clinical/prescriptions', query: query);
   }
 
-  /// GET /clinical/prescriptions/:prescriptionId
-  Uri clinicalPrescriptionGet(String prescriptionId) =>
-      _uri('clinical/prescriptions/${_seg(prescriptionId)}');
+  /// GET /clinical/patients/:patientId/prescriptions
+  Uri clinicalPatientPrescriptionsList({
+    required String patientId,
+    bool? isActive,
+    String? status,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
 
-  /// POST /clinical/prescriptions
-  Uri clinicalPrescriptionCreate() => _uri('clinical/prescriptions');
+    final st = (status ?? '').trim();
+    if (st.isNotEmpty) query['status'] = st;
 
-  /// PUT /clinical/prescriptions/:prescriptionId
-  Uri clinicalPrescriptionUpdate(String prescriptionId) =>
-      _uri('clinical/prescriptions/${_seg(prescriptionId)}');
+    if (isActive != null) {
+      query['is_active'] = isActive ? 'true' : 'false';
+    }
 
-  /// DELETE /clinical/prescriptions/:prescriptionId
-  Uri clinicalPrescriptionDelete(String prescriptionId) =>
-      _uri('clinical/prescriptions/${_seg(prescriptionId)}');
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/prescriptions',
+      query: query,
+    );
+  }
+
+  /// GET /clinical/patients/:patientId/prescriptions/:prescriptionId
+  Uri clinicalPatientPrescriptionGet({
+    required String patientId,
+    required String prescriptionId,
+  }) {
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/prescriptions/${_seg(prescriptionId)}',
+    );
+  }
+
+  /// POST /clinical/patients/:patientId/prescriptions
+  Uri clinicalPatientPrescriptionCreate(String patientId) {
+    return _uri('clinical/patients/${_seg(patientId)}/prescriptions');
+  }
+
+  /// PUT /clinical/patients/:patientId/prescriptions/:prescriptionId
+  Uri clinicalPatientPrescriptionUpdate({
+    required String patientId,
+    required String prescriptionId,
+  }) {
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/prescriptions/${_seg(prescriptionId)}',
+    );
+  }
+
+  /// DELETE /clinical/patients/:patientId/prescriptions/:prescriptionId
+  Uri clinicalPatientPrescriptionDelete({
+    required String patientId,
+    required String prescriptionId,
+  }) {
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/prescriptions/${_seg(prescriptionId)}',
+    );
+  }
 }

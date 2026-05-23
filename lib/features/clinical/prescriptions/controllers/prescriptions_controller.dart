@@ -1,0 +1,147 @@
+// lib/features/clinical/prescriptions/controllers/prescriptions_controller.dart
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+
+@immutable
+class PrescriptionsState {
+  const PrescriptionsState({
+    this.items = const [],
+    this.patientId,
+    this.isLoading = false,
+    this.isUploading = false,
+    this.error,
+  });
+
+  final List<Prescription> items;
+  final String? patientId;
+  final bool isLoading;
+  final bool isUploading;
+  final String? error;
+
+  bool get busy => isLoading || isUploading;
+
+  PrescriptionsState copyWith({
+    List<Prescription>? items,
+    String? patientId,
+    bool? isLoading,
+    bool? isUploading,
+    String? error,
+    bool clearError = false,
+  }) {
+    return PrescriptionsState(
+      items: items ?? this.items,
+      patientId: patientId ?? this.patientId,
+      isLoading: isLoading ?? this.isLoading,
+      isUploading: isUploading ?? this.isUploading,
+      error: clearError ? null : error ?? this.error,
+    );
+  }
+}
+
+class PrescriptionsController extends StateNotifier<PrescriptionsState> {
+  PrescriptionsController({
+    required PrescriptionsService service,
+    String? patientId,
+  }) : _service = service,
+       super(PrescriptionsState(patientId: patientId));
+
+  final PrescriptionsService _service;
+
+  Future<void> load({
+    String? patientId,
+    bool? isActive,
+    PrescriptionStatus? status,
+  }) async {
+    final pid = (patientId ?? state.patientId ?? '').trim();
+
+    state = state.copyWith(
+      patientId: pid.isEmpty ? null : pid,
+      isLoading: true,
+      clearError: true,
+    );
+
+    try {
+      if (pid.isEmpty) {
+        state = state.copyWith(
+          items: const [],
+          patientId: null,
+          isLoading: false,
+          clearError: true,
+        );
+        return;
+      }
+
+      final items = await _service.list(
+        patientId: pid,
+        isActive: isActive,
+        status: status,
+      );
+
+      state = state.copyWith(items: items, isLoading: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> upload({
+    required String tenantId,
+    required String patientId,
+    required PickedPrescriptionFile file,
+    String? note,
+    String? prescribedOn,
+  }) async {
+    final pid = patientId.trim();
+
+    if (pid.isEmpty) {
+      state = state.copyWith(error: 'Patient ID is required');
+      return;
+    }
+
+    state = state.copyWith(patientId: pid, isUploading: true, clearError: true);
+
+    try {
+      final saved = await _service.uploadAndCreate(
+        tenantId: tenantId,
+        patientId: pid,
+        file: file,
+        note: note,
+        prescribedOn: prescribedOn,
+      );
+
+      final next = [saved, ...state.items]
+          .where((p) => p.patientId == pid || state.patientId == null)
+          .toList(growable: false);
+
+      state = state.copyWith(items: next, isUploading: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(isUploading: false, error: e.toString());
+    }
+  }
+
+  Future<void> delete(Prescription prescription) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      await _service.remove(
+        patientId: prescription.patientId,
+        prescriptionId: prescription.prescriptionId,
+      );
+
+      final next = state.items
+          .where((p) => p.prescriptionId != prescription.prescriptionId)
+          .toList(growable: false);
+
+      state = state.copyWith(items: next, isLoading: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<String> downloadUrl(Prescription prescription) {
+    return _service.downloadUrl(prescription.storagePath);
+  }
+}

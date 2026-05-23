@@ -8,6 +8,7 @@ import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart'
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
 
 import 'package:afyakit/core/home/widgets/admin_dashboard/admin_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
@@ -268,6 +269,13 @@ final class HomeRegistry {
       allowedRef: _allowMemberUx,
     ),
     StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'My Prescriptions',
+      iconOverride: Icons.description_outlined,
+      destination: _myPrescriptions,
+      allowedRef: _allowMemberUx,
+    ),
+    StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Quotes',
       iconOverride: Icons.request_quote_outlined,
@@ -316,7 +324,7 @@ final class HomeRegistry {
       const PatientProfilesScreen(allowExplicitContactLink: true);
 
   static Widget _prescriptions(BuildContext _) =>
-      const _ComingSoonScreen(title: 'Prescriptions');
+      const PrescriptionsScreen(forcePatientPickerMode: true);
 
   static Widget _insuranceMemberships(BuildContext _) =>
       const InsuranceMembershipsScreen();
@@ -325,6 +333,8 @@ final class HomeRegistry {
       const InsuranceClaimsScreen();
 
   static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
+
+  static Widget _myPrescriptions(BuildContext _) => const PrescriptionsScreen();
 
   static Widget _myQuotes(BuildContext _) =>
       const QuotesListScreen(scope: RetailDocScope.mine);
@@ -383,7 +393,9 @@ final class HomeRegistry {
       if (k == FeatureKeys.reporting) return false;
       if (k == FeatureKeys.hq) return false;
 
-      if (k == FeatureKeys.clinical && d.destination != _myProfiles) {
+      if (k == FeatureKeys.clinical &&
+          d.destination != _myProfiles &&
+          d.destination != _myPrescriptions) {
         return false;
       }
     }
@@ -408,27 +420,5 @@ final class HomeRegistry {
     if (key.isEmpty) return false;
 
     return profile.features.enabled(key);
-  }
-}
-
-class _ComingSoonScreen extends StatelessWidget {
-  const _ComingSoonScreen({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            '$title screen coming next.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
   }
 }

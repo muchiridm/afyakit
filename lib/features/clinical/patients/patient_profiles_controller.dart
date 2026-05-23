@@ -1,3 +1,5 @@
+// lib/features/clinical/patients/patient_profiles_controller.dart
+
 import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';

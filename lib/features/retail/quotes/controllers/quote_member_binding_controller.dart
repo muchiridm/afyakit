@@ -199,8 +199,9 @@ class QuoteMemberBindingController {
     );
 
     if (byAccount == null) {
-      if (showError)
+      if (showError) {
         SnackService.showError('Your customer profile is missing.');
+      }
       _debug('no customer profile found');
     }
 

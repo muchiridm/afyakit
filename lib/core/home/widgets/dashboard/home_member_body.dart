@@ -7,6 +7,7 @@ import 'package:afyakit/core/home/widgets/activities/member_latest_activity_pane
 import 'package:afyakit/core/home/widgets/dashboard/home_shared.dart';
 
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -211,6 +212,15 @@ class HomeMemberQuickActions extends StatelessWidget {
                 contactId: contactId,
                 allowExplicitContactLink: false,
               ),
+            ),
+          ),
+        ),
+        HomeActionChip(
+          icon: Icons.description_outlined,
+          label: 'My Prescriptions',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PrescriptionsScreen(contactId: contactId),
             ),
           ),
         ),
