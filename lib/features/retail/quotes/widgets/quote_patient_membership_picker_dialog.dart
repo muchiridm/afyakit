@@ -2,10 +2,14 @@
 
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
-import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
+import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,12 +64,26 @@ class _QuotePatientMembershipPickerDialogState
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtl;
 
-  final _patientSearchCtl = TextEditingController();
-  final _membershipSearchCtl = TextEditingController();
+  static const String _missingMemberContactId = '__missing_member_contact__';
 
-  static const PatientProfilesScope _patientScope = PatientProfilesScope(
-    allowExplicitContactLink: true,
-  );
+  PatientProfile? _selectedPatient;
+
+  QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
+
+  bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
+
+  String get _memberContactId {
+    return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
+  }
+
+  PatientProfilesScope get _memberPatientScope {
+    final String contactId = _memberContactId;
+
+    return PatientProfilesScope(
+      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
+      allowExplicitContactLink: false,
+    );
+  }
 
   @override
   void initState() {
@@ -73,62 +91,51 @@ class _QuotePatientMembershipPickerDialogState
 
     _tabCtl = TabController(length: 2, vsync: this);
 
-    Future<void>.microtask(() async {
-      final patientsController = ref.read(
-        patientProfilesControllerProvider(_patientScope).notifier,
-      );
+    final bool openInsurance =
+        widget.initialPaymentContext == QuotePaymentContext.insurance ||
+        (widget.initialMembershipId ?? '').trim().isNotEmpty;
 
-      patientsController.setIsActive(true);
-      await patientsController.load();
+    if (openInsurance) _tabCtl.index = 1;
 
-      await ref
-          .read(insuranceMembershipsControllerProvider.notifier)
-          .load(isActive: true, perPage: 200, page: 1);
-
-      if (!mounted) return;
-
-      final bool openInsurance =
-          widget.initialPaymentContext == QuotePaymentContext.insurance ||
-          (widget.initialMembershipId ?? '').trim().isNotEmpty;
-
-      if (openInsurance) _tabCtl.index = 1;
-    });
+    if (_isMemberScoped) {
+      Future<void>.microtask(_loadLinkedPatientsForMembershipGuard);
+    }
   }
 
   @override
   void dispose() {
     _tabCtl.dispose();
-    _patientSearchCtl.dispose();
-    _membershipSearchCtl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadLinkedPatientsForMembershipGuard() async {
+    final controller = ref.read(
+      patientProfilesControllerProvider(_memberPatientScope).notifier,
+    );
+
+    controller.setIsActive(true);
+    await controller.load();
   }
 
   String _clean(String? value) => (value ?? '').trim();
 
-  bool _contains(String source, String query) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    return source.toLowerCase().contains(q);
-  }
+  Set<String>? _allowedPatientIdsForMemberships() {
+    if (!_isMemberScoped) return null;
 
-  String _membershipSubtitle(InsuranceMembership membership) {
-    final parts = <String>[
-      membership.payerLabel,
-      if (_clean(membership.scheme).isNotEmpty) membership.scheme!,
-      if (_clean(membership.memberNo).isNotEmpty)
-        'Member ${membership.memberNo}',
-      if (_clean(membership.policyNo).isNotEmpty)
-        'Policy ${membership.policyNo}',
-      if (_clean(membership.medicalCardNo).isNotEmpty)
-        'Card ${membership.medicalCardNo}',
-    ];
+    final state = ref.watch(
+      patientProfilesControllerProvider(_memberPatientScope),
+    );
 
-    return parts.where((p) => p.trim().isNotEmpty).join(' · ');
+    return state.items
+        .where((PatientProfile p) => p.isActive)
+        .map((PatientProfile p) => p.patientId.trim())
+        .where((String id) => id.isNotEmpty)
+        .toSet();
   }
 
   QuotePatientContextSelection _selectionFromPatient(PatientProfile patient) {
-    final gender = patient.gender?.name;
-    final relationship = patient.relationship?.name;
+    final String? gender = patient.gender?.name;
+    final String? relationship = patient.relationship?.name;
 
     return QuotePatientContextSelection(
       paymentContext: QuotePaymentContext.directPay,
@@ -146,15 +153,16 @@ class _QuotePatientMembershipPickerDialogState
   QuotePatientContextSelection _selectionFromMembership(
     InsuranceMembership membership,
   ) {
-    final patientName = _clean(membership.patientDisplayName).isNotEmpty
+    final String patientName = _clean(membership.patientDisplayName).isNotEmpty
         ? membership.patientDisplayName!.trim()
         : membership.patientId.trim();
 
-    final payerDisplayName = _clean(membership.payerDisplayName).isNotEmpty
+    final String payerDisplayName =
+        _clean(membership.payerDisplayName).isNotEmpty
         ? membership.payerDisplayName!.trim()
         : membership.payerContactId.trim();
 
-    final payerContact = ZohoContact(
+    final ZohoContact payerContact = ZohoContact(
       contactId: membership.payerContactId.trim(),
       displayName: payerDisplayName,
       accountNumber: _clean(membership.payerAccountNumber).isEmpty
@@ -180,58 +188,6 @@ class _QuotePatientMembershipPickerDialogState
     );
   }
 
-  List<PatientProfile> _filteredPatients(List<PatientProfile> items) {
-    final q = _patientSearchCtl.text.trim();
-
-    return items
-        .where((p) {
-          if (!p.isActive) return false;
-
-          final haystack = [
-            p.patientId,
-            p.fullName,
-            p.dob,
-            p.phone,
-            p.email,
-            p.nationalId,
-            p.contactDisplayName,
-            p.relationship?.name,
-          ].whereType<String>().join(' ');
-
-          return _contains(haystack, q);
-        })
-        .toList(growable: false);
-  }
-
-  List<InsuranceMembership> _filteredMemberships(
-    List<InsuranceMembership> items,
-  ) {
-    final q = _membershipSearchCtl.text.trim();
-
-    return items
-        .where((m) {
-          if (!m.isActive) return false;
-
-          final haystack = [
-            m.membershipId,
-            m.patientId,
-            m.patientNo,
-            m.patientDisplayName,
-            m.payerDisplayName,
-            m.payerAccountNumber,
-            m.memberNo,
-            m.memberName,
-            m.principalName,
-            m.scheme,
-            m.medicalCardNo,
-            m.policyNo,
-          ].whereType<String>().join(' ');
-
-          return _contains(haystack, q);
-        })
-        .toList(growable: false);
-  }
-
   void _selectPatient(PatientProfile patient) {
     Navigator.of(context).pop(_selectionFromPatient(patient));
   }
@@ -242,27 +198,32 @@ class _QuotePatientMembershipPickerDialogState
 
   @override
   Widget build(BuildContext context) {
-    final patientsState = ref.watch(
-      patientProfilesControllerProvider(_patientScope),
-    );
-    final membershipsState = ref.watch(insuranceMembershipsControllerProvider);
+    final Set<String>? allowedPatientIds = _allowedPatientIdsForMemberships();
 
-    final patients = _filteredPatients(patientsState.items);
-    final memberships = _filteredMemberships(membershipsState.items);
-
-    final isLoading = patientsState.isLoading || membershipsState.isLoading;
+    final bool memberContactMissing =
+        _isMemberScoped && _memberContactId.isEmpty;
 
     return AlertDialog(
-      title: const Text('Select patient / insurance'),
+      title: Text(
+        _isMemberScoped
+            ? 'Select your patient / insurance'
+            : 'Select patient / insurance',
+      ),
       content: SizedBox(
         width: 760,
         height: MediaQuery.of(context).size.height * 0.72,
         child: Column(
-          children: [
-            if (isLoading) const LinearProgressIndicator(minHeight: 2),
+          children: <Widget>[
+            if (memberContactMissing)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: _ErrorText(
+                  'Your customer profile is not linked yet. Please refresh or contact support.',
+                ),
+              ),
             TabBar(
               controller: _tabCtl,
-              tabs: const [
+              tabs: const <Widget>[
                 Tab(icon: Icon(Icons.person_outline), text: 'Direct pay'),
                 Tab(
                   icon: Icon(Icons.health_and_safety_outlined),
@@ -274,33 +235,21 @@ class _QuotePatientMembershipPickerDialogState
             Expanded(
               child: TabBarView(
                 controller: _tabCtl,
-                children: [
-                  _PatientTab(
-                    searchCtl: _patientSearchCtl,
-                    patients: patients,
-                    error: patientsState.error,
-                    selectedPatientId: widget.initialPatientId,
-                    onSearchChanged: (_) => setState(() {}),
-                    onRefresh: () => ref
-                        .read(
-                          patientProfilesControllerProvider(
-                            _patientScope,
-                          ).notifier,
-                        )
-                        .load(),
-                    onSelect: _selectPatient,
+                children: <Widget>[
+                  _DirectPayPatientTab(
+                    memberScoped: _isMemberScoped,
+                    contactId: _isMemberScoped ? _memberContactId : null,
+                    selectedPatient: _selectedPatient,
+                    onSelected: (PatientProfile patient) {
+                      setState(() => _selectedPatient = patient);
+                      _selectPatient(patient);
+                    },
                   ),
-                  _MembershipTab(
-                    searchCtl: _membershipSearchCtl,
-                    memberships: memberships,
-                    error: membershipsState.error,
-                    selectedMembershipId: widget.initialMembershipId,
-                    onSearchChanged: (_) => setState(() {}),
-                    onRefresh: () => ref
-                        .read(insuranceMembershipsControllerProvider.notifier)
-                        .load(isActive: true, perPage: 200, page: 1),
-                    onSelect: _selectMembership,
-                    subtitleBuilder: _membershipSubtitle,
+                  _InsuranceMembershipTab(
+                    memberScoped: _isMemberScoped,
+                    initialMembershipId: widget.initialMembershipId,
+                    allowedPatientIds: allowedPatientIds,
+                    onSelected: _selectMembership,
                   ),
                 ],
               ),
@@ -308,7 +257,7 @@ class _QuotePatientMembershipPickerDialogState
           ],
         ),
       ),
-      actions: [
+      actions: <Widget>[
         TextButton.icon(
           onPressed: () => Navigator.of(context).pop(null),
           icon: const Icon(Icons.close),
@@ -319,189 +268,79 @@ class _QuotePatientMembershipPickerDialogState
   }
 }
 
-class _PatientTab extends StatelessWidget {
-  const _PatientTab({
-    required this.searchCtl,
-    required this.patients,
-    required this.error,
-    required this.selectedPatientId,
-    required this.onSearchChanged,
-    required this.onRefresh,
-    required this.onSelect,
+class _DirectPayPatientTab extends StatelessWidget {
+  const _DirectPayPatientTab({
+    required this.memberScoped,
+    required this.contactId,
+    required this.selectedPatient,
+    required this.onSelected,
   });
 
-  final TextEditingController searchCtl;
-  final List<PatientProfile> patients;
-  final String? error;
-  final String? selectedPatientId;
-  final ValueChanged<String> onSearchChanged;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<PatientProfile> onSelect;
+  final bool memberScoped;
+  final String? contactId;
+  final PatientProfile? selectedPatient;
+  final ValueChanged<PatientProfile> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: [
+      children: <Widget>[
         _TabHint(
           icon: Icons.payments_outlined,
-          text:
-              'Use this when the payer is the patient, parent, guardian, company, or any direct-pay customer.',
+          text: memberScoped
+              ? 'Choose one of your linked patient profiles for direct-pay orders.'
+              : 'Choose the patient receiving care or medicine. The selected quote customer remains the payer.',
         ),
-        const SizedBox(height: 8),
-        _SearchBox(
-          controller: searchCtl,
-          label: 'Search patients',
-          hint: 'Name, patient no, phone, contact...',
-          onChanged: onSearchChanged,
-          onRefresh: onRefresh,
+        const SizedBox(height: 12),
+        PatientPickerCard(
+          selectedPatient: selectedPatient,
+          busy: false,
+          contactId: memberScoped ? contactId : null,
+          forcePickerMode: !memberScoped,
+          onChanged: onSelected,
         ),
-        if (error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _ErrorText(error!),
-          ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: patients.isEmpty
-              ? const _EmptyText(
-                  icon: Icons.person_off_outlined,
-                  text: 'No active patients found.',
-                )
-              : ListView.separated(
-                  itemCount: patients.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final patient = patients[index];
-                    final selected =
-                        patient.patientId.trim() ==
-                        (selectedPatientId ?? '').trim();
-
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Icon(
-                          selected ? Icons.check : Icons.person_outline,
-                        ),
-                      ),
-                      title: Text(
-                        patient.fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        _subtitle(patient),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: FilledButton(
-                        onPressed: () => onSelect(patient),
-                        child: Text(selected ? 'Selected' : 'Use'),
-                      ),
-                    );
-                  },
-                ),
-        ),
+        const Spacer(),
       ],
     );
   }
-
-  static String _subtitle(PatientProfile patient) {
-    final parts = <String>[
-      patient.patientId,
-      if ((patient.dob ?? '').trim().isNotEmpty) 'DOB ${patient.dob}',
-      if (patient.gender != null) patient.gender!.name,
-      if (patient.relationship != null) patient.relationship!.name,
-      if ((patient.contactDisplayName ?? '').trim().isNotEmpty)
-        patient.contactDisplayName!,
-    ];
-
-    return parts.where((p) => p.trim().isNotEmpty).join(' · ');
-  }
 }
 
-class _MembershipTab extends StatelessWidget {
-  const _MembershipTab({
-    required this.searchCtl,
-    required this.memberships,
-    required this.error,
-    required this.selectedMembershipId,
-    required this.onSearchChanged,
-    required this.onRefresh,
-    required this.onSelect,
-    required this.subtitleBuilder,
+class _InsuranceMembershipTab extends StatelessWidget {
+  const _InsuranceMembershipTab({
+    required this.memberScoped,
+    required this.initialMembershipId,
+    required this.allowedPatientIds,
+    required this.onSelected,
   });
 
-  final TextEditingController searchCtl;
-  final List<InsuranceMembership> memberships;
-  final String? error;
-  final String? selectedMembershipId;
-  final ValueChanged<String> onSearchChanged;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<InsuranceMembership> onSelect;
-  final String Function(InsuranceMembership membership) subtitleBuilder;
+  final bool memberScoped;
+  final String? initialMembershipId;
+  final Set<String>? allowedPatientIds;
+  final ValueChanged<InsuranceMembership> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: [
+      children: <Widget>[
         _TabHint(
           icon: Icons.health_and_safety_outlined,
-          text:
-              'Use this only when the insurer is paying. The quote customer will become the insurance payer.',
+          text: memberScoped
+              ? 'Choose insurance cover linked to your patient profiles.'
+              : 'Choose this only when the insurer is paying. The quote customer will become the insurance payer.',
         ),
-        const SizedBox(height: 8),
-        _SearchBox(
-          controller: searchCtl,
-          label: 'Search memberships',
-          hint: 'Patient, payer, member no, scheme...',
-          onChanged: onSearchChanged,
-          onRefresh: onRefresh,
-        ),
-        if (error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _ErrorText(error!),
-          ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Expanded(
-          child: memberships.isEmpty
-              ? const _EmptyText(
-                  icon: Icons.verified_user_outlined,
-                  text: 'No active insurance memberships found.',
-                )
-              : ListView.separated(
-                  itemCount: memberships.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final membership = memberships[index];
-                    final selected =
-                        membership.membershipId.trim() ==
-                        (selectedMembershipId ?? '').trim();
-
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Icon(
-                          selected
-                              ? Icons.check
-                              : Icons.health_and_safety_outlined,
-                        ),
-                      ),
-                      title: Text(
-                        membership.displayTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        subtitleBuilder(membership),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: FilledButton(
-                        onPressed: () => onSelect(membership),
-                        child: Text(selected ? 'Selected' : 'Use'),
-                      ),
-                    );
-                  },
-                ),
+          child: InsuranceMembershipPickerCard(
+            initialMembershipId: initialMembershipId,
+            allowedPatientIds: allowedPatientIds,
+            title: memberScoped
+                ? 'Your insurance memberships'
+                : 'Insurance memberships',
+            emptyText: memberScoped
+                ? 'No insurance memberships found for your linked profiles.'
+                : 'No active insurance memberships found.',
+            onSelected: onSelected,
+          ),
         ),
       ],
     );
@@ -520,47 +359,11 @@ class _TabHint extends StatelessWidget {
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+      children: <Widget>[
         Icon(icon, size: 18),
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
       ],
-    );
-  }
-}
-
-class _SearchBox extends StatelessWidget {
-  const _SearchBox({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.onChanged,
-    required this.onRefresh,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final ValueChanged<String> onChanged;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        isDense: true,
-        labelText: label,
-        hintText: hint,
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: IconButton(
-          tooltip: 'Refresh',
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-        ),
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: onChanged,
     );
   }
 }
@@ -575,27 +378,6 @@ class _ErrorText extends StatelessWidget {
     return Text(
       message,
       style: TextStyle(color: Theme.of(context).colorScheme.error),
-    );
-  }
-}
-
-class _EmptyText extends StatelessWidget {
-  const _EmptyText({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 42),
-          const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center),
-        ],
-      ),
     );
   }
 }

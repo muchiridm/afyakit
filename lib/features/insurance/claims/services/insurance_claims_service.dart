@@ -36,6 +36,7 @@ class InsuranceClaimsService {
     String? claimNo,
     String? visitNo,
     String? prescriptionNo,
+    String? prescriptionId,
     InsuranceClaimStatus? status,
     bool? isActive,
     int perPage = 50,
@@ -54,6 +55,7 @@ class InsuranceClaimsService {
       claimNo: _nullable(claimNo),
       visitNo: _nullable(visitNo),
       prescriptionNo: _nullable(prescriptionNo),
+      prescriptionId: _nullable(prescriptionId),
       status: status?.wire,
       isActive: isActive,
       perPage: perPage,
@@ -75,14 +77,6 @@ class InsuranceClaimsService {
     return _readClaim(body['claim']);
   }
 
-  /// Creates the insurance claim.
-  ///
-  /// Backend responsibility:
-  /// - resolves membership_id
-  /// - verifies invoice belongs to the insurance payer
-  /// - saves claim snapshot
-  /// - maps claim fields to Zoho custom fields
-  /// - updates the linked Zoho invoice
   Future<InsuranceClaim> create(InsuranceClaimUpsertInput input) async {
     final response = await api.postUri<Object?>(
       routes.insuranceClaimCreate(),
@@ -93,12 +87,6 @@ class InsuranceClaimsService {
     return _readClaim(body['claim']);
   }
 
-  /// Updates the insurance claim.
-  ///
-  /// Backend responsibility:
-  /// - updates claim snapshot
-  /// - remaps claim fields to Zoho custom fields
-  /// - updates the linked Zoho invoice
   Future<InsuranceClaim> update(
     String claimId,
     InsuranceClaimUpsertInput input,
@@ -118,6 +106,58 @@ class InsuranceClaimsService {
     final id = _requiredId(claimId, 'claimId');
 
     await api.deleteUri<Object?>(routes.insuranceClaimDelete(id));
+  }
+
+  Future<InsuranceClaim> attachClaimForm({
+    required String claimId,
+    required ClaimFormAttachmentInput input,
+  }) async {
+    final id = _requiredId(claimId, 'claimId');
+
+    final response = await api.putUri<Object?>(
+      routes.insuranceClaimAttachClaimForm(id),
+      data: input.toJson(),
+    );
+
+    final body = _asMap(response.data);
+    return _readClaim(body['claim']);
+  }
+
+  Future<InsuranceClaim> detachClaimForm(String claimId) async {
+    final id = _requiredId(claimId, 'claimId');
+
+    final response = await api.deleteUri<Object?>(
+      routes.insuranceClaimDetachClaimForm(id),
+    );
+
+    final body = _asMap(response.data);
+    return _readClaim(body['claim']);
+  }
+
+  Future<InsuranceClaim> attachPrescription({
+    required String claimId,
+    required ClaimPrescriptionAttachmentInput input,
+  }) async {
+    final id = _requiredId(claimId, 'claimId');
+
+    final response = await api.putUri<Object?>(
+      routes.insuranceClaimAttachPrescription(id),
+      data: input.toJson(),
+    );
+
+    final body = _asMap(response.data);
+    return _readClaim(body['claim']);
+  }
+
+  Future<InsuranceClaim> detachPrescription(String claimId) async {
+    final id = _requiredId(claimId, 'claimId');
+
+    final response = await api.deleteUri<Object?>(
+      routes.insuranceClaimDetachPrescription(id),
+    );
+
+    final body = _asMap(response.data);
+    return _readClaim(body['claim']);
   }
 
   static Map<String, Object?> _asMap(Object? value) {
@@ -170,4 +210,71 @@ class InsuranceClaimsService {
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;
   }
+}
+
+class ClaimFormAttachmentInput {
+  const ClaimFormAttachmentInput({
+    this.fileName,
+    this.url,
+    this.storagePath,
+    this.originalStoragePath,
+    this.thumbnailStoragePath,
+    this.contentType,
+    this.sizeBytes,
+    this.status,
+  });
+
+  final String? fileName;
+  final String? url;
+  final String? storagePath;
+  final String? originalStoragePath;
+  final String? thumbnailStoragePath;
+  final String? contentType;
+  final int? sizeBytes;
+  final ClaimFormStatus? status;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'claim_form_file_name': fileName,
+      'claim_form_url': url,
+      'claim_form_storage_path': storagePath,
+      'claim_form_original_storage_path': originalStoragePath,
+      'claim_form_thumbnail_storage_path': thumbnailStoragePath,
+      'claim_form_content_type': contentType,
+      'claim_form_size_bytes': sizeBytes,
+      'claim_form_status': status?.wire,
+    }..removeWhere(_removeEmpty);
+  }
+}
+
+class ClaimPrescriptionAttachmentInput {
+  const ClaimPrescriptionAttachmentInput({
+    this.prescriptionId,
+    this.prescriptionNo,
+    this.fileName,
+    this.url,
+    this.storagePath,
+  });
+
+  final String? prescriptionId;
+  final String? prescriptionNo;
+  final String? fileName;
+  final String? url;
+  final String? storagePath;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'prescription_id': prescriptionId,
+      'prescription_no': prescriptionNo,
+      'prescription_file_name': fileName,
+      'prescription_url': url,
+      'prescription_storage_path': storagePath,
+    }..removeWhere(_removeEmpty);
+  }
+}
+
+bool _removeEmpty(Object? _, Object? value) {
+  if (value == null) return true;
+  if (value is String && value.trim().isEmpty) return true;
+  return false;
 }

@@ -6,6 +6,8 @@ import 'package:afyakit/features/insurance/memberships/models/insurance_membersh
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_form_dialog.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -320,23 +322,27 @@ class _InsuranceMembershipsScreenState
 
     final isBusy = state.isLoading || _isLoadingLinks;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Insurance Members'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: isBusy ? null : _load,
-            icon: const Icon(Icons.refresh),
+    return AppPage(
+      title: 'Insurance Members',
+      showBack: true,
+      maxWidth: AppLayout.contentMaxWidth,
+      padding: AppLayout.pagePadding,
+      scrollable: false,
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: isBusy ? null : _load,
+          icon: const Icon(Icons.refresh),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: _openPatientProfiles,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Open Patients'),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openPatientProfiles,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Open Patients'),
-      ),
+        ),
+      ],
       body: Column(
         children: [
           Padding(

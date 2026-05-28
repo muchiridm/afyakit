@@ -2,20 +2,26 @@
 
 enum PrescriptionStatus {
   uploaded,
-  processing,
-  ready,
-  failed;
+  pendingReview,
+  verified,
+  rejected,
+  used,
+  expired;
 
   static PrescriptionStatus fromJson(Object? value) {
     final s = (value ?? '').toString().trim().toLowerCase();
 
     switch (s) {
-      case 'processing':
-        return PrescriptionStatus.processing;
-      case 'ready':
-        return PrescriptionStatus.ready;
-      case 'failed':
-        return PrescriptionStatus.failed;
+      case 'pending_review':
+        return PrescriptionStatus.pendingReview;
+      case 'verified':
+        return PrescriptionStatus.verified;
+      case 'rejected':
+        return PrescriptionStatus.rejected;
+      case 'used':
+        return PrescriptionStatus.used;
+      case 'expired':
+        return PrescriptionStatus.expired;
       case 'uploaded':
       default:
         return PrescriptionStatus.uploaded;
@@ -26,12 +32,16 @@ enum PrescriptionStatus {
     switch (this) {
       case PrescriptionStatus.uploaded:
         return 'uploaded';
-      case PrescriptionStatus.processing:
-        return 'processing';
-      case PrescriptionStatus.ready:
-        return 'ready';
-      case PrescriptionStatus.failed:
-        return 'failed';
+      case PrescriptionStatus.pendingReview:
+        return 'pending_review';
+      case PrescriptionStatus.verified:
+        return 'verified';
+      case PrescriptionStatus.rejected:
+        return 'rejected';
+      case PrescriptionStatus.used:
+        return 'used';
+      case PrescriptionStatus.expired:
+        return 'expired';
     }
   }
 
@@ -39,14 +49,20 @@ enum PrescriptionStatus {
     switch (this) {
       case PrescriptionStatus.uploaded:
         return 'Uploaded';
-      case PrescriptionStatus.processing:
-        return 'Processing';
-      case PrescriptionStatus.ready:
-        return 'Ready';
-      case PrescriptionStatus.failed:
-        return 'Failed';
+      case PrescriptionStatus.pendingReview:
+        return 'Pending review';
+      case PrescriptionStatus.verified:
+        return 'Verified';
+      case PrescriptionStatus.rejected:
+        return 'Rejected';
+      case PrescriptionStatus.used:
+        return 'Used';
+      case PrescriptionStatus.expired:
+        return 'Expired';
     }
   }
+
+  bool get canSupportClaim => this == PrescriptionStatus.verified;
 }
 
 class Prescription {

@@ -73,6 +73,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? claimNo,
     String? visitNo,
     String? prescriptionNo,
+    String? prescriptionId,
     String? status,
     bool? isActive,
     int perPage = 50,
@@ -97,6 +98,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('claim_no', claimNo);
     add('visit_no', visitNo);
     add('prescription_no', prescriptionNo);
+    add('prescription_id', prescriptionId);
     add('status', status);
 
     if (isActive != null) {
@@ -122,57 +124,22 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       _uri('insurance/claims/${_seg(claimId)}');
 
   // ─────────────────────────────────────────────
-  // Backward-compatible aliases during refactor
+  // 📎 Insurance / Claim Pack
   // ─────────────────────────────────────────────
 
-  @Deprecated('Use insuranceClaimsList instead.')
-  Uri claimsInsuranceList({
-    String? search,
-    String? membershipId,
-    String? patientId,
-    String? patientNo,
-    String? payerContactId,
-    String? invoiceId,
-    String? memberNo,
-    String? scheme,
-    String? authCode,
-    String? claimNo,
-    String? visitNo,
-    String? prescriptionNo,
-    String? status,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) {
-    return insuranceClaimsList(
-      search: search,
-      membershipId: membershipId,
-      patientId: patientId,
-      patientNo: patientNo,
-      payerContactId: payerContactId,
-      invoiceId: invoiceId,
-      memberNo: memberNo,
-      scheme: scheme,
-      authCode: authCode,
-      claimNo: claimNo,
-      visitNo: visitNo,
-      prescriptionNo: prescriptionNo,
-      status: status,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-    );
-  }
+  /// PUT /insurance/claims/:claimId/claim-form
+  Uri insuranceClaimAttachClaimForm(String claimId) =>
+      _uri('insurance/claims/${_seg(claimId)}/claim-form');
 
-  @Deprecated('Use insuranceClaimGet instead.')
-  Uri claimsInsuranceGet(String claimId) => insuranceClaimGet(claimId);
+  /// DELETE /insurance/claims/:claimId/claim-form
+  Uri insuranceClaimDetachClaimForm(String claimId) =>
+      _uri('insurance/claims/${_seg(claimId)}/claim-form');
 
-  @Deprecated('Use insuranceClaimCreate instead.')
-  Uri claimsInsuranceCreate() => insuranceClaimCreate();
+  /// PUT /insurance/claims/:claimId/prescription
+  Uri insuranceClaimAttachPrescription(String claimId) =>
+      _uri('insurance/claims/${_seg(claimId)}/prescription');
 
-  @Deprecated('Use insuranceClaimUpdate instead.')
-  Uri claimsInsuranceUpdate(String claimId) => insuranceClaimUpdate(claimId);
-
-  @Deprecated('Use insuranceClaimDelete instead.')
-  Uri claimsInsuranceDelete(String claimId) => insuranceClaimDelete(claimId);
+  /// DELETE /insurance/claims/:claimId/prescription
+  Uri insuranceClaimDetachPrescription(String claimId) =>
+      _uri('insurance/claims/${_seg(claimId)}/prescription');
 }

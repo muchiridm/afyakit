@@ -100,6 +100,8 @@ class QuoteEngine {
       deliveryAddress: quote.deliveryAddress,
       patientSnapshot: quote.patientSnapshot,
       membershipId: quote.resolvedMembershipId,
+      prescriptionId: quote.resolvedPrescriptionId,
+      prescriptionLabel: quote.resolvedPrescriptionId,
     );
   }
 
@@ -154,6 +156,10 @@ class QuoteEngine {
 
     if (meta.requiresMembership && !meta.hasInsuranceContext) {
       return 'Please select an insurance membership';
+    }
+
+    if (meta.requiresPrescription && !meta.hasPrescriptionContext) {
+      return 'Please select a verified prescription';
     }
 
     if (meta.isGeneral && meta.isInsurancePayment) {
@@ -226,6 +232,7 @@ class QuoteEngine {
       patientId: meta.resolvedPatientId,
       patientSnapshot: meta.patientSnapshot,
       membershipId: meta.resolvedMembershipId,
+      prescriptionId: meta.resolvedPrescriptionId,
       lines: _buildLineDrafts(requirePrices: requirePrices),
     );
   }
@@ -351,6 +358,7 @@ class QuoteEngine {
     DateTime? invoiceDate,
     DateTime? dueDate,
     String? membershipId,
+    String? prescriptionId,
     bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     SalesDocumentAddress? deliveryAddress,
@@ -360,6 +368,7 @@ class QuoteEngine {
       invoiceDate: invoiceDate,
       dueDate: dueDate,
       membershipId: membershipId,
+      prescriptionId: prescriptionId,
       createInsuranceClaim: createInsuranceClaim,
       patientSnapshot: patientSnapshot,
       deliveryAddress: deliveryAddress,

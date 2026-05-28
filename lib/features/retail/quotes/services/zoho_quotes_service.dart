@@ -265,6 +265,7 @@ class ZohoQuotesService {
     DateTime? invoiceDate,
     DateTime? dueDate,
     String? membershipId,
+    String? prescriptionId,
     bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     SalesDocumentAddress? deliveryAddress,
@@ -275,6 +276,15 @@ class ZohoQuotesService {
     final Uri uri = routes.retailConvertQuoteToInvoice(id);
 
     final String? cleanMembershipId = asCleanStringOrNull(membershipId);
+    final String? cleanPrescriptionId = asCleanStringOrNull(prescriptionId);
+
+    if (createInsuranceClaim && cleanMembershipId == null) {
+      throw StateError('Please select an insurance membership.');
+    }
+
+    if (createInsuranceClaim && cleanPrescriptionId == null) {
+      throw StateError('Please select a verified prescription.');
+    }
 
     final Map<String, Object?> body = <String, Object?>{
       if (invoiceDate != null)
@@ -286,6 +296,7 @@ class ZohoQuotesService {
         'patient_snapshot': patientSnapshot.toJson(),
       },
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
+      if (cleanPrescriptionId != null) 'prescription_id': cleanPrescriptionId,
       if (createInsuranceClaim) 'create_insurance_claim': true,
     };
 
@@ -313,6 +324,9 @@ class ZohoQuotesService {
       dueDate: dueDate,
       membershipId: shouldCreateInsuranceClaim
           ? draft.resolvedMembershipId
+          : null,
+      prescriptionId: shouldCreateInsuranceClaim
+          ? draft.resolvedPrescriptionId
           : null,
       createInsuranceClaim: shouldCreateInsuranceClaim,
       patientSnapshot: draft.patientSnapshot,
@@ -357,6 +371,9 @@ class ZohoQuotesService {
     final String? cleanMembershipId = asCleanStringOrNull(
       draft.resolvedMembershipId,
     );
+    final String? cleanPrescriptionId = asCleanStringOrNull(
+      draft.resolvedPrescriptionId,
+    );
 
     if (draft.saleContext == QuoteSaleContext.general &&
         draft.paymentContext == QuotePaymentContext.insurance) {
@@ -385,6 +402,10 @@ class ZohoQuotesService {
       throw StateError('Please select an insurance membership.');
     }
 
+    if (draft.requiresPrescription && cleanPrescriptionId == null) {
+      throw StateError('Please select a verified prescription.');
+    }
+
     final String? reference = asCleanStringOrNull(draft.reference);
     final String? notes = asCleanStringOrNull(draft.customerNotes);
 
@@ -407,6 +428,7 @@ class ZohoQuotesService {
       if (draft.patientSnapshot != null)
         'patient_snapshot': draft.patientSnapshot!.toJson(),
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
+      if (cleanPrescriptionId != null) 'prescription_id': cleanPrescriptionId,
       'line_items': draft.lines
           .where((QuoteLineDraft line) => line.safeQty > 0)
           .map((QuoteLineDraft line) {

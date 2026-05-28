@@ -168,6 +168,10 @@ class InsuranceClaim {
     this.serviceDate,
     this.prescriptionNo,
     this.prescriberName,
+    this.prescriptionId,
+    this.prescriptionFileName,
+    this.prescriptionUrl,
+    this.prescriptionStoragePath,
     this.diagnosis,
     this.icd10Code,
     this.investigations,
@@ -175,6 +179,12 @@ class InsuranceClaim {
     this.notes,
     this.claimFormStatus,
     this.claimFormUrl,
+    this.claimFormFileName,
+    this.claimFormStoragePath,
+    this.claimFormOriginalStoragePath,
+    this.claimFormThumbnailStoragePath,
+    this.claimFormContentType,
+    this.claimFormSizeBytes,
     this.invoicePdfUrl,
     this.etimsStatus,
     this.etimsNo,
@@ -212,8 +222,19 @@ class InsuranceClaim {
   final String? claimNo;
   final String? visitNo;
   final String? serviceDate;
+
+  /// Admin / human Rx reference.
   final String? prescriptionNo;
   final String? prescriberName;
+
+  /// Linked patient prescription record.
+  ///
+  /// Source of truth remains the patient prescription record. These fields are
+  /// a lightweight claim-pack reference/snapshot for display and submission.
+  final String? prescriptionId;
+  final String? prescriptionFileName;
+  final String? prescriptionUrl;
+  final String? prescriptionStoragePath;
 
   final String? diagnosis;
   final String? icd10Code;
@@ -221,8 +242,15 @@ class InsuranceClaim {
   final String? treatmentRecommendations;
   final String? notes;
 
+  /// Uploaded/scanned claim form metadata.
   final ClaimFormStatus? claimFormStatus;
   final String? claimFormUrl;
+  final String? claimFormFileName;
+  final String? claimFormStoragePath;
+  final String? claimFormOriginalStoragePath;
+  final String? claimFormThumbnailStoragePath;
+  final String? claimFormContentType;
+  final int? claimFormSizeBytes;
 
   final String? invoicePdfUrl;
 
@@ -239,30 +267,34 @@ class InsuranceClaim {
   final String? createdAt;
   final String? updatedAt;
 
-  /// Temporary compatibility getters for older UI code.
-  @Deprecated('Use memberNo instead.')
-  String get memberNumber => memberNo;
+  bool get hasClaimForm {
+    return claimFormStatus == ClaimFormStatus.attached ||
+        claimFormStatus == ClaimFormStatus.signed ||
+        _hasText(claimFormUrl) ||
+        _hasText(claimFormStoragePath) ||
+        _hasText(claimFormOriginalStoragePath);
+  }
 
-  @Deprecated('Use medicalCardNo instead.')
-  String? get medicalCardNumber => medicalCardNo;
+  bool get hasPrescriptionEvidence {
+    return _hasText(prescriptionId) ||
+        _hasText(prescriptionNo) ||
+        _hasText(prescriptionUrl) ||
+        _hasText(prescriptionStoragePath);
+  }
 
-  @Deprecated('Use policyNo instead.')
-  String? get policyNumber => policyNo;
+  bool get hasEtimsEvidence {
+    return etimsStatus == EtimsStatus.attached ||
+        etimsStatus == EtimsStatus.notRequired ||
+        _hasText(etimsNo) ||
+        _hasText(etimsUrl);
+  }
 
-  @Deprecated('Use authCode instead.')
-  String? get authorizationNumber => authCode;
-
-  @Deprecated('Use claimNo instead.')
-  String? get claimNumber => claimNo;
-
-  @Deprecated('Use visitNo instead.')
-  String? get visitNumber => visitNo;
-
-  @Deprecated('Use prescriptionNo instead.')
-  String? get prescriptionNumber => prescriptionNo;
-
-  @Deprecated('Use etimsNo instead.')
-  String? get etimsNumber => etimsNo;
+  bool get isReadyForSubmission {
+    return _hasText(invoiceId) &&
+        hasClaimForm &&
+        hasPrescriptionEvidence &&
+        hasEtimsEvidence;
+  }
 
   factory InsuranceClaim.fromJson(Map<String, Object?> json) {
     return InsuranceClaim(
@@ -291,6 +323,10 @@ class InsuranceClaim {
         json['prescription_no'] ?? json['prescription_number'],
       ),
       prescriberName: _sn(json['prescriber_name']),
+      prescriptionId: _sn(json['prescription_id']),
+      prescriptionFileName: _sn(json['prescription_file_name']),
+      prescriptionUrl: _sn(json['prescription_url']),
+      prescriptionStoragePath: _sn(json['prescription_storage_path']),
       diagnosis: _sn(json['diagnosis']),
       icd10Code: _sn(json['icd10_code']),
       investigations: _sn(json['investigations']),
@@ -300,6 +336,16 @@ class InsuranceClaim {
           ? ClaimFormStatusX.fromWire(json['claim_form_status'])
           : null,
       claimFormUrl: _sn(json['claim_form_url']),
+      claimFormFileName: _sn(json['claim_form_file_name']),
+      claimFormStoragePath: _sn(json['claim_form_storage_path']),
+      claimFormOriginalStoragePath: _sn(
+        json['claim_form_original_storage_path'],
+      ),
+      claimFormThumbnailStoragePath: _sn(
+        json['claim_form_thumbnail_storage_path'],
+      ),
+      claimFormContentType: _sn(json['claim_form_content_type']),
+      claimFormSizeBytes: _intn(json['claim_form_size_bytes']),
       invoicePdfUrl: _sn(json['invoice_pdf_url']),
       etimsStatus: json.containsKey('etims_status')
           ? EtimsStatusX.fromWire(json['etims_status'])
@@ -338,6 +384,10 @@ class InsuranceClaim {
       'service_date': serviceDate,
       'prescription_no': prescriptionNo,
       'prescriber_name': prescriberName,
+      'prescription_id': prescriptionId,
+      'prescription_file_name': prescriptionFileName,
+      'prescription_url': prescriptionUrl,
+      'prescription_storage_path': prescriptionStoragePath,
       'diagnosis': diagnosis,
       'icd10_code': icd10Code,
       'investigations': investigations,
@@ -345,6 +395,12 @@ class InsuranceClaim {
       'notes': notes,
       'claim_form_status': claimFormStatus?.wire,
       'claim_form_url': claimFormUrl,
+      'claim_form_file_name': claimFormFileName,
+      'claim_form_storage_path': claimFormStoragePath,
+      'claim_form_original_storage_path': claimFormOriginalStoragePath,
+      'claim_form_thumbnail_storage_path': claimFormThumbnailStoragePath,
+      'claim_form_content_type': claimFormContentType,
+      'claim_form_size_bytes': claimFormSizeBytes,
       'invoice_pdf_url': invoicePdfUrl,
       'etims_status': etimsStatus?.wire,
       'etims_no': etimsNo,
@@ -358,6 +414,8 @@ class InsuranceClaim {
     }..removeWhere(_removeEmpty);
   }
 
+  static bool _hasText(String? value) => (value ?? '').trim().isNotEmpty;
+
   static bool _removeEmpty(Object? _, Object? value) {
     if (value == null) return true;
     if (value is String && value.trim().isEmpty) return true;
@@ -369,6 +427,19 @@ class InsuranceClaim {
   static String? _sn(Object? value) {
     final s = (value ?? '').toString().trim();
     return s.isEmpty ? null : s;
+  }
+
+  static int? _intn(Object? value) {
+    if (value == null) return null;
+
+    if (value is int) return value;
+
+    if (value is num) return value.toInt();
+
+    final s = value.toString().trim();
+    if (s.isEmpty) return null;
+
+    return int.tryParse(s);
   }
 }
 
@@ -383,6 +454,10 @@ class InsuranceClaimUpsertInput {
     this.serviceDate,
     this.prescriptionNo,
     this.prescriberName,
+    this.prescriptionId,
+    this.prescriptionFileName,
+    this.prescriptionUrl,
+    this.prescriptionStoragePath,
     this.diagnosis,
     this.icd10Code,
     this.investigations,
@@ -390,6 +465,12 @@ class InsuranceClaimUpsertInput {
     this.notes,
     this.claimFormStatus,
     this.claimFormUrl,
+    this.claimFormFileName,
+    this.claimFormStoragePath,
+    this.claimFormOriginalStoragePath,
+    this.claimFormThumbnailStoragePath,
+    this.claimFormContentType,
+    this.claimFormSizeBytes,
     this.invoicePdfUrl,
     this.etimsStatus,
     this.etimsNo,
@@ -409,8 +490,14 @@ class InsuranceClaimUpsertInput {
   final String? claimNo;
   final String? visitNo;
   final String? serviceDate;
+
   final String? prescriptionNo;
   final String? prescriberName;
+
+  final String? prescriptionId;
+  final String? prescriptionFileName;
+  final String? prescriptionUrl;
+  final String? prescriptionStoragePath;
 
   final String? diagnosis;
   final String? icd10Code;
@@ -420,6 +507,12 @@ class InsuranceClaimUpsertInput {
 
   final ClaimFormStatus? claimFormStatus;
   final String? claimFormUrl;
+  final String? claimFormFileName;
+  final String? claimFormStoragePath;
+  final String? claimFormOriginalStoragePath;
+  final String? claimFormThumbnailStoragePath;
+  final String? claimFormContentType;
+  final int? claimFormSizeBytes;
 
   final String? invoicePdfUrl;
 
@@ -433,63 +526,6 @@ class InsuranceClaimUpsertInput {
   final InsuranceClaimStatus? status;
   final bool? isActive;
 
-  @Deprecated(
-    'Use authCode, claimNo, visitNo, prescriptionNo and etimsNo instead.',
-  )
-  factory InsuranceClaimUpsertInput.legacy({
-    required String membershipId,
-    required String invoiceId,
-    String? invoiceNumber,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? serviceDate,
-    String? prescriptionNumber,
-    String? prescriberName,
-    String? diagnosis,
-    String? icd10Code,
-    String? investigations,
-    String? treatmentRecommendations,
-    String? notes,
-    ClaimFormStatus? claimFormStatus,
-    String? claimFormUrl,
-    String? invoicePdfUrl,
-    EtimsStatus? etimsStatus,
-    String? etimsNumber,
-    String? etimsUrl,
-    String? submittedAt,
-    String? submittedByUid,
-    InsuranceClaimStatus? status,
-    bool? isActive,
-  }) {
-    return InsuranceClaimUpsertInput(
-      membershipId: membershipId,
-      invoiceId: invoiceId,
-      invoiceNumber: invoiceNumber,
-      authCode: authorizationNumber,
-      claimNo: claimNumber,
-      visitNo: visitNumber,
-      serviceDate: serviceDate,
-      prescriptionNo: prescriptionNumber,
-      prescriberName: prescriberName,
-      diagnosis: diagnosis,
-      icd10Code: icd10Code,
-      investigations: investigations,
-      treatmentRecommendations: treatmentRecommendations,
-      notes: notes,
-      claimFormStatus: claimFormStatus,
-      claimFormUrl: claimFormUrl,
-      invoicePdfUrl: invoicePdfUrl,
-      etimsStatus: etimsStatus,
-      etimsNo: etimsNumber,
-      etimsUrl: etimsUrl,
-      submittedAt: submittedAt,
-      submittedByUid: submittedByUid,
-      status: status,
-      isActive: isActive,
-    );
-  }
-
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'membership_id': membershipId,
@@ -501,6 +537,10 @@ class InsuranceClaimUpsertInput {
       'service_date': serviceDate,
       'prescription_no': prescriptionNo,
       'prescriber_name': prescriberName,
+      'prescription_id': prescriptionId,
+      'prescription_file_name': prescriptionFileName,
+      'prescription_url': prescriptionUrl,
+      'prescription_storage_path': prescriptionStoragePath,
       'diagnosis': diagnosis,
       'icd10_code': icd10Code,
       'investigations': investigations,
@@ -508,6 +548,12 @@ class InsuranceClaimUpsertInput {
       'notes': notes,
       'claim_form_status': claimFormStatus?.wire,
       'claim_form_url': claimFormUrl,
+      'claim_form_file_name': claimFormFileName,
+      'claim_form_storage_path': claimFormStoragePath,
+      'claim_form_original_storage_path': claimFormOriginalStoragePath,
+      'claim_form_thumbnail_storage_path': claimFormThumbnailStoragePath,
+      'claim_form_content_type': claimFormContentType,
+      'claim_form_size_bytes': claimFormSizeBytes,
       'invoice_pdf_url': invoicePdfUrl,
       'etims_status': etimsStatus?.wire,
       'etims_no': etimsNo,

@@ -3,7 +3,7 @@
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
-import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_patient_picker.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:file_picker/file_picker.dart';
@@ -112,7 +112,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
             if (!fixedToPatient)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: PrescriptionPatientPickerCard(
+                child: PatientPickerCard(
                   selectedPatient: _selectedPatient,
                   busy: false,
                   contactId: widget.contactId,
@@ -180,7 +180,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                   if (!fixedToPatient) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: PrescriptionPatientPickerCard(
+                      child: PatientPickerCard(
                         selectedPatient: _selectedPatient,
                         busy: state.busy,
                         contactId: widget.contactId,

@@ -33,3 +33,25 @@ final prescriptionsControllerProvider = StateNotifierProvider.autoDispose
       }
       return controller;
     });
+
+final prescriptionPickerControllerProvider = StateNotifierProvider.autoDispose
+    .family<PrescriptionsController, PrescriptionsState, String>((
+      ref,
+      patientId,
+    ) {
+      final service = ref.watch(prescriptionsServiceProvider);
+      final pid = patientId.trim();
+
+      final controller = PrescriptionsController(
+        service: service,
+        patientId: pid,
+      );
+
+      if (pid.isNotEmpty) {
+        Future<void>.microtask(() {
+          controller.load(patientId: pid, isActive: true);
+        });
+      }
+
+      return controller;
+    });

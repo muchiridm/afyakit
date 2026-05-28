@@ -1,5 +1,8 @@
 // lib/features/retail/quotes/widgets/quote_editor_meta_section.dart
 
+import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
@@ -10,6 +13,7 @@ import 'package:afyakit/features/retail/shared/models/sales_document_address.dar
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String quoteCurrencyCode() => 'KES';
 
@@ -88,6 +92,39 @@ Future<void> pickQuotePatientContext(
   );
 }
 
+Future<void> pickQuotePrescription(
+  BuildContext context, {
+  required List<Prescription> prescriptions,
+  required String? selectedPrescriptionId,
+  required bool requiredForClaim,
+  required QuoteMetaController metaCtl,
+}) async {
+  final List<Prescription> active = prescriptions
+      .where((Prescription p) => p.isActive)
+      .toList(growable: false);
+
+  final List<Prescription> selectable = requiredForClaim
+      ? active
+            .where((Prescription p) => p.status == PrescriptionStatus.verified)
+            .toList(growable: false)
+      : active;
+
+  final Prescription? picked = await showDialog<Prescription>(
+    context: context,
+    builder: (BuildContext context) {
+      return _PrescriptionPickerDialog(
+        prescriptions: selectable,
+        selectedPrescriptionId: selectedPrescriptionId,
+        requiredForClaim: requiredForClaim,
+      );
+    },
+  );
+
+  if (picked == null) return;
+
+  metaCtl.setPrescription(picked);
+}
+
 SalesDocMetaVm buildQuoteMetaVm({
   required QuoteMetaState meta,
   required QuoteLinesState linesState,
@@ -115,7 +152,7 @@ SalesDocMetaVm buildQuoteMetaVm({
   );
 }
 
-class QuoteEditorMetaSection extends StatelessWidget {
+class QuoteEditorMetaSection extends ConsumerWidget {
   const QuoteEditorMetaSection({
     super.key,
     required this.busy,
@@ -134,10 +171,16 @@ class QuoteEditorMetaSection extends StatelessWidget {
   final Future<bool> Function() onEnsureAuthed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final DateTime quoteDate = meta.quoteDate ?? quoteDateOnly(DateTime.now());
     final DateTime expiryDate =
         meta.expiryDate ?? _defaultExpiry(meta.quoteDate);
+
+    final String patientId = (meta.resolvedPatientId ?? '').trim();
+
+    final PrescriptionsState rxState = patientId.isEmpty
+        ? const PrescriptionsState()
+        : ref.watch(prescriptionPickerControllerProvider(patientId));
 
     final Widget saleAndPaymentSelector = _SaleAndPaymentSelector(
       busy: busy,
@@ -197,6 +240,27 @@ class QuoteEditorMetaSection extends StatelessWidget {
       onClear: meta.hasPatientContext ? metaCtl.clearPatientContext : null,
     );
 
+    final Widget prescriptionField = _PrescriptionTile(
+      busy: busy || rxState.busy,
+      patientId: patientId,
+      prescriptions: rxState.items,
+      selectedPrescriptionId: meta.resolvedPrescriptionId,
+      requiredForClaim: meta.isInsurancePayment,
+      error: rxState.error,
+      onPick: patientId.isEmpty
+          ? null
+          : () => pickQuotePrescription(
+              context,
+              prescriptions: rxState.items,
+              selectedPrescriptionId: meta.resolvedPrescriptionId,
+              requiredForClaim: meta.isInsurancePayment,
+              metaCtl: metaCtl,
+            ),
+      onClear: (meta.resolvedPrescriptionId ?? '').trim().isEmpty
+          ? null
+          : metaCtl.clearPrescription,
+    );
+
     final Widget addressField = _DeliveryAddressTile(
       busy: busy,
       address: meta.deliveryAddress,
@@ -240,6 +304,8 @@ class QuoteEditorMetaSection extends StatelessWidget {
                       const SizedBox(height: 6),
                       patientField,
                       const SizedBox(height: 6),
+                      prescriptionField,
+                      const SizedBox(height: 6),
                       addressField,
                     ],
                   ),
@@ -258,6 +324,8 @@ class QuoteEditorMetaSection extends StatelessWidget {
               dateColumn,
               const SizedBox(height: 6),
               patientField,
+              const SizedBox(height: 6),
+              prescriptionField,
               const SizedBox(height: 6),
               addressField,
               const SizedBox(height: 6),
@@ -401,7 +469,7 @@ class _SaleAndPaymentSelector extends StatelessWidget {
     }
 
     if (meta.isInsurancePayment) {
-      return 'Insurance sale. Patient, membership, and delivery address are required. Customer should be the insurer.';
+      return 'Insurance sale. Patient, membership, prescription, and delivery address are required. Customer should be the insurer.';
     }
 
     return 'Direct-pay clinical sale. Patient and delivery address are required. Customer can be the patient, parent, guardian, company, or other payer.';
@@ -692,6 +760,175 @@ class _PatientContextTile extends StatelessWidget {
     }
 
     return hasContext ? 'Patient context *' : 'Patient *';
+  }
+}
+
+class _PrescriptionTile extends StatelessWidget {
+  const _PrescriptionTile({
+    required this.busy,
+    required this.patientId,
+    required this.prescriptions,
+    required this.selectedPrescriptionId,
+    required this.requiredForClaim,
+    required this.error,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final bool busy;
+  final String patientId;
+  final List<Prescription> prescriptions;
+  final String? selectedPrescriptionId;
+  final bool requiredForClaim;
+  final String? error;
+  final Future<void> Function()? onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final Prescription? selected = _selectedPrescription();
+
+    final bool hasPatient = patientId.trim().isNotEmpty;
+    final bool hasSelected = selected != null;
+
+    final String title = !hasPatient
+        ? 'Select patient first'
+        : hasSelected
+        ? _title(selected)
+        : 'Select prescription';
+
+    final String subtitle = !hasPatient
+        ? 'Prescription belongs to a patient profile.'
+        : hasSelected
+        ? _subtitle(selected)
+        : _emptySubtitle();
+
+    return InkWell(
+      onTap: busy || !hasPatient ? null : onPick,
+      borderRadius: BorderRadius.circular(10),
+      child: InputDecorator(
+        decoration: _denseDecoration(
+          labelText: requiredForClaim
+              ? 'Prescription for claim *'
+              : 'Prescription optional',
+          suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
+        ),
+        child: _TileBody(
+          icon: Icons.description_outlined,
+          title: title,
+          subtitle: error == null ? subtitle : error,
+        ),
+      ),
+    );
+  }
+
+  Prescription? _selectedPrescription() {
+    final String id = (selectedPrescriptionId ?? '').trim();
+    if (id.isEmpty) return null;
+
+    for (final Prescription p in prescriptions) {
+      if (p.prescriptionId == id) return p;
+    }
+
+    return null;
+  }
+
+  String _emptySubtitle() {
+    if (requiredForClaim) {
+      return 'Required before creating an insurance claim.';
+    }
+
+    return 'Optional for direct-pay quotes.';
+  }
+
+  static String _title(Prescription p) {
+    final String fileName = p.fileName.trim();
+    return fileName.isNotEmpty ? fileName : p.prescriptionId;
+  }
+
+  static String _subtitle(Prescription p) {
+    return _join(<String?>[
+      p.prescriptionId,
+      p.prescribedOn == null ? null : 'Prescribed: ${p.prescribedOn}',
+      p.status.label,
+    ]);
+  }
+}
+
+class _PrescriptionPickerDialog extends StatelessWidget {
+  const _PrescriptionPickerDialog({
+    required this.prescriptions,
+    required this.selectedPrescriptionId,
+    required this.requiredForClaim,
+  });
+
+  final List<Prescription> prescriptions;
+  final String? selectedPrescriptionId;
+  final bool requiredForClaim;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        requiredForClaim
+            ? 'Select verified prescription'
+            : 'Select prescription',
+      ),
+      content: SizedBox(
+        width: 560,
+        height: 420,
+        child: prescriptions.isEmpty
+            ? Center(
+                child: Text(
+                  requiredForClaim
+                      ? 'No verified prescriptions found for this patient.'
+                      : 'No active prescriptions found for this patient.',
+                ),
+              )
+            : ListView.separated(
+                itemCount: prescriptions.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (BuildContext context, int index) {
+                  final Prescription p = prescriptions[index];
+                  final bool selected =
+                      p.prescriptionId == selectedPrescriptionId;
+
+                  return ListTile(
+                    leading: Icon(
+                      selected
+                          ? Icons.check_circle
+                          : Icons.description_outlined,
+                    ),
+                    title: Text(
+                      p.fileName.trim().isNotEmpty
+                          ? p.fileName.trim()
+                          : p.prescriptionId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      _join(<String?>[
+                        p.prescriptionId,
+                        p.prescribedOn == null
+                            ? null
+                            : 'Prescribed: ${p.prescribedOn}',
+                        p.status.label,
+                      ]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.of(context).pop(p),
+                  );
+                },
+              ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
   }
 }
 

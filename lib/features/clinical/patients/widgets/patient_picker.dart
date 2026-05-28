@@ -1,4 +1,4 @@
-// lib/features/clinical/prescriptions/widgets/prescription_patient_picker.dart
+// lib/features/clinical/patients/widgets/patient_picker.dart
 
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
@@ -6,8 +6,8 @@ import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class PrescriptionPatientPickerCard extends StatelessWidget {
-  const PrescriptionPatientPickerCard({
+class PatientPickerCard extends StatelessWidget {
+  const PatientPickerCard({
     super.key,
     required this.selectedPatient,
     required this.busy,
@@ -68,7 +68,7 @@ class PrescriptionPatientPickerCard extends StatelessWidget {
                         Text(
                           scoped
                               ? 'Choose from your linked patient profiles.'
-                              : 'Choose the patient whose prescription you want to view or upload.',
+                              : 'Choose the patient profile to continue.',
                         ),
                       ],
                     )
@@ -103,9 +103,8 @@ class PrescriptionPatientPickerCard extends StatelessWidget {
                   : () async {
                       final picked = await showDialog<PatientProfile>(
                         context: context,
-                        builder: (_) => PrescriptionPatientPickerDialog(
-                          contactId: _scopeContactId,
-                        ),
+                        builder: (_) =>
+                            PatientPickerDialog(contactId: _scopeContactId),
                       );
 
                       if (picked != null) onChanged(picked);
@@ -120,18 +119,17 @@ class PrescriptionPatientPickerCard extends StatelessWidget {
   }
 }
 
-class PrescriptionPatientPickerDialog extends ConsumerStatefulWidget {
-  const PrescriptionPatientPickerDialog({super.key, this.contactId});
+class PatientPickerDialog extends ConsumerStatefulWidget {
+  const PatientPickerDialog({super.key, this.contactId});
 
   final String? contactId;
 
   @override
-  ConsumerState<PrescriptionPatientPickerDialog> createState() =>
-      _PrescriptionPatientPickerDialogState();
+  ConsumerState<PatientPickerDialog> createState() =>
+      _PatientPickerDialogState();
 }
 
-class _PrescriptionPatientPickerDialogState
-    extends ConsumerState<PrescriptionPatientPickerDialog> {
+class _PatientPickerDialogState extends ConsumerState<PatientPickerDialog> {
   final _searchController = TextEditingController();
 
   PatientProfilesScope get _scope {

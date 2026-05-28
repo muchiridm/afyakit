@@ -48,7 +48,7 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
 
   final Ref ref;
 
-  Future<InsuranceClaimsService> get _service async {
+  Future<InsuranceClaimsService> get _service {
     return ref.read(insuranceClaimsServiceProvider.future);
   }
 
@@ -65,6 +65,7 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
     String? claimNo,
     String? visitNo,
     String? prescriptionNo,
+    String? prescriptionId,
     InsuranceClaimStatus? status,
     bool? isActive,
     int perPage = 50,
@@ -90,55 +91,17 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
         claimNo: claimNo,
         visitNo: visitNo,
         prescriptionNo: prescriptionNo,
+        prescriptionId: prescriptionId,
         status: status,
         isActive: isActive,
         perPage: perPage,
         page: page,
       );
 
-      state = state.copyWith(items: items, isLoading: false);
+      state = state.copyWith(items: items, isLoading: false, clearError: true);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
-  }
-
-  @Deprecated('Use load(memberNo: ...) instead.')
-  Future<void> loadLegacy({
-    String? search,
-    String? membershipId,
-    String? patientId,
-    String? patientNo,
-    String? payerContactId,
-    String? invoiceId,
-    String? memberNumber,
-    String? scheme,
-    String? authorizationNumber,
-    String? claimNumber,
-    String? visitNumber,
-    String? prescriptionNumber,
-    InsuranceClaimStatus? status,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) {
-    return load(
-      search: search,
-      membershipId: membershipId,
-      patientId: patientId,
-      patientNo: patientNo,
-      payerContactId: payerContactId,
-      invoiceId: invoiceId,
-      memberNo: memberNumber,
-      scheme: scheme,
-      authCode: authorizationNumber,
-      claimNo: claimNumber,
-      visitNo: visitNumber,
-      prescriptionNo: prescriptionNumber,
-      status: status,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-    );
   }
 
   Future<void> loadForInvoice(String invoiceId) {
@@ -163,7 +126,12 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
       final svc = await _service;
       final claim = await svc.get(id);
 
-      state = state.copyWith(selected: claim, isLoading: false);
+      state = state.copyWith(
+        selected: claim,
+        isLoading: false,
+        clearError: true,
+      );
+
       return claim;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -178,19 +146,13 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
 
     try {
       final svc = await _service;
-
-      // Backend:
-      // - resolves membership_id
-      // - verifies invoice belongs to payer
-      // - snapshots patient/payer/member details
-      // - saves claim
-      // - patches Zoho invoice custom fields
       final claim = await svc.create(input);
 
       state = state.copyWith(
         isSaving: false,
         selected: claim,
         items: [claim, ...state.items],
+        clearError: true,
       );
 
       return claim;
@@ -217,18 +179,9 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
 
     try {
       final svc = await _service;
-
       final claim = await svc.update(id, input);
 
-      final updatedItems = state.items
-          .map((item) => item.claimId == claim.claimId ? claim : item)
-          .toList(growable: false);
-
-      state = state.copyWith(
-        isSaving: false,
-        selected: claim,
-        items: updatedItems,
-      );
+      _patchClaimInState(claim);
 
       return claim;
     } catch (e) {
@@ -261,6 +214,7 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
         isSaving: false,
         items: updatedItems,
         clearSelected: state.selected?.claimId == id,
+        clearError: true,
       );
 
       return true;
@@ -268,5 +222,128 @@ class InsuranceClaimsController extends StateNotifier<InsuranceClaimsState> {
       state = state.copyWith(isSaving: false, error: e.toString());
       return false;
     }
+  }
+
+  Future<InsuranceClaim?> attachClaimForm({
+    required String claimId,
+    required ClaimFormAttachmentInput input,
+  }) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      final claim = await svc.attachClaimForm(claimId: id, input: input);
+
+      _patchClaimInState(claim);
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<InsuranceClaim?> detachClaimForm(String claimId) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      final claim = await svc.detachClaimForm(id);
+
+      _patchClaimInState(claim);
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<InsuranceClaim?> attachPrescription({
+    required String claimId,
+    required ClaimPrescriptionAttachmentInput input,
+  }) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      final claim = await svc.attachPrescription(claimId: id, input: input);
+
+      _patchClaimInState(claim);
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<InsuranceClaim?> detachPrescription(String claimId) async {
+    final id = claimId.trim();
+
+    if (id.isEmpty) {
+      state = state.copyWith(error: 'Claim ID is empty');
+      return null;
+    }
+
+    if (state.isSaving) return null;
+
+    state = state.copyWith(isSaving: true, clearError: true);
+
+    try {
+      final svc = await _service;
+      final claim = await svc.detachPrescription(id);
+
+      _patchClaimInState(claim);
+
+      return claim;
+    } catch (e) {
+      state = state.copyWith(isSaving: false, error: e.toString());
+      return null;
+    }
+  }
+
+  void _patchClaimInState(InsuranceClaim claim) {
+    final exists = state.items.any((item) => item.claimId == claim.claimId);
+
+    final updatedItems = exists
+        ? state.items
+              .map((item) => item.claimId == claim.claimId ? claim : item)
+              .toList(growable: false)
+        : [claim, ...state.items];
+
+    state = state.copyWith(
+      isSaving: false,
+      selected: claim,
+      items: updatedItems,
+      clearError: true,
+    );
   }
 }

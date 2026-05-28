@@ -1,5 +1,6 @@
 // lib/features/retail/quotes/controllers/quote_meta_controller.dart
 
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
@@ -24,6 +25,8 @@ class QuoteMetaState {
     this.deliveryAddress,
     this.patientSnapshot,
     this.membershipId,
+    this.prescriptionId,
+    this.prescriptionLabel,
   });
 
   final String? editingQuoteId;
@@ -61,6 +64,14 @@ class QuoteMetaState {
   /// Insurance membership used later for quote → invoice → claim.
   final String? membershipId;
 
+  /// Patient prescription used later for quote → invoice → claim.
+  ///
+  /// Claims require this when create_insurance_claim is true.
+  final String? prescriptionId;
+
+  /// UI display label only. Source of truth remains [prescriptionId].
+  final String? prescriptionLabel;
+
   bool get isEditing => _clean(editingQuoteId) != null;
 
   bool get isClinical => saleContext == QuoteSaleContext.clinical;
@@ -87,6 +98,10 @@ class QuoteMetaState {
     return isClinical && effectivePaymentContext.requiresMembership;
   }
 
+  bool get requiresPrescription {
+    return isClinical && isInsurancePayment;
+  }
+
   String get customerIdResolved => (contact?.contactId ?? '').trim();
 
   String get displayContactName {
@@ -100,16 +115,23 @@ class QuoteMetaState {
     return _clean(membershipId) ?? _clean(patientSnapshot?.membershipId);
   }
 
+  String? get resolvedPrescriptionId => _clean(prescriptionId);
+
   bool get hasPatientContext => resolvedPatientId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
+
+  bool get hasPrescriptionContext => resolvedPrescriptionId != null;
 
   bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
 
   bool get hasQuoteDate => quoteDate != null;
 
   bool get canCreateInsuranceClaim {
-    return isClinical && isInsurancePayment && hasInsuranceContext;
+    return isClinical &&
+        isInsurancePayment &&
+        hasInsuranceContext &&
+        hasPrescriptionContext;
   }
 
   String get patientLabel {
@@ -143,6 +165,15 @@ class QuoteMetaState {
     ]);
   }
 
+  String? get prescriptionSubtitle {
+    if (resolvedPrescriptionId == null) return null;
+
+    return _joinParts(<String>[
+      if (_clean(prescriptionLabel) != null) prescriptionLabel!.trim(),
+      if (_clean(prescriptionLabel) == null) resolvedPrescriptionId!,
+    ]);
+  }
+
   String? get paymentSubtitle {
     if (isGeneral) return 'Direct-pay general sale';
 
@@ -150,6 +181,7 @@ class QuoteMetaState {
       return _joinParts(<String>[
         'Insurance',
         if (resolvedMembershipId != null) 'membership selected',
+        if (resolvedPrescriptionId != null) 'prescription selected',
       ]);
     }
 
@@ -177,6 +209,10 @@ class QuoteMetaState {
     bool clearPatientSnapshot = false,
     String? membershipId,
     bool clearMembershipId = false,
+    String? prescriptionId,
+    bool clearPrescriptionId = false,
+    String? prescriptionLabel,
+    bool clearPrescriptionLabel = false,
   }) {
     final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
 
@@ -207,6 +243,12 @@ class QuoteMetaState {
       membershipId: clearMembershipId
           ? null
           : (membershipId ?? this.membershipId),
+      prescriptionId: clearPrescriptionId
+          ? null
+          : (prescriptionId ?? this.prescriptionId),
+      prescriptionLabel: clearPrescriptionLabel
+          ? null
+          : (prescriptionLabel ?? this.prescriptionLabel),
     );
   }
 
@@ -271,6 +313,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       clearContact: wasEditing,
       clearPatientSnapshot: wasEditing,
       clearMembershipId: wasEditing,
+      clearPrescriptionId: wasEditing,
+      clearPrescriptionLabel: wasEditing,
       clearDeliveryAddress: wasEditing,
     );
   }
@@ -292,6 +336,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       paymentContext: saleContext == QuoteSaleContext.general
           ? QuotePaymentContext.directPay
           : state.effectivePaymentContext,
+      clearPrescriptionId: saleContext == QuoteSaleContext.general,
+      clearPrescriptionLabel: saleContext == QuoteSaleContext.general,
     );
   }
 
@@ -392,6 +438,14 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
         ? _requiredInsurancePayerContact(payerContact)
         : state.contact;
 
+    final String? previousPatientId = state.resolvedPatientId;
+    final String? nextPatientId = _clean(patientSnapshot.patientId);
+
+    final bool patientChanged =
+        previousPatientId != null &&
+        nextPatientId != null &&
+        previousPatientId != nextPatientId;
+
     state = state.copyWith(
       saleContext: QuoteSaleContext.clinical,
       paymentContext: isInsurance
@@ -401,6 +455,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       patientSnapshot: patientSnapshot,
       membershipId: resolvedMembershipId,
       clearMembershipId: resolvedMembershipId == null,
+      clearPrescriptionId: patientChanged,
+      clearPrescriptionLabel: patientChanged,
     );
   }
 
@@ -409,6 +465,25 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       paymentContext: QuotePaymentContext.directPay,
       clearPatientSnapshot: true,
       clearMembershipId: true,
+      clearPrescriptionId: true,
+      clearPrescriptionLabel: true,
+    );
+  }
+
+  void setPrescription(Prescription prescription) {
+    final String prescriptionId = prescription.prescriptionId.trim();
+    if (prescriptionId.isEmpty) return;
+
+    state = state.copyWith(
+      prescriptionId: prescriptionId,
+      prescriptionLabel: _prescriptionLabel(prescription),
+    );
+  }
+
+  void clearPrescription() {
+    state = state.copyWith(
+      clearPrescriptionId: true,
+      clearPrescriptionLabel: true,
     );
   }
 
@@ -424,6 +499,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     SalesDocumentAddress? deliveryAddress,
     SalesDocumentPatientSnapshot? patientSnapshot,
     String? membershipId,
+    String? prescriptionId,
+    String? prescriptionLabel,
   }) {
     final String? id = _clean(editingQuoteId);
     final ZohoContact? safeContact = _safeContactForPolicy(contact);
@@ -452,6 +529,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       deliveryAddress: deliveryAddress,
       patientSnapshot: patientSnapshot,
       membershipId: resolvedMembershipId,
+      prescriptionId: _clean(prescriptionId),
+      prescriptionLabel: _clean(prescriptionLabel),
     );
   }
 
@@ -488,6 +567,23 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     required SalesDocumentPatientSnapshot patientSnapshot,
   }) {
     return _clean(membershipId) ?? _clean(patientSnapshot.membershipId);
+  }
+
+  static String _prescriptionLabel(Prescription prescription) {
+    final List<String> parts = <String>[
+      if (_clean(prescription.fileName) != null) prescription.fileName.trim(),
+      if (_clean(prescription.prescribedOn) != null)
+        prescription.prescribedOn!.trim(),
+      prescription.status.label,
+    ];
+
+    final String label = parts
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .join(' · ')
+        .trim();
+
+    return label.isEmpty ? prescription.prescriptionId : label;
   }
 
   static DateTime _normalize(DateTime date) {

@@ -97,6 +97,7 @@ class QuoteDraft {
     this.patientId,
     this.patientSnapshot,
     this.membershipId,
+    this.prescriptionId,
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
@@ -147,6 +148,11 @@ class QuoteDraft {
   /// Only required when [paymentContext] is insurance.
   final String? membershipId;
 
+  /// Patient prescription selected for this quote/claim flow.
+  ///
+  /// Required before creating an insurance claim.
+  final String? prescriptionId;
+
   final String? currencyCode;
 
   final List<QuoteLineDraft> lines;
@@ -181,6 +187,10 @@ class QuoteDraft {
     return isClinical && paymentContext.requiresMembership;
   }
 
+  bool get requiresPrescription {
+    return isClinical && isInsurancePayment;
+  }
+
   /// General sales cannot be insurance claims in the current model.
   QuotePaymentContext get effectivePaymentContext {
     return isGeneral ? QuotePaymentContext.directPay : paymentContext;
@@ -202,9 +212,16 @@ class QuoteDraft {
     return snap.isEmpty ? null : snap;
   }
 
+  String? get resolvedPrescriptionId {
+    final String direct = (prescriptionId ?? '').trim();
+    return direct.isEmpty ? null : direct;
+  }
+
   bool get hasPatientContext => resolvedPatientId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
+
+  bool get hasPrescriptionContext => resolvedPrescriptionId != null;
 
   bool get canCreateQuote {
     if (!hasCustomer || !hasLines) return false;
@@ -219,7 +236,10 @@ class QuoteDraft {
   }
 
   bool get canCreateInsuranceClaim {
-    return isClinical && isInsurancePayment && hasInsuranceContext;
+    return isClinical &&
+        isInsurancePayment &&
+        hasInsuranceContext &&
+        hasPrescriptionContext;
   }
 
   num get total {
@@ -259,6 +279,8 @@ class QuoteDraft {
     bool clearPatientSnapshot = false,
     String? membershipId,
     bool clearMembershipId = false,
+    String? prescriptionId,
+    bool clearPrescriptionId = false,
     List<QuoteLineDraft>? lines,
     bool clearLines = false,
     String? currencyCode,
@@ -291,6 +313,9 @@ class QuoteDraft {
       membershipId: clearMembershipId
           ? null
           : (membershipId ?? this.membershipId),
+      prescriptionId: clearPrescriptionId
+          ? null
+          : (prescriptionId ?? this.prescriptionId),
       lines: clearLines ? const <QuoteLineDraft>[] : (lines ?? this.lines),
       currencyCode: clearCurrencyCode
           ? null
@@ -355,6 +380,7 @@ class QuoteDraft {
       clearPatientId: true,
       clearPatientSnapshot: true,
       clearMembershipId: true,
+      clearPrescriptionId: true,
     );
   }
 
@@ -368,6 +394,17 @@ class QuoteDraft {
       // Do not auto-switch to insurance just because membership exists.
       // Parent/self/company direct-pay can still involve a patient with insurance.
       paymentContext: paymentContext,
+      clearPrescriptionId:
+          resolvedPatientId != null && resolvedPatientId != snapshot.patientId,
+    );
+  }
+
+  QuoteDraft withPrescriptionId(String? prescriptionId) {
+    final String clean = (prescriptionId ?? '').trim();
+
+    return copyWith(
+      prescriptionId: clean.isEmpty ? null : clean,
+      clearPrescriptionId: clean.isEmpty,
     );
   }
 
@@ -428,6 +465,7 @@ class QuoteDraft {
       patientId: quote.resolvedPatientId,
       patientSnapshot: quote.patientSnapshot,
       membershipId: quote.resolvedMembershipId,
+      prescriptionId: quote.resolvedPrescriptionId,
       currencyCode: quote.currencyCode,
       lines: hydratedLines,
     );

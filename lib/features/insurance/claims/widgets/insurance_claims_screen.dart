@@ -2,9 +2,12 @@
 
 import 'package:afyakit/features/insurance/claims/controllers/insurance_claims_controller.dart';
 import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_detail_screen.dart';
 import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_form_dialog.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -230,25 +233,29 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
     final isBusy = claimsState.isLoading || membershipsState.isLoading;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Insurance Claims'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: isBusy ? null : _refreshAll,
-            icon: const Icon(Icons.refresh),
+    return AppPage(
+      title: 'Insurance Claims',
+      showBack: true,
+      maxWidth: AppLayout.contentMaxWidth,
+      padding: AppLayout.pagePadding,
+      scrollable: false,
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: isBusy ? null : _refreshAll,
+          icon: const Icon(Icons.refresh),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: claimsState.isSaving || membershipsState.items.isEmpty
+                ? null
+                : _openCreateInvoicePrompt,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Claim'),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: claimsState.isSaving || membershipsState.items.isEmpty
-            ? null
-            : _openCreateInvoicePrompt,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Claim'),
-      ),
+        ),
+      ],
       body: Column(
         children: [
           Padding(
@@ -299,6 +306,14 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
                         return _ClaimCard(
                           claim: claim,
+                          onOpen: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => InsuranceClaimDetailScreen(
+                                claimId: claim.claimId,
+                                initialClaim: claim,
+                              ),
+                            ),
+                          ),
                           onEdit: () => _openEditDialog(claim),
                           onCancel: () => _deactivate(claim),
                         );
@@ -367,11 +382,13 @@ class _ClaimFilters extends StatelessWidget {
 class _ClaimCard extends StatelessWidget {
   const _ClaimCard({
     required this.claim,
+    required this.onOpen,
     required this.onEdit,
     required this.onCancel,
   });
 
   final InsuranceClaim claim;
+  final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
 
@@ -402,6 +419,8 @@ class _ClaimCard extends StatelessWidget {
 
     return Card.outlined(
       child: ListTile(
+        onTap: onOpen,
+        mouseCursor: SystemMouseCursors.click,
         leading: CircleAvatar(
           child: Icon(claim.isActive ? Icons.assignment : Icons.block),
         ),
@@ -420,6 +439,7 @@ class _ClaimCard extends StatelessWidget {
         ),
         trailing: Wrap(
           spacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _ClaimStatusChip(status: claim.status),
             IconButton(
@@ -432,6 +452,7 @@ class _ClaimCard extends StatelessWidget {
               onPressed: claim.isActive ? onCancel : null,
               icon: const Icon(Icons.block),
             ),
+            const Icon(Icons.chevron_right),
           ],
         ),
       ),

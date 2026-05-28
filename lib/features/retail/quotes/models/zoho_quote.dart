@@ -27,6 +27,7 @@ class ZohoQuote {
     this.patientId,
     this.patientSnapshot,
     this.membershipId,
+    this.prescriptionId,
     this.lineItems = const <ZohoQuoteLineItem>[],
   });
 
@@ -60,6 +61,9 @@ class ZohoQuote {
   /// Insurance membership, only meaningful for insurance payment context.
   final String? membershipId;
 
+  /// Patient prescription linked to this quote/claim flow.
+  final String? prescriptionId;
+
   final List<ZohoQuoteLineItem> lineItems;
 
   bool get isClinical => saleContext == QuoteSaleContext.clinical;
@@ -86,8 +90,15 @@ class ZohoQuote {
     return direct.isNotEmpty || snap.isNotEmpty;
   }
 
+  bool get hasPrescriptionContext {
+    return resolvedPrescriptionId != null;
+  }
+
   bool get canCreateInsuranceClaim {
-    return isClinical && isInsurancePayment && hasInsuranceContext;
+    return isClinical &&
+        isInsurancePayment &&
+        hasInsuranceContext &&
+        hasPrescriptionContext;
   }
 
   String? get resolvedPatientId {
@@ -104,6 +115,11 @@ class ZohoQuote {
 
     final String snap = (patientSnapshot?.membershipId ?? '').trim();
     return snap.isEmpty ? null : snap;
+  }
+
+  String? get resolvedPrescriptionId {
+    final String direct = (prescriptionId ?? '').trim();
+    return direct.isEmpty ? null : direct;
   }
 
   factory ZohoQuote.fromJson(JsonMap json) {
@@ -160,6 +176,10 @@ class ZohoQuote {
     final String? membershipId =
         _asCleanOrNull(json['membership_id']) ?? patientSnapshot?.membershipId;
 
+    final String? prescriptionId = _asCleanOrNull(
+      json['prescription_id'] ?? json['prescriptionId'],
+    );
+
     final Object? rawLines = json['line_items'];
     final List<ZohoQuoteLineItem> lines = <ZohoQuoteLineItem>[];
 
@@ -189,6 +209,7 @@ class ZohoQuote {
       patientId: patientId,
       patientSnapshot: patientSnapshot,
       membershipId: membershipId,
+      prescriptionId: prescriptionId,
       lineItems: lines,
     );
   }
@@ -214,6 +235,7 @@ class ZohoQuote {
       'patient_id': patientId,
       'patient_snapshot': patientSnapshot?.toJson(),
       'membership_id': membershipId,
+      'prescription_id': prescriptionId,
       'line_items': lineItems
           .map((ZohoQuoteLineItem item) => item.toJson())
           .toList(growable: false),
@@ -247,6 +269,8 @@ class ZohoQuote {
     bool clearPatientSnapshot = false,
     String? membershipId,
     bool clearMembershipId = false,
+    String? prescriptionId,
+    bool clearPrescriptionId = false,
     List<ZohoQuoteLineItem>? lineItems,
   }) {
     final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
@@ -284,6 +308,9 @@ class ZohoQuote {
       membershipId: clearMembershipId
           ? null
           : (membershipId ?? this.membershipId),
+      prescriptionId: clearPrescriptionId
+          ? null
+          : (prescriptionId ?? this.prescriptionId),
       lineItems: lineItems ?? this.lineItems,
     );
   }
