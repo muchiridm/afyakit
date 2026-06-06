@@ -173,17 +173,30 @@ class QuoteActionController {
       return;
     }
 
-    final String? membershipId = quote.resolvedMembershipId;
-    final bool hasInsuranceContext = (membershipId ?? '').trim().isNotEmpty;
+    final String? membershipId = _clean(quote.resolvedMembershipId);
+    final String? prescriptionId = _clean(quote.resolvedPrescriptionId);
+
+    final bool isInsuranceQuote =
+        quote.saleContext.isClinical && quote.paymentContext.isInsurance;
+
+    if (isInsuranceQuote && membershipId == null) {
+      SnackService.showError('This insurance quote has no membership linked.');
+      return;
+    }
+
+    if (isInsuranceQuote && prescriptionId == null) {
+      SnackService.showError(
+        'This insurance quote has no prescription linked.',
+      );
+      return;
+    }
 
     final bool ok = await SalesDocDialogs.confirm(
       context,
-      title: hasInsuranceContext
-          ? 'Convert to invoice and create claim?'
-          : 'Convert to invoice?',
-      message: hasInsuranceContext
-          ? 'This will create an invoice from this quote in Zoho Books and create an insurance claim linked to that invoice.'
-          : 'This will create an invoice from this quote in Zoho Books.',
+      title: 'Convert to invoice?',
+      message: isInsuranceQuote
+          ? 'This will create a Zoho invoice from this insurance quote. The insurance claim will be created separately after uploading the claim document.'
+          : 'This will create a Zoho invoice from this quote.',
       okLabel: 'Convert',
       danger: false,
       barrierDismissible: false,
@@ -197,9 +210,12 @@ class QuoteActionController {
       final QuoteConversionResult result = await svc.convertToInvoice(
         id,
         membershipId: membershipId,
+        prescriptionId: prescriptionId,
         patientSnapshot: quote.patientSnapshot,
         deliveryAddress: quote.deliveryAddress,
-        createInsuranceClaim: hasInsuranceContext,
+
+        // Claims are no longer created during quote → invoice conversion.
+        createInsuranceClaim: false,
       );
 
       SnackService.showSuccess(_conversionMessage(result));
@@ -245,14 +261,6 @@ class QuoteActionController {
 
     final String invoiceLabel = invoiceNumber ?? invoiceId ?? '';
 
-    if (result.claim != null) {
-      if (invoiceLabel.isNotEmpty) {
-        return 'Converted → Invoice $invoiceLabel and claim created';
-      }
-
-      return 'Converted to invoice and claim created';
-    }
-
     if (invoiceLabel.isNotEmpty) {
       return 'Converted → Invoice $invoiceLabel';
     }
@@ -268,6 +276,11 @@ class QuoteActionController {
     final Object? value = invoice[key] ?? invoice[fallbackKey];
     final String text = (value ?? '').toString().trim();
 
+    return text.isEmpty ? null : text;
+  }
+
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
     return text.isEmpty ? null : text;
   }
 }

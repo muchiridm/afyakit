@@ -95,6 +95,24 @@ class PrescriptionsService {
     return _readPrescription(body['prescription']);
   }
 
+  Future<Prescription> approve({
+    required String patientId,
+    required String prescriptionId,
+  }) async {
+    final pid = _requiredId(patientId, 'patientId');
+    final rxid = _requiredId(prescriptionId, 'prescriptionId');
+
+    final response = await api.patchUri<Object?>(
+      routes.clinicalPatientPrescriptionApprove(
+        patientId: pid,
+        prescriptionId: rxid,
+      ),
+    );
+
+    final body = _asMap(response.data);
+    return _readPrescription(body['prescription']);
+  }
+
   Future<Prescription> update({
     required String patientId,
     required String prescriptionId,
@@ -159,11 +177,12 @@ class PrescriptionsService {
 
     final metadata = SettableMetadata(
       contentType: contentType,
-      customMetadata: {
+      customMetadata: <String, String>{
         'tenant_id': cleanTenantId,
         'patient_id': cleanPatientId,
         'upload_id': uploadId,
         'original_file_name': file.fileName,
+        'document_type': 'prescription',
       },
     );
 
@@ -206,7 +225,7 @@ class PrescriptionsService {
 
     if (value is Map) {
       return value.map(
-        (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+        (Object? key, Object? value) => MapEntry(key.toString(), value),
       );
     }
 
@@ -219,8 +238,8 @@ class PrescriptionsService {
     return value
         .whereType<Map>()
         .map(
-          (item) => item.map(
-            (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+          (Map item) => item.map(
+            (Object? key, Object? value) => MapEntry(key.toString(), value),
           ),
         )
         .toList(growable: false);

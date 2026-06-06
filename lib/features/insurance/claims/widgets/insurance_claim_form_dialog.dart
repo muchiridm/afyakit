@@ -1,150 +1,185 @@
 // lib/features/insurance/claims/widgets/insurance_claim_form_dialog.dart
 
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
 import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
+import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
+import 'package:afyakit/features/retail/invoices/widgets/invoice_picker.dart';
+import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class InsuranceClaimFormDialog extends StatefulWidget {
+class InsuranceClaimFormDialog extends ConsumerStatefulWidget {
   const InsuranceClaimFormDialog({
     super.key,
     this.initial,
-    required this.invoiceId,
-    this.invoiceNumber,
     required this.memberships,
     this.initialMembershipId,
+    this.invoiceId,
+    this.invoiceNumber,
+    this.patientId,
+    this.allowedPatientIds,
   });
 
   final InsuranceClaim? initial;
 
-  final String invoiceId;
-  final String? invoiceNumber;
-
+  /// Local fallback/list already loaded by parent.
+  ///
+  /// The membership picker reads from the membership controller, but this list
+  /// is still useful for resolving the initial selected membership label.
   final List<InsuranceMembership> memberships;
+
   final String? initialMembershipId;
 
+  /// Optional hard patient filter for member-scoped or patient-scoped flows.
+  final String? patientId;
+
+  /// Optional local visibility guard.
+  final Set<String>? allowedPatientIds;
+
+  /// Optional invoice context helper.
+  final String? invoiceId;
+  final String? invoiceNumber;
+
   @override
-  State<InsuranceClaimFormDialog> createState() =>
+  ConsumerState<InsuranceClaimFormDialog> createState() =>
       _InsuranceClaimFormDialogState();
 }
 
-class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
-  final _formKey = GlobalKey<FormState>();
+class _InsuranceClaimFormDialogState
+    extends ConsumerState<InsuranceClaimFormDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
+  late final TextEditingController _invoiceIdCtl;
+  late final TextEditingController _invoiceNumberCtl;
+  late final TextEditingController _prescriptionNoCtl;
+  late final TextEditingController _prescriberNameCtl;
   late final TextEditingController _authCodeCtl;
   late final TextEditingController _claimNoCtl;
   late final TextEditingController _visitNoCtl;
   late final TextEditingController _serviceDateCtl;
-  late final TextEditingController _prescriptionNoCtl;
-  late final TextEditingController _prescriberNameCtl;
   late final TextEditingController _diagnosisCtl;
   late final TextEditingController _icd10CodeCtl;
-  late final TextEditingController _investigationsCtl;
-  late final TextEditingController _treatmentRecommendationsCtl;
   late final TextEditingController _notesCtl;
+  late final TextEditingController _submittedAtCtl;
+  late final TextEditingController _submittedByUidCtl;
 
-  late ClaimFormStatus _claimFormStatus;
-  late EtimsStatus _etimsStatus;
-
-  late final TextEditingController _claimFormUrlCtl;
-  late final TextEditingController _invoicePdfUrlCtl;
-  late final TextEditingController _etimsNoCtl;
-  late final TextEditingController _etimsUrlCtl;
+  InsuranceMembership? _selectedMembership;
+  ZohoInvoice? _selectedInvoice;
+  Prescription? _selectedPrescription;
 
   String? _membershipId;
-  InsuranceClaimStatus _status = InsuranceClaimStatus.draft;
+  String? _prescriptionId;
+
+  InsuranceClaimStatus _status = InsuranceClaimStatus.uploaded;
   bool _isActive = true;
 
   bool get _isEdit => widget.initial != null;
+
+  String get _selectedPatientId {
+    return (_selectedMembership?.patientId ??
+            widget.initial?.patientId ??
+            widget.patientId ??
+            '')
+        .trim();
+  }
 
   @override
   void initState() {
     super.initState();
 
-    final initial = widget.initial;
+    final InsuranceClaim? initial = widget.initial;
 
-    _authCodeCtl = TextEditingController(text: initial?.authCode ?? '');
-    _claimNoCtl = TextEditingController(text: initial?.claimNo ?? '');
-    _visitNoCtl = TextEditingController(text: initial?.visitNo ?? '');
-    _serviceDateCtl = TextEditingController(text: initial?.serviceDate ?? '');
+    _invoiceIdCtl = TextEditingController(
+      text: initial?.invoiceId ?? widget.invoiceId ?? '',
+    );
+    _invoiceNumberCtl = TextEditingController(
+      text: initial?.invoiceNumber ?? widget.invoiceNumber ?? '',
+    );
     _prescriptionNoCtl = TextEditingController(
       text: initial?.prescriptionNo ?? '',
     );
     _prescriberNameCtl = TextEditingController(
       text: initial?.prescriberName ?? '',
     );
+    _authCodeCtl = TextEditingController(text: initial?.authCode ?? '');
+    _claimNoCtl = TextEditingController(text: initial?.claimNo ?? '');
+    _visitNoCtl = TextEditingController(text: initial?.visitNo ?? '');
+    _serviceDateCtl = TextEditingController(text: initial?.serviceDate ?? '');
     _diagnosisCtl = TextEditingController(text: initial?.diagnosis ?? '');
     _icd10CodeCtl = TextEditingController(text: initial?.icd10Code ?? '');
-    _investigationsCtl = TextEditingController(
-      text: initial?.investigations ?? '',
-    );
-    _treatmentRecommendationsCtl = TextEditingController(
-      text: initial?.treatmentRecommendations ?? '',
-    );
     _notesCtl = TextEditingController(text: initial?.notes ?? '');
-
-    _claimFormStatus = initial?.claimFormStatus ?? ClaimFormStatus.pending;
-    _etimsStatus = initial?.etimsStatus ?? EtimsStatus.pending;
-
-    _claimFormUrlCtl = TextEditingController(text: initial?.claimFormUrl ?? '');
-    _invoicePdfUrlCtl = TextEditingController(
-      text: initial?.invoicePdfUrl ?? '',
+    _submittedAtCtl = TextEditingController(text: initial?.submittedAt ?? '');
+    _submittedByUidCtl = TextEditingController(
+      text: initial?.submittedByUid ?? '',
     );
-    _etimsNoCtl = TextEditingController(text: initial?.etimsNo ?? '');
-    _etimsUrlCtl = TextEditingController(text: initial?.etimsUrl ?? '');
 
-    _status = initial?.status ?? InsuranceClaimStatus.draft;
+    _status = initial?.status ?? InsuranceClaimStatus.uploaded;
     _isActive = initial?.isActive ?? true;
 
-    final requestedMembershipId =
+    final String? requestedMembershipId =
         initial?.membershipId ?? widget.initialMembershipId;
 
-    final exists = widget.memberships.any(
-      (item) => item.membershipId == requestedMembershipId,
-    );
+    _membershipId = _cleanOrNull(requestedMembershipId);
+    _selectedMembership = _findMembership(_membershipId);
 
-    _membershipId = exists ? requestedMembershipId : null;
+    _prescriptionId = _cleanOrNull(initial?.prescriptionId);
+
+    Future<void>.microtask(_loadPrescriptions);
   }
 
   @override
   void dispose() {
+    _invoiceIdCtl.dispose();
+    _invoiceNumberCtl.dispose();
+    _prescriptionNoCtl.dispose();
+    _prescriberNameCtl.dispose();
     _authCodeCtl.dispose();
     _claimNoCtl.dispose();
     _visitNoCtl.dispose();
     _serviceDateCtl.dispose();
-    _prescriptionNoCtl.dispose();
-    _prescriberNameCtl.dispose();
     _diagnosisCtl.dispose();
     _icd10CodeCtl.dispose();
-    _investigationsCtl.dispose();
-    _treatmentRecommendationsCtl.dispose();
     _notesCtl.dispose();
-
-    _claimFormUrlCtl.dispose();
-    _invoicePdfUrlCtl.dispose();
-    _etimsNoCtl.dispose();
-    _etimsUrlCtl.dispose();
-
+    _submittedAtCtl.dispose();
+    _submittedByUidCtl.dispose();
     super.dispose();
   }
 
-  String? _required(String? value, String label) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return '$label is required';
+  InsuranceMembership? _findMembership(String? membershipId) {
+    final String id = (membershipId ?? '').trim();
+    if (id.isEmpty) return null;
+
+    for (final InsuranceMembership membership in widget.memberships) {
+      if (membership.membershipId == id) return membership;
+    }
+
     return null;
   }
 
+  String? _cleanOrNull(String? value) {
+    final String clean = (value ?? '').trim();
+    return clean.isEmpty ? null : clean;
+  }
+
   String? _date(String? value) {
-    final trimmed = value?.trim() ?? '';
+    final String trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) return null;
 
-    final ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
+    final bool ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
     if (!ok) return 'Use YYYY-MM-DD';
 
     return null;
   }
 
   String? _nullable(TextEditingController controller) {
-    final value = controller.text.trim();
+    final String value = controller.text.trim();
     return value.isEmpty ? null : value;
   }
 
@@ -180,72 +215,254 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
     );
   }
 
-  String _membershipLabel(InsuranceMembership membership) {
-    final patient = membership.patientDisplayName?.trim() ?? '';
-    final payer = membership.payerDisplayName?.trim() ?? '';
-    final memberNo = membership.memberNo.trim();
-    final scheme = membership.scheme?.trim() ?? '';
-
-    final parts = <String>[
-      if (patient.isNotEmpty) patient,
-      if (payer.isNotEmpty) payer,
-      if (memberNo.isNotEmpty) memberNo,
-      if (scheme.isNotEmpty) scheme,
-    ];
-
-    return parts.isEmpty ? membership.membershipId : parts.join(' · ');
-  }
-
-  Widget _invoiceSummary(BuildContext context) {
-    final invoice = [
-      widget.invoiceNumber,
-      widget.invoiceId,
-    ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' · ');
-
-    return SizedBox(
-      width: 720,
-      child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            'Invoice: ${invoice.isEmpty ? widget.invoiceId : invoice}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
+  Future<void> _pickMembership() async {
+    final InsuranceMembership? picked = await showDialog<InsuranceMembership>(
+      context: context,
+      builder: (_) => InsuranceMembershipPickerDialog(
+        initialMembershipId: _membershipId,
+        patientId: widget.patientId ?? widget.initial?.patientId,
+        allowedPatientIds: widget.allowedPatientIds,
+        title: 'Select insurance membership',
+        emptyText: 'No active insurance memberships found.',
       ),
     );
+
+    if (!mounted || picked == null) return;
+
+    final String previousPatientId = _selectedPatientId;
+
+    setState(() {
+      _selectedMembership = picked;
+      _membershipId = picked.membershipId;
+
+      if (previousPatientId != picked.patientId.trim()) {
+        _selectedInvoice = null;
+        _invoiceIdCtl.clear();
+        _invoiceNumberCtl.clear();
+
+        _selectedPrescription = null;
+        _prescriptionId = null;
+      }
+    });
+
+    await _loadPrescriptions();
+  }
+
+  Future<void> _pickInvoice() async {
+    final String patientId = _selectedPatientId;
+
+    if (patientId.isEmpty) {
+      _snack('Select a membership first.');
+      return;
+    }
+
+    final InsuranceMembership? membership = _selectedMembership;
+
+    final ZohoInvoice? picked = await showDialog<ZohoInvoice>(
+      context: context,
+      builder: (_) => InvoicePickerDialog(
+        initialInvoiceId: _nullable(_invoiceIdCtl),
+        patientId: patientId,
+        patientNo: membership?.patientNo,
+        accountNumber: membership?.patientNo,
+        title: 'Select patient invoice',
+        emptyText: 'No invoices found for this patient.',
+      ),
+    );
+
+    if (!mounted || picked == null) return;
+
+    setState(() {
+      _selectedInvoice = picked;
+      _invoiceIdCtl.text = picked.invoiceId;
+      _invoiceNumberCtl.text = picked.invoiceNumber ?? '';
+    });
+  }
+
+  Future<void> _loadPrescriptions() {
+    final String patientId = _selectedPatientId;
+
+    if (patientId.isEmpty) return Future<void>.value();
+
+    return ref
+        .read(prescriptionsControllerProvider(patientId).notifier)
+        .load(patientId: patientId, isActive: true);
+  }
+
+  Future<void> _uploadPrescription() async {
+    final String patientId = _selectedPatientId;
+
+    if (patientId.isEmpty) {
+      _snack('Select a membership first.');
+      return;
+    }
+
+    final _PrescriptionUploadMeta? meta =
+        await showDialog<_PrescriptionUploadMeta>(
+          context: context,
+          builder: (_) => const _PrescriptionUploadMetaDialog(),
+        );
+
+    if (!mounted || meta == null) return;
+
+    final FilePickerResult? picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    );
+
+    if (!mounted || picked == null || picked.files.isEmpty) return;
+
+    final PlatformFile file = picked.files.single;
+    final bytes = file.bytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      _snack('Could not read selected file.');
+      return;
+    }
+
+    final String tenantId = ref.read(tenantIdProvider).trim();
+
+    final PrescriptionsController controller = ref.read(
+      prescriptionsControllerProvider(patientId).notifier,
+    );
+
+    await controller.upload(
+      tenantId: tenantId,
+      patientId: patientId,
+      file: PickedPrescriptionFile(
+        fileName: file.name,
+        extension: file.extension ?? 'jpg',
+        bytes: bytes,
+      ),
+      note: meta.note,
+      prescribedOn: meta.prescribedOn,
+    );
+
+    if (!mounted) return;
+
+    final PrescriptionsState state = ref.read(
+      prescriptionsControllerProvider(patientId),
+    );
+
+    if (state.error != null) {
+      _snack(state.error!);
+      return;
+    }
+
+    final Prescription? saved = state.items.isEmpty ? null : state.items.first;
+
+    setState(() {
+      _selectedPrescription = saved;
+      _prescriptionId = saved?.prescriptionId ?? _prescriptionId;
+    });
+
+    _snack('Prescription uploaded.');
+  }
+
+  String _membershipTitle() {
+    final InsuranceMembership? membership = _selectedMembership;
+
+    if (membership != null) return membership.displayTitle;
+
+    final String? id = _cleanOrNull(_membershipId);
+    if (id != null) return id;
+
+    return 'No membership selected';
+  }
+
+  String _membershipSubtitle() {
+    final InsuranceMembership? membership = _selectedMembership;
+
+    if (membership == null) {
+      return 'Select the verified membership. Patient/member details come from the membership record.';
+    }
+
+    final List<String> parts = <String>[
+      membership.payerLabel,
+      if ((membership.scheme ?? '').trim().isNotEmpty)
+        membership.scheme!.trim(),
+      if (membership.memberNo.trim().isNotEmpty)
+        'Member ${membership.memberNo.trim()}',
+      if ((membership.policyNo ?? '').trim().isNotEmpty)
+        'Policy ${membership.policyNo!.trim()}',
+      if ((membership.medicalCardNo ?? '').trim().isNotEmpty)
+        'Card ${membership.medicalCardNo!.trim()}',
+    ];
+
+    return parts.where((String part) => part.trim().isNotEmpty).join(' · ');
+  }
+
+  String _invoiceTitle() {
+    final ZohoInvoice? invoice = _selectedInvoice;
+
+    if (invoice != null) {
+      return invoice.invoiceNumber ?? invoice.invoiceId;
+    }
+
+    final String? invoiceNumber = _nullable(_invoiceNumberCtl);
+    if (invoiceNumber != null) return invoiceNumber;
+
+    final String? invoiceId = _nullable(_invoiceIdCtl);
+    if (invoiceId != null) return invoiceId;
+
+    return 'No invoice selected';
+  }
+
+  String _invoiceSubtitle() {
+    final ZohoInvoice? invoice = _selectedInvoice;
+
+    if (invoice == null) {
+      return 'Optional. Link this claim to the patient invoice.';
+    }
+
+    final List<String> parts = <String>[
+      invoice.customerName,
+      invoice.status,
+      if (invoice.date != null) _formatDate(invoice.date!),
+      '${invoice.currencyCode ?? ''} ${invoice.total}',
+      if (invoice.balance != null) 'Balance ${invoice.balance}',
+    ];
+
+    return parts.where((String p) => p.trim().isNotEmpty).join(' · ');
+  }
+
+  String _formatDate(DateTime value) {
+    final DateTime local = value.toLocal();
+
+    String two(int v) => v.toString().padLeft(2, '0');
+
+    return '${local.year}-${two(local.month)}-${two(local.day)}';
   }
 
   void _submit() {
-    final valid = _formKey.currentState?.validate() ?? false;
+    final bool valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
 
-    final membershipId = _membershipId?.trim() ?? '';
-    if (membershipId.isEmpty) return;
+    final String membershipId = (_membershipId ?? '').trim();
 
-    final input = InsuranceClaimUpsertInput(
+    if (membershipId.isEmpty) {
+      _snack('Select an insurance membership.');
+      return;
+    }
+
+    final InsuranceClaimUpdateInput input = InsuranceClaimUpdateInput(
       membershipId: membershipId,
-      invoiceId: widget.invoiceId,
-      invoiceNumber: widget.invoiceNumber,
+      invoiceId: _nullable(_invoiceIdCtl),
+      invoiceNumber: _nullable(_invoiceNumberCtl),
+      prescriptionId: _cleanOrNull(_prescriptionId),
+      prescriptionNo: _nullable(_prescriptionNoCtl),
+      prescriberName: _nullable(_prescriberNameCtl),
       authCode: _nullable(_authCodeCtl),
       claimNo: _nullable(_claimNoCtl),
       visitNo: _nullable(_visitNoCtl),
       serviceDate: _nullable(_serviceDateCtl),
-      prescriptionNo: _nullable(_prescriptionNoCtl),
-      prescriberName: _nullable(_prescriberNameCtl),
       diagnosis: _nullable(_diagnosisCtl),
       icd10Code: _nullable(_icd10CodeCtl),
-      investigations: _nullable(_investigationsCtl),
-      treatmentRecommendations: _nullable(_treatmentRecommendationsCtl),
       notes: _nullable(_notesCtl),
-      claimFormStatus: _claimFormStatus,
-      claimFormUrl: _nullable(_claimFormUrlCtl),
-      invoicePdfUrl: _nullable(_invoicePdfUrlCtl),
-      etimsStatus: _etimsStatus,
-      etimsNo: _nullable(_etimsNoCtl),
-      etimsUrl: _nullable(_etimsUrlCtl),
+      submittedAt: _nullable(_submittedAtCtl),
+      submittedByUid: _nullable(_submittedByUidCtl),
       status: _status,
       isActive: _isActive,
     );
@@ -253,15 +470,30 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
     Navigator.of(context).pop(input);
   }
 
+  void _snack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasMemberships = widget.memberships.isNotEmpty;
+    final bool hasMembership =
+        (_membershipId ?? '').trim().isNotEmpty || _selectedMembership != null;
+
+    final bool hasInvoice = _nullable(_invoiceIdCtl) != null;
+
+    final String patientId = _selectedPatientId;
+
+    final PrescriptionsState prescriptionState = patientId.isEmpty
+        ? const PrescriptionsState()
+        : ref.watch(prescriptionsControllerProvider(patientId));
 
     return AlertDialog(
       title: Text(_isEdit ? 'Edit insurance claim' : 'Create insurance claim'),
       content: SizedBox(
         width: 760,
-        height: MediaQuery.of(context).size.height * 0.74,
+        height: MediaQuery.of(context).size.height * 0.78,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -269,40 +501,68 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
             child: Wrap(
               spacing: 12,
               runSpacing: 14,
-              children: [
-                _invoiceSummary(context),
+              children: <Widget>[
                 SizedBox(
                   width: 720,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _membershipId,
-                    isExpanded: true,
-                    decoration: _dec(
-                      'Insurance Membership',
-                      helper:
-                          'Select the verified membership. Patient/member details come from this record.',
-                    ),
-                    items: widget.memberships
-                        .map(
-                          (membership) => DropdownMenuItem<String>(
-                            value: membership.membershipId,
-                            child: Text(
-                              _membershipLabel(membership),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    validator: (value) {
-                      if (!hasMemberships) {
-                        return 'No active insurance memberships found';
-                      }
-                      return _required(value, 'Insurance membership');
-                    },
-                    onChanged: hasMemberships
-                        ? (value) => setState(() => _membershipId = value)
-                        : null,
+                  child: _MembershipSelectorTile(
+                    title: _membershipTitle(),
+                    subtitle: _membershipSubtitle(),
+                    hasSelection: hasMembership,
+                    onTap: _pickMembership,
                   ),
                 ),
+                SizedBox(
+                  width: 720,
+                  child: _InvoiceSelectorTile(
+                    title: _invoiceTitle(),
+                    subtitle: _invoiceSubtitle(),
+                    hasSelection: hasInvoice,
+                    onTap: _pickInvoice,
+                  ),
+                ),
+                SizedBox(
+                  width: 720,
+                  child: PrescriptionPickerCard(
+                    patientId: patientId,
+                    prescriptions: prescriptionState.items,
+                    selectedPrescriptionId:
+                        _selectedPrescription?.prescriptionId ??
+                        _prescriptionId,
+                    busy: prescriptionState.busy,
+                    error: prescriptionState.error,
+                    requiredForClaim: true,
+                    onRefresh: patientId.isEmpty ? null : _loadPrescriptions,
+                    onUpload: patientId.isEmpty ? null : _uploadPrescription,
+                    onChanged: (Prescription? prescription) {
+                      setState(() {
+                        _selectedPrescription = prescription;
+                        _prescriptionId = prescription?.prescriptionId;
+                      });
+                    },
+                  ),
+                ),
+                _field(
+                  width: 340,
+                  controller: _invoiceIdCtl,
+                  label: 'Invoice ID',
+                  helper: 'Optional Zoho invoice link.',
+                ),
+                _field(
+                  width: 340,
+                  controller: _invoiceNumberCtl,
+                  label: 'Invoice Number',
+                ),
+                _field(
+                  width: 220,
+                  controller: _prescriptionNoCtl,
+                  label: 'Prescription No',
+                ),
+                _field(
+                  width: 240,
+                  controller: _prescriberNameCtl,
+                  label: 'Prescriber Name',
+                ),
+                const SizedBox(width: 720, child: Divider()),
                 _field(
                   width: 220,
                   controller: _authCodeCtl,
@@ -317,16 +577,6 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                   hint: 'YYYY-MM-DD',
                   validator: _date,
                 ),
-                _field(
-                  width: 220,
-                  controller: _prescriptionNoCtl,
-                  label: 'Prescription No',
-                ),
-                _field(
-                  width: 240,
-                  controller: _prescriberNameCtl,
-                  label: 'Prescriber Name',
-                ),
                 const SizedBox(width: 720, child: Divider()),
                 _field(
                   width: 340,
@@ -340,82 +590,22 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                 ),
                 _field(
                   width: 720,
-                  controller: _investigationsCtl,
-                  label: 'Investigations',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _field(
-                  width: 720,
-                  controller: _treatmentRecommendationsCtl,
-                  label: 'Treatment recommendations',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                const SizedBox(width: 720, child: Divider()),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<ClaimFormStatus>(
-                    initialValue: _claimFormStatus,
-                    isExpanded: true,
-                    decoration: _dec('Claim Form'),
-                    items: ClaimFormStatus.values
-                        .map(
-                          (status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status.label),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _claimFormStatus = value);
-                    },
-                  ),
-                ),
-                _field(
-                  width: 480,
-                  controller: _claimFormUrlCtl,
-                  label: 'Claim Form URL',
-                ),
-                _field(
-                  width: 480,
-                  controller: _invoicePdfUrlCtl,
-                  label: 'Invoice PDF URL',
-                ),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<EtimsStatus>(
-                    initialValue: _etimsStatus,
-                    isExpanded: true,
-                    decoration: _dec('eTIMS Status'),
-                    items: EtimsStatus.values
-                        .map(
-                          (status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status.label),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _etimsStatus = value);
-                    },
-                  ),
-                ),
-                _field(width: 220, controller: _etimsNoCtl, label: 'eTIMS No'),
-                _field(
-                  width: 480,
-                  controller: _etimsUrlCtl,
-                  label: 'eTIMS URL',
-                ),
-                const SizedBox(width: 720, child: Divider()),
-                _field(
-                  width: 720,
                   controller: _notesCtl,
                   label: 'Notes',
                   minLines: 2,
                   maxLines: 4,
+                ),
+                const SizedBox(width: 720, child: Divider()),
+                _field(
+                  width: 340,
+                  controller: _submittedAtCtl,
+                  label: 'Submitted At',
+                  helper: 'Optional. Keep blank until actually submitted.',
+                ),
+                _field(
+                  width: 340,
+                  controller: _submittedByUidCtl,
+                  label: 'Submitted By UID',
                 ),
                 SizedBox(
                   width: 260,
@@ -425,28 +615,31 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
                     decoration: _dec('Claim Status'),
                     items: InsuranceClaimStatus.values
                         .map(
-                          (status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status.label),
-                          ),
+                          (InsuranceClaimStatus status) =>
+                              DropdownMenuItem<InsuranceClaimStatus>(
+                                value: status,
+                                child: Text(status.label),
+                              ),
                         )
                         .toList(growable: false),
-                    onChanged: (value) {
+                    onChanged: (InsuranceClaimStatus? value) {
                       if (value == null) return;
                       setState(() => _status = value);
                     },
                   ),
                 ),
                 SizedBox(
-                  width: 420,
-                  child: SwitchListTile(
+                  width: 220,
+                  child: SwitchListTile.adaptive(
                     value: _isActive,
-                    onChanged: (value) => setState(() => _isActive = value),
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Active claim'),
+                    title: const Text('Active'),
                     subtitle: const Text(
                       'Inactive claims are retained for audit/history.',
                     ),
+                    onChanged: (bool value) {
+                      setState(() => _isActive = value);
+                    },
                   ),
                 ),
               ],
@@ -454,16 +647,204 @@ class _InsuranceClaimFormDialogState extends State<InsuranceClaimFormDialog> {
           ),
         ),
       ),
-      actions: [
+      actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: hasMemberships ? _submit : null,
-          child: Text(_isEdit ? 'Save claim' : 'Create claim'),
+          onPressed: _submit,
+          child: Text(_isEdit ? 'Save claim' : 'Continue'),
         ),
       ],
     );
+  }
+}
+
+class _MembershipSelectorTile extends StatelessWidget {
+  const _MembershipSelectorTile({
+    required this.title,
+    required this.subtitle,
+    required this.hasSelection,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool hasSelection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: hasSelection
+          ? scheme.primaryContainer.withValues(alpha: 0.25)
+          : scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        leading: Icon(
+          hasSelection
+              ? Icons.health_and_safety
+              : Icons.health_and_safety_outlined,
+          color: hasSelection ? scheme.primary : null,
+        ),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: FilledButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.search),
+          label: Text(hasSelection ? 'Change' : 'Select'),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _InvoiceSelectorTile extends StatelessWidget {
+  const _InvoiceSelectorTile({
+    required this.title,
+    required this.subtitle,
+    required this.hasSelection,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool hasSelection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: hasSelection
+          ? scheme.secondaryContainer.withValues(alpha: 0.45)
+          : scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        leading: Icon(
+          hasSelection ? Icons.receipt_long : Icons.receipt_long_outlined,
+          color: hasSelection ? scheme.primary : null,
+        ),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: FilledButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.search),
+          label: Text(hasSelection ? 'Change' : 'Select'),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _PrescriptionUploadMeta {
+  const _PrescriptionUploadMeta({this.note, this.prescribedOn});
+
+  final String? note;
+  final String? prescribedOn;
+}
+
+class _PrescriptionUploadMetaDialog extends StatefulWidget {
+  const _PrescriptionUploadMetaDialog();
+
+  @override
+  State<_PrescriptionUploadMetaDialog> createState() =>
+      _PrescriptionUploadMetaDialogState();
+}
+
+class _PrescriptionUploadMetaDialogState
+    extends State<_PrescriptionUploadMetaDialog> {
+  final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _prescribedOnController = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _prescribedOnController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Prescription details'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+              controller: _prescribedOnController,
+              decoration: const InputDecoration(
+                labelText: 'Prescribed on',
+                hintText: 'YYYY-MM-DD',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _noteController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Note',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            final String? prescribedOn = _clean(_prescribedOnController.text);
+
+            if (prescribedOn != null &&
+                !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(prescribedOn)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Date must be YYYY-MM-DD')),
+              );
+              return;
+            }
+
+            Navigator.of(context).pop(
+              _PrescriptionUploadMeta(
+                note: _clean(_noteController.text),
+                prescribedOn: prescribedOn,
+              ),
+            );
+          },
+          icon: const Icon(Icons.check),
+          label: const Text('Continue'),
+        ),
+      ],
+    );
+  }
+
+  String? _clean(String value) {
+    final String clean = value.trim();
+    return clean.isEmpty ? null : clean;
   }
 }

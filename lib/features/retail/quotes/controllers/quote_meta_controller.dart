@@ -460,6 +460,56 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
+  void setClinicalContext({
+    required SalesDocumentPatientSnapshot patientSnapshot,
+    required QuotePaymentContext paymentContext,
+    String? membershipId,
+    ZohoContact? payerContact,
+    Prescription? prescription,
+
+    /// Fallback when the dialog has an initial prescription ID but the full
+    /// Prescription object was not re-selected/hydrated.
+    String? prescriptionId,
+  }) {
+    final String? resolvedMembershipId = _resolveMembershipId(
+      membershipId: membershipId,
+      patientSnapshot: patientSnapshot,
+    );
+
+    final bool isInsurance = paymentContext == QuotePaymentContext.insurance;
+
+    final ZohoContact? nextContact = isInsurance
+        ? _requiredInsurancePayerContact(payerContact)
+        : state.contact;
+
+    final String? resolvedPrescriptionId =
+        _clean(prescription?.prescriptionId) ?? _clean(prescriptionId);
+
+    final String? resolvedPrescriptionLabel = prescription == null
+        ? (resolvedPrescriptionId == null ? null : state.prescriptionLabel)
+        : _prescriptionLabel(prescription);
+
+    state = state.copyWith(
+      saleContext: QuoteSaleContext.clinical,
+      paymentContext: isInsurance
+          ? QuotePaymentContext.insurance
+          : QuotePaymentContext.directPay,
+      contact: nextContact,
+      patientSnapshot: patientSnapshot,
+
+      // Membership is only retained for insurance quotes.
+      membershipId: isInsurance ? resolvedMembershipId : null,
+      clearMembershipId: !isInsurance || resolvedMembershipId == null,
+
+      // Prescription is retained for all clinical quotes.
+      // It is required for insurance, optional for direct-pay.
+      prescriptionId: resolvedPrescriptionId,
+      prescriptionLabel: resolvedPrescriptionLabel,
+      clearPrescriptionId: resolvedPrescriptionId == null,
+      clearPrescriptionLabel: resolvedPrescriptionId == null,
+    );
+  }
+
   void clearPatientContext() {
     state = state.copyWith(
       paymentContext: QuotePaymentContext.directPay,

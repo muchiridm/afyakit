@@ -41,9 +41,13 @@ class _InsuranceMembershipPickerCardState
     extends ConsumerState<InsuranceMembershipPickerCard> {
   final TextEditingController _searchCtl = TextEditingController();
 
+  String? _selectedMembershipId;
+
   @override
   void initState() {
     super.initState();
+
+    _selectedMembershipId = _cleanOrNull(widget.initialMembershipId);
 
     Future<void>.microtask(_load);
   }
@@ -55,7 +59,16 @@ class _InsuranceMembershipPickerCardState
     final String oldPatientId = _clean(oldWidget.patientId);
     final String nextPatientId = _clean(widget.patientId);
 
+    final String? oldInitialId = _cleanOrNull(oldWidget.initialMembershipId);
+    final String? nextInitialId = _cleanOrNull(widget.initialMembershipId);
+
+    if (oldInitialId != nextInitialId &&
+        nextInitialId != _selectedMembershipId) {
+      _selectedMembershipId = nextInitialId;
+    }
+
     if (oldPatientId != nextPatientId) {
+      _selectedMembershipId = nextInitialId;
       Future<void>.microtask(_load);
     }
   }
@@ -80,6 +93,11 @@ class _InsuranceMembershipPickerCardState
   }
 
   String _clean(String? value) => (value ?? '').trim();
+
+  String? _cleanOrNull(String? value) {
+    final String clean = _clean(value);
+    return clean.isEmpty ? null : clean;
+  }
 
   bool _contains(String source, String query) {
     final String q = query.trim().toLowerCase();
@@ -131,6 +149,13 @@ class _InsuranceMembershipPickerCardState
   }
 
   void _select(InsuranceMembership membership) {
+    final String membershipId = membership.membershipId.trim();
+    if (membershipId.isEmpty) return;
+
+    setState(() {
+      _selectedMembershipId = membershipId;
+    });
+
     widget.onSelected?.call(membership);
   }
 
@@ -183,7 +208,7 @@ class _InsuranceMembershipPickerCardState
 
                         final bool selected =
                             membership.membershipId.trim() ==
-                            _clean(widget.initialMembershipId);
+                            _clean(_selectedMembershipId);
 
                         return _MembershipTile(
                           membership: membership,
@@ -335,8 +360,14 @@ class _MembershipTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
     return ListTile(
+      selected: selected,
+      selectedTileColor: scheme.primaryContainer.withValues(alpha: 0.35),
       leading: CircleAvatar(
+        backgroundColor: selected ? scheme.primaryContainer : null,
+        foregroundColor: selected ? scheme.onPrimaryContainer : null,
         child: Icon(selected ? Icons.check : Icons.health_and_safety_outlined),
       ),
       title: Text(

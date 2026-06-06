@@ -25,9 +25,13 @@ enum QuoteSaleContext {
     };
   }
 
-  bool get requiresPatient => this == QuoteSaleContext.clinical;
+  bool get isClinical => this == QuoteSaleContext.clinical;
 
-  bool get requiresDeliveryAddress => this == QuoteSaleContext.clinical;
+  bool get isGeneral => this == QuoteSaleContext.general;
+
+  bool get requiresPatient => isClinical;
+
+  bool get requiresDeliveryAddress => isClinical;
 
   static QuoteSaleContext fromApi(Object? value) {
     final String text = (value ?? '').toString().trim().toLowerCase();
@@ -64,9 +68,11 @@ enum QuotePaymentContext {
     };
   }
 
+  bool get isDirectPay => this == QuotePaymentContext.directPay;
+
   bool get isInsurance => this == QuotePaymentContext.insurance;
 
-  bool get requiresMembership => this == QuotePaymentContext.insurance;
+  bool get requiresMembership => isInsurance;
 
   static QuotePaymentContext fromApi(Object? value) {
     final String text = (value ?? '').toString().trim().toLowerCase();

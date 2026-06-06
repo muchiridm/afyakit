@@ -37,13 +37,12 @@ class PrescriptionPickerCard extends StatelessWidget {
         .where((Prescription p) => p.isActive)
         .toList(growable: false);
 
-    final List<Prescription> selectable = requiredForClaim
-        ? active
-              .where(
-                (Prescription p) => p.status == PrescriptionStatus.verified,
-              )
-              .toList(growable: false)
-        : active;
+    // Important:
+    // Do NOT hide uploaded / pending-review prescriptions in insurance mode.
+    // Newly uploaded prescriptions are usually not verified yet, but staff still
+    // need to see and select them. Verification/submission rules should be
+    // handled by workflow validation, not by making the upload disappear.
+    final List<Prescription> selectable = active;
 
     final String? selected =
         selectable.any(
@@ -117,7 +116,7 @@ class PrescriptionPickerCard extends StatelessWidget {
               )
             else
               DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: requiredForClaim
@@ -125,10 +124,7 @@ class PrescriptionPickerCard extends StatelessWidget {
                       : 'Prescription',
                   border: const OutlineInputBorder(),
                   errorText: error,
-                  helperText: _helperText(
-                    activeCount: active.length,
-                    selectableCount: selectable.length,
-                  ),
+                  helperText: _helperText(activeCount: active.length),
                 ),
                 items: <DropdownMenuItem<String>>[
                   const DropdownMenuItem<String>(
@@ -160,19 +156,14 @@ class PrescriptionPickerCard extends StatelessWidget {
     );
   }
 
-  String _helperText({required int activeCount, required int selectableCount}) {
+  String _helperText({required int activeCount}) {
     if (!_hasPatient) return 'Select a patient first';
 
-    if (requiredForClaim) {
-      if (activeCount == 0) return 'No active prescriptions found';
-      if (selectableCount == 0) {
-        return 'Insurance claims require a verified prescription';
-      }
-
-      return 'Required for insurance claims';
-    }
-
     if (activeCount == 0) return 'No active prescriptions found';
+
+    if (requiredForClaim) {
+      return 'Required for insurance claims. Prefer a verified prescription.';
+    }
 
     return 'Optional for direct-pay quotes';
   }

@@ -1,14 +1,14 @@
 // lib/features/retail/quotes/widgets/quote_detail_screen.dart
-// UPDATED: dumb UI (delegates to QuoteActionController), capability-gated via AuthUserX
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 
-import 'package:afyakit/features/retail/quotes/extensions/quote_action_enum.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_action_controller.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_action_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
@@ -18,8 +18,6 @@ import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
-
-import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,11 +50,12 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     BuildContext context, {
     required String quoteId,
   }) async {
-    final res = await Navigator.of(context).push<QuoteEditorResult>(
-      MaterialPageRoute(
-        builder: (_) => QuoteEditorScreen(editingQuoteId: quoteId),
-      ),
-    );
+    final QuoteEditorResult? res = await Navigator.of(context)
+        .push<QuoteEditorResult>(
+          MaterialPageRoute<QuoteEditorResult>(
+            builder: (_) => QuoteEditorScreen(editingQuoteId: quoteId),
+          ),
+        );
 
     if (!mounted) return;
 
@@ -72,7 +71,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final quoteId = widget.quoteId.trim();
+    final String quoteId = widget.quoteId.trim();
 
     if (quoteId.isEmpty) {
       return const AppPage(
@@ -86,12 +85,15 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       );
     }
 
-    final quoteAsync = ref.watch(zohoQuoteProvider(quoteId));
+    final AsyncValue<ZohoQuote> quoteAsync = ref.watch(
+      zohoQuoteProvider(quoteId),
+    );
     final me = ref.watch(currentUserProvider).valueOrNull;
 
-    final canManage = me?.canManageQuotes ?? false;
-
-    final actionsCtl = ref.read(quoteActionControllerProvider);
+    final bool canManage = me?.canManageQuotes ?? false;
+    final QuoteActionController actionsCtl = ref.read(
+      quoteActionControllerProvider,
+    );
 
     return AppPage(
       title: 'Quote',
@@ -115,13 +117,13 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }) {
     return quoteAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => SalesDocErrorState(
+      error: (Object e, _) => SalesDocErrorState(
         title: 'Failed to load quote',
         message: e.toString(),
       ),
-      data: (q) => RefreshIndicator(
+      data: (ZohoQuote quote) => RefreshIndicator(
         onRefresh: () => actionsCtl.refresh(quoteId),
-        child: _buildDetail(q),
+        child: _buildDetail(quote),
       ),
     );
   }
@@ -133,10 +135,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     required bool canManage,
     required String quoteId,
   }) {
-    final quote = quoteAsync.valueOrNull;
-    final hasInsuranceContext = quote?.hasInsuranceContext == true;
-
-    final actions = <Widget>[
+    final List<Widget> actions = <Widget>[
       IconButton(
         tooltip: _acting ? 'Working…' : 'PDF',
         icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -148,12 +147,12 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
     if (!canManage) return actions;
 
-    actions.addAll([
+    actions.addAll(<Widget>[
       PopupMenuButton<QuoteAction>(
         tooltip: 'Actions',
         enabled: !_acting,
-        onSelected: (a) {
-          switch (a) {
+        onSelected: (QuoteAction action) {
+          switch (action) {
             case QuoteAction.send:
               _run(() => actionsCtl.sendQuote(context, quoteId: quoteId));
               break;
@@ -167,25 +166,22 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
               break;
           }
         },
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: QuoteAction.send,
-            child: Text('Send quote'),
-          ),
-          const PopupMenuItem(
-            value: QuoteAction.markSent,
-            child: Text('Mark as sent'),
-          ),
-          const PopupMenuDivider(),
-          PopupMenuItem(
-            value: QuoteAction.invoice,
-            child: Text(
-              hasInsuranceContext
-                  ? 'Convert to invoice + claim'
-                  : 'Convert to invoice',
-            ),
-          ),
-        ],
+        itemBuilder: (BuildContext context) =>
+            const <PopupMenuEntry<QuoteAction>>[
+              PopupMenuItem<QuoteAction>(
+                value: QuoteAction.send,
+                child: Text('Send quote'),
+              ),
+              PopupMenuItem<QuoteAction>(
+                value: QuoteAction.markSent,
+                child: Text('Mark as sent'),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem<QuoteAction>(
+                value: QuoteAction.invoice,
+                child: Text('Convert to invoice'),
+              ),
+            ],
         icon: const Icon(Icons.more_vert),
       ),
       IconButton(
@@ -198,14 +194,19 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     return actions;
   }
 
-  Widget _buildDetail(ZohoQuote q) {
-    final meta = _buildMeta(q);
-    final currency = _currency(meta.currencyCode);
-    final lines = _buildLines(q);
+  Widget _buildDetail(ZohoQuote quote) {
+    final SalesDocMetaVm meta = _buildMeta(quote);
+    final String currency = _currency(meta.currencyCode);
+    final List<SalesDocLineVm> lines = _buildLines(quote);
+
+    final bool hasClinicalContext =
+        quote.hasPatientContext ||
+        quote.hasInsuranceContext ||
+        _clean(quote.resolvedPrescriptionId) != null;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      children: [
+      children: <Widget>[
         if (_acting) const LinearProgressIndicator(minHeight: 2),
         SalesDocHeader(
           title: '',
@@ -213,13 +214,14 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
         ),
-        if (q.hasPatientContext || q.hasInsuranceContext) ...[
+        if (hasClinicalContext) ...<Widget>[
           const Divider(height: 1),
-          _PatientInsuranceCard(q: q),
+          _PatientInsurancePrescriptionCard(q: quote),
         ],
-        if (q.deliveryAddress != null && q.deliveryAddress!.isUsable) ...[
+        if (quote.deliveryAddress != null &&
+            quote.deliveryAddress!.isUsable) ...<Widget>[
           const Divider(height: 1),
-          _DeliveryAddressCard(q: q),
+          _DeliveryAddressCard(q: quote),
         ],
         const Divider(height: 1),
         SizedBox(
@@ -240,11 +242,11 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }
 
   static SalesDocMetaVm _buildMeta(ZohoQuote q) {
-    final party = q.customerName.trim().isEmpty ? 'Customer' : q.customerName;
-
-    final docNo = _bestDocNumber(q);
-
-    final currency = (q.currencyCode ?? '').trim();
+    final String party = q.customerName.trim().isEmpty
+        ? 'Customer'
+        : q.customerName;
+    final String docNo = _bestDocNumber(q);
+    final String currency = (q.currencyCode ?? '').trim();
 
     return SalesDocMetaVm(
       partyName: party,
@@ -258,95 +260,101 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }
 
   static String _bestDocNumber(ZohoQuote q) {
-    final acc = (q.accountNumber ?? '').trim();
+    final String acc = (q.accountNumber ?? '').trim();
     if (acc.isNotEmpty) return acc;
 
-    final id = q.quoteId.trim();
+    final String id = q.quoteId.trim();
     return id.isEmpty ? '-' : id;
   }
 
   static List<SalesDocLineVm> _buildLines(ZohoQuote q) {
     return q.lineItems
         .map(
-          (li) => SalesDocLineVm(
-            title: _lineTitle(li),
-            subtitle: _lineSubtitle(li),
-            qty: li.quantity,
-            rate: li.rate,
+          (ZohoQuoteLineItem line) => SalesDocLineVm(
+            title: _lineTitle(line),
+            subtitle: _lineSubtitle(line),
+            qty: line.quantity,
+            rate: line.rate,
           ),
         )
         .toList(growable: false);
   }
 
   static String _currency(String code) {
-    final c = code.trim();
+    final String c = code.trim();
     return c.isEmpty ? 'KES' : c;
   }
 
-  static String _lineTitle(ZohoQuoteLineItem li) {
-    final name = _cleanZohoLineText(li.name);
-    final v = (name ?? '').trim();
+  static String _lineTitle(ZohoQuoteLineItem line) {
+    final String? name = _cleanZohoLineText(line.name);
+    final String value = (name ?? '').trim();
 
-    return v.isEmpty ? 'Item' : v;
+    return value.isEmpty ? 'Item' : value;
   }
 
-  static String? _lineSubtitle(ZohoQuoteLineItem li) {
-    final desc = _cleanZohoLineText(li.description);
-    final v = (desc ?? '').trim();
+  static String? _lineSubtitle(ZohoQuoteLineItem line) {
+    final String? desc = _cleanZohoLineText(line.description);
+    final String value = (desc ?? '').trim();
 
-    return v.isEmpty ? null : v;
+    return value.isEmpty ? null : value;
   }
 
-  static String? _cleanZohoLineText(Object? v) {
-    final t = (v ?? '').toString().trim();
+  static String? _cleanZohoLineText(Object? value) {
+    final String text = (value ?? '').toString().trim();
 
-    if (t.isEmpty) return null;
-    if (t.toLowerCase() == 'item') return null;
+    if (text.isEmpty) return null;
+    if (text.toLowerCase() == 'item') return null;
 
-    return t;
+    return text;
   }
 }
 
-class _PatientInsuranceCard extends StatelessWidget {
-  const _PatientInsuranceCard({required this.q});
+class _PatientInsurancePrescriptionCard extends StatelessWidget {
+  const _PatientInsurancePrescriptionCard({required this.q});
 
   final ZohoQuote q;
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
     final patient = q.patientSnapshot;
 
-    final patientName = (patient?.fullName ?? '').trim();
-    final patientNo = (patient?.patientNo ?? '').trim();
-    final relationship = (patient?.relationship ?? '').trim();
+    final String patientName = (patient?.fullName ?? '').trim();
+    final String patientNo = (patient?.patientNo ?? '').trim();
+    final String relationship = (patient?.relationship ?? '').trim();
 
-    final payerName = (patient?.payerName ?? '').trim();
-    final memberNo = (patient?.memberNo ?? '').trim();
-    final scheme = (patient?.scheme ?? '').trim();
-    final membershipId = (q.resolvedMembershipId ?? '').trim();
+    final String payerName = (patient?.payerName ?? '').trim();
+    final String memberNo = (patient?.memberNo ?? '').trim();
+    final String scheme = (patient?.scheme ?? '').trim();
+    final String membershipId = (q.resolvedMembershipId ?? '').trim();
 
-    final hasPatient = patientName.isNotEmpty || patientNo.isNotEmpty;
-    final hasInsurance =
+    final String prescriptionId = (q.resolvedPrescriptionId ?? '').trim();
+
+    final bool hasPatient = patientName.isNotEmpty || patientNo.isNotEmpty;
+    final bool hasInsurance =
         payerName.isNotEmpty ||
         memberNo.isNotEmpty ||
         scheme.isNotEmpty ||
         membershipId.isNotEmpty;
 
-    if (!hasPatient && !hasInsurance) return const SizedBox.shrink();
+    final bool hasPrescription = prescriptionId.isNotEmpty;
+    final bool shouldWarnMissingPrescription = hasInsurance && !hasPrescription;
+
+    if (!hasPatient && !hasInsurance && !hasPrescription) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Wrap(
         spacing: 18,
         runSpacing: 12,
-        children: [
+        children: <Widget>[
           if (hasPatient)
             _InfoBlock(
               icon: Icons.person_outline,
               title: 'Patient',
               primary: patientName.isNotEmpty ? patientName : patientNo,
-              secondary: _joinClean([
+              secondary: _joinClean(<String>[
                 if (patientNo.isNotEmpty && patientName.isNotEmpty) patientNo,
                 if (relationship.isNotEmpty) relationship,
               ]),
@@ -356,18 +364,37 @@ class _PatientInsuranceCard extends StatelessWidget {
               icon: Icons.health_and_safety_outlined,
               title: 'Insurance',
               primary: payerName.isNotEmpty ? payerName : 'Insurance claim',
-              secondary: _joinClean([
+              secondary: _joinClean(<String>[
                 if (memberNo.isNotEmpty) 'Member $memberNo',
                 if (scheme.isNotEmpty) scheme,
+                if (membershipId.isNotEmpty) 'Membership linked',
               ]),
             ),
+          _InfoBlock(
+            icon: hasPrescription
+                ? Icons.verified_outlined
+                : Icons.warning_amber_outlined,
+            title: 'Prescription',
+            primary: hasPrescription
+                ? 'Prescription linked'
+                : 'No prescription linked',
+            secondary: hasPrescription
+                ? 'Rx ID: $prescriptionId'
+                : shouldWarnMissingPrescription
+                ? 'This insurance quote has no prescription_id returned by the API.'
+                : 'Optional for this quote.',
+            warning: shouldWarnMissingPrescription,
+          ),
         ],
       ),
     );
   }
 
   static String _joinClean(List<String> parts) {
-    return parts.map((e) => e.trim()).where((e) => e.isNotEmpty).join(' · ');
+    return parts
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .join(' · ');
   }
 }
 
@@ -377,39 +404,57 @@ class _InfoBlock extends StatelessWidget {
     required this.title,
     required this.primary,
     required this.secondary,
+    this.warning = false,
   });
 
   final IconData icon;
   final String title;
   final String primary;
   final String secondary;
+  final bool warning;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+
+    final Color iconColor = warning ? scheme.error : scheme.onSurfaceVariant;
+    final Color textColor = warning ? scheme.error : scheme.onSurface;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 240, maxWidth: 420),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18),
+        children: <Widget>[
+          Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: <Widget>[
                 Text(
                   title,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
+                    color: textColor,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(primary, style: theme.textTheme.bodyMedium),
-                if (secondary.trim().isNotEmpty) ...[
+                Text(
+                  primary,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: textColor,
+                    fontWeight: warning ? FontWeight.w700 : null,
+                  ),
+                ),
+                if (secondary.trim().isNotEmpty) ...<Widget>[
                   const SizedBox(height: 3),
-                  Text(secondary, style: theme.textTheme.bodySmall),
+                  Text(
+                    secondary,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: warning ? scheme.error : null,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -428,29 +473,29 @@ class _DeliveryAddressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = q.deliveryAddress!;
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
-    final recipient = a.recipientDisplay.trim();
-    final singleLine = a.singleLine.trim();
-    final label = (a.label ?? '').trim();
-    final placeName = (a.placeName ?? '').trim();
+    final String recipient = a.recipientDisplay.trim();
+    final String singleLine = a.singleLine.trim();
+    final String label = (a.label ?? '').trim();
+    final String placeName = (a.placeName ?? '').trim();
 
-    final helperParts = <String>[
+    final List<String> helperParts = <String>[
       if (label.isNotEmpty) label,
       if (placeName.isNotEmpty && placeName != label) placeName,
     ];
 
-    final helper = helperParts.join(' • ').trim();
+    final String helper = helperParts.join(' • ').trim();
 
-    final showCoordsOnly = singleLine.isEmpty && a.hasCoordinates;
+    final bool showCoordsOnly = singleLine.isEmpty && a.hasCoordinates;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           Row(
-            children: [
+            children: <Widget>[
               const Icon(Icons.location_on_outlined, size: 18),
               const SizedBox(width: 8),
               Text(
@@ -473,11 +518,11 @@ class _DeliveryAddressCard extends StatelessWidget {
             const SizedBox(height: 6),
           if (singleLine.isNotEmpty)
             Text(singleLine, style: theme.textTheme.bodyMedium),
-          if (helper.isNotEmpty) ...[
+          if (helper.isNotEmpty) ...<Widget>[
             const SizedBox(height: 6),
             Text(helper, style: theme.textTheme.bodySmall),
           ],
-          if (showCoordsOnly) ...[
+          if (showCoordsOnly) ...<Widget>[
             const SizedBox(height: 6),
             Text(
               'Pinned map location available',
@@ -497,16 +542,21 @@ class _HeaderStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = status.trim();
+    final String s = status.trim();
     if (s.isEmpty) return const SizedBox.shrink();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      children: <Widget>[
         SalesDocLeadingIcon(status: s, radius: 14),
         const SizedBox(width: 8),
         SalesDocStatusChip(status: s),
       ],
     );
   }
+}
+
+String? _clean(String? value) {
+  final String text = (value ?? '').trim();
+  return text.isEmpty ? null : text;
 }

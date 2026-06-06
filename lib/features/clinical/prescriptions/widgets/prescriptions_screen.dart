@@ -2,17 +2,16 @@
 
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
+import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
-import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PrescriptionsScreen extends ConsumerStatefulWidget {
@@ -207,7 +206,6 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                       child: _SelectedPatientHeader(patient: _selectedPatient!),
                     ),
                   ],
-
                   if (state.error != null && state.error!.trim().isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -216,7 +214,6 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                       ),
                       child: _ErrorBanner(message: state.error!),
                     ),
-
                   if (state.isLoading && state.items.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(32),
@@ -238,7 +235,13 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                                 ),
                                 child: _PrescriptionTile(
                                   prescription: p,
+                                  busy: state.busy,
                                   onOpen: () => _openPrescription(
+                                    context: context,
+                                    controller: controller,
+                                    prescription: p,
+                                  ),
+                                  onChangeStatus: () => _changeStatus(
                                     context: context,
                                     controller: controller,
                                     prescription: p,
@@ -343,6 +346,43 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     }
   }
 
+  Future<void> _changeStatus({
+    required BuildContext context,
+    required PrescriptionsController controller,
+    required Prescription prescription,
+  }) async {
+    final PrescriptionStatus? nextStatus = await showDialog<PrescriptionStatus>(
+      context: context,
+      builder: (_) =>
+          _PrescriptionStatusDialog(currentStatus: prescription.status),
+    );
+
+    if (!context.mounted || nextStatus == null) return;
+
+    if (nextStatus == prescription.status) {
+      _showSnack(context, 'Prescription status unchanged.');
+      return;
+    }
+
+    final Prescription? updated = await controller.update(
+      prescription: prescription,
+      input: PrescriptionUpdateInput(status: nextStatus, isActive: true),
+    );
+
+    if (!context.mounted) return;
+
+    if (updated == null) {
+      final error = ref
+          .read(prescriptionsControllerProvider(prescription.patientId))
+          .error;
+
+      _showSnack(context, error ?? 'Failed to update prescription status.');
+      return;
+    }
+
+    _showSnack(context, 'Prescription marked as ${nextStatus.label}.');
+  }
+
   Future<void> _confirmDelete({
     required BuildContext context,
     required PrescriptionsController controller,
@@ -414,12 +454,16 @@ class _SelectedPatientHeader extends StatelessWidget {
 class _PrescriptionTile extends StatelessWidget {
   const _PrescriptionTile({
     required this.prescription,
+    required this.busy,
     required this.onOpen,
+    required this.onChangeStatus,
     required this.onDelete,
   });
 
   final Prescription prescription;
+  final bool busy;
   final VoidCallback onOpen;
+  final VoidCallback onChangeStatus;
   final VoidCallback onDelete;
 
   @override
@@ -451,35 +495,53 @@ class _PrescriptionTile extends StatelessWidget {
           ),
         ),
         isThreeLine: true,
-        trailing: PopupMenuButton<_PrescriptionAction>(
-          onSelected: (action) {
-            switch (action) {
-              case _PrescriptionAction.open:
-                onOpen();
-                break;
-              case _PrescriptionAction.delete:
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: _PrescriptionAction.open,
-              child: ListTile(
-                leading: Icon(Icons.open_in_new),
-                title: Text('Open'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _PrescriptionAction.delete,
-              child: ListTile(
-                leading: Icon(Icons.delete_outline),
-                title: Text('Delete'),
-              ),
+        trailing: Wrap(
+          spacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _PrescriptionStatusChip(status: prescription.status),
+            PopupMenuButton<_PrescriptionAction>(
+              enabled: !busy,
+              onSelected: (action) {
+                switch (action) {
+                  case _PrescriptionAction.open:
+                    onOpen();
+                    break;
+                  case _PrescriptionAction.changeStatus:
+                    onChangeStatus();
+                    break;
+                  case _PrescriptionAction.delete:
+                    onDelete();
+                    break;
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _PrescriptionAction.open,
+                  child: ListTile(
+                    leading: Icon(Icons.open_in_new),
+                    title: Text('Open'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _PrescriptionAction.changeStatus,
+                  child: ListTile(
+                    leading: Icon(Icons.fact_check_outlined),
+                    title: Text('Change status'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _PrescriptionAction.delete,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('Delete'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        onTap: onOpen,
+        onTap: busy ? null : onOpen,
       ),
     );
   }
@@ -501,7 +563,114 @@ class _PrescriptionTile extends StatelessWidget {
   }
 }
 
-enum _PrescriptionAction { open, delete }
+class _PrescriptionStatusChip extends StatelessWidget {
+  const _PrescriptionStatusChip({required this.status});
+
+  final PrescriptionStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text(status.label),
+      avatar: Icon(_iconFor(status), size: 18),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  static IconData _iconFor(PrescriptionStatus status) {
+    switch (status) {
+      case PrescriptionStatus.uploaded:
+        return Icons.cloud_upload_outlined;
+      case PrescriptionStatus.pendingReview:
+        return Icons.pending_actions_outlined;
+      case PrescriptionStatus.verified:
+        return Icons.verified_outlined;
+      case PrescriptionStatus.rejected:
+        return Icons.block_outlined;
+      case PrescriptionStatus.used:
+        return Icons.task_alt_outlined;
+      case PrescriptionStatus.expired:
+        return Icons.event_busy_outlined;
+    }
+  }
+}
+
+class _PrescriptionStatusDialog extends StatefulWidget {
+  const _PrescriptionStatusDialog({required this.currentStatus});
+
+  final PrescriptionStatus currentStatus;
+
+  @override
+  State<_PrescriptionStatusDialog> createState() =>
+      _PrescriptionStatusDialogState();
+}
+
+class _PrescriptionStatusDialogState extends State<_PrescriptionStatusDialog> {
+  late PrescriptionStatus _selectedStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedStatus = widget.currentStatus;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Change prescription status'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: PrescriptionStatus.values
+              .map((status) {
+                return RadioListTile<PrescriptionStatus>(
+                  value: status,
+                  groupValue: _selectedStatus,
+                  title: Text(status.label),
+                  subtitle: Text(_descriptionFor(status)),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _selectedStatus = value);
+                  },
+                );
+              })
+              .toList(growable: false),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, _selectedStatus),
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Save status'),
+        ),
+      ],
+    );
+  }
+
+  static String _descriptionFor(PrescriptionStatus status) {
+    switch (status) {
+      case PrescriptionStatus.uploaded:
+        return 'Uploaded by patient/member or staff, not yet reviewed.';
+      case PrescriptionStatus.pendingReview:
+        return 'Queued for pharmacist/admin review.';
+      case PrescriptionStatus.verified:
+        return 'Approved for use in dispensing or insurance claims.';
+      case PrescriptionStatus.rejected:
+        return 'Rejected after review.';
+      case PrescriptionStatus.used:
+        return 'Already used for fulfilment or claim processing.';
+      case PrescriptionStatus.expired:
+        return 'No longer valid for use.';
+    }
+  }
+}
+
+enum _PrescriptionAction { open, changeStatus, delete }
 
 class _PrescriptionUploadMeta {
   const _PrescriptionUploadMeta({this.note, this.prescribedOn});

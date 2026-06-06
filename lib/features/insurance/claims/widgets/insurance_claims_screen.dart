@@ -2,12 +2,14 @@
 
 import 'package:afyakit/features/insurance/claims/controllers/insurance_claims_controller.dart';
 import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claims/services/insurance_claims_service.dart';
 import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_detail_screen.dart';
 import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_form_dialog.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +22,7 @@ class InsuranceClaimsScreen extends ConsumerStatefulWidget {
 }
 
 class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
-  final _searchCtl = TextEditingController();
+  final TextEditingController _searchCtl = TextEditingController();
 
   bool _activeOnly = true;
 
@@ -29,7 +31,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
     super.initState();
 
     Future<void>.microtask(() async {
-      await Future.wait([_loadClaims(), _loadMemberships()]);
+      await Future.wait(<Future<void>>[_loadClaims(), _loadMemberships()]);
     });
   }
 
@@ -57,108 +59,164 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
   }
 
   Future<void> _refreshAll() async {
-    await Future.wait([_loadClaims(), _loadMemberships()]);
+    await Future.wait(<Future<void>>[_loadClaims(), _loadMemberships()]);
   }
 
-  Future<void> _openCreateInvoicePrompt() async {
-    final invoiceContext = await showDialog<_ClaimInvoiceContext>(
-      context: context,
-      builder: (_) => const _ClaimInvoiceContextDialog(),
+  Future<void> _openCreateDialog() async {
+    final List<InsuranceMembership> memberships = ref
+        .read(insuranceMembershipsControllerProvider)
+        .items;
+
+    if (memberships.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Create an active insurance membership first.'),
+        ),
+      );
+      return;
+    }
+
+    final InsuranceClaimUpdateInput? meta =
+        await showDialog<InsuranceClaimUpdateInput>(
+          context: context,
+          builder: (_) => InsuranceClaimFormDialog(memberships: memberships),
+        );
+
+    if (meta == null || !mounted) return;
+
+    final String membershipId = (meta.membershipId ?? '').trim();
+
+    final InsuranceMembership? membership = _findMembership(
+      memberships,
+      membershipId,
     );
 
-    if (invoiceContext == null || !mounted) return;
+    if (membership == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected membership was not found.')),
+      );
+      return;
+    }
 
-    final memberships = ref.read(insuranceMembershipsControllerProvider).items;
-
-    final input = await showDialog<InsuranceClaimUpsertInput>(
-      context: context,
-      builder: (_) => InsuranceClaimFormDialog(
-        invoiceId: invoiceContext.invoiceId,
-        invoiceNumber: invoiceContext.invoiceNumber,
-        memberships: memberships,
-      ),
+    final FilePickerResult? picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     );
 
-    if (input == null || !mounted) return;
+    if (!mounted || picked == null || picked.files.isEmpty) return;
 
-    final claim = await ref
+    final PlatformFile file = picked.files.single;
+    final bytes = file.bytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read selected file.')),
+      );
+      return;
+    }
+
+    final InsuranceClaim? claim = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .create(input);
+        .uploadClaimFileAndCreate(
+          patientId: membership.patientId,
+          membershipId: membership.membershipId,
+          file: PickedInsuranceClaimFile(
+            fileName: file.name,
+            extension: file.extension ?? 'pdf',
+            bytes: bytes,
+          ),
+          invoiceId: meta.invoiceId,
+          invoiceNumber: meta.invoiceNumber,
+          prescriptionId: meta.prescriptionId,
+          prescriptionNo: meta.prescriptionNo,
+          prescriberName: meta.prescriberName,
+          authCode: meta.authCode,
+          claimNo: meta.claimNo,
+          visitNo: meta.visitNo,
+          serviceDate: meta.serviceDate,
+          diagnosis: meta.diagnosis,
+          icd10Code: meta.icd10Code,
+          notes: meta.notes,
+          status: meta.status,
+          isActive: meta.isActive,
+        );
 
     if (!mounted) return;
 
     if (claim == null) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error ?? 'Failed to create insurance claim')),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Insurance claim saved and invoice updated'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Insurance claim created')));
 
     await _loadClaims();
   }
 
   Future<void> _openEditDialog(InsuranceClaim claim) async {
-    final loadedMemberships = ref
+    final List<InsuranceMembership> loadedMemberships = ref
         .read(insuranceMembershipsControllerProvider)
         .items;
 
-    final memberships = _withClaimMembershipFallback(
+    final List<InsuranceMembership> memberships = _withClaimMembershipFallback(
       claim: claim,
       memberships: loadedMemberships,
     );
 
-    final input = await showDialog<InsuranceClaimUpsertInput>(
-      context: context,
-      builder: (_) => InsuranceClaimFormDialog(
-        initial: claim,
-        invoiceId: claim.invoiceId,
-        invoiceNumber: claim.invoiceNumber,
-        memberships: memberships,
-        initialMembershipId: claim.membershipId,
-      ),
-    );
+    final InsuranceClaimUpdateInput? input =
+        await showDialog<InsuranceClaimUpdateInput>(
+          context: context,
+          builder: (_) => InsuranceClaimFormDialog(
+            initial: claim,
+            memberships: memberships,
+            initialMembershipId: claim.membershipId,
+          ),
+        );
 
     if (input == null || !mounted) return;
 
-    final updated = await ref
+    final InsuranceClaim? updated = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .update(claim.claimId, input);
+        .update(
+          patientId: claim.patientId,
+          claimId: claim.claimId,
+          input: input,
+        );
 
     if (!mounted) return;
 
     if (updated == null) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error ?? 'Failed to update insurance claim')),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Insurance claim updated and invoice synced'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Insurance claim updated')));
 
     await _loadClaims();
   }
 
   Future<void> _deactivate(InsuranceClaim claim) async {
-    final confirmed = await showDialog<bool>(
+    final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Cancel claim?'),
         content: Text(
-          'This will mark claim ${claim.claimId} as cancelled/inactive. The record will remain for audit history.',
+          'This will mark claim ${claim.claimId} as inactive. The record will remain for audit history.',
         ),
-        actions: [
+        actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
@@ -173,14 +231,14 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    final ok = await ref
+    final bool ok = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .delete(claim.claimId);
+        .delete(patientId: claim.patientId, claimId: claim.claimId);
 
     if (!mounted) return;
 
     if (!ok) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error ?? 'Failed to cancel claim')),
       );
@@ -194,21 +252,38 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
     await _loadClaims();
   }
 
+  InsuranceMembership? _findMembership(
+    List<InsuranceMembership> memberships,
+    String membershipId,
+  ) {
+    final String id = membershipId.trim();
+
+    if (id.isEmpty) return null;
+
+    for (final InsuranceMembership membership in memberships) {
+      if (membership.membershipId == id) return membership;
+    }
+
+    return null;
+  }
+
   List<InsuranceMembership> _withClaimMembershipFallback({
     required InsuranceClaim claim,
     required List<InsuranceMembership> memberships,
   }) {
-    final exists = memberships.any((m) => m.membershipId == claim.membershipId);
+    final bool exists = memberships.any(
+      (InsuranceMembership m) => m.membershipId == claim.membershipId,
+    );
     if (exists) return memberships;
 
-    final fallback = InsuranceMembership(
+    final InsuranceMembership fallback = InsuranceMembership(
       membershipId: claim.membershipId,
       patientId: claim.patientId,
       patientNo: claim.patientNo,
       patientDisplayName: claim.patientDisplayName,
-      payerContactId: claim.payerContactId,
+      payerContactId: claim.payerContactId ?? '',
       payerDisplayName: claim.payerDisplayName,
-      memberNo: claim.memberNo,
+      memberNo: claim.memberNo ?? '',
       memberName: claim.memberName,
       principalName: claim.principalName,
       scheme: claim.scheme,
@@ -217,21 +292,23 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
       isActive: claim.isActive,
     );
 
-    return [fallback, ...memberships];
+    return <InsuranceMembership>[fallback, ...memberships];
   }
 
   String? _nullable(String? value) {
-    final trimmed = value?.trim();
+    final String? trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;
   }
 
   @override
   Widget build(BuildContext context) {
-    final claimsState = ref.watch(insuranceClaimsControllerProvider);
+    final InsuranceClaimsState claimsState = ref.watch(
+      insuranceClaimsControllerProvider,
+    );
     final membershipsState = ref.watch(insuranceMembershipsControllerProvider);
 
-    final isBusy = claimsState.isLoading || membershipsState.isLoading;
+    final bool isBusy = claimsState.isLoading || membershipsState.isLoading;
 
     return AppPage(
       title: 'Insurance Claims',
@@ -239,7 +316,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
       maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
       scrollable: false,
-      actions: [
+      actions: <Widget>[
         IconButton(
           tooltip: 'Refresh',
           onPressed: isBusy ? null : _refreshAll,
@@ -250,21 +327,21 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
           child: FilledButton.icon(
             onPressed: claimsState.isSaving || membershipsState.items.isEmpty
                 ? null
-                : _openCreateInvoicePrompt,
+                : _openCreateDialog,
             icon: const Icon(Icons.add),
             label: const Text('Add Claim'),
           ),
         ),
       ],
       body: Column(
-        children: [
+        children: <Widget>[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: _ClaimFilters(
               searchCtl: _searchCtl,
               activeOnly: _activeOnly,
               isLoading: claimsState.isLoading,
-              onActiveOnlyChanged: (value) {
+              onActiveOnlyChanged: (bool value) {
                 setState(() => _activeOnly = value);
                 _loadClaims();
               },
@@ -294,15 +371,15 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
                       icon: Icons.assignment_outlined,
                       title: 'No insurance claims',
                       message:
-                          'Create a claim from an invoice and verified insurance membership.',
+                          'Upload an insurance claim document and link it to a patient membership.',
                     )
                   : ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                       itemCount: claimsState.items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final claim = claimsState.items[index];
+                      itemBuilder: (BuildContext context, int index) {
+                        final InsuranceClaim claim = claimsState.items[index];
 
                         return _ClaimCard(
                           claim: claim,
@@ -310,6 +387,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
                             MaterialPageRoute<void>(
                               builder: (_) => InsuranceClaimDetailScreen(
                                 claimId: claim.claimId,
+                                patientId: claim.patientId,
                                 initialClaim: claim,
                               ),
                             ),
@@ -348,7 +426,7 @@ class _ClaimFilters extends StatelessWidget {
       spacing: 12,
       runSpacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
+      children: <Widget>[
         SizedBox(
           width: 380,
           child: TextField(
@@ -394,27 +472,30 @@ class _ClaimCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleParts = <String>[
+    final List<String> titleParts = <String>[
       if ((claim.patientDisplayName ?? '').trim().isNotEmpty)
         claim.patientDisplayName!.trim()
       else
         claim.patientId,
-      claim.invoiceNumber?.trim().isNotEmpty == true
-          ? claim.invoiceNumber!.trim()
-          : claim.invoiceId,
+      if ((claim.invoiceNumber ?? '').trim().isNotEmpty)
+        claim.invoiceNumber!.trim()
+      else if ((claim.invoiceId ?? '').trim().isNotEmpty)
+        claim.invoiceId!.trim()
+      else
+        claim.claimId,
     ];
 
-    final subtitleParts = <String>[
+    final List<String> subtitleParts = <String>[
       if ((claim.payerDisplayName ?? '').trim().isNotEmpty)
         claim.payerDisplayName!.trim(),
-      'Member: ${claim.memberNo}',
+      if ((claim.memberNo ?? '').trim().isNotEmpty)
+        'Member: ${claim.memberNo!.trim()}',
       if ((claim.scheme ?? '').trim().isNotEmpty) claim.scheme!.trim(),
       if ((claim.authCode ?? '').trim().isNotEmpty)
         'Auth: ${claim.authCode!.trim()}',
       if ((claim.claimNo ?? '').trim().isNotEmpty)
         'Claim: ${claim.claimNo!.trim()}',
-      if ((claim.etimsNo ?? '').trim().isNotEmpty)
-        'eTIMS: ${claim.etimsNo!.trim()}',
+      if (claim.hasFile) 'Document uploaded',
     ];
 
     return Card.outlined(
@@ -440,7 +521,7 @@ class _ClaimCard extends StatelessWidget {
         trailing: Wrap(
           spacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
+          children: <Widget>[
             _ClaimStatusChip(status: claim.status),
             IconButton(
               tooltip: 'Edit',
@@ -474,98 +555,6 @@ class _ClaimStatusChip extends StatelessWidget {
   }
 }
 
-class _ClaimInvoiceContext {
-  const _ClaimInvoiceContext({required this.invoiceId, this.invoiceNumber});
-
-  final String invoiceId;
-  final String? invoiceNumber;
-}
-
-class _ClaimInvoiceContextDialog extends StatefulWidget {
-  const _ClaimInvoiceContextDialog();
-
-  @override
-  State<_ClaimInvoiceContextDialog> createState() =>
-      _ClaimInvoiceContextDialogState();
-}
-
-class _ClaimInvoiceContextDialogState
-    extends State<_ClaimInvoiceContextDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _invoiceIdCtl = TextEditingController();
-  final _invoiceNumberCtl = TextEditingController();
-
-  @override
-  void dispose() {
-    _invoiceIdCtl.dispose();
-    _invoiceNumberCtl.dispose();
-    super.dispose();
-  }
-
-  String? _required(String? value) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return 'Invoice ID is required';
-    return null;
-  }
-
-  void _submit() {
-    final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
-
-    final invoiceNumber = _invoiceNumberCtl.text.trim();
-
-    Navigator.of(context).pop(
-      _ClaimInvoiceContext(
-        invoiceId: _invoiceIdCtl.text.trim(),
-        invoiceNumber: invoiceNumber.isEmpty ? null : invoiceNumber,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Link invoice to insurance claim'),
-      content: SizedBox(
-        width: 420,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _invoiceIdCtl,
-                decoration: const InputDecoration(
-                  labelText: 'Zoho Invoice ID',
-                  hintText: 'Example: 7052134000001194001',
-                  border: OutlineInputBorder(),
-                ),
-                validator: _required,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _invoiceNumberCtl,
-                decoration: const InputDecoration(
-                  labelText: 'Invoice Number',
-                  hintText: 'Optional display helper',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('Continue')),
-      ],
-    );
-  }
-}
-
 class _InfoBanner extends StatelessWidget {
   const _InfoBanner({required this.message});
 
@@ -576,16 +565,7 @@ class _InfoBanner extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.secondaryContainer,
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-      ),
+      child: Padding(padding: const EdgeInsets.all(12), child: Text(message)),
     );
   }
 }
@@ -619,7 +599,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      children: [
+      children: <Widget>[
         const SizedBox(height: 120),
         Icon(icon, size: 56, color: Theme.of(context).colorScheme.outline),
         const SizedBox(height: 12),

@@ -42,6 +42,43 @@ class InsuranceMembershipsState {
       error: clearError ? null : error ?? this.error,
     );
   }
+
+  List<InsuranceMembership> visibleActiveItems({
+    String? patientId,
+    Set<String>? allowedPatientIds,
+  }) {
+    final String cleanPatientId = _clean(patientId);
+
+    return items
+        .where((InsuranceMembership membership) {
+          if (!membership.isActive) return false;
+
+          if (cleanPatientId.isNotEmpty &&
+              membership.patientId.trim() != cleanPatientId) {
+            return false;
+          }
+
+          if (allowedPatientIds != null) {
+            if (allowedPatientIds.isEmpty) return false;
+
+            if (!allowedPatientIds.contains(membership.patientId.trim())) {
+              return false;
+            }
+          }
+
+          return true;
+        })
+        .toList(growable: false);
+  }
+
+  int visibleActiveCount({String? patientId, Set<String>? allowedPatientIds}) {
+    return visibleActiveItems(
+      patientId: patientId,
+      allowedPatientIds: allowedPatientIds,
+    ).length;
+  }
+
+  static String _clean(String? value) => (value ?? '').trim();
 }
 
 class InsuranceMembershipsController
@@ -71,9 +108,9 @@ class InsuranceMembershipsController
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final svc = await _service;
+      final InsuranceMembershipsService svc = await _service;
 
-      final items = await svc.list(
+      final List<InsuranceMembership> items = await svc.list(
         search: search,
         patientId: patientId,
         patientNo: patientNo,
@@ -121,7 +158,7 @@ class InsuranceMembershipsController
   }
 
   Future<InsuranceMembership?> get(String membershipId) async {
-    final id = membershipId.trim();
+    final String id = membershipId.trim();
 
     if (id.isEmpty) {
       state = state.copyWith(error: 'Membership ID is empty');
@@ -131,8 +168,8 @@ class InsuranceMembershipsController
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final svc = await _service;
-      final membership = await svc.get(id);
+      final InsuranceMembershipsService svc = await _service;
+      final InsuranceMembership membership = await svc.get(id);
 
       state = state.copyWith(selected: membership, isLoading: false);
       return membership;
@@ -150,13 +187,13 @@ class InsuranceMembershipsController
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final svc = await _service;
-      final membership = await svc.create(input);
+      final InsuranceMembershipsService svc = await _service;
+      final InsuranceMembership membership = await svc.create(input);
 
       state = state.copyWith(
         isSaving: false,
         selected: membership,
-        items: [membership, ...state.items],
+        items: <InsuranceMembership>[membership, ...state.items],
       );
 
       return membership;
@@ -170,7 +207,7 @@ class InsuranceMembershipsController
     String membershipId,
     InsuranceMembershipUpsertInput input,
   ) async {
-    final id = membershipId.trim();
+    final String id = membershipId.trim();
 
     if (id.isEmpty) {
       state = state.copyWith(error: 'Membership ID is empty');
@@ -182,14 +219,15 @@ class InsuranceMembershipsController
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final svc = await _service;
-      final membership = await svc.update(id, input);
+      final InsuranceMembershipsService svc = await _service;
+      final InsuranceMembership membership = await svc.update(id, input);
 
-      final updatedItems = state.items
-          .map((item) {
+      final List<InsuranceMembership> updatedItems = state.items
+          .map((InsuranceMembership item) {
             if (item.membershipId == membership.membershipId) {
               return membership;
             }
+
             return item;
           })
           .toList(growable: false);
@@ -208,7 +246,7 @@ class InsuranceMembershipsController
   }
 
   Future<bool> delete(String membershipId) async {
-    final id = membershipId.trim();
+    final String id = membershipId.trim();
 
     if (id.isEmpty) {
       state = state.copyWith(error: 'Membership ID is empty');
@@ -220,11 +258,11 @@ class InsuranceMembershipsController
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final svc = await _service;
+      final InsuranceMembershipsService svc = await _service;
       await svc.delete(id);
 
-      final updatedItems = state.items
-          .where((item) => item.membershipId != id)
+      final List<InsuranceMembership> updatedItems = state.items
+          .where((InsuranceMembership item) => item.membershipId != id)
           .toList(growable: false);
 
       state = state.copyWith(

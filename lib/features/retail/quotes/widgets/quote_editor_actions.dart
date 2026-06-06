@@ -41,7 +41,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
 
     final ButtonStyle pickStyle = OutlinedButton.styleFrom(
       minimumSize: const Size(0, _trailHeight),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
@@ -70,40 +70,65 @@ class QuoteEditorHeaderActions extends StatelessWidget {
       onContactPicked(picked);
     }
 
-    return SizedBox(
-      height: _trailHeight,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SalesDocStatusChip(
-            status: vmMeta.status,
-            visualDensity: VisualDensity.compact,
-            forceLabel: isEdit ? 'editing' : 'draft',
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool tight =
+            constraints.maxWidth > 0 && constraints.maxWidth < 260;
+
+        final Widget statusChip = SalesDocStatusChip(
+          status: vmMeta.status,
+          visualDensity: VisualDensity.compact,
+          forceLabel: tight ? null : (isEdit ? 'editing' : 'draft'),
+        );
+
+        final Widget? payerButton = isMemberScoped
+            ? null
+            : OutlinedButton.icon(
+                style: pickStyle,
+                icon: const Icon(Icons.person_outline, size: 18),
+                label: Text(
+                  hasContact ? 'Change payer' : 'Pick payer',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+                onPressed: busy ? null : pickContact,
+              );
+
+        final Widget? deleteButton = isEdit
+            ? IconButton(
+                tooltip: 'Delete quote',
+                style: iconStyle,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: colorScheme.error,
+                ),
+                onPressed: busy ? null : onDelete,
+              )
+            : null;
+
+        final List<Widget> actions = <Widget>[
+          statusChip,
+          if (payerButton != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: tight ? 150 : 190),
+              child: payerButton,
+            ),
+          if (deleteButton != null) deleteButton,
+        ];
+
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: actions,
           ),
-          if (!isMemberScoped) ...<Widget>[
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              style: pickStyle,
-              icon: const Icon(Icons.person_outline, size: 18),
-              label: Text(hasContact ? 'Change payer' : 'Pick payer'),
-              onPressed: busy ? null : pickContact,
-            ),
-          ],
-          if (isEdit) ...<Widget>[
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Delete quote',
-              style: iconStyle,
-              icon: Icon(
-                Icons.delete_outline,
-                size: 20,
-                color: colorScheme.error,
-              ),
-              onPressed: busy ? null : onDelete,
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 }

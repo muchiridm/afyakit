@@ -38,6 +38,14 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   /// POST /clinical/patients
   Uri clinicalPatientCreate() => _uri('clinical/patients');
 
+  /// PUT /clinical/patients/:patientId
+  Uri clinicalPatientUpdate(String patientId) =>
+      _uri('clinical/patients/${_seg(patientId)}');
+
+  /// DELETE /clinical/patients/:patientId
+  Uri clinicalPatientDelete(String patientId) =>
+      _uri('clinical/patients/${_seg(patientId)}');
+
   /// POST /clinical/patients/:patientId/link-self
   Uri clinicalPatientLinkSelf(String patientId) =>
       _uri('clinical/patients/${_seg(patientId)}/link-self');
@@ -93,14 +101,6 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
       'clinical/patients/${_seg(patientId)}/linked-contacts/${_seg(contactId)}',
     );
   }
-
-  /// PUT /clinical/patients/:patientId
-  Uri clinicalPatientUpdate(String patientId) =>
-      _uri('clinical/patients/${_seg(patientId)}');
-
-  /// DELETE /clinical/patients/:patientId
-  Uri clinicalPatientDelete(String patientId) =>
-      _uri('clinical/patients/${_seg(patientId)}');
 
   // ─────────────────────────────────────────────
   // 📄 Clinical / Prescriptions
@@ -166,6 +166,16 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   /// POST /clinical/patients/:patientId/prescriptions
   Uri clinicalPatientPrescriptionCreate(String patientId) {
     return _uri('clinical/patients/${_seg(patientId)}/prescriptions');
+  }
+
+  /// PATCH /clinical/patients/:patientId/prescriptions/:prescriptionId/approve
+  Uri clinicalPatientPrescriptionApprove({
+    required String patientId,
+    required String prescriptionId,
+  }) {
+    return _uri(
+      'clinical/patients/${_seg(patientId)}/prescriptions/${_seg(prescriptionId)}/approve',
+    );
   }
 
   /// PUT /clinical/patients/:patientId/prescriptions/:prescriptionId

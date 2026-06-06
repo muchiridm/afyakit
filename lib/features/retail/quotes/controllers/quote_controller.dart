@@ -13,6 +13,7 @@ import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controlle
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
+import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
@@ -232,6 +233,8 @@ class QuoteController extends StateNotifier<QuoteState> {
         deliveryAddress: meta.deliveryAddress,
         patientSnapshot: meta.patientSnapshot,
         membershipId: meta.membershipId,
+        prescriptionId: meta.prescriptionId,
+        prescriptionLabel: meta.prescriptionLabel,
       );
 
       state = state.copyWith(loadingEdit: false, loadedEditId: id);
@@ -281,7 +284,8 @@ class QuoteController extends StateNotifier<QuoteState> {
       'customerId=${meta.customerIdResolved} '
       'customer=${meta.contact?.title ?? ''} '
       'patient=${meta.resolvedPatientId ?? ''} '
-      'membership=${meta.resolvedMembershipId ?? ''}',
+      'membership=${meta.resolvedMembershipId ?? ''} '
+      'prescription=${meta.resolvedPrescriptionId ?? ''}',
     );
 
     state = state.copyWith(
@@ -496,7 +500,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         invoiceDate: invoiceDate,
         dueDate: dueDate,
         membershipId: membershipId,
-        createInsuranceClaim: createInsuranceClaim,
+        createInsuranceClaim: false,
         patientSnapshot: patientSnapshot,
         deliveryAddress: deliveryAddress,
       );
@@ -505,11 +509,7 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       state = state.copyWith(converting: false);
 
-      SnackService.showSuccess(
-        result.claim != null
-            ? 'Converted to invoice and claim created'
-            : 'Converted to invoice',
-      );
+      SnackService.showSuccess('Converted to invoice');
 
       return result;
     } catch (e) {
@@ -529,6 +529,7 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (id.isEmpty) return;
 
     _invalidateQuotesList();
+    _ref.invalidate(zohoQuoteProvider(id));
   }
 
   String _friendlyError(Object error, {required String fallback}) {

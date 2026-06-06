@@ -1,19 +1,14 @@
 // lib/features/retail/quotes/widgets/quote_editor_meta_section.dart
 
-import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_clinical_context_dialog.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String quoteCurrencyCode() => 'KES';
 
@@ -62,7 +57,7 @@ Future<void> pickQuoteDeliveryAddress(
   metaCtl.setDeliveryAddress(SalesDocumentAddress.fromDeliveryAddress(result));
 }
 
-Future<void> pickQuotePatientContext(
+Future<void> pickQuoteClinicalContext(
   BuildContext context, {
   required Future<bool> Function() ensureAuthed,
   required QuoteMetaState meta,
@@ -72,57 +67,27 @@ Future<void> pickQuotePatientContext(
   if (!ok) return;
   if (!context.mounted) return;
 
-  final QuotePatientContextSelection? selected =
-      await showDialog<QuotePatientContextSelection>(
+  final QuoteClinicalContextSelection? selected =
+      await showDialog<QuoteClinicalContextSelection>(
         context: context,
-        builder: (_) => QuotePatientMembershipPickerDialog(
+        builder: (_) => QuoteClinicalContextDialog(
           initialPatientId: meta.resolvedPatientId,
           initialMembershipId: meta.resolvedMembershipId,
+          initialPrescriptionId: meta.resolvedPrescriptionId,
           initialPaymentContext: meta.effectivePaymentContext,
         ),
       );
 
   if (selected == null) return;
 
-  metaCtl.setPatientContext(
+  metaCtl.setClinicalContext(
     patientSnapshot: selected.patientSnapshot,
+    paymentContext: selected.paymentContext,
     membershipId: selected.membershipId,
     payerContact: selected.payerContact,
-    paymentContext: selected.paymentContext,
+    prescription: selected.prescription,
+    prescriptionId: selected.prescriptionId,
   );
-}
-
-Future<void> pickQuotePrescription(
-  BuildContext context, {
-  required List<Prescription> prescriptions,
-  required String? selectedPrescriptionId,
-  required bool requiredForClaim,
-  required QuoteMetaController metaCtl,
-}) async {
-  final List<Prescription> active = prescriptions
-      .where((Prescription p) => p.isActive)
-      .toList(growable: false);
-
-  final List<Prescription> selectable = requiredForClaim
-      ? active
-            .where((Prescription p) => p.status == PrescriptionStatus.verified)
-            .toList(growable: false)
-      : active;
-
-  final Prescription? picked = await showDialog<Prescription>(
-    context: context,
-    builder: (BuildContext context) {
-      return _PrescriptionPickerDialog(
-        prescriptions: selectable,
-        selectedPrescriptionId: selectedPrescriptionId,
-        requiredForClaim: requiredForClaim,
-      );
-    },
-  );
-
-  if (picked == null) return;
-
-  metaCtl.setPrescription(picked);
 }
 
 SalesDocMetaVm buildQuoteMetaVm({
@@ -152,7 +117,7 @@ SalesDocMetaVm buildQuoteMetaVm({
   );
 }
 
-class QuoteEditorMetaSection extends ConsumerWidget {
+class QuoteEditorMetaSection extends StatelessWidget {
   const QuoteEditorMetaSection({
     super.key,
     required this.busy,
@@ -171,25 +136,12 @@ class QuoteEditorMetaSection extends ConsumerWidget {
   final Future<bool> Function() onEnsureAuthed;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final DateTime quoteDate = meta.quoteDate ?? quoteDateOnly(DateTime.now());
     final DateTime expiryDate =
         meta.expiryDate ?? _defaultExpiry(meta.quoteDate);
 
-    final String patientId = (meta.resolvedPatientId ?? '').trim();
-
-    final PrescriptionsState rxState = patientId.isEmpty
-        ? const PrescriptionsState()
-        : ref.watch(prescriptionPickerControllerProvider(patientId));
-
-    final Widget saleAndPaymentSelector = _SaleAndPaymentSelector(
-      busy: busy,
-      meta: meta,
-      onSaleChanged: metaCtl.setSaleContext,
-      onPaymentChanged: metaCtl.setPaymentContext,
-    );
-
-    final Widget dateColumn = _DateColumn(
+    final Widget dateRow = _DateRow(
       busy: busy,
       quoteDate: meta.quoteDate,
       expiryDate: meta.expiryDate,
@@ -201,64 +153,17 @@ class QuoteEditorMetaSection extends ConsumerWidget {
       onClearExpiryDate: metaCtl.clearExpiryDate,
     );
 
-    final Widget referenceAndNotes = Row(
-      children: <Widget>[
-        Expanded(
-          child: _MetaTextField(
-            controller: refController,
-            enabled: !busy,
-            labelText: 'Reference',
-            hintText: 'e.g. PO number',
-            onChanged: metaCtl.setReference,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _MetaTextField(
-            controller: notesController,
-            enabled: !busy,
-            labelText: 'Customer notes',
-            hintText: 'Notes on the quote…',
-            minLines: 1,
-            maxLines: 2,
-            onChanged: metaCtl.setCustomerNotes,
-          ),
-        ),
-      ],
-    );
-
-    final Widget patientField = _PatientContextTile(
+    final Widget clinicalContextField = _ClinicalContextTile(
       busy: busy,
       meta: meta,
       requiredForSubmit: meta.requiresPatient,
-      onPick: () => pickQuotePatientContext(
+      onPick: () => pickQuoteClinicalContext(
         context,
         ensureAuthed: onEnsureAuthed,
         meta: meta,
         metaCtl: metaCtl,
       ),
       onClear: meta.hasPatientContext ? metaCtl.clearPatientContext : null,
-    );
-
-    final Widget prescriptionField = _PrescriptionTile(
-      busy: busy || rxState.busy,
-      patientId: patientId,
-      prescriptions: rxState.items,
-      selectedPrescriptionId: meta.resolvedPrescriptionId,
-      requiredForClaim: meta.isInsurancePayment,
-      error: rxState.error,
-      onPick: patientId.isEmpty
-          ? null
-          : () => pickQuotePrescription(
-              context,
-              prescriptions: rxState.items,
-              selectedPrescriptionId: meta.resolvedPrescriptionId,
-              requiredForClaim: meta.isInsurancePayment,
-              metaCtl: metaCtl,
-            ),
-      onClear: (meta.resolvedPrescriptionId ?? '').trim().isEmpty
-          ? null
-          : metaCtl.clearPrescription,
     );
 
     final Widget addressField = _DeliveryAddressTile(
@@ -275,41 +180,42 @@ class QuoteEditorMetaSection extends ConsumerWidget {
           : metaCtl.clearDeliveryAddress,
     );
 
+    final Widget referenceField = _MetaTextField(
+      controller: refController,
+      enabled: !busy,
+      labelText: 'Reference',
+      hintText: 'e.g. PO number',
+      onChanged: metaCtl.setReference,
+    );
+
+    final Widget notesField = _MetaTextField(
+      controller: notesController,
+      enabled: !busy,
+      labelText: 'Customer notes',
+      hintText: 'Notes on the quote…',
+      minLines: 1,
+      maxLines: 2,
+      onChanged: metaCtl.setCustomerNotes,
+    );
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final bool isWide = constraints.maxWidth >= 860;
+        final bool isWide = constraints.maxWidth >= 900;
 
-        if (isWide) {
+        if (!isWide) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
               children: <Widget>[
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: <Widget>[
-                      saleAndPaymentSelector,
-                      const SizedBox(height: 6),
-                      dateColumn,
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    children: <Widget>[
-                      referenceAndNotes,
-                      const SizedBox(height: 6),
-                      patientField,
-                      const SizedBox(height: 6),
-                      prescriptionField,
-                      const SizedBox(height: 6),
-                      addressField,
-                    ],
-                  ),
-                ),
+                dateRow,
+                const SizedBox(height: 6),
+                clinicalContextField,
+                const SizedBox(height: 6),
+                addressField,
+                const SizedBox(height: 6),
+                referenceField,
+                const SizedBox(height: 6),
+                notesField,
               ],
             ),
           );
@@ -319,17 +225,31 @@ class QuoteEditorMetaSection extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
           child: Column(
             children: <Widget>[
-              saleAndPaymentSelector,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: clinicalContextField),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      children: <Widget>[
+                        dateRow,
+                        const SizedBox(height: 6),
+                        addressField,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
-              dateColumn,
-              const SizedBox(height: 6),
-              patientField,
-              const SizedBox(height: 6),
-              prescriptionField,
-              const SizedBox(height: 6),
-              addressField,
-              const SizedBox(height: 6),
-              referenceAndNotes,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: referenceField),
+                  const SizedBox(width: 8),
+                  Expanded(child: notesField),
+                ],
+              ),
             ],
           ),
         );
@@ -377,107 +297,8 @@ class QuoteEditorMetaSection extends ConsumerWidget {
   }
 }
 
-class _SaleAndPaymentSelector extends StatelessWidget {
-  const _SaleAndPaymentSelector({
-    required this.busy,
-    required this.meta,
-    required this.onSaleChanged,
-    required this.onPaymentChanged,
-  });
-
-  final bool busy;
-  final QuoteMetaState meta;
-  final ValueChanged<QuoteSaleContext> onSaleChanged;
-  final ValueChanged<QuotePaymentContext> onPaymentChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return InputDecorator(
-      decoration: _denseDecoration(labelText: 'Sale & payment'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SegmentedButton<QuoteSaleContext>(
-            showSelectedIcon: false,
-            style: _segmentedStyle(),
-            segments: const <ButtonSegment<QuoteSaleContext>>[
-              ButtonSegment<QuoteSaleContext>(
-                value: QuoteSaleContext.clinical,
-                icon: Icon(Icons.medical_services_outlined, size: 18),
-                label: Text('Clinical'),
-              ),
-              ButtonSegment<QuoteSaleContext>(
-                value: QuoteSaleContext.general,
-                icon: Icon(Icons.storefront_outlined, size: 18),
-                label: Text('General'),
-              ),
-            ],
-            selected: <QuoteSaleContext>{meta.saleContext},
-            onSelectionChanged: busy
-                ? null
-                : (Set<QuoteSaleContext> selected) {
-                    onSaleChanged(selected.first);
-                  },
-          ),
-          if (meta.isClinical) ...<Widget>[
-            const SizedBox(height: 8),
-            SegmentedButton<QuotePaymentContext>(
-              showSelectedIcon: false,
-              style: _segmentedStyle(),
-              segments: const <ButtonSegment<QuotePaymentContext>>[
-                ButtonSegment<QuotePaymentContext>(
-                  value: QuotePaymentContext.directPay,
-                  icon: Icon(Icons.payments_outlined, size: 18),
-                  label: Text('Direct pay'),
-                ),
-                ButtonSegment<QuotePaymentContext>(
-                  value: QuotePaymentContext.insurance,
-                  icon: Icon(Icons.health_and_safety_outlined, size: 18),
-                  label: Text('Insurance'),
-                ),
-              ],
-              selected: <QuotePaymentContext>{meta.effectivePaymentContext},
-              onSelectionChanged: busy
-                  ? null
-                  : (Set<QuotePaymentContext> selected) {
-                      onPaymentChanged(selected.first);
-                    },
-            ),
-          ],
-          const SizedBox(height: 6),
-          Text(_helperText(meta), style: theme.textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
-
-  static ButtonStyle _segmentedStyle() {
-    return ButtonStyle(
-      visualDensity: VisualDensity.compact,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: WidgetStateProperty.all(
-        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      ),
-    );
-  }
-
-  static String _helperText(QuoteMetaState meta) {
-    if (meta.isGeneral) {
-      return 'OTC / B2B / general sale. Patient and delivery address are optional.';
-    }
-
-    if (meta.isInsurancePayment) {
-      return 'Insurance sale. Patient, membership, prescription, and delivery address are required. Customer should be the insurer.';
-    }
-
-    return 'Direct-pay clinical sale. Patient and delivery address are required. Customer can be the patient, parent, guardian, company, or other payer.';
-  }
-}
-
-class _DateColumn extends StatelessWidget {
-  const _DateColumn({
+class _DateRow extends StatelessWidget {
+  const _DateRow({
     required this.busy,
     required this.quoteDate,
     required this.expiryDate,
@@ -501,46 +322,33 @@ class _DateColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool inline = constraints.maxWidth >= 420;
-
-        final Widget quoteDatePill = SalesDocDatePill(
-          label: 'Date *',
-          icon: Icons.event_outlined,
-          date: quoteDate,
-          enabled: !busy,
-          onPick: busy ? null : onPickQuoteDate,
-          onClear: busy ? null : onClearQuoteDate,
-        );
-
-        final Widget expiryDatePill = SalesDocDatePill(
-          label: 'Expiry',
-          icon: Icons.timelapse_outlined,
-          date: expiryDate,
-          enabled: !busy,
-          onPick: busy ? null : onPickExpiryDate,
-          onClear: busy ? null : onClearExpiryDate,
-        );
-
-        if (inline) {
-          return Row(
-            children: <Widget>[
-              Expanded(child: quoteDatePill),
-              const SizedBox(width: 8),
-              Expanded(child: expiryDatePill),
-            ],
-          );
-        }
-
-        return Column(
-          children: <Widget>[
-            quoteDatePill,
-            const SizedBox(height: 6),
-            expiryDatePill,
-          ],
-        );
-      },
+    return InputDecorator(
+      decoration: _denseDecoration(labelText: 'Dates'),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: SalesDocDatePill(
+              label: 'Date *',
+              icon: Icons.event_outlined,
+              date: quoteDate,
+              enabled: !busy,
+              onPick: busy ? null : onPickQuoteDate,
+              onClear: busy ? null : onClearQuoteDate,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SalesDocDatePill(
+              label: 'Expiry',
+              icon: Icons.timelapse_outlined,
+              date: expiryDate,
+              enabled: !busy,
+              onPick: busy ? null : onPickExpiryDate,
+              onClear: busy ? null : onClearExpiryDate,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -577,6 +385,73 @@ class _MetaTextField extends StatelessWidget {
       decoration: _denseDecoration(labelText: labelText, hintText: hintText),
       onChanged: onChanged,
     );
+  }
+}
+
+class _ClinicalContextTile extends StatelessWidget {
+  const _ClinicalContextTile({
+    required this.busy,
+    required this.meta,
+    required this.requiredForSubmit,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final bool busy;
+  final QuoteMetaState meta;
+  final bool requiredForSubmit;
+  final Future<void> Function() onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasContext = meta.hasPatientContext;
+
+    final String title = hasContext
+        ? meta.patientLabel
+        : 'Select clinical context';
+
+    final String subtitle = hasContext
+        ? _join(<String?>[
+            meta.patientSubtitle,
+            meta.paymentSubtitle,
+            meta.isInsurancePayment ? meta.insuranceSubtitle : null,
+            meta.prescriptionSubtitle == null
+                ? null
+                : 'Rx: ${meta.prescriptionSubtitle}',
+          ], sep: '\n')
+        : _emptySubtitle();
+
+    return InkWell(
+      onTap: busy ? null : onPick,
+      borderRadius: BorderRadius.circular(10),
+      child: InputDecorator(
+        decoration: _denseDecoration(
+          labelText: _labelText(hasContext),
+          suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
+        ),
+        child: _TileBody(
+          icon: meta.isInsurancePayment
+              ? Icons.health_and_safety_outlined
+              : Icons.person_outline,
+          title: title,
+          subtitle: subtitle,
+        ),
+      ),
+    );
+  }
+
+  String _labelText(bool hasContext) {
+    if (!requiredForSubmit) return 'Clinical context optional';
+    return 'Clinical context *';
+  }
+
+  String _emptySubtitle() {
+    if (!requiredForSubmit) {
+      return 'Optional for general sales.';
+    }
+
+    return 'Choose patient, payment context, insurance, and prescription in one place.';
   }
 }
 
@@ -707,231 +582,6 @@ class _DeliveryAddressTile extends StatelessWidget {
   }
 }
 
-class _PatientContextTile extends StatelessWidget {
-  const _PatientContextTile({
-    required this.busy,
-    required this.meta,
-    required this.requiredForSubmit,
-    required this.onPick,
-    required this.onClear,
-  });
-
-  final bool busy;
-  final QuoteMetaState meta;
-  final bool requiredForSubmit;
-  final Future<void> Function() onPick;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasContext = meta.hasPatientContext;
-
-    final String title = hasContext ? meta.patientLabel : 'Select patient';
-    final String subtitle = _join(<String?>[
-      meta.patientSubtitle,
-      meta.isInsurancePayment ? meta.insuranceSubtitle : null,
-      meta.paymentSubtitle,
-    ], sep: '\n');
-
-    return InkWell(
-      onTap: busy ? null : onPick,
-      borderRadius: BorderRadius.circular(10),
-      child: InputDecorator(
-        decoration: _denseDecoration(
-          labelText: _labelText(hasContext),
-          suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
-        ),
-        child: _TileBody(
-          icon: meta.isInsurancePayment
-              ? Icons.health_and_safety_outlined
-              : Icons.person_outline,
-          title: title,
-          subtitle: subtitle,
-        ),
-      ),
-    );
-  }
-
-  String _labelText(bool hasContext) {
-    if (!requiredForSubmit) return 'Patient optional';
-
-    if (meta.requiresMembership) {
-      return hasContext ? 'Patient + insurance *' : 'Patient + insurance *';
-    }
-
-    return hasContext ? 'Patient context *' : 'Patient *';
-  }
-}
-
-class _PrescriptionTile extends StatelessWidget {
-  const _PrescriptionTile({
-    required this.busy,
-    required this.patientId,
-    required this.prescriptions,
-    required this.selectedPrescriptionId,
-    required this.requiredForClaim,
-    required this.error,
-    required this.onPick,
-    required this.onClear,
-  });
-
-  final bool busy;
-  final String patientId;
-  final List<Prescription> prescriptions;
-  final String? selectedPrescriptionId;
-  final bool requiredForClaim;
-  final String? error;
-  final Future<void> Function()? onPick;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final Prescription? selected = _selectedPrescription();
-
-    final bool hasPatient = patientId.trim().isNotEmpty;
-    final bool hasSelected = selected != null;
-
-    final String title = !hasPatient
-        ? 'Select patient first'
-        : hasSelected
-        ? _title(selected)
-        : 'Select prescription';
-
-    final String subtitle = !hasPatient
-        ? 'Prescription belongs to a patient profile.'
-        : hasSelected
-        ? _subtitle(selected)
-        : _emptySubtitle();
-
-    return InkWell(
-      onTap: busy || !hasPatient ? null : onPick,
-      borderRadius: BorderRadius.circular(10),
-      child: InputDecorator(
-        decoration: _denseDecoration(
-          labelText: requiredForClaim
-              ? 'Prescription for claim *'
-              : 'Prescription optional',
-          suffixIcon: _TileSuffixActions(busy: busy, onClear: onClear),
-        ),
-        child: _TileBody(
-          icon: Icons.description_outlined,
-          title: title,
-          subtitle: error == null ? subtitle : error,
-        ),
-      ),
-    );
-  }
-
-  Prescription? _selectedPrescription() {
-    final String id = (selectedPrescriptionId ?? '').trim();
-    if (id.isEmpty) return null;
-
-    for (final Prescription p in prescriptions) {
-      if (p.prescriptionId == id) return p;
-    }
-
-    return null;
-  }
-
-  String _emptySubtitle() {
-    if (requiredForClaim) {
-      return 'Required before creating an insurance claim.';
-    }
-
-    return 'Optional for direct-pay quotes.';
-  }
-
-  static String _title(Prescription p) {
-    final String fileName = p.fileName.trim();
-    return fileName.isNotEmpty ? fileName : p.prescriptionId;
-  }
-
-  static String _subtitle(Prescription p) {
-    return _join(<String?>[
-      p.prescriptionId,
-      p.prescribedOn == null ? null : 'Prescribed: ${p.prescribedOn}',
-      p.status.label,
-    ]);
-  }
-}
-
-class _PrescriptionPickerDialog extends StatelessWidget {
-  const _PrescriptionPickerDialog({
-    required this.prescriptions,
-    required this.selectedPrescriptionId,
-    required this.requiredForClaim,
-  });
-
-  final List<Prescription> prescriptions;
-  final String? selectedPrescriptionId;
-  final bool requiredForClaim;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        requiredForClaim
-            ? 'Select verified prescription'
-            : 'Select prescription',
-      ),
-      content: SizedBox(
-        width: 560,
-        height: 420,
-        child: prescriptions.isEmpty
-            ? Center(
-                child: Text(
-                  requiredForClaim
-                      ? 'No verified prescriptions found for this patient.'
-                      : 'No active prescriptions found for this patient.',
-                ),
-              )
-            : ListView.separated(
-                itemCount: prescriptions.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (BuildContext context, int index) {
-                  final Prescription p = prescriptions[index];
-                  final bool selected =
-                      p.prescriptionId == selectedPrescriptionId;
-
-                  return ListTile(
-                    leading: Icon(
-                      selected
-                          ? Icons.check_circle
-                          : Icons.description_outlined,
-                    ),
-                    title: Text(
-                      p.fileName.trim().isNotEmpty
-                          ? p.fileName.trim()
-                          : p.prescriptionId,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      _join(<String?>[
-                        p.prescriptionId,
-                        p.prescribedOn == null
-                            ? null
-                            : 'Prescribed: ${p.prescribedOn}',
-                        p.status.label,
-                      ]),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => Navigator.of(context).pop(p),
-                  );
-                },
-              ),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ],
-    );
-  }
-}
-
 class _TileBody extends StatelessWidget {
   const _TileBody({
     required this.icon,
@@ -973,7 +623,7 @@ class _TileBody extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   cleanSubtitle,
-                  maxLines: 3,
+                  maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall,
                 ),

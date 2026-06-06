@@ -315,20 +315,19 @@ class ZohoQuotesService {
     DateTime? dueDate,
     bool createInsuranceClaim = false,
   }) {
-    final bool shouldCreateInsuranceClaim =
-        createInsuranceClaim && draft.canCreateInsuranceClaim;
-
     return convertToInvoice(
       quoteId,
       invoiceDate: invoiceDate,
       dueDate: dueDate,
-      membershipId: shouldCreateInsuranceClaim
-          ? draft.resolvedMembershipId
-          : null,
-      prescriptionId: shouldCreateInsuranceClaim
-          ? draft.resolvedPrescriptionId
-          : null,
-      createInsuranceClaim: shouldCreateInsuranceClaim,
+
+      // Always carry clinical/insurance context forward to the invoice.
+      // Claim creation is no longer done during quote → invoice conversion.
+      membershipId: draft.resolvedMembershipId,
+      prescriptionId: draft.resolvedPrescriptionId,
+
+      // Deprecated behaviour. Claims are created separately after claim document upload.
+      createInsuranceClaim: false,
+
       patientSnapshot: draft.patientSnapshot,
       deliveryAddress: draft.deliveryAddress,
     );

@@ -123,6 +123,19 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     return requireAuth(context, ref);
   }
 
+  bool _hasMetaEdits(QuoteMetaState meta) {
+    return (meta.reference ?? '').trim().isNotEmpty ||
+        (meta.customerNotes ?? '').trim().isNotEmpty ||
+        meta.contact != null ||
+        meta.quoteDate != null ||
+        meta.expiryDate != null ||
+        meta.deliveryAddress != null ||
+        meta.patientSnapshot != null ||
+        (meta.resolvedPatientId ?? '').trim().isNotEmpty ||
+        (meta.resolvedMembershipId ?? '').trim().isNotEmpty ||
+        (meta.resolvedPrescriptionId ?? '').trim().isNotEmpty;
+  }
+
   Future<bool> _handleBack(BuildContext context, QuoteState state) async {
     if (state.busy) return false;
 
@@ -133,18 +146,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
     final QuoteMetaState meta = ref.read(quoteMetaControllerProvider);
 
-    final bool hasMetaEdits =
-        (meta.reference ?? '').trim().isNotEmpty ||
-        (meta.customerNotes ?? '').trim().isNotEmpty ||
-        meta.contact != null ||
-        meta.quoteDate != null ||
-        meta.expiryDate != null ||
-        meta.deliveryAddress != null ||
-        meta.patientSnapshot != null ||
-        (meta.resolvedPatientId ?? '').trim().isNotEmpty ||
-        (meta.resolvedMembershipId ?? '').trim().isNotEmpty;
-
-    if (!hasLines && !hasMetaEdits) return true;
+    if (!hasLines && !_hasMetaEdits(meta)) return true;
 
     final bool ok = _isEdit
         ? await SalesDocDialogs.confirmDiscardChanges(context)
@@ -340,7 +342,7 @@ class _QuoteEditLoadingState extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Please wait while we fetch the customer, patient, delivery address and quote items.',
+                      'Please wait while we fetch the customer, patient, insurance, prescription, delivery address and quote items.',
                       style: theme.textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

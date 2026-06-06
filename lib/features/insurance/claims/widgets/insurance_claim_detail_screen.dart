@@ -1,11 +1,21 @@
 // lib/features/insurance/claims/widgets/insurance_claim_detail_screen.dart
 
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
 import 'package:afyakit/features/insurance/claims/controllers/insurance_claims_controller.dart';
 import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claims/services/insurance_claims_service.dart';
 import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_form_dialog.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
+import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
+import 'package:afyakit/features/retail/invoices/controllers/invoice_action_controller.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,10 +24,12 @@ class InsuranceClaimDetailScreen extends ConsumerStatefulWidget {
   const InsuranceClaimDetailScreen({
     super.key,
     required this.claimId,
+    this.patientId,
     this.initialClaim,
   });
 
   final String claimId;
+  final String? patientId;
   final InsuranceClaim? initialClaim;
 
   @override
@@ -31,6 +43,14 @@ class _InsuranceClaimDetailScreenState
   bool _loading = false;
   String? _error;
 
+  String get _patientId {
+    return (_claim?.patientId ??
+            widget.initialClaim?.patientId ??
+            widget.patientId ??
+            '')
+        .trim();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,8 +61,17 @@ class _InsuranceClaimDetailScreenState
   }
 
   Future<void> _load() async {
-    final claimId = widget.claimId.trim();
+    final String claimId = widget.claimId.trim();
+    final String patientId = _patientId;
+
     if (claimId.isEmpty) return;
+
+    if (patientId.isEmpty) {
+      setState(() {
+        _error = 'Patient ID is required to load this claim.';
+      });
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -50,9 +79,9 @@ class _InsuranceClaimDetailScreenState
     });
 
     try {
-      final claim = await ref
+      final InsuranceClaim? claim = await ref
           .read(insuranceClaimsControllerProvider.notifier)
-          .get(claimId);
+          .get(patientId: patientId, claimId: claimId);
 
       if (!mounted) return;
 
@@ -71,34 +100,40 @@ class _InsuranceClaimDetailScreenState
   }
 
   Future<void> _editClaim() async {
-    final claim = _claim;
+    final InsuranceClaim? claim = _claim;
     if (claim == null) return;
 
-    final loadedMemberships = ref
+    final List<InsuranceMembership> loadedMemberships = ref
         .read(insuranceMembershipsControllerProvider)
         .items;
 
-    final input = await showDialog<InsuranceClaimUpsertInput>(
-      context: context,
-      builder: (_) => InsuranceClaimFormDialog(
-        initial: claim,
-        invoiceId: claim.invoiceId,
-        invoiceNumber: claim.invoiceNumber,
-        memberships: loadedMemberships,
-        initialMembershipId: claim.membershipId,
-      ),
-    );
+    final InsuranceClaimUpdateInput? input =
+        await showDialog<InsuranceClaimUpdateInput>(
+          context: context,
+          builder: (_) => InsuranceClaimFormDialog(
+            initial: claim,
+            invoiceId: claim.invoiceId,
+            invoiceNumber: claim.invoiceNumber,
+            memberships: loadedMemberships,
+            initialMembershipId: claim.membershipId,
+          ),
+        );
 
     if (input == null || !mounted) return;
 
-    final updated = await ref
+    final InsuranceClaim? updated = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .update(claim.claimId, input);
+        .update(
+          patientId: claim.patientId,
+          claimId: claim.claimId,
+          input: input,
+        );
 
     if (!mounted) return;
 
     if (updated == null) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error ?? 'Failed to update insurance claim')),
       );
@@ -112,39 +147,64 @@ class _InsuranceClaimDetailScreenState
     ).showSnackBar(const SnackBar(content: Text('Insurance claim updated')));
   }
 
-  Future<void> _detachClaimForm(InsuranceClaim claim) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Detach claim form?'),
-        content: const Text(
-          'This removes the claim form link from this claim. It does not delete the file from storage.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Detach'),
-          ),
-        ],
+  Future<void> _replaceClaimDocument(InsuranceClaim claim) async {
+    final FilePickerResult? picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    );
+
+    if (!mounted || picked == null || picked.files.isEmpty) return;
+
+    final PlatformFile file = picked.files.single;
+    final bytes = file.bytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read selected file.')),
+      );
+      return;
+    }
+
+    final InsuranceClaimsService svc = await ref.read(
+      insuranceClaimsServiceProvider.future,
+    );
+
+    final UploadedInsuranceClaimFile uploaded = await svc.uploadClaimFile(
+      patientId: claim.patientId,
+      file: PickedInsuranceClaimFile(
+        fileName: file.name,
+        extension: file.extension ?? 'pdf',
+        bytes: bytes,
       ),
     );
 
-    if (ok != true || !mounted) return;
+    if (!mounted) return;
 
-    final updated = await ref
+    final InsuranceClaim? updated = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .detachClaimForm(claim.claimId);
+        .update(
+          patientId: claim.patientId,
+          claimId: claim.claimId,
+          input: InsuranceClaimUpdateInput(
+            fileName: uploaded.fileName,
+            storagePath: uploaded.storagePath,
+            originalStoragePath: uploaded.originalStoragePath,
+            thumbnailStoragePath: uploaded.thumbnailStoragePath,
+            downloadUrl: uploaded.downloadUrl,
+            contentType: uploaded.contentType,
+            sizeBytes: uploaded.sizeBytes,
+          ),
+        );
 
     if (!mounted) return;
 
     if (updated == null) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Failed to detach claim form')),
+        SnackBar(content: Text(error ?? 'Failed to replace claim document')),
       );
       return;
     }
@@ -153,42 +213,36 @@ class _InsuranceClaimDetailScreenState
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Claim form detached')));
+    ).showSnackBar(const SnackBar(content: Text('Claim document replaced')));
   }
 
-  Future<void> _detachPrescription(InsuranceClaim claim) async {
-    final ok = await showDialog<bool>(
+  Future<void> _pickOrUploadPrescription(InsuranceClaim claim) async {
+    final Prescription? picked = await showDialog<Prescription>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Detach prescription?'),
-        content: const Text(
-          'This removes the prescription reference from this claim. The patient prescription record remains unchanged.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Detach'),
-          ),
-        ],
-      ),
+      builder: (_) => _ClaimPrescriptionPickerDialog(claim: claim),
     );
 
-    if (ok != true || !mounted) return;
+    if (!mounted || picked == null) return;
 
-    final updated = await ref
+    final InsuranceClaim? updated = await ref
         .read(insuranceClaimsControllerProvider.notifier)
-        .detachPrescription(claim.claimId);
+        .update(
+          patientId: claim.patientId,
+          claimId: claim.claimId,
+          input: InsuranceClaimUpdateInput(
+            prescriptionId: picked.prescriptionId,
+            prescriptionNo: claim.prescriptionNo,
+            prescriberName: claim.prescriberName,
+          ),
+        );
 
     if (!mounted) return;
 
     if (updated == null) {
-      final error = ref.read(insuranceClaimsControllerProvider).error;
+      final String? error = ref.read(insuranceClaimsControllerProvider).error;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Failed to detach prescription')),
+        SnackBar(content: Text(error ?? 'Failed to link prescription')),
       );
       return;
     }
@@ -197,11 +251,63 @@ class _InsuranceClaimDetailScreenState
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Prescription detached')));
+    ).showSnackBar(const SnackBar(content: Text('Prescription linked')));
+  }
+
+  Future<void> _openPrescription(InsuranceClaim claim) async {
+    final String patientId = claim.patientId.trim();
+    final String prescriptionId = (claim.prescriptionId ?? '').trim();
+
+    if (patientId.isEmpty || prescriptionId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No prescription is linked.')),
+      );
+      return;
+    }
+
+    try {
+      final PrescriptionsService service = ref.read(
+        prescriptionsServiceProvider,
+      );
+
+      final Prescription prescription = await service.get(
+        patientId: patientId,
+        prescriptionId: prescriptionId,
+      );
+
+      final String url = (prescription.downloadUrl ?? '').trim().isNotEmpty
+          ? prescription.downloadUrl!.trim()
+          : await service.downloadUrl(prescription.storagePath);
+
+      if (!mounted) return;
+
+      await _openUrl(url);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open prescription: $e')),
+      );
+    }
+  }
+
+  Future<void> _openInvoicePdf(InsuranceClaim claim) async {
+    final String invoiceId = (claim.invoiceId ?? '').trim();
+
+    if (invoiceId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No invoice is linked to this claim.')),
+      );
+      return;
+    }
+
+    await ref
+        .read(invoiceActionControllerProvider)
+        .viewPdf(context, invoiceId: invoiceId);
   }
 
   Future<void> _openUrl(String? value) async {
-    final raw = (value ?? '').trim();
+    final String raw = (value ?? '').trim();
 
     if (raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,7 +316,7 @@ class _InsuranceClaimDetailScreenState
       return;
     }
 
-    final uri = Uri.tryParse(raw);
+    final Uri? uri = Uri.tryParse(raw);
 
     if (uri == null) {
       ScaffoldMessenger.of(
@@ -219,7 +325,7 @@ class _InsuranceClaimDetailScreenState
       return;
     }
 
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final bool ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!ok && mounted) {
       ScaffoldMessenger.of(
@@ -230,19 +336,20 @@ class _InsuranceClaimDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final claim = _claim;
-    final busy =
+    final InsuranceClaim? claim = _claim;
+
+    final bool busy =
         _loading || ref.watch(insuranceClaimsControllerProvider).isSaving;
 
     return AppPage(
       title: claim == null
           ? 'Insurance Claim'
-          : 'Claim · ${claim.invoiceNumber ?? claim.invoiceId}',
+          : 'Claim · ${claim.claimNo ?? claim.invoiceNumber ?? claim.claimId}',
       showBack: true,
       maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
       scrollable: false,
-      actions: [
+      actions: <Widget>[
         IconButton(
           tooltip: 'Refresh',
           onPressed: busy ? null : _load,
@@ -262,7 +369,7 @@ class _InsuranceClaimDetailScreenState
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
+          children: <Widget>[
             if (_loading && claim == null)
               const Padding(
                 padding: EdgeInsets.all(48),
@@ -272,17 +379,17 @@ class _InsuranceClaimDetailScreenState
               _ErrorBanner(message: _error!)
             else if (claim == null)
               const _EmptyClaim()
-            else ...[
+            else ...<Widget>[
               _ClaimSummaryCard(claim: claim),
               const SizedBox(height: 12),
               _ClaimDocumentsCard(
                 claim: claim,
-                onOpenClaimForm: () => _openUrl(claim.claimFormUrl),
-                onOpenPrescription: () => _openUrl(claim.prescriptionUrl),
-                onOpenInvoicePdf: () => _openUrl(claim.invoicePdfUrl),
-                onOpenEtims: () => _openUrl(claim.etimsUrl),
-                onDetachClaimForm: () => _detachClaimForm(claim),
-                onDetachPrescription: () => _detachPrescription(claim),
+                busy: busy,
+                onOpenClaimDocument: () => _openUrl(claim.downloadUrl),
+                onOpenPrescription: () => _openPrescription(claim),
+                onOpenInvoicePdf: () => _openInvoicePdf(claim),
+                onReplaceClaimDocument: () => _replaceClaimDocument(claim),
+                onPickPrescription: () => _pickOrUploadPrescription(claim),
               ),
               const SizedBox(height: 12),
               _ClaimDetailsCard(claim: claim),
@@ -306,7 +413,7 @@ class _ClaimSummaryCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          children: <Widget>[
             const _SectionTitle(
               icon: Icons.assignment_outlined,
               title: 'Claim summary',
@@ -326,14 +433,12 @@ class _ClaimSummaryCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                Chip(label: Text('Claim: ${claim.status.label}')),
-                if (claim.claimFormStatus != null)
-                  Chip(label: Text('Form: ${claim.claimFormStatus!.label}')),
-                if (claim.hasPrescriptionEvidence)
-                  const Chip(label: Text('Prescription: Attached')),
-                if (claim.etimsStatus != null)
-                  Chip(label: Text('eTIMS: ${claim.etimsStatus!.label}')),
+              children: <Widget>[
+                Chip(label: Text('Status: ${claim.status.label}')),
+                if (claim.hasFile) const Chip(label: Text('Document uploaded')),
+                if (claim.hasPrescription)
+                  const Chip(label: Text('Prescription linked')),
+                if (claim.hasInvoice) const Chip(label: Text('Invoice linked')),
                 if (!claim.isActive) const Chip(label: Text('Inactive')),
               ],
             ),
@@ -347,21 +452,21 @@ class _ClaimSummaryCard extends StatelessWidget {
 class _ClaimDocumentsCard extends StatelessWidget {
   const _ClaimDocumentsCard({
     required this.claim,
-    required this.onOpenClaimForm,
+    required this.busy,
+    required this.onOpenClaimDocument,
     required this.onOpenPrescription,
     required this.onOpenInvoicePdf,
-    required this.onOpenEtims,
-    required this.onDetachClaimForm,
-    required this.onDetachPrescription,
+    required this.onReplaceClaimDocument,
+    required this.onPickPrescription,
   });
 
   final InsuranceClaim claim;
-  final VoidCallback onOpenClaimForm;
+  final bool busy;
+  final VoidCallback onOpenClaimDocument;
   final VoidCallback onOpenPrescription;
   final VoidCallback onOpenInvoicePdf;
-  final VoidCallback onOpenEtims;
-  final VoidCallback onDetachClaimForm;
-  final VoidCallback onDetachPrescription;
+  final VoidCallback onReplaceClaimDocument;
+  final VoidCallback onPickPrescription;
 
   @override
   Widget build(BuildContext context) {
@@ -369,96 +474,68 @@ class _ClaimDocumentsCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          children: [
+          children: <Widget>[
             const _SectionTitle(
               icon: Icons.folder_outlined,
-              title: 'Claim pack',
+              title: 'Claim documents',
             ),
             const SizedBox(height: 12),
             _DocumentTile(
-              title: 'Claim form',
-              subtitle: _claimFormSubtitle(claim),
+              title: 'Insurance claim document',
+              subtitle: _claimDocumentSubtitle(claim),
               icon: Icons.assignment_outlined,
-              hasLink: _hasText(claim.claimFormUrl),
-              onOpen: onOpenClaimForm,
-              secondaryAction: claim.hasClaimForm
-                  ? TextButton.icon(
-                      onPressed: onDetachClaimForm,
-                      icon: const Icon(Icons.link_off),
-                      label: const Text('Detach'),
-                    )
-                  : null,
+              hasLink: claim.hasFile,
+              onOpen: onOpenClaimDocument,
+              secondaryAction: TextButton.icon(
+                onPressed: busy ? null : onReplaceClaimDocument,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Replace'),
+              ),
             ),
             const Divider(height: 1),
             _DocumentTile(
               title: 'Prescription',
               subtitle: _prescriptionSubtitle(claim),
               icon: Icons.medication_outlined,
-              hasLink: _hasText(claim.prescriptionUrl),
+              hasLink: _hasText(claim.prescriptionId),
               onOpen: onOpenPrescription,
-              secondaryAction: claim.hasPrescriptionEvidence
-                  ? TextButton.icon(
-                      onPressed: onDetachPrescription,
-                      icon: const Icon(Icons.link_off),
-                      label: const Text('Detach'),
-                    )
-                  : null,
+              secondaryAction: TextButton.icon(
+                onPressed: busy ? null : onPickPrescription,
+                icon: const Icon(Icons.medication_outlined),
+                label: Text(claim.hasPrescription ? 'Change' : 'Pick / upload'),
+              ),
             ),
             const Divider(height: 1),
             _DocumentTile(
               title: 'Invoice PDF',
-              subtitle: claim.invoiceNumber ?? claim.invoiceId,
+              subtitle: claim.invoiceNumber ?? claim.invoiceId ?? 'Not linked',
               icon: Icons.receipt_long_outlined,
-              hasLink: _hasText(claim.invoicePdfUrl),
+              hasLink: _hasText(claim.invoiceId),
               onOpen: onOpenInvoicePdf,
             ),
-            const Divider(height: 1),
-            _DocumentTile(
-              title: 'eTIMS',
-              subtitle: _etimsSubtitle(claim),
-              icon: Icons.verified_outlined,
-              hasLink: _hasText(claim.etimsUrl),
-              onOpen: onOpenEtims,
-            ),
-            const SizedBox(height: 12),
-            _ReadinessBanner(claim: claim),
           ],
         ),
       ),
     );
   }
 
-  static String _claimFormSubtitle(InsuranceClaim claim) {
-    final parts = <String>[
-      claim.claimFormStatus?.label ?? 'Pending',
-      if (_hasText(claim.claimFormFileName)) claim.claimFormFileName!.trim(),
-      if (_hasText(claim.claimFormContentType))
-        claim.claimFormContentType!.trim(),
-      if (claim.claimFormSizeBytes != null)
-        _formatBytes(claim.claimFormSizeBytes!),
+  static String _claimDocumentSubtitle(InsuranceClaim claim) {
+    final List<String> parts = <String>[
+      if (_hasText(claim.fileName)) claim.fileName.trim(),
+      if (_hasText(claim.contentType)) claim.contentType!.trim(),
+      if (claim.sizeBytes != null) _formatBytes(claim.sizeBytes!),
     ];
 
-    return parts.join(' · ');
+    return parts.isEmpty ? 'No document uploaded' : parts.join(' · ');
   }
 
   static String _prescriptionSubtitle(InsuranceClaim claim) {
-    final parts = <String>[
-      if (_hasText(claim.prescriptionFileName))
-        claim.prescriptionFileName!.trim(),
+    final List<String> parts = <String>[
       if (_hasText(claim.prescriptionNo)) 'Rx No: ${claim.prescriptionNo}',
       if (_hasText(claim.prescriptionId)) 'ID: ${claim.prescriptionId}',
     ];
 
-    return parts.isEmpty ? 'Not attached' : parts.join(' · ');
-  }
-
-  static String _etimsSubtitle(InsuranceClaim claim) {
-    final parts = <String>[
-      if (claim.etimsStatus != null) claim.etimsStatus!.label,
-      if (_hasText(claim.etimsNo)) 'No: ${claim.etimsNo}',
-    ];
-
-    return parts.isEmpty ? 'Not available' : parts.join(' · ');
+    return parts.isEmpty ? 'Not linked' : parts.join(' · ');
   }
 
   static bool _hasText(String? value) => (value ?? '').trim().isNotEmpty;
@@ -466,10 +543,10 @@ class _ClaimDocumentsCard extends StatelessWidget {
   static String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
 
-    final kb = bytes / 1024;
+    final double kb = bytes / 1024;
     if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
 
-    final mb = kb / 1024;
+    final double mb = kb / 1024;
     return '${mb.toStringAsFixed(1)} MB';
   }
 }
@@ -485,7 +562,7 @@ class _ClaimDetailsCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          children: [
+          children: <Widget>[
             const _SectionTitle(
               icon: Icons.fact_check_outlined,
               title: 'Claim details',
@@ -495,24 +572,272 @@ class _ClaimDetailsCard extends StatelessWidget {
             _InfoRow('Claim no.', claim.claimNo),
             _InfoRow('Visit no.', claim.visitNo),
             _InfoRow('Service date', claim.serviceDate),
+            _InfoRow('Prescription ID', claim.prescriptionId),
             _InfoRow('Prescription no.', claim.prescriptionNo),
             _InfoRow('Prescriber', claim.prescriberName),
             _InfoRow('Diagnosis', claim.diagnosis),
             _InfoRow('ICD-10', claim.icd10Code),
-            _InfoRow('Investigations', claim.investigations),
-            _InfoRow(
-              'Treatment recommendations',
-              claim.treatmentRecommendations,
-            ),
             _InfoRow('Notes', claim.notes),
             _InfoRow('Submitted at', claim.submittedAt),
             _InfoRow('Submitted by', claim.submittedByUid),
+            _InfoRow('Uploaded by', claim.uploadedByUid),
             _InfoRow('Created', claim.createdAt),
             _InfoRow('Updated', claim.updatedAt),
           ],
         ),
       ),
     );
+  }
+}
+
+class _ClaimPrescriptionPickerDialog extends ConsumerStatefulWidget {
+  const _ClaimPrescriptionPickerDialog({required this.claim});
+
+  final InsuranceClaim claim;
+
+  @override
+  ConsumerState<_ClaimPrescriptionPickerDialog> createState() =>
+      _ClaimPrescriptionPickerDialogState();
+}
+
+class _ClaimPrescriptionPickerDialogState
+    extends ConsumerState<_ClaimPrescriptionPickerDialog> {
+  Prescription? _selected;
+
+  String get _patientId => widget.claim.patientId.trim();
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future<void>.microtask(_load);
+  }
+
+  Future<void> _load() {
+    if (_patientId.isEmpty) return Future<void>.value();
+
+    return ref
+        .read(prescriptionsControllerProvider(_patientId).notifier)
+        .load(patientId: _patientId, isActive: true);
+  }
+
+  Future<void> _upload() async {
+    if (_patientId.isEmpty) {
+      _snack('Claim patient ID is missing.');
+      return;
+    }
+
+    final _PrescriptionUploadMeta? meta =
+        await showDialog<_PrescriptionUploadMeta>(
+          context: context,
+          builder: (_) => const _PrescriptionUploadMetaDialog(),
+        );
+
+    if (!mounted || meta == null) return;
+
+    final FilePickerResult? picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    );
+
+    if (!mounted || picked == null || picked.files.isEmpty) return;
+
+    final PlatformFile file = picked.files.single;
+    final bytes = file.bytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      _snack('Could not read selected file.');
+      return;
+    }
+
+    final String tenantId = ref.read(tenantIdProvider).trim();
+
+    final PrescriptionsController controller = ref.read(
+      prescriptionsControllerProvider(_patientId).notifier,
+    );
+
+    await controller.upload(
+      tenantId: tenantId,
+      patientId: _patientId,
+      file: PickedPrescriptionFile(
+        fileName: file.name,
+        extension: file.extension ?? 'jpg',
+        bytes: bytes,
+      ),
+      note: meta.note,
+      prescribedOn: meta.prescribedOn,
+    );
+
+    if (!mounted) return;
+
+    final PrescriptionsState state = ref.read(
+      prescriptionsControllerProvider(_patientId),
+    );
+
+    if (state.error != null) {
+      _snack(state.error!);
+      return;
+    }
+
+    final Prescription? saved = state.items.isEmpty ? null : state.items.first;
+
+    setState(() => _selected = saved);
+
+    _snack('Prescription uploaded.');
+  }
+
+  void _useSelected() {
+    final Prescription? selected = _selected;
+
+    if (selected == null) {
+      _snack('Pick or upload a prescription first.');
+      return;
+    }
+
+    Navigator.of(context).pop(selected);
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final PrescriptionsState state = _patientId.isEmpty
+        ? const PrescriptionsState()
+        : ref.watch(prescriptionsControllerProvider(_patientId));
+
+    return AlertDialog(
+      title: const Text('Link prescription'),
+      content: SizedBox(
+        width: 720,
+        height: MediaQuery.of(context).size.height * 0.66,
+        child: PrescriptionPickerCard(
+          patientId: _patientId,
+          prescriptions: state.items,
+          selectedPrescriptionId:
+              _selected?.prescriptionId ?? widget.claim.prescriptionId,
+          busy: state.busy,
+          error: state.error,
+          requiredForClaim: true,
+          onRefresh: _patientId.isEmpty ? null : _load,
+          onUpload: _patientId.isEmpty ? null : _upload,
+          onChanged: (Prescription? prescription) {
+            setState(() => _selected = prescription);
+          },
+        ),
+      ),
+      actions: <Widget>[
+        TextButton.icon(
+          onPressed: () => Navigator.of(context).pop(null),
+          icon: const Icon(Icons.close),
+          label: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: state.busy ? null : _useSelected,
+          icon: const Icon(Icons.check),
+          label: const Text('Link'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PrescriptionUploadMeta {
+  const _PrescriptionUploadMeta({this.note, this.prescribedOn});
+
+  final String? note;
+  final String? prescribedOn;
+}
+
+class _PrescriptionUploadMetaDialog extends StatefulWidget {
+  const _PrescriptionUploadMetaDialog();
+
+  @override
+  State<_PrescriptionUploadMetaDialog> createState() =>
+      _PrescriptionUploadMetaDialogState();
+}
+
+class _PrescriptionUploadMetaDialogState
+    extends State<_PrescriptionUploadMetaDialog> {
+  final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _prescribedOnController = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _prescribedOnController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Prescription details'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+              controller: _prescribedOnController,
+              decoration: const InputDecoration(
+                labelText: 'Prescribed on',
+                hintText: 'YYYY-MM-DD',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _noteController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Note',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            final String? prescribedOn = _clean(_prescribedOnController.text);
+
+            if (prescribedOn != null &&
+                !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(prescribedOn)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Date must be YYYY-MM-DD')),
+              );
+              return;
+            }
+
+            Navigator.of(context).pop(
+              _PrescriptionUploadMeta(
+                note: _clean(_noteController.text),
+                prescribedOn: prescribedOn,
+              ),
+            );
+          },
+          icon: const Icon(Icons.check),
+          label: const Text('Continue'),
+        ),
+      ],
+    );
+  }
+
+  String? _clean(String value) {
+    final String clean = value.trim();
+    return clean.isEmpty ? null : clean;
   }
 }
 
@@ -525,7 +850,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: [
+      children: <Widget>[
         Icon(icon, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 8),
         Expanded(
@@ -560,79 +885,22 @@ class _DocumentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cleanSubtitle = subtitle.trim();
-
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(child: Icon(icon)),
+      leading: Icon(icon),
       title: Text(title),
-      subtitle: Text(
-        cleanSubtitle.isEmpty ? 'Not available' : cleanSubtitle,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+      subtitle: Text(subtitle),
       trailing: Wrap(
-        spacing: 6,
+        spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
+        children: <Widget>[
           if (secondaryAction != null) secondaryAction!,
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Open',
             onPressed: hasLink ? onOpen : null,
             icon: const Icon(Icons.open_in_new),
-            label: const Text('Open'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ReadinessBanner extends StatelessWidget {
-  const _ReadinessBanner({required this.claim});
-
-  final InsuranceClaim claim;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    final missing = <String>[
-      if (!claim.hasClaimForm) 'claim form',
-      if (!claim.hasPrescriptionEvidence) 'prescription',
-      if (!claim.hasEtimsEvidence) 'eTIMS',
-    ];
-
-    final ready = missing.isEmpty && claim.isReadyForSubmission;
-
-    return Material(
-      color: ready ? scheme.secondaryContainer : scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(
-              ready ? Icons.check_circle_outline : Icons.info_outline,
-              color: ready
-                  ? scheme.onSecondaryContainer
-                  : scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                ready
-                    ? 'Claim pack is ready for submission.'
-                    : 'Missing: ${missing.join(', ')}.',
-                style: TextStyle(
-                  color: ready
-                      ? scheme.onSecondaryContainer
-                      : scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -646,25 +914,23 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clean = (value ?? '').trim();
+    final String clean = (value ?? '').trim();
+
     if (clean.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           SizedBox(
-            width: 170,
+            width: 180,
             child: Text(
               label,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
-          Expanded(child: SelectableText(clean)),
+          Expanded(child: Text(clean)),
         ],
       ),
     );

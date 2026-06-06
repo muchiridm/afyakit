@@ -60,19 +60,18 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
 
   /// GET /insurance/claims
+  ///
+  /// Staff global list only.
   Uri insuranceClaimsList({
     String? search,
     String? membershipId,
     String? patientId,
-    String? patientNo,
     String? payerContactId,
     String? invoiceId,
     String? memberNo,
-    String? scheme,
     String? authCode,
     String? claimNo,
     String? visitNo,
-    String? prescriptionNo,
     String? prescriptionId,
     String? status,
     bool? isActive,
@@ -89,15 +88,12 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('search', search);
     add('membership_id', membershipId);
     add('patient_id', patientId);
-    add('patient_no', patientNo);
     add('payer_contact_id', payerContactId);
     add('invoice_id', invoiceId);
     add('member_no', memberNo);
-    add('scheme', scheme);
     add('auth_code', authCode);
     add('claim_no', claimNo);
     add('visit_no', visitNo);
-    add('prescription_no', prescriptionNo);
     add('prescription_id', prescriptionId);
     add('status', status);
 
@@ -108,38 +104,67 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     return _uri('insurance/claims', query: query);
   }
 
-  /// GET /insurance/claims/:claimId
-  Uri insuranceClaimGet(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}');
+  /// GET /insurance/patients/:patientId/claims
+  ///
+  /// Staff or member patient-scoped list.
+  Uri insuranceClaimsListForPatient({
+    required String patientId,
+    String? search,
+    String? membershipId,
+    String? payerContactId,
+    String? invoiceId,
+    String? memberNo,
+    String? authCode,
+    String? claimNo,
+    String? visitNo,
+    String? prescriptionId,
+    String? status,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
 
-  /// POST /insurance/claims
-  Uri insuranceClaimCreate() => _uri('insurance/claims');
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
 
-  /// PUT /insurance/claims/:claimId
-  Uri insuranceClaimUpdate(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}');
+    add('search', search);
+    add('membership_id', membershipId);
+    add('payer_contact_id', payerContactId);
+    add('invoice_id', invoiceId);
+    add('member_no', memberNo);
+    add('auth_code', authCode);
+    add('claim_no', claimNo);
+    add('visit_no', visitNo);
+    add('prescription_id', prescriptionId);
+    add('status', status);
 
-  /// DELETE /insurance/claims/:claimId
-  Uri insuranceClaimDelete(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}');
+    if (isActive != null) {
+      query['is_active'] = isActive ? 'true' : 'false';
+    }
 
-  // ─────────────────────────────────────────────
-  // 📎 Insurance / Claim Pack
-  // ─────────────────────────────────────────────
+    return _uri('insurance/patients/${_seg(patientId)}/claims', query: query);
+  }
 
-  /// PUT /insurance/claims/:claimId/claim-form
-  Uri insuranceClaimAttachClaimForm(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}/claim-form');
+  /// GET /insurance/patients/:patientId/claims/:claimId
+  Uri insuranceClaimGet({required String patientId, required String claimId}) =>
+      _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
 
-  /// DELETE /insurance/claims/:claimId/claim-form
-  Uri insuranceClaimDetachClaimForm(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}/claim-form');
+  /// POST /insurance/patients/:patientId/claims
+  Uri insuranceClaimCreate({required String patientId}) =>
+      _uri('insurance/patients/${_seg(patientId)}/claims');
 
-  /// PUT /insurance/claims/:claimId/prescription
-  Uri insuranceClaimAttachPrescription(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}/prescription');
+  /// PUT /insurance/patients/:patientId/claims/:claimId
+  Uri insuranceClaimUpdate({
+    required String patientId,
+    required String claimId,
+  }) => _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
 
-  /// DELETE /insurance/claims/:claimId/prescription
-  Uri insuranceClaimDetachPrescription(String claimId) =>
-      _uri('insurance/claims/${_seg(claimId)}/prescription');
+  /// DELETE /insurance/patients/:patientId/claims/:claimId
+  Uri insuranceClaimDelete({
+    required String patientId,
+    required String claimId,
+  }) => _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
 }

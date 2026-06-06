@@ -369,7 +369,11 @@ class QuoteEngine {
       dueDate: dueDate,
       membershipId: membershipId,
       prescriptionId: prescriptionId,
-      createInsuranceClaim: createInsuranceClaim,
+
+      // Claims are no longer created during quote → invoice conversion.
+      // The insurance claim is now created separately after uploading the claim document.
+      createInsuranceClaim: false,
+
       patientSnapshot: patientSnapshot,
       deliveryAddress: deliveryAddress,
     );
@@ -381,13 +385,19 @@ class QuoteEngine {
     DateTime? invoiceDate,
     DateTime? dueDate,
     bool createInsuranceClaim = false,
-  }) async {
-    return (await _svc).convertDraftToInvoice(
+  }) {
+    return convertToInvoice(
       quoteId,
-      draft,
       invoiceDate: invoiceDate,
       dueDate: dueDate,
-      createInsuranceClaim: createInsuranceClaim,
+      membershipId: draft.resolvedMembershipId,
+      prescriptionId: draft.resolvedPrescriptionId,
+
+      // Claims are no longer created here.
+      createInsuranceClaim: false,
+
+      patientSnapshot: draft.patientSnapshot,
+      deliveryAddress: draft.deliveryAddress,
     );
   }
 
