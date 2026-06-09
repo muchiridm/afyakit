@@ -1,4 +1,4 @@
-// lib/features/insurance/claims/services/insurance_claims_service.dart
+// lib/features/insurance/documents/services/insurance_documents_service.dart
 
 import 'dart:typed_data';
 
@@ -6,23 +6,28 @@ import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
-import 'package:afyakit/features/insurance/claims/services/insurance_claim_form_storage_paths.dart';
+import 'package:afyakit/features/insurance/documents/models/insurance_document.dart';
+import 'package:afyakit/features/insurance/documents/services/insurance_document_storage_paths.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final insuranceClaimsServiceProvider = FutureProvider<InsuranceClaimsService>((
-  ref,
-) async {
-  final String tenantId = ref.watch(tenantIdProvider);
-  final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
-  final AfyaKitClient api = await ref.watch(afyakitClientFutureProvider.future);
+final insuranceDocumentsServiceProvider =
+    FutureProvider<InsuranceDocumentsService>((ref) async {
+      final String tenantId = ref.watch(tenantIdProvider);
+      final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
+      final AfyaKitClient api = await ref.watch(
+        afyakitClientFutureProvider.future,
+      );
 
-  return InsuranceClaimsService(tenantId: tenantId, api: api, routes: routes);
-});
+      return InsuranceDocumentsService(
+        tenantId: tenantId,
+        api: api,
+        routes: routes,
+      );
+    });
 
-class PickedInsuranceClaimFile {
-  const PickedInsuranceClaimFile({
+class PickedInsuranceDocumentFile {
+  const PickedInsuranceDocumentFile({
     required this.fileName,
     required this.extension,
     required this.bytes,
@@ -35,8 +40,8 @@ class PickedInsuranceClaimFile {
   int get sizeBytes => bytes.lengthInBytes;
 }
 
-class UploadedInsuranceClaimFile {
-  const UploadedInsuranceClaimFile({
+class UploadedInsuranceDocumentFile {
+  const UploadedInsuranceDocumentFile({
     required this.fileName,
     required this.storagePath,
     required this.originalStoragePath,
@@ -54,25 +59,20 @@ class UploadedInsuranceClaimFile {
   final String contentType;
   final int sizeBytes;
 
-  InsuranceClaimCreateInput toCreateInput({
-    required String membershipId,
-    String? invoiceId,
-    String? invoiceNumber,
-    String? prescriptionId,
-    String? prescriptionNo,
-    String? prescriberName,
-    String? authCode,
-    String? claimNo,
-    String? visitNo,
-    String? serviceDate,
-    String? diagnosis,
-    String? icd10Code,
+  InsuranceDocumentCreateInput toCreateInput({
+    String? claimPackId,
+    required InsuranceDocumentType documentType,
+    String? membershipId,
+    String? payerContactId,
+    String? payerDisplayName,
+    String? title,
     String? notes,
-    InsuranceClaimStatus? status,
+    InsuranceDocumentStatus? status,
     bool? isActive,
   }) {
-    return InsuranceClaimCreateInput(
-      membershipId: membershipId,
+    return InsuranceDocumentCreateInput(
+      claimPackId: claimPackId,
+      documentType: documentType,
       fileName: fileName,
       storagePath: storagePath,
       originalStoragePath: originalStoragePath,
@@ -80,17 +80,10 @@ class UploadedInsuranceClaimFile {
       downloadUrl: downloadUrl,
       contentType: contentType,
       sizeBytes: sizeBytes,
-      invoiceId: invoiceId,
-      invoiceNumber: invoiceNumber,
-      prescriptionId: prescriptionId,
-      prescriptionNo: prescriptionNo,
-      prescriberName: prescriberName,
-      authCode: authCode,
-      claimNo: claimNo,
-      visitNo: visitNo,
-      serviceDate: serviceDate,
-      diagnosis: diagnosis,
-      icd10Code: icd10Code,
+      membershipId: membershipId,
+      payerContactId: payerContactId,
+      payerDisplayName: payerDisplayName,
+      title: title,
       notes: notes,
       status: status,
       isActive: isActive,
@@ -98,8 +91,8 @@ class UploadedInsuranceClaimFile {
   }
 }
 
-class InsuranceClaimsService {
-  const InsuranceClaimsService({
+class InsuranceDocumentsService {
+  const InsuranceDocumentsService({
     required this.tenantId,
     required this.api,
     required this.routes,
@@ -113,33 +106,25 @@ class InsuranceClaimsService {
 
   FirebaseStorage get storage => _storage ?? FirebaseStorage.instance;
 
-  Future<List<InsuranceClaim>> list({
+  Future<List<InsuranceDocument>> list({
     String? search,
-    String? membershipId,
     String? patientId,
+    String? claimPackId,
+    InsuranceDocumentType? documentType,
+    String? membershipId,
     String? payerContactId,
-    String? invoiceId,
-    String? memberNo,
-    String? authCode,
-    String? claimNo,
-    String? visitNo,
-    String? prescriptionId,
-    InsuranceClaimStatus? status,
+    InsuranceDocumentStatus? status,
     bool? isActive,
     int perPage = 50,
     int page = 1,
   }) async {
-    final Uri uri = routes.insuranceClaimsList(
+    final Uri uri = routes.insuranceDocumentsList(
       search: _nullable(search),
-      membershipId: _nullable(membershipId),
       patientId: _nullable(patientId),
+      claimPackId: _nullable(claimPackId),
+      documentType: documentType?.wire,
+      membershipId: _nullable(membershipId),
       payerContactId: _nullable(payerContactId),
-      invoiceId: _nullable(invoiceId),
-      memberNo: _nullable(memberNo),
-      authCode: _nullable(authCode),
-      claimNo: _nullable(claimNo),
-      visitNo: _nullable(visitNo),
-      prescriptionId: _nullable(prescriptionId),
       status: status?.wire,
       isActive: isActive,
       perPage: perPage,
@@ -149,38 +134,30 @@ class InsuranceClaimsService {
     final response = await api.getUri<Object?>(uri);
     final Map<String, Object?> body = _asMap(response.data);
 
-    return _readClaims(body['claims']);
+    return _readDocuments(body['documents']);
   }
 
-  Future<List<InsuranceClaim>> listForPatient({
+  Future<List<InsuranceDocument>> listForPatient({
     required String patientId,
     String? search,
+    String? claimPackId,
+    InsuranceDocumentType? documentType,
     String? membershipId,
     String? payerContactId,
-    String? invoiceId,
-    String? memberNo,
-    String? authCode,
-    String? claimNo,
-    String? visitNo,
-    String? prescriptionId,
-    InsuranceClaimStatus? status,
+    InsuranceDocumentStatus? status,
     bool? isActive,
     int perPage = 50,
     int page = 1,
   }) async {
     final String cleanPatientId = _requiredId(patientId, 'patientId');
 
-    final Uri uri = routes.insuranceClaimsListForPatient(
+    final Uri uri = routes.insuranceDocumentsListForPatient(
       patientId: cleanPatientId,
       search: _nullable(search),
+      claimPackId: _nullable(claimPackId),
+      documentType: documentType?.wire,
       membershipId: _nullable(membershipId),
       payerContactId: _nullable(payerContactId),
-      invoiceId: _nullable(invoiceId),
-      memberNo: _nullable(memberNo),
-      authCode: _nullable(authCode),
-      claimNo: _nullable(claimNo),
-      visitNo: _nullable(visitNo),
-      prescriptionId: _nullable(prescriptionId),
       status: status?.wire,
       isActive: isActive,
       perPage: perPage,
@@ -190,112 +167,121 @@ class InsuranceClaimsService {
     final response = await api.getUri<Object?>(uri);
     final Map<String, Object?> body = _asMap(response.data);
 
-    return _readClaims(body['claims']);
+    return _readDocuments(body['documents']);
   }
 
-  Future<InsuranceClaim> get({
+  Future<InsuranceDocument> get({
     required String patientId,
-    required String claimId,
+    required String documentId,
   }) async {
     final String cleanPatientId = _requiredId(patientId, 'patientId');
-    final String cleanClaimId = _requiredId(claimId, 'claimId');
+    final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     final response = await api.getUri<Object?>(
-      routes.insuranceClaimGet(
+      routes.insuranceDocumentGet(
         patientId: cleanPatientId,
-        claimId: cleanClaimId,
+        documentId: cleanDocumentId,
       ),
     );
 
     final Map<String, Object?> body = _asMap(response.data);
-    return _readClaim(body['claim']);
+    return _readDocument(body['document']);
   }
 
-  Future<InsuranceClaim> create({
+  Future<InsuranceDocument> create({
     required String patientId,
-    required InsuranceClaimCreateInput input,
+    required InsuranceDocumentCreateInput input,
   }) async {
     final String cleanPatientId = _requiredId(patientId, 'patientId');
 
     final response = await api.postUri<Object?>(
-      routes.insuranceClaimCreate(patientId: cleanPatientId),
+      routes.insuranceDocumentCreate(patientId: cleanPatientId),
       data: input.toJson(),
     );
 
     final Map<String, Object?> body = _asMap(response.data);
-    return _readClaim(body['claim']);
+    return _readDocument(body['document']);
   }
 
-  Future<InsuranceClaim> update({
+  Future<InsuranceDocument> update({
     required String patientId,
-    required String claimId,
-    required InsuranceClaimUpdateInput input,
+    required String documentId,
+    required InsuranceDocumentUpdateInput input,
   }) async {
     final String cleanPatientId = _requiredId(patientId, 'patientId');
-    final String cleanClaimId = _requiredId(claimId, 'claimId');
+    final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     final response = await api.putUri<Object?>(
-      routes.insuranceClaimUpdate(
+      routes.insuranceDocumentUpdate(
         patientId: cleanPatientId,
-        claimId: cleanClaimId,
+        documentId: cleanDocumentId,
       ),
       data: input.toJson(),
     );
 
     final Map<String, Object?> body = _asMap(response.data);
-    return _readClaim(body['claim']);
+    return _readDocument(body['document']);
   }
 
   Future<void> delete({
     required String patientId,
-    required String claimId,
+    required String documentId,
   }) async {
     final String cleanPatientId = _requiredId(patientId, 'patientId');
-    final String cleanClaimId = _requiredId(claimId, 'claimId');
+    final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     await api.deleteUri<Object?>(
-      routes.insuranceClaimDelete(
+      routes.insuranceDocumentDelete(
         patientId: cleanPatientId,
-        claimId: cleanClaimId,
+        documentId: cleanDocumentId,
       ),
     );
   }
 
-  Future<UploadedInsuranceClaimFile> uploadClaimFile({
+  Future<UploadedInsuranceDocumentFile> uploadDocumentFile({
     required String patientId,
-    required PickedInsuranceClaimFile file,
+    required PickedInsuranceDocumentFile file,
+    required InsuranceDocumentType documentType,
+    String? claimPackId,
   }) async {
     final String cleanTenantId = _requiredId(tenantId, 'tenantId');
     final String cleanPatientId = _requiredId(patientId, 'patientId');
 
-    final String uploadId = InsuranceClaimStoragePaths.newUploadId();
-    final String ext = InsuranceClaimStoragePaths.cleanExt(file.extension);
-    final String contentType = InsuranceClaimStoragePaths.contentTypeForExt(
+    final String uploadId = InsuranceDocumentStoragePaths.newUploadId();
+    final String ext = InsuranceDocumentStoragePaths.cleanExt(file.extension);
+    final String contentType = InsuranceDocumentStoragePaths.contentTypeForExt(
       ext,
     );
 
-    final String originalPath = InsuranceClaimStoragePaths.originalPath(
+    final String originalPath = InsuranceDocumentStoragePaths.originalPath(
       tenantId: cleanTenantId,
       patientId: cleanPatientId,
       uploadId: uploadId,
       ext: ext,
     );
 
-    final String thumbnailPath = InsuranceClaimStoragePaths.thumbnailPath(
+    final String thumbnailPath = InsuranceDocumentStoragePaths.thumbnailPath(
       tenantId: cleanTenantId,
       patientId: cleanPatientId,
       uploadId: uploadId,
     );
 
+    final Map<String, String> customMetadata = <String, String>{
+      'tenant_id': cleanTenantId,
+      'patient_id': cleanPatientId,
+      'upload_id': uploadId,
+      'document_type': documentType.wire,
+      'original_file_name': file.fileName,
+    };
+
+    final String? cleanClaimPackId = _nullable(claimPackId);
+    if (cleanClaimPackId != null) {
+      customMetadata['claim_pack_id'] = cleanClaimPackId;
+    }
+
     final SettableMetadata metadata = SettableMetadata(
       contentType: contentType,
-      customMetadata: <String, String>{
-        'tenant_id': cleanTenantId,
-        'patient_id': cleanPatientId,
-        'upload_id': uploadId,
-        'document_type': 'insurance_claim',
-        'original_file_name': file.fileName,
-      },
+      customMetadata: customMetadata,
     );
 
     final Reference ref = storage.ref(originalPath);
@@ -304,7 +290,7 @@ class InsuranceClaimsService {
 
     final String downloadUrl = await ref.getDownloadURL();
 
-    return UploadedInsuranceClaimFile(
+    return UploadedInsuranceDocumentFile(
       fileName: file.fileName,
       storagePath: originalPath,
       originalStoragePath: originalPath,
@@ -315,45 +301,35 @@ class InsuranceClaimsService {
     );
   }
 
-  Future<InsuranceClaim> uploadClaimFileAndCreate({
+  Future<InsuranceDocument> uploadDocumentFileAndCreate({
     required String patientId,
-    required String membershipId,
-    required PickedInsuranceClaimFile file,
-    String? invoiceId,
-    String? invoiceNumber,
-    String? prescriptionId,
-    String? prescriptionNo,
-    String? prescriberName,
-    String? authCode,
-    String? claimNo,
-    String? visitNo,
-    String? serviceDate,
-    String? diagnosis,
-    String? icd10Code,
+    required PickedInsuranceDocumentFile file,
+    required InsuranceDocumentType documentType,
+    String? claimPackId,
+    String? membershipId,
+    String? payerContactId,
+    String? payerDisplayName,
+    String? title,
     String? notes,
-    InsuranceClaimStatus? status,
+    InsuranceDocumentStatus? status,
     bool? isActive,
   }) async {
-    final UploadedInsuranceClaimFile uploaded = await uploadClaimFile(
+    final UploadedInsuranceDocumentFile uploaded = await uploadDocumentFile(
       patientId: patientId,
       file: file,
+      documentType: documentType,
+      claimPackId: claimPackId,
     );
 
     return create(
       patientId: patientId,
       input: uploaded.toCreateInput(
+        claimPackId: claimPackId,
+        documentType: documentType,
         membershipId: membershipId,
-        invoiceId: invoiceId,
-        invoiceNumber: invoiceNumber,
-        prescriptionId: prescriptionId,
-        prescriptionNo: prescriptionNo,
-        prescriberName: prescriberName,
-        authCode: authCode,
-        claimNo: claimNo,
-        visitNo: visitNo,
-        serviceDate: serviceDate,
-        diagnosis: diagnosis,
-        icd10Code: icd10Code,
+        payerContactId: payerContactId,
+        payerDisplayName: payerDisplayName,
+        title: title,
         notes: notes,
         status: status,
         isActive: isActive,
@@ -361,14 +337,14 @@ class InsuranceClaimsService {
     );
   }
 
-  static InsuranceClaim _readClaim(Object? value) {
-    return InsuranceClaim.fromJson(_asMap(value));
+  static InsuranceDocument _readDocument(Object? value) {
+    return InsuranceDocument.fromJson(_asMap(value));
   }
 
-  static List<InsuranceClaim> _readClaims(Object? value) {
+  static List<InsuranceDocument> _readDocuments(Object? value) {
     return _asListOfMaps(
       value,
-    ).map(InsuranceClaim.fromJson).toList(growable: false);
+    ).map(InsuranceDocument.fromJson).toList(growable: false);
   }
 
   static Map<String, Object?> _asMap(Object? value) {

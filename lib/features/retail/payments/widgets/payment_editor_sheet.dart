@@ -1,12 +1,9 @@
-// lib/features/retail/payments/zoho/widgets/payment_editor_sheet.dart
+// lib/features/retail/payments/widgets/payment_editor_sheet.dart
 
-import 'package:afyakit/features/retail/mpesa/models/mpesa_payment.dart';
-import 'package:afyakit/features/retail/payments/controllers/payment_state.dart';
+import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
-import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
 
 class PaymentEditorSheet extends ConsumerStatefulWidget {
   const PaymentEditorSheet({super.key, required this.invoiceId});
@@ -22,63 +19,35 @@ class PaymentEditorSheet extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<PaymentEditorSheet> createState() => _PaymentEditorSheetState();
+  ConsumerState<PaymentEditorSheet> createState() {
+    return _PaymentEditorSheetState();
+  }
 }
 
 class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
   late final TextEditingController _amountCtl;
   late final TextEditingController _dateCtl;
   late final TextEditingController _modeCtl;
-  late final TextEditingController _descCtl;
-
-  // ✅ NEW: phone input lives in the sheet (no dialog)
-  late final TextEditingController _phoneCtl;
-
-  ProviderSubscription<PaymentState>? _sub;
+  late final TextEditingController _referenceCtl;
+  late final TextEditingController _descriptionCtl;
 
   String? _lastEditingPaymentId;
-
   bool _amountDirty = false;
-  bool _phoneDirty = false;
 
   @override
   void initState() {
     super.initState();
 
-    final s = ref.read(paymentControllerProvider(widget.invoiceId));
-    _seedFromState(s);
-    _lastEditingPaymentId = s.editingPaymentId;
-
-    // ✅ Riverpod-safe listener for initState
-    _sub = ref.listenManual<PaymentState>(
+    final PaymentState state = ref.read(
       paymentControllerProvider(widget.invoiceId),
-      (prev, next) {
-        if (!mounted) return;
-
-        // ---- Amount auto-fill (pending) ----
-        final prevAmt = prev?.paymentDraft.amount ?? 0;
-        final nextAmt = next.paymentDraft.amount;
-        final becameNonZero = (prevAmt <= 0) && (nextAmt > 0);
-
-        if (!next.isEditing && !_amountDirty && becameNonZero) {
-          _amountCtl.text = _fmtAmount(nextAmt);
-        }
-
-        // ---- Phone auto-fill (suggested) ----
-        final prevPhone = (prev?.suggestedMpesaPhone ?? '').trim();
-        final nextPhone = (next.suggestedMpesaPhone ?? '').trim();
-
-        final becameAvailable = prevPhone.isEmpty && nextPhone.isNotEmpty;
-
-        if (!_phoneDirty && becameAvailable) {
-          _phoneCtl.text = nextPhone;
-        }
-      },
     );
 
-    // ✅ Kick seeding (pending amount + suggested phone)
+    _seedControllers(state);
+    _lastEditingPaymentId = state.editingPaymentId;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       ref
           .read(paymentControllerProvider(widget.invoiceId).notifier)
           .ensureSeededDefaults();
@@ -87,76 +56,59 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
 
   @override
   void dispose() {
-    _sub?.close();
     _amountCtl.dispose();
     _dateCtl.dispose();
     _modeCtl.dispose();
-    _descCtl.dispose();
-    _phoneCtl.dispose();
+    _referenceCtl.dispose();
+    _descriptionCtl.dispose();
     super.dispose();
   }
 
-  void _seedFromState(PaymentState s) {
-    _amountCtl = TextEditingController(text: _fmtAmount(s.paymentDraft.amount));
-    _dateCtl = TextEditingController(text: ymd.format(s.paymentDraft.date));
-    _modeCtl = TextEditingController(text: (s.paymentDraft.mode ?? '').trim());
-    _descCtl = TextEditingController(
-      text: (s.paymentDraft.description ?? '').trim(),
-    );
+  void _seedControllers(PaymentState state) {
+    final draft = state.paymentDraft;
 
-    // ✅ seed phone from state (if already known)
-    _phoneCtl = TextEditingController(
-      text: (s.suggestedMpesaPhone ?? '').trim(),
+    _amountCtl = TextEditingController(text: _formatAmount(draft.amount));
+    _dateCtl = TextEditingController(text: ymd.format(draft.date));
+    _modeCtl = TextEditingController(text: (draft.mode ?? '').trim());
+    _referenceCtl = TextEditingController(text: (draft.reference ?? '').trim());
+    _descriptionCtl = TextEditingController(
+      text: (draft.description ?? '').trim(),
     );
   }
 
-  void _resetControllersFromDraft(PaymentState s) {
+  void _resetControllers(PaymentState state) {
+    final draft = state.paymentDraft;
+
     _amountDirty = false;
-    _phoneDirty = false;
 
-    _amountCtl.text = _fmtAmount(s.paymentDraft.amount);
-    _dateCtl.text = ymd.format(s.paymentDraft.date);
-    _modeCtl.text = (s.paymentDraft.mode ?? '').trim();
-    _descCtl.text = (s.paymentDraft.description ?? '').trim();
-    _phoneCtl.text = (s.suggestedMpesaPhone ?? '').trim();
-  }
-
-  static String _fmtAmount(num v) {
-    if (v.isNaN || v.isInfinite) return '0';
-    final n = v < 0 ? 0 : v;
-    return n.toString();
-  }
-
-  static num? _parseAmount(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return null;
-    return num.tryParse(t);
-  }
-
-  static String _normalizePhone(String raw) {
-    // keep it minimal: trim only. backend/service can normalize further.
-    return raw.trim();
+    _amountCtl.text = _formatAmount(draft.amount);
+    _dateCtl.text = ymd.format(draft.date);
+    _modeCtl.text = (draft.mode ?? '').trim();
+    _referenceCtl.text = (draft.reference ?? '').trim();
+    _descriptionCtl.text = (draft.description ?? '').trim();
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(paymentControllerProvider(widget.invoiceId));
-    final ctl = ref.read(paymentControllerProvider(widget.invoiceId).notifier);
+    final PaymentState state = ref.watch(
+      paymentControllerProvider(widget.invoiceId),
+    );
 
-    if (_lastEditingPaymentId != s.editingPaymentId) {
-      _lastEditingPaymentId = s.editingPaymentId;
-      _resetControllersFromDraft(s);
+    final PaymentController controller = ref.read(
+      paymentControllerProvider(widget.invoiceId).notifier,
+    );
+
+    if (_lastEditingPaymentId != state.editingPaymentId) {
+      _lastEditingPaymentId = state.editingPaymentId;
+      _resetControllers(state);
     }
 
-    final isEdit = s.isEditing;
+    _maybeAutofillAmount(state);
 
-    final pending = (s.pendingAmount ?? 0);
-    final hasPending = pending > 0;
+    final bool isEdit = state.isEditing;
+    final bool busy = state.busy;
 
-    const showMpesa = true;
-
-    final phone = _normalizePhone(_phoneCtl.text);
-    final hasPhone = phone.isNotEmpty;
+    final num? pending = _validPending(state.pendingAmount);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -165,208 +117,213 @@ class _PaymentEditorSheetState extends ConsumerState<PaymentEditorSheet> {
         top: 14,
         bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  isEdit ? 'Edit payment' : 'Record payment',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Close',
-                onPressed: s.busy ? null : () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: _amountCtl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: 'Amount',
-              border: const OutlineInputBorder(),
-              helperText: hasPending ? 'Pending: $pending' : null,
-              suffixIcon: (!s.busy && hasPending && !isEdit)
-                  ? IconButton(
-                      tooltip: 'Use pending amount',
-                      onPressed: () {
-                        _amountDirty = false;
-                        _amountCtl.text = _fmtAmount(pending);
-                        ctl.patchDraft(amount: pending);
-                      },
-                      icon: const Icon(Icons.call_made_outlined),
-                    )
-                  : null,
-            ),
-            onChanged: (v) {
-              _amountDirty = true;
-              ctl.patchDraft(amount: _parseAmount(v));
-            },
-          ),
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: _dateCtl,
-            decoration: const InputDecoration(
-              labelText: 'Date (YYYY-MM-DD)',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) {
-              final dt = DateTime.tryParse(v.trim());
-              if (dt != null) ctl.patchDraft(date: dt);
-            },
-          ),
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: _modeCtl,
-            decoration: const InputDecoration(
-              labelText: 'Mode (Cash, Mpesa, Bank...)',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => ctl.patchDraft(mode: v),
-          ),
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: _descCtl,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Description (optional)',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => ctl.patchDraft(description: v),
-          ),
-          const SizedBox(height: 12),
-
-          // ✅ NEW: M-Pesa phone field inside the sheet (no dialog)
-          if (showMpesa) ...[
-            TextField(
-              controller: _phoneCtl,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'M-Pesa phone',
-                border: const OutlineInputBorder(),
-                hintText: '07XXXXXXXX or 2547XXXXXXXX',
-                helperText: (s.suggestedMpesaPhone ?? '').trim().isNotEmpty
-                    ? 'Suggested phone loaded'
-                    : 'Enter the phone number to receive the STK prompt',
-              ),
-              onChanged: (_) {
-                _phoneDirty = true;
-              },
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _Header(
+              title: isEdit ? 'Edit payment' : 'Record payment',
+              busy: busy,
+              onClose: () => Navigator.pop(context),
             ),
             const SizedBox(height: 12),
-          ],
-
-          if (s.mpesaLastPayment != null) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _mpesaStatusLabel(s.mpesaLastPayment!),
-                style: const TextStyle(fontSize: 12),
+            TextField(
+              controller: _amountCtl,
+              enabled: !busy,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
-
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: s.busy
-                      ? null
-                      : () {
-                          ctl.cancelPaymentEdit();
-                          Navigator.pop(context);
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                border: const OutlineInputBorder(),
+                helperText: pending == null ? null : 'Pending: $pending',
+                suffixIcon: pending == null || isEdit || busy
+                    ? null
+                    : IconButton(
+                        tooltip: 'Use pending amount',
+                        onPressed: () {
+                          _amountDirty = false;
+                          _amountCtl.text = _formatAmount(pending);
+                          controller.patchDraft(amount: pending);
                         },
-                  child: const Text('Cancel'),
-                ),
+                        icon: const Icon(Icons.call_made_outlined),
+                      ),
               ),
-              const SizedBox(width: 12),
+              onChanged: (String value) {
+                _amountDirty = true;
+                controller.patchDraft(amount: _parseAmount(value));
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _dateCtl,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: 'Date (YYYY-MM-DD)',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (String value) {
+                final DateTime? parsed = DateTime.tryParse(value.trim());
+                if (parsed == null) return;
 
-              if (showMpesa) ...[
+                controller.patchDraft(
+                  date: DateTime(parsed.year, parsed.month, parsed.day),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _modeCtl,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: 'Mode',
+                hintText: 'Cash, M-Pesa, Bank Transfer...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (String value) {
+                controller.patchDraft(mode: value);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _referenceCtl,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: 'Reference',
+                hintText: 'M-Pesa receipt, bank ref, cheque no...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (String value) {
+                controller.patchDraft(reference: value);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _descriptionCtl,
+              enabled: !busy,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (String value) {
+                controller.patchDraft(description: value);
+              },
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: busy
+                        ? null
+                        : () {
+                            controller.cancelPaymentEdit();
+                            Navigator.pop(context);
+                          },
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
-                    icon: s.busy
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            final bool ok = await controller.savePayment();
+
+                            if (!ok) return;
+                            if (!context.mounted) return;
+
+                            Navigator.pop(context);
+                          },
+                    icon: busy
                         ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.phone_android),
-                    label: Text(s.busy ? 'Processing…' : 'Pay via M-Pesa'),
-                    onPressed: (s.busy || !hasPhone)
-                        ? null
-                        : () async {
-                            final ok = await ctl.payViaMpesaStk(phone: phone);
-                            if (!ok) return;
-                            if (!context.mounted) return;
-                            Navigator.pop(context);
-                          },
+                        : const Icon(Icons.save_outlined),
+                    label: Text(busy ? 'Saving…' : 'Save'),
                   ),
                 ),
-                const SizedBox(width: 12),
               ],
-
-              Expanded(
-                child: FilledButton.icon(
-                  icon: s.busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(s.busy ? 'Saving…' : 'Save'),
-                  onPressed: s.busy
-                      ? null
-                      : () async {
-                          final ok = await ctl.savePayment();
-                          if (!ok) return;
-                          if (!context.mounted) return;
-                          Navigator.pop(context);
-                        },
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  static String _mpesaStatusLabel(MpesaPayment p) {
-    final s = p.status.trim().toLowerCase();
+  void _maybeAutofillAmount(PaymentState state) {
+    if (state.isEditing) return;
+    if (_amountDirty) return;
 
-    if (s == 'created') return 'M-Pesa: created (waiting to initiate)';
-    if (s == 'stk_initiated') return 'M-Pesa: waiting for PIN on phone…';
-    if (s == 'stk_failed') {
-      final msg = (p.resultDesc ?? '').trim();
-      return msg.isEmpty ? 'M-Pesa: failed' : 'M-Pesa: failed — $msg';
-    }
-    if (s == 'stk_success') {
-      final z = (p.zohoSyncStatus ?? '').trim().toLowerCase();
-      if (z == 'success') return 'M-Pesa: success (synced to Zoho)';
-      if (z == 'failed') {
-        final err = (p.zohoSyncError ?? '').trim();
-        return err.isEmpty
-            ? 'M-Pesa: success (Zoho sync failed)'
-            : 'M-Pesa: success (Zoho sync failed) — $err';
-      }
-      return 'M-Pesa: success (syncing to Zoho…)';
+    final num amount = state.paymentDraft.amount;
+    if (amount <= 0) return;
+
+    final String next = _formatAmount(amount);
+    if (_amountCtl.text.trim() == next) return;
+
+    _amountCtl.text = next;
+  }
+
+  static num? _parseAmount(String value) {
+    final String text = value.trim();
+    if (text.isEmpty) return null;
+
+    return num.tryParse(text);
+  }
+
+  static num? _validPending(num? value) {
+    if (value == null) return null;
+    if (!value.isFinite) return null;
+    if (value <= 0) return null;
+
+    return value;
+  }
+
+  static String _formatAmount(num value) {
+    if (!value.isFinite) return '0';
+
+    final num safe = value < 0 ? 0 : value;
+
+    if (safe == safe.roundToDouble()) {
+      return safe.toInt().toString();
     }
 
-    return 'M-Pesa: $s';
+    return safe.toStringAsFixed(2);
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.title,
+    required this.busy,
+    required this.onClose,
+  });
+
+  final String title;
+  final bool busy;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Close',
+          onPressed: busy ? null : onClose,
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    );
   }
 }

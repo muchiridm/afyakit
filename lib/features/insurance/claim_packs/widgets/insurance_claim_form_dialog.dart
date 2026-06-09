@@ -1,4 +1,4 @@
-// lib/features/insurance/claims/widgets/insurance_claim_form_dialog.dart
+// lib/features/insurance/claim_packs/widgets/insurance_claim_form_dialog.dart
 
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
@@ -6,14 +6,26 @@ import 'package:afyakit/features/clinical/prescriptions/models/prescription_mode
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
 import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
-import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_picker.dart';
-import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class InsuranceClaimPackFormResult {
+  const InsuranceClaimPackFormResult({
+    required this.patientId,
+    required this.createInput,
+    required this.updateInput,
+  });
+
+  final String patientId;
+  final InsuranceClaimPackCreateInput createInput;
+  final InsuranceClaimPackUpdateInput updateInput;
+}
 
 class InsuranceClaimFormDialog extends ConsumerStatefulWidget {
   const InsuranceClaimFormDialog({
@@ -27,25 +39,13 @@ class InsuranceClaimFormDialog extends ConsumerStatefulWidget {
     this.allowedPatientIds,
   });
 
-  final InsuranceClaim? initial;
-
-  /// Local fallback/list already loaded by parent.
-  ///
-  /// The membership picker reads from the membership controller, but this list
-  /// is still useful for resolving the initial selected membership label.
+  final InsuranceClaimPack? initial;
   final List<InsuranceMembership> memberships;
-
   final String? initialMembershipId;
-
-  /// Optional hard patient filter for member-scoped or patient-scoped flows.
-  final String? patientId;
-
-  /// Optional local visibility guard.
-  final Set<String>? allowedPatientIds;
-
-  /// Optional invoice context helper.
   final String? invoiceId;
   final String? invoiceNumber;
+  final String? patientId;
+  final Set<String>? allowedPatientIds;
 
   @override
   ConsumerState<InsuranceClaimFormDialog> createState() =>
@@ -61,14 +61,12 @@ class _InsuranceClaimFormDialogState
   late final TextEditingController _prescriptionNoCtl;
   late final TextEditingController _prescriberNameCtl;
   late final TextEditingController _authCodeCtl;
-  late final TextEditingController _claimNoCtl;
+  late final TextEditingController _insurerClaimNoCtl;
   late final TextEditingController _visitNoCtl;
   late final TextEditingController _serviceDateCtl;
   late final TextEditingController _diagnosisCtl;
   late final TextEditingController _icd10CodeCtl;
   late final TextEditingController _notesCtl;
-  late final TextEditingController _submittedAtCtl;
-  late final TextEditingController _submittedByUidCtl;
 
   InsuranceMembership? _selectedMembership;
   ZohoInvoice? _selectedInvoice;
@@ -77,7 +75,7 @@ class _InsuranceClaimFormDialogState
   String? _membershipId;
   String? _prescriptionId;
 
-  InsuranceClaimStatus _status = InsuranceClaimStatus.uploaded;
+  InsuranceClaimPackStatus _status = InsuranceClaimPackStatus.draft;
   bool _isActive = true;
 
   bool get _isEdit => widget.initial != null;
@@ -90,45 +88,62 @@ class _InsuranceClaimFormDialogState
         .trim();
   }
 
+  String? get _selectedPatientNo {
+    return _cleanOrNull(
+      _selectedMembership?.patientNo ??
+          widget.initial?.patientNo ??
+          widget.patientId,
+    );
+  }
+
+  bool get _hasInvoice {
+    return _nullable(_invoiceIdCtl) != null ||
+        _nullable(_invoiceNumberCtl) != null ||
+        _selectedInvoice != null;
+  }
+
   @override
   void initState() {
     super.initState();
 
-    final InsuranceClaim? initial = widget.initial;
+    final InsuranceClaimPack? initial = widget.initial;
 
     _invoiceIdCtl = TextEditingController(
       text: initial?.invoiceId ?? widget.invoiceId ?? '',
     );
+
     _invoiceNumberCtl = TextEditingController(
       text: initial?.invoiceNumber ?? widget.invoiceNumber ?? '',
     );
+
     _prescriptionNoCtl = TextEditingController(
       text: initial?.prescriptionNo ?? '',
     );
+
     _prescriberNameCtl = TextEditingController(
       text: initial?.prescriberName ?? '',
     );
+
     _authCodeCtl = TextEditingController(text: initial?.authCode ?? '');
-    _claimNoCtl = TextEditingController(text: initial?.claimNo ?? '');
+
+    _insurerClaimNoCtl = TextEditingController(
+      text: initial?.insurerClaimNo ?? '',
+    );
+
     _visitNoCtl = TextEditingController(text: initial?.visitNo ?? '');
     _serviceDateCtl = TextEditingController(text: initial?.serviceDate ?? '');
     _diagnosisCtl = TextEditingController(text: initial?.diagnosis ?? '');
     _icd10CodeCtl = TextEditingController(text: initial?.icd10Code ?? '');
     _notesCtl = TextEditingController(text: initial?.notes ?? '');
-    _submittedAtCtl = TextEditingController(text: initial?.submittedAt ?? '');
-    _submittedByUidCtl = TextEditingController(
-      text: initial?.submittedByUid ?? '',
-    );
 
-    _status = initial?.status ?? InsuranceClaimStatus.uploaded;
+    _status = initial?.status ?? InsuranceClaimPackStatus.draft;
     _isActive = initial?.isActive ?? true;
 
-    final String? requestedMembershipId =
-        initial?.membershipId ?? widget.initialMembershipId;
+    _membershipId = _cleanOrNull(
+      initial?.membershipId ?? widget.initialMembershipId,
+    );
 
-    _membershipId = _cleanOrNull(requestedMembershipId);
     _selectedMembership = _findMembership(_membershipId);
-
     _prescriptionId = _cleanOrNull(initial?.prescriptionId);
 
     Future<void>.microtask(_loadPrescriptions);
@@ -141,78 +156,13 @@ class _InsuranceClaimFormDialogState
     _prescriptionNoCtl.dispose();
     _prescriberNameCtl.dispose();
     _authCodeCtl.dispose();
-    _claimNoCtl.dispose();
+    _insurerClaimNoCtl.dispose();
     _visitNoCtl.dispose();
     _serviceDateCtl.dispose();
     _diagnosisCtl.dispose();
     _icd10CodeCtl.dispose();
     _notesCtl.dispose();
-    _submittedAtCtl.dispose();
-    _submittedByUidCtl.dispose();
     super.dispose();
-  }
-
-  InsuranceMembership? _findMembership(String? membershipId) {
-    final String id = (membershipId ?? '').trim();
-    if (id.isEmpty) return null;
-
-    for (final InsuranceMembership membership in widget.memberships) {
-      if (membership.membershipId == id) return membership;
-    }
-
-    return null;
-  }
-
-  String? _cleanOrNull(String? value) {
-    final String clean = (value ?? '').trim();
-    return clean.isEmpty ? null : clean;
-  }
-
-  String? _date(String? value) {
-    final String trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return null;
-
-    final bool ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
-    if (!ok) return 'Use YYYY-MM-DD';
-
-    return null;
-  }
-
-  String? _nullable(TextEditingController controller) {
-    final String value = controller.text.trim();
-    return value.isEmpty ? null : value;
-  }
-
-  InputDecoration _dec(String label, {String? hint, String? helper}) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      helperText: helper,
-      border: const OutlineInputBorder(),
-      isDense: true,
-    );
-  }
-
-  Widget _field({
-    required double width,
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    String? helper,
-    String? Function(String?)? validator,
-    int minLines = 1,
-    int maxLines = 1,
-  }) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        controller: controller,
-        decoration: _dec(label, hint: hint, helper: helper),
-        validator: validator,
-        minLines: minLines,
-        maxLines: maxLines,
-      ),
-    );
   }
 
   Future<void> _pickMembership() async {
@@ -230,18 +180,15 @@ class _InsuranceClaimFormDialogState
     if (!mounted || picked == null) return;
 
     final String previousPatientId = _selectedPatientId;
+    final String nextPatientId = picked.patientId.trim();
 
     setState(() {
       _selectedMembership = picked;
       _membershipId = picked.membershipId;
 
-      if (previousPatientId != picked.patientId.trim()) {
-        _selectedInvoice = null;
-        _invoiceIdCtl.clear();
-        _invoiceNumberCtl.clear();
-
-        _selectedPrescription = null;
-        _prescriptionId = null;
+      if (previousPatientId.isNotEmpty && previousPatientId != nextPatientId) {
+        _clearInvoice();
+        _clearPrescription();
       }
     });
 
@@ -256,15 +203,17 @@ class _InsuranceClaimFormDialogState
       return;
     }
 
-    final InsuranceMembership? membership = _selectedMembership;
-
     final ZohoInvoice? picked = await showDialog<ZohoInvoice>(
       context: context,
       builder: (_) => InvoicePickerDialog(
         initialInvoiceId: _nullable(_invoiceIdCtl),
         patientId: patientId,
-        patientNo: membership?.patientNo,
-        accountNumber: membership?.patientNo,
+        patientNo: _selectedPatientNo,
+
+        // Do not pass patientNo as accountNumber.
+        // accountNumber is a Zoho customer/member scope filter, not a patient filter.
+        accountNumber: null,
+
         title: 'Select patient invoice',
         emptyText: 'No invoices found for this patient.',
       ),
@@ -272,11 +221,28 @@ class _InsuranceClaimFormDialogState
 
     if (!mounted || picked == null) return;
 
+    _setInvoice(picked);
+  }
+
+  void _setInvoice(ZohoInvoice invoice) {
     setState(() {
-      _selectedInvoice = picked;
-      _invoiceIdCtl.text = picked.invoiceId;
-      _invoiceNumberCtl.text = picked.invoiceNumber ?? '';
+      _selectedInvoice = invoice;
+      _invoiceIdCtl.text = invoice.invoiceId;
+      _invoiceNumberCtl.text = invoice.invoiceNumber ?? '';
     });
+  }
+
+  void _clearInvoice() {
+    _selectedInvoice = null;
+    _invoiceIdCtl.clear();
+    _invoiceNumberCtl.clear();
+  }
+
+  void _clearPrescription() {
+    _selectedPrescription = null;
+    _prescriptionId = null;
+    _prescriptionNoCtl.clear();
+    _prescriberNameCtl.clear();
   }
 
   Future<void> _loadPrescriptions() {
@@ -361,22 +327,111 @@ class _InsuranceClaimFormDialogState
     _snack('Prescription uploaded.');
   }
 
+  void _setPrescription(Prescription? prescription) {
+    setState(() {
+      _selectedPrescription = prescription;
+      _prescriptionId = prescription?.prescriptionId;
+
+      if (prescription != null) {
+        final String fileName = prescription.fileName.trim();
+
+        if (_prescriptionNoCtl.text.trim().isEmpty) {
+          _prescriptionNoCtl.text = fileName.isEmpty
+              ? prescription.prescriptionId
+              : fileName;
+        }
+      }
+    });
+  }
+
+  void _submit() {
+    final bool valid = _formKey.currentState?.validate() ?? false;
+    if (!valid) return;
+
+    final String membershipId = (_membershipId ?? '').trim();
+    final String patientId = _selectedPatientId;
+
+    if (membershipId.isEmpty) {
+      _snack('Select an insurance membership.');
+      return;
+    }
+
+    if (patientId.isEmpty) {
+      _snack('Selected membership has no patient ID.');
+      return;
+    }
+
+    final InsuranceClaimPackCreateInput createInput =
+        InsuranceClaimPackCreateInput(
+          membershipId: membershipId,
+          invoiceId: _nullable(_invoiceIdCtl),
+          invoiceNumber: _nullable(_invoiceNumberCtl),
+          prescriptionId: _cleanOrNull(_prescriptionId),
+          prescriptionNo: _nullable(_prescriptionNoCtl),
+          prescriberName: _nullable(_prescriberNameCtl),
+          authCode: _nullable(_authCodeCtl),
+          insurerClaimNo: _nullable(_insurerClaimNoCtl),
+          visitNo: _nullable(_visitNoCtl),
+          serviceDate: _nullable(_serviceDateCtl),
+          diagnosis: _nullable(_diagnosisCtl),
+          icd10Code: _nullable(_icd10CodeCtl),
+          notes: _nullable(_notesCtl),
+          status: _status,
+          isActive: _isActive,
+        );
+
+    final InsuranceClaimPackUpdateInput updateInput =
+        InsuranceClaimPackUpdateInput(
+          membershipId: membershipId,
+          invoiceId: _nullable(_invoiceIdCtl),
+          invoiceNumber: _nullable(_invoiceNumberCtl),
+          prescriptionId: _cleanOrNull(_prescriptionId),
+          prescriptionNo: _nullable(_prescriptionNoCtl),
+          prescriberName: _nullable(_prescriberNameCtl),
+          authCode: _nullable(_authCodeCtl),
+          insurerClaimNo: _nullable(_insurerClaimNoCtl),
+          visitNo: _nullable(_visitNoCtl),
+          serviceDate: _nullable(_serviceDateCtl),
+          diagnosis: _nullable(_diagnosisCtl),
+          icd10Code: _nullable(_icd10CodeCtl),
+          notes: _nullable(_notesCtl),
+          status: _status,
+          isActive: _isActive,
+        );
+
+    Navigator.of(context).pop(
+      InsuranceClaimPackFormResult(
+        patientId: patientId,
+        createInput: createInput,
+        updateInput: updateInput,
+      ),
+    );
+  }
+
+  InsuranceMembership? _findMembership(String? membershipId) {
+    final String id = (membershipId ?? '').trim();
+    if (id.isEmpty) return null;
+
+    for (final InsuranceMembership membership in widget.memberships) {
+      if (membership.membershipId == id) return membership;
+    }
+
+    return null;
+  }
+
   String _membershipTitle() {
     final InsuranceMembership? membership = _selectedMembership;
-
     if (membership != null) return membership.displayTitle;
 
     final String? id = _cleanOrNull(_membershipId);
-    if (id != null) return id;
-
-    return 'No membership selected';
+    return id ?? 'No membership selected';
   }
 
   String _membershipSubtitle() {
     final InsuranceMembership? membership = _selectedMembership;
 
     if (membership == null) {
-      return 'Select the verified membership. Patient/member details come from the membership record.';
+      return 'Select the patient insurance membership.';
     }
 
     final List<String> parts = <String>[
@@ -414,15 +469,24 @@ class _InsuranceClaimFormDialogState
     final ZohoInvoice? invoice = _selectedInvoice;
 
     if (invoice == null) {
-      return 'Optional. Link this claim to the patient invoice.';
+      final String? invoiceNumber = _nullable(_invoiceNumberCtl);
+      final String? invoiceId = _nullable(_invoiceIdCtl);
+
+      if (invoiceNumber != null || invoiceId != null) {
+        return 'Linked invoice saved on this claim pack.';
+      }
+
+      return 'Tap to select the patient invoice for this claim pack.';
     }
 
     final List<String> parts = <String>[
       invoice.customerName,
       invoice.status,
       if (invoice.date != null) _formatDate(invoice.date!),
-      '${invoice.currencyCode ?? ''} ${invoice.total}',
+      '${invoice.currencyCode ?? ''} ${invoice.total}'.trim(),
       if (invoice.balance != null) 'Balance ${invoice.balance}',
+      if (invoice.hasClaimPack) 'Claim pack linked',
+      if (invoice.isInsurancePayment) 'Insurance',
     ];
 
     return parts.where((String p) => p.trim().isNotEmpty).join(' · ');
@@ -436,38 +500,56 @@ class _InsuranceClaimFormDialogState
     return '${local.year}-${two(local.month)}-${two(local.day)}';
   }
 
-  void _submit() {
-    final bool valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
+  String? _date(String? value) {
+    final String trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
 
-    final String membershipId = (_membershipId ?? '').trim();
+    final bool ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
+    if (!ok) return 'Use YYYY-MM-DD';
 
-    if (membershipId.isEmpty) {
-      _snack('Select an insurance membership.');
-      return;
-    }
+    return null;
+  }
 
-    final InsuranceClaimUpdateInput input = InsuranceClaimUpdateInput(
-      membershipId: membershipId,
-      invoiceId: _nullable(_invoiceIdCtl),
-      invoiceNumber: _nullable(_invoiceNumberCtl),
-      prescriptionId: _cleanOrNull(_prescriptionId),
-      prescriptionNo: _nullable(_prescriptionNoCtl),
-      prescriberName: _nullable(_prescriberNameCtl),
-      authCode: _nullable(_authCodeCtl),
-      claimNo: _nullable(_claimNoCtl),
-      visitNo: _nullable(_visitNoCtl),
-      serviceDate: _nullable(_serviceDateCtl),
-      diagnosis: _nullable(_diagnosisCtl),
-      icd10Code: _nullable(_icd10CodeCtl),
-      notes: _nullable(_notesCtl),
-      submittedAt: _nullable(_submittedAtCtl),
-      submittedByUid: _nullable(_submittedByUidCtl),
-      status: _status,
-      isActive: _isActive,
+  String? _nullable(TextEditingController controller) {
+    final String value = controller.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String? _cleanOrNull(String? value) {
+    final String clean = (value ?? '').trim();
+    return clean.isEmpty ? null : clean;
+  }
+
+  InputDecoration _dec(String label, {String? hint, String? helper}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      helperText: helper,
+      border: const OutlineInputBorder(),
+      isDense: true,
     );
+  }
 
-    Navigator.of(context).pop(input);
+  Widget _field({
+    required double width,
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    String? helper,
+    String? Function(String?)? validator,
+    int minLines = 1,
+    int maxLines = 1,
+  }) {
+    return SizedBox(
+      width: width,
+      child: TextFormField(
+        controller: controller,
+        decoration: _dec(label, hint: hint, helper: helper),
+        validator: validator,
+        minLines: minLines,
+        maxLines: maxLines,
+      ),
+    );
   }
 
   void _snack(String message) {
@@ -481,8 +563,6 @@ class _InsuranceClaimFormDialogState
     final bool hasMembership =
         (_membershipId ?? '').trim().isNotEmpty || _selectedMembership != null;
 
-    final bool hasInvoice = _nullable(_invoiceIdCtl) != null;
-
     final String patientId = _selectedPatientId;
 
     final PrescriptionsState prescriptionState = patientId.isEmpty
@@ -490,10 +570,10 @@ class _InsuranceClaimFormDialogState
         : ref.watch(prescriptionsControllerProvider(patientId));
 
     return AlertDialog(
-      title: Text(_isEdit ? 'Edit insurance claim' : 'Create insurance claim'),
+      title: Text(_isEdit ? 'Edit claim pack' : 'Create claim pack'),
       content: SizedBox(
-        width: 760,
-        height: MediaQuery.of(context).size.height * 0.78,
+        width: 780,
+        height: MediaQuery.of(context).size.height * 0.82,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -504,7 +584,9 @@ class _InsuranceClaimFormDialogState
               children: <Widget>[
                 SizedBox(
                   width: 720,
-                  child: _MembershipSelectorTile(
+                  child: _SelectorTile(
+                    icon: Icons.health_and_safety_outlined,
+                    selectedIcon: Icons.health_and_safety,
                     title: _membershipTitle(),
                     subtitle: _membershipSubtitle(),
                     hasSelection: hasMembership,
@@ -513,10 +595,12 @@ class _InsuranceClaimFormDialogState
                 ),
                 SizedBox(
                   width: 720,
-                  child: _InvoiceSelectorTile(
+                  child: _SelectorTile(
+                    icon: Icons.receipt_long_outlined,
+                    selectedIcon: Icons.receipt_long,
                     title: _invoiceTitle(),
                     subtitle: _invoiceSubtitle(),
-                    hasSelection: hasInvoice,
+                    hasSelection: _hasInvoice,
                     onTap: _pickInvoice,
                   ),
                 ),
@@ -533,19 +617,13 @@ class _InsuranceClaimFormDialogState
                     requiredForClaim: true,
                     onRefresh: patientId.isEmpty ? null : _loadPrescriptions,
                     onUpload: patientId.isEmpty ? null : _uploadPrescription,
-                    onChanged: (Prescription? prescription) {
-                      setState(() {
-                        _selectedPrescription = prescription;
-                        _prescriptionId = prescription?.prescriptionId;
-                      });
-                    },
+                    onChanged: _setPrescription,
                   ),
                 ),
                 _field(
                   width: 340,
                   controller: _invoiceIdCtl,
                   label: 'Invoice ID',
-                  helper: 'Optional Zoho invoice link.',
                 ),
                 _field(
                   width: 340,
@@ -568,7 +646,11 @@ class _InsuranceClaimFormDialogState
                   controller: _authCodeCtl,
                   label: 'Auth Code',
                 ),
-                _field(width: 220, controller: _claimNoCtl, label: 'Claim No'),
+                _field(
+                  width: 220,
+                  controller: _insurerClaimNoCtl,
+                  label: 'Insurer Claim No',
+                ),
                 _field(width: 220, controller: _visitNoCtl, label: 'Visit No'),
                 _field(
                   width: 220,
@@ -596,33 +678,22 @@ class _InsuranceClaimFormDialogState
                   maxLines: 4,
                 ),
                 const SizedBox(width: 720, child: Divider()),
-                _field(
-                  width: 340,
-                  controller: _submittedAtCtl,
-                  label: 'Submitted At',
-                  helper: 'Optional. Keep blank until actually submitted.',
-                ),
-                _field(
-                  width: 340,
-                  controller: _submittedByUidCtl,
-                  label: 'Submitted By UID',
-                ),
                 SizedBox(
                   width: 260,
-                  child: DropdownButtonFormField<InsuranceClaimStatus>(
+                  child: DropdownButtonFormField<InsuranceClaimPackStatus>(
                     initialValue: _status,
                     isExpanded: true,
-                    decoration: _dec('Claim Status'),
-                    items: InsuranceClaimStatus.values
+                    decoration: _dec('Status'),
+                    items: InsuranceClaimPackStatus.values
                         .map(
-                          (InsuranceClaimStatus status) =>
-                              DropdownMenuItem<InsuranceClaimStatus>(
+                          (InsuranceClaimPackStatus status) =>
+                              DropdownMenuItem<InsuranceClaimPackStatus>(
                                 value: status,
                                 child: Text(status.label),
                               ),
                         )
                         .toList(growable: false),
-                    onChanged: (InsuranceClaimStatus? value) {
+                    onChanged: (InsuranceClaimPackStatus? value) {
                       if (value == null) return;
                       setState(() => _status = value);
                     },
@@ -634,9 +705,7 @@ class _InsuranceClaimFormDialogState
                     value: _isActive,
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Active'),
-                    subtitle: const Text(
-                      'Inactive claims are retained for audit/history.',
-                    ),
+                    subtitle: const Text('Retained for audit/history.'),
                     onChanged: (bool value) {
                       setState(() => _isActive = value);
                     },
@@ -654,103 +723,9 @@ class _InsuranceClaimFormDialogState
         ),
         FilledButton(
           onPressed: _submit,
-          child: Text(_isEdit ? 'Save claim' : 'Continue'),
+          child: Text(_isEdit ? 'Save' : 'Create'),
         ),
       ],
-    );
-  }
-}
-
-class _MembershipSelectorTile extends StatelessWidget {
-  const _MembershipSelectorTile({
-    required this.title,
-    required this.subtitle,
-    required this.hasSelection,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool hasSelection;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: hasSelection
-          ? scheme.primaryContainer.withValues(alpha: 0.25)
-          : scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        leading: Icon(
-          hasSelection
-              ? Icons.health_and_safety
-              : Icons.health_and_safety_outlined,
-          color: hasSelection ? scheme.primary : null,
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: FilledButton.icon(
-          onPressed: onTap,
-          icon: const Icon(Icons.search),
-          label: Text(hasSelection ? 'Change' : 'Select'),
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _InvoiceSelectorTile extends StatelessWidget {
-  const _InvoiceSelectorTile({
-    required this.title,
-    required this.subtitle,
-    required this.hasSelection,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool hasSelection;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: hasSelection
-          ? scheme.secondaryContainer.withValues(alpha: 0.45)
-          : scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        leading: Icon(
-          hasSelection ? Icons.receipt_long : Icons.receipt_long_outlined,
-          color: hasSelection ? scheme.primary : null,
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: FilledButton.icon(
-          onPressed: onTap,
-          icon: const Icon(Icons.search),
-          label: Text(hasSelection ? 'Change' : 'Select'),
-        ),
-        onTap: onTap,
-      ),
     );
   }
 }
@@ -814,7 +789,7 @@ class _PrescriptionUploadMetaDialogState
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.of(context).pop(null),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
@@ -829,7 +804,8 @@ class _PrescriptionUploadMetaDialogState
               return;
             }
 
-            Navigator.of(context).pop(
+            Navigator.pop(
+              context,
               _PrescriptionUploadMeta(
                 note: _clean(_noteController.text),
                 prescribedOn: prescribedOn,
@@ -844,7 +820,48 @@ class _PrescriptionUploadMetaDialogState
   }
 
   String? _clean(String value) {
-    final String clean = value.trim();
-    return clean.isEmpty ? null : clean;
+    final String s = value.trim();
+    return s.isEmpty ? null : s;
+  }
+}
+
+class _SelectorTile extends StatelessWidget {
+  const _SelectorTile({
+    required this.icon,
+    required this.selectedIcon,
+    required this.title,
+    required this.subtitle,
+    required this.hasSelection,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String title;
+  final String subtitle;
+  final bool hasSelection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: hasSelection
+          ? scheme.primaryContainer.withValues(alpha: 0.25)
+          : scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        leading: Icon(
+          hasSelection ? selectedIcon : icon,
+          color: hasSelection ? scheme.primary : null,
+        ),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
   }
 }

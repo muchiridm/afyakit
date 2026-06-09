@@ -11,7 +11,6 @@ import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_sc
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
-import 'package:afyakit/features/retail/payments/widgets/payments_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 
@@ -250,16 +249,6 @@ class HomeMemberQuickActions extends StatelessWidget {
             MaterialPageRoute<void>(
               builder: (_) =>
                   const InvoicesListScreen(scope: RetailDocScope.mine),
-            ),
-          ),
-        ),
-        HomeActionChip(
-          icon: Icons.payments_outlined,
-          label: 'My Payments',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) =>
-                  const PaymentsListScreen(scope: RetailDocScope.mine),
             ),
           ),
         ),

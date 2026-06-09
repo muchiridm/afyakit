@@ -1,4 +1,4 @@
-// lib/features/retail/shared/models/zoho_payment_draft.dart
+// lib/features/retail/payments/models/zoho_payment_draft.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -14,9 +14,9 @@ class ZohoPaymentDraft {
     this.mode,
     this.description,
     this.accountId,
+    this.reference,
   });
 
-  /// ✅ Convenience: fresh draft defaults
   factory ZohoPaymentDraft.today({
     required String invoiceId,
     num amount = 0,
@@ -24,8 +24,10 @@ class ZohoPaymentDraft {
     String? mode,
     String? description,
     String? accountId,
+    String? reference,
   }) {
-    final n = now ?? DateTime.now();
+    final DateTime n = now ?? DateTime.now();
+
     return ZohoPaymentDraft(
       invoiceId: invoiceId,
       amount: amount,
@@ -33,22 +35,18 @@ class ZohoPaymentDraft {
       mode: mode,
       description: description,
       accountId: accountId,
+      reference: reference,
     );
   }
 
-  /// ✅ REQUIRED for CREATE: Zoho invoice_id
   final String invoiceId;
-
   final num amount;
   final DateTime date;
 
-  /// Zoho payment_mode (Cash, Mpesa, Bank Transfer, etc)
   final String? mode;
-
   final String? description;
-
-  /// Optional: Zoho account_id to post into
   final String? accountId;
+  final String? reference;
 
   ZohoPaymentDraft copyWith({
     String? invoiceId,
@@ -60,6 +58,8 @@ class ZohoPaymentDraft {
     bool clearDescription = false,
     String? accountId,
     bool clearAccountId = false,
+    String? reference,
+    bool clearReference = false,
   }) {
     return ZohoPaymentDraft(
       invoiceId: (invoiceId ?? this.invoiceId).trim(),
@@ -68,58 +68,56 @@ class ZohoPaymentDraft {
       mode: clearMode ? null : (mode ?? this.mode),
       description: clearDescription ? null : (description ?? this.description),
       accountId: clearAccountId ? null : (accountId ?? this.accountId),
+      reference: clearReference ? null : (reference ?? this.reference),
     );
   }
 
-  /// ✅ Keep dates consistent (Zoho prefers date-only)
   ZohoPaymentDraft withDateOnly() {
-    final d = date;
+    final DateTime d = date;
     return copyWith(date: DateTime(d.year, d.month, d.day));
   }
 
-  // ───────────────────────── Normalizers ─────────────────────────
-
   static final DateFormat _dateFmt = DateFormat('yyyy-MM-dd');
 
-  static num _safeAmount(num v) {
-    if (v.isNaN || v.isInfinite) return 0;
-    if (v < 0) return 0;
-    return v;
+  static num _safeAmount(num value) {
+    if (value.isNaN || value.isInfinite) return 0;
+    if (value < 0) return 0;
+    return value;
   }
 
-  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  static DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
 
-  // ───────────────────────── Validators ─────────────────────────
-
-  /// Throwing validator (useful before POST)
   void assertValidCreate() {
-    final inv = invoiceId.trim();
-    if (inv.isEmpty) throw ArgumentError('invoiceId is required');
+    final String inv = invoiceId.trim();
 
-    final amt = _safeAmount(amount);
-    if (amt <= 0) throw ArgumentError('amount must be > 0');
+    if (inv.isEmpty) {
+      throw ArgumentError('invoiceId is required');
+    }
+
+    final num amt = _safeAmount(amount);
+
+    if (amt <= 0) {
+      throw ArgumentError('amount must be > 0');
+    }
   }
 
-  /// Throwing validator (useful before PUT)
   void assertValidUpdate() {
-    final amt = _safeAmount(amount);
-    if (amt <= 0) throw ArgumentError('amount must be > 0');
-  }
+    final num amt = _safeAmount(amount);
 
-  // ───────────────────────── JSON ─────────────────────────
-  // Always send canonical keys expected by backend:
-  // - invoice_id (create only)
-  // - payment_mode
-  // - description
-  // - account_id
-  // ───────────────────────────────────────────────────────
+    if (amt <= 0) {
+      throw ArgumentError('amount must be > 0');
+    }
+  }
 
   Map<String, Object?> toCreateJson() {
-    final d = _dateOnly(date);
+    final DateTime d = _dateOnly(date);
 
-    final modeClean = readStringOrNull(mode);
-    final descClean = readStringOrNull(description);
-    final accountClean = readStringOrNull(accountId);
+    final String? modeClean = readStringOrNull(mode);
+    final String? descClean = readStringOrNull(description);
+    final String? accountClean = readStringOrNull(accountId);
+    final String? refClean = readStringOrNull(reference);
 
     return <String, Object?>{
       'invoice_id': invoiceId.trim(),
@@ -128,15 +126,17 @@ class ZohoPaymentDraft {
       if (modeClean != null) 'payment_mode': modeClean,
       if (descClean != null) 'description': descClean,
       if (accountClean != null) 'account_id': accountClean,
+      if (refClean != null) 'reference': refClean,
     };
   }
 
   Map<String, Object?> toUpdateJson() {
-    final d = _dateOnly(date);
+    final DateTime d = _dateOnly(date);
 
-    final modeClean = readStringOrNull(mode);
-    final descClean = readStringOrNull(description);
-    final accountClean = readStringOrNull(accountId);
+    final String? modeClean = readStringOrNull(mode);
+    final String? descClean = readStringOrNull(description);
+    final String? accountClean = readStringOrNull(accountId);
+    final String? refClean = readStringOrNull(reference);
 
     return <String, Object?>{
       'amount': _safeAmount(amount),
@@ -144,6 +144,7 @@ class ZohoPaymentDraft {
       if (modeClean != null) 'payment_mode': modeClean,
       if (descClean != null) 'description': descClean,
       if (accountClean != null) 'account_id': accountClean,
+      if (refClean != null) 'reference': refClean,
     };
   }
 }

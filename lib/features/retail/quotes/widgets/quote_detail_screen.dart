@@ -2,6 +2,7 @@
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_action_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_action_enum.dart';
@@ -14,6 +15,7 @@ import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
@@ -88,9 +90,27 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     final AsyncValue<ZohoQuote> quoteAsync = ref.watch(
       zohoQuoteProvider(quoteId),
     );
+
     final me = ref.watch(currentUserProvider).valueOrNull;
 
-    final bool canManage = me?.canManageQuotes ?? false;
+    final bool isStaffWorkspaceActive = ref.watch(
+      isStaffWorkspaceActiveProvider,
+    );
+
+    final bool canViewQuotePdf = me?.canViewQuotePdf ?? false;
+
+    final bool canEditQuote =
+        isStaffWorkspaceActive && (me?.canEditQuote ?? false);
+
+    final bool canSendQuote =
+        isStaffWorkspaceActive && (me?.canSendQuote ?? false);
+
+    final bool canMarkQuoteSent =
+        isStaffWorkspaceActive && (me?.canMarkQuoteSent ?? false);
+
+    final bool canConvertQuoteToInvoice =
+        isStaffWorkspaceActive && (me?.canConvertQuoteToInvoice ?? false);
+
     final QuoteActionController actionsCtl = ref.read(
       quoteActionControllerProvider,
     );
@@ -101,9 +121,12 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       scrollable: false,
       actions: _buildActions(
         context,
-        quoteAsync: quoteAsync,
         actionsCtl: actionsCtl,
-        canManage: canManage,
+        canViewQuotePdf: canViewQuotePdf,
+        canEditQuote: canEditQuote,
+        canSendQuote: canSendQuote,
+        canMarkQuoteSent: canMarkQuoteSent,
+        canConvertQuoteToInvoice: canConvertQuoteToInvoice,
         quoteId: quoteId,
       ),
       body: _buildBody(quoteAsync, actionsCtl: actionsCtl, quoteId: quoteId),
@@ -130,66 +153,104 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
 
   List<Widget> _buildActions(
     BuildContext context, {
-    required AsyncValue<ZohoQuote> quoteAsync,
     required QuoteActionController actionsCtl,
-    required bool canManage,
+    required bool canViewQuotePdf,
+    required bool canEditQuote,
+    required bool canSendQuote,
+    required bool canMarkQuoteSent,
+    required bool canConvertQuoteToInvoice,
     required String quoteId,
   }) {
-    final List<Widget> actions = <Widget>[
-      IconButton(
-        tooltip: _acting ? 'Working…' : 'PDF',
-        icon: const Icon(Icons.picture_as_pdf_outlined),
-        onPressed: _acting
-            ? null
-            : () => _run(() => actionsCtl.viewPdf(context, quoteId: quoteId)),
-      ),
-    ];
+    final List<Widget> actions = <Widget>[];
 
-    if (!canManage) return actions;
+    if (canViewQuotePdf) {
+      actions.add(
+        IconButton(
+          tooltip: _acting ? 'Working…' : 'PDF',
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          onPressed: _acting
+              ? null
+              : () => _run(() => actionsCtl.viewPdf(context, quoteId: quoteId)),
+        ),
+      );
+    }
 
-    actions.addAll(<Widget>[
-      PopupMenuButton<QuoteAction>(
-        tooltip: 'Actions',
-        enabled: !_acting,
-        onSelected: (QuoteAction action) {
-          switch (action) {
-            case QuoteAction.send:
-              _run(() => actionsCtl.sendQuote(context, quoteId: quoteId));
-              break;
-            case QuoteAction.markSent:
-              _run(() => actionsCtl.markSent(context, quoteId: quoteId));
-              break;
-            case QuoteAction.invoice:
-              _run(
-                () => actionsCtl.convertToInvoice(context, quoteId: quoteId),
-              );
-              break;
-          }
-        },
-        itemBuilder: (BuildContext context) =>
-            const <PopupMenuEntry<QuoteAction>>[
-              PopupMenuItem<QuoteAction>(
-                value: QuoteAction.send,
-                child: Text('Send quote'),
-              ),
-              PopupMenuItem<QuoteAction>(
-                value: QuoteAction.markSent,
-                child: Text('Mark as sent'),
-              ),
-              PopupMenuDivider(),
-              PopupMenuItem<QuoteAction>(
-                value: QuoteAction.invoice,
-                child: Text('Convert to invoice'),
-              ),
-            ],
-        icon: const Icon(Icons.more_vert),
-      ),
-      IconButton(
-        tooltip: 'Edit quote',
-        icon: const Icon(Icons.edit_outlined),
-        onPressed: _acting ? null : () => _editQuote(context, quoteId: quoteId),
-      ),
-    ]);
+    final List<PopupMenuEntry<QuoteAction>> menuItems =
+        <PopupMenuEntry<QuoteAction>>[];
+
+    if (canSendQuote) {
+      menuItems.add(
+        const PopupMenuItem<QuoteAction>(
+          value: QuoteAction.send,
+          child: Text('Send quote'),
+        ),
+      );
+    }
+
+    if (canMarkQuoteSent) {
+      menuItems.add(
+        const PopupMenuItem<QuoteAction>(
+          value: QuoteAction.markSent,
+          child: Text('Mark as sent'),
+        ),
+      );
+    }
+
+    if (canConvertQuoteToInvoice) {
+      if (menuItems.isNotEmpty) {
+        menuItems.add(const PopupMenuDivider());
+      }
+
+      menuItems.add(
+        const PopupMenuItem<QuoteAction>(
+          value: QuoteAction.invoice,
+          child: Text('Convert to invoice'),
+        ),
+      );
+    }
+
+    if (menuItems.isNotEmpty) {
+      actions.add(
+        PopupMenuButton<QuoteAction>(
+          tooltip: 'Actions',
+          enabled: !_acting,
+          onSelected: (QuoteAction action) {
+            switch (action) {
+              case QuoteAction.send:
+                if (!canSendQuote) return;
+                _run(() => actionsCtl.sendQuote(context, quoteId: quoteId));
+                break;
+
+              case QuoteAction.markSent:
+                if (!canMarkQuoteSent) return;
+                _run(() => actionsCtl.markSent(context, quoteId: quoteId));
+                break;
+
+              case QuoteAction.invoice:
+                if (!canConvertQuoteToInvoice) return;
+                _run(
+                  () => actionsCtl.convertToInvoice(context, quoteId: quoteId),
+                );
+                break;
+            }
+          },
+          itemBuilder: (_) => menuItems,
+          icon: const Icon(Icons.more_vert),
+        ),
+      );
+    }
+
+    if (canEditQuote) {
+      actions.add(
+        IconButton(
+          tooltip: 'Edit quote',
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: _acting
+              ? null
+              : () => _editQuote(context, quoteId: quoteId),
+        ),
+      );
+    }
 
     return actions;
   }
@@ -316,7 +377,7 @@ class _PatientInsurancePrescriptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final patient = q.patientSnapshot;
+    final SalesDocumentPatientSnapshot? patient = q.patientSnapshot;
 
     final String patientName = (patient?.fullName ?? '').trim();
     final String patientNo = (patient?.patientNo ?? '').trim();
@@ -328,8 +389,8 @@ class _PatientInsurancePrescriptionCard extends StatelessWidget {
     final String membershipId = (q.resolvedMembershipId ?? '').trim();
 
     final String prescriptionId = (q.resolvedPrescriptionId ?? '').trim();
-
     final bool hasPatient = patientName.isNotEmpty || patientNo.isNotEmpty;
+
     final bool hasInsurance =
         payerName.isNotEmpty ||
         memberNo.isNotEmpty ||
@@ -337,6 +398,7 @@ class _PatientInsurancePrescriptionCard extends StatelessWidget {
         membershipId.isNotEmpty;
 
     final bool hasPrescription = prescriptionId.isNotEmpty;
+
     final bool shouldWarnMissingPrescription = hasInsurance && !hasPrescription;
 
     if (!hasPatient && !hasInsurance && !hasPrescription) {

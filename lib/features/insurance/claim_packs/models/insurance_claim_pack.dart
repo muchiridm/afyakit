@@ -1,84 +1,81 @@
-// lib/features/insurance/claims/models/insurance_claim.dart
+// lib/features/insurance/claim_packs/models/insurance_claim_pack.dart
 
-enum InsuranceClaimStatus {
-  uploaded,
+enum InsuranceClaimPackStatus {
+  draft,
   pendingReview,
-  verified,
-  rejected,
+  ready,
   submitted,
   approved,
   paid,
+  rejected,
   cancelled,
 }
 
-extension InsuranceClaimStatusX on InsuranceClaimStatus {
+extension InsuranceClaimPackStatusX on InsuranceClaimPackStatus {
   String get wire {
     switch (this) {
-      case InsuranceClaimStatus.uploaded:
-        return 'uploaded';
-      case InsuranceClaimStatus.pendingReview:
+      case InsuranceClaimPackStatus.draft:
+        return 'draft';
+      case InsuranceClaimPackStatus.pendingReview:
         return 'pending_review';
-      case InsuranceClaimStatus.verified:
-        return 'verified';
-      case InsuranceClaimStatus.rejected:
-        return 'rejected';
-      case InsuranceClaimStatus.submitted:
+      case InsuranceClaimPackStatus.ready:
+        return 'ready';
+      case InsuranceClaimPackStatus.submitted:
         return 'submitted';
-      case InsuranceClaimStatus.approved:
+      case InsuranceClaimPackStatus.approved:
         return 'approved';
-      case InsuranceClaimStatus.paid:
+      case InsuranceClaimPackStatus.paid:
         return 'paid';
-      case InsuranceClaimStatus.cancelled:
+      case InsuranceClaimPackStatus.rejected:
+        return 'rejected';
+      case InsuranceClaimPackStatus.cancelled:
         return 'cancelled';
     }
   }
 
   String get label {
     switch (this) {
-      case InsuranceClaimStatus.uploaded:
-        return 'Uploaded';
-      case InsuranceClaimStatus.pendingReview:
+      case InsuranceClaimPackStatus.draft:
+        return 'Draft';
+      case InsuranceClaimPackStatus.pendingReview:
         return 'Pending Review';
-      case InsuranceClaimStatus.verified:
-        return 'Verified';
-      case InsuranceClaimStatus.rejected:
-        return 'Rejected';
-      case InsuranceClaimStatus.submitted:
+      case InsuranceClaimPackStatus.ready:
+        return 'Ready';
+      case InsuranceClaimPackStatus.submitted:
         return 'Submitted';
-      case InsuranceClaimStatus.approved:
+      case InsuranceClaimPackStatus.approved:
         return 'Approved';
-      case InsuranceClaimStatus.paid:
+      case InsuranceClaimPackStatus.paid:
         return 'Paid';
-      case InsuranceClaimStatus.cancelled:
+      case InsuranceClaimPackStatus.rejected:
+        return 'Rejected';
+      case InsuranceClaimPackStatus.cancelled:
         return 'Cancelled';
     }
   }
 
-  static InsuranceClaimStatus fromWire(Object? value) {
+  static InsuranceClaimPackStatus fromWire(Object? value) {
     final String s = _cleanString(value);
 
-    for (final InsuranceClaimStatus status in InsuranceClaimStatus.values) {
+    for (final InsuranceClaimPackStatus status
+        in InsuranceClaimPackStatus.values) {
       if (status.wire == s) return status;
     }
 
-    return InsuranceClaimStatus.uploaded;
+    return InsuranceClaimPackStatus.draft;
   }
 }
 
-class InsuranceClaim {
-  const InsuranceClaim({
-    required this.claimId,
+class InsuranceClaimPack {
+  const InsuranceClaimPack({
+    required this.claimPackId,
     required this.patientId,
     required this.membershipId,
-    required this.fileName,
-    required this.storagePath,
-    this.originalStoragePath,
-    this.thumbnailStoragePath,
-    this.downloadUrl,
-    this.contentType,
-    this.sizeBytes,
-    this.width,
-    this.height,
+    this.invoiceId,
+    this.invoiceNumber,
+    this.prescriptionId,
+    this.prescriptionNo,
+    this.prescriberName,
     this.patientNo,
     this.patientDisplayName,
     this.payerContactId,
@@ -89,13 +86,8 @@ class InsuranceClaim {
     this.memberName,
     this.principalName,
     this.scheme,
-    this.invoiceId,
-    this.invoiceNumber,
-    this.prescriptionId,
-    this.prescriptionNo,
-    this.prescriberName,
     this.authCode,
-    this.claimNo,
+    this.insurerClaimNo,
     this.visitNo,
     this.serviceDate,
     this.diagnosis,
@@ -105,34 +97,26 @@ class InsuranceClaim {
     this.submittedByUid,
     required this.status,
     required this.isActive,
-    this.uploadedByUid,
+    this.createdByUid,
     this.createdAt,
     this.updatedAt,
   });
 
-  final String claimId;
+  final String claimPackId;
 
   final String patientId;
   final String membershipId;
 
-  /// Uploaded insurance claim document metadata.
-  final String fileName;
-  final String storagePath;
-  final String? originalStoragePath;
-  final String? thumbnailStoragePath;
-  final String? downloadUrl;
+  final String? invoiceId;
+  final String? invoiceNumber;
 
-  final String? contentType;
-  final int? sizeBytes;
+  final String? prescriptionId;
+  final String? prescriptionNo;
+  final String? prescriberName;
 
-  final int? width;
-  final int? height;
-
-  /// Cached patient display fields.
   final String? patientNo;
   final String? patientDisplayName;
 
-  /// Cached insurance/membership display fields.
   final String? payerContactId;
   final String? payerDisplayName;
 
@@ -144,18 +128,8 @@ class InsuranceClaim {
   final String? principalName;
   final String? scheme;
 
-  /// Optional invoice linkage.
-  final String? invoiceId;
-  final String? invoiceNumber;
-
-  /// Optional prescription linkage.
-  final String? prescriptionId;
-  final String? prescriptionNo;
-  final String? prescriberName;
-
-  /// Optional insurer/admin metadata.
   final String? authCode;
-  final String? claimNo;
+  final String? insurerClaimNo;
   final String? visitNo;
   final String? serviceDate;
 
@@ -166,14 +140,12 @@ class InsuranceClaim {
   final String? submittedAt;
   final String? submittedByUid;
 
-  final InsuranceClaimStatus status;
+  final InsuranceClaimPackStatus status;
   final bool isActive;
 
-  final String? uploadedByUid;
+  final String? createdByUid;
   final String? createdAt;
   final String? updatedAt;
-
-  bool get hasFile => _hasText(storagePath) || _hasText(downloadUrl);
 
   bool get hasInvoice => _hasText(invoiceId) || _hasText(invoiceNumber);
 
@@ -182,20 +154,16 @@ class InsuranceClaim {
 
   bool get hasMembership => _hasText(membershipId);
 
-  factory InsuranceClaim.fromJson(Map<String, Object?> json) {
-    return InsuranceClaim(
-      claimId: _s(json['claim_id']),
+  factory InsuranceClaimPack.fromJson(Map<String, Object?> json) {
+    return InsuranceClaimPack(
+      claimPackId: _s(json['claim_pack_id']),
       patientId: _s(json['patient_id']),
       membershipId: _s(json['membership_id']),
-      fileName: _s(json['file_name']),
-      storagePath: _s(json['storage_path']),
-      originalStoragePath: _sn(json['original_storage_path']),
-      thumbnailStoragePath: _sn(json['thumbnail_storage_path']),
-      downloadUrl: _sn(json['download_url']),
-      contentType: _sn(json['content_type']),
-      sizeBytes: _intn(json['size_bytes']),
-      width: _intn(json['width']),
-      height: _intn(json['height']),
+      invoiceId: _sn(json['invoice_id']),
+      invoiceNumber: _sn(json['invoice_number']),
+      prescriptionId: _sn(json['prescription_id']),
+      prescriptionNo: _sn(json['prescription_no']),
+      prescriberName: _sn(json['prescriber_name']),
       patientNo: _sn(json['patient_no']),
       patientDisplayName: _sn(json['patient_display_name']),
       payerContactId: _sn(json['payer_contact_id']),
@@ -206,13 +174,8 @@ class InsuranceClaim {
       memberName: _sn(json['member_name']),
       principalName: _sn(json['principal_name']),
       scheme: _sn(json['scheme']),
-      invoiceId: _sn(json['invoice_id']),
-      invoiceNumber: _sn(json['invoice_number']),
-      prescriptionId: _sn(json['prescription_id']),
-      prescriptionNo: _sn(json['prescription_no']),
-      prescriberName: _sn(json['prescriber_name']),
       authCode: _sn(json['auth_code']),
-      claimNo: _sn(json['claim_no']),
+      insurerClaimNo: _sn(json['insurer_claim_no']),
       visitNo: _sn(json['visit_no']),
       serviceDate: _sn(json['service_date']),
       diagnosis: _sn(json['diagnosis']),
@@ -220,9 +183,9 @@ class InsuranceClaim {
       notes: _sn(json['notes']),
       submittedAt: _sn(json['submitted_at']),
       submittedByUid: _sn(json['submitted_by_uid']),
-      status: InsuranceClaimStatusX.fromWire(json['status']),
-      isActive: json['is_active'] == true,
-      uploadedByUid: _sn(json['uploaded_by_uid']),
+      status: InsuranceClaimPackStatusX.fromWire(json['status']),
+      isActive: json['is_active'] != false,
+      createdByUid: _sn(json['created_by_uid']),
       createdAt: _sn(json['created_at']),
       updatedAt: _sn(json['updated_at']),
     );
@@ -230,18 +193,14 @@ class InsuranceClaim {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'claim_id': claimId,
+      'claim_pack_id': claimPackId,
       'patient_id': patientId,
       'membership_id': membershipId,
-      'file_name': fileName,
-      'storage_path': storagePath,
-      'original_storage_path': originalStoragePath,
-      'thumbnail_storage_path': thumbnailStoragePath,
-      'download_url': downloadUrl,
-      'content_type': contentType,
-      'size_bytes': sizeBytes,
-      'width': width,
-      'height': height,
+      'invoice_id': invoiceId,
+      'invoice_number': invoiceNumber,
+      'prescription_id': prescriptionId,
+      'prescription_no': prescriptionNo,
+      'prescriber_name': prescriberName,
       'patient_no': patientNo,
       'patient_display_name': patientDisplayName,
       'payer_contact_id': payerContactId,
@@ -252,13 +211,8 @@ class InsuranceClaim {
       'member_name': memberName,
       'principal_name': principalName,
       'scheme': scheme,
-      'invoice_id': invoiceId,
-      'invoice_number': invoiceNumber,
-      'prescription_id': prescriptionId,
-      'prescription_no': prescriptionNo,
-      'prescriber_name': prescriberName,
       'auth_code': authCode,
-      'claim_no': claimNo,
+      'insurer_claim_no': insurerClaimNo,
       'visit_no': visitNo,
       'service_date': serviceDate,
       'diagnosis': diagnosis,
@@ -268,32 +222,23 @@ class InsuranceClaim {
       'submitted_by_uid': submittedByUid,
       'status': status.wire,
       'is_active': isActive,
-      'uploaded_by_uid': uploadedByUid,
+      'created_by_uid': createdByUid,
       'created_at': createdAt,
       'updated_at': updatedAt,
     }..removeWhere(_removeEmpty);
   }
 }
 
-class InsuranceClaimCreateInput {
-  const InsuranceClaimCreateInput({
+class InsuranceClaimPackCreateInput {
+  const InsuranceClaimPackCreateInput({
     required this.membershipId,
-    required this.fileName,
-    required this.storagePath,
-    this.originalStoragePath,
-    this.thumbnailStoragePath,
-    this.downloadUrl,
-    this.contentType,
-    this.sizeBytes,
-    this.width,
-    this.height,
     this.invoiceId,
     this.invoiceNumber,
     this.prescriptionId,
     this.prescriptionNo,
     this.prescriberName,
     this.authCode,
-    this.claimNo,
+    this.insurerClaimNo,
     this.visitNo,
     this.serviceDate,
     this.diagnosis,
@@ -307,18 +252,6 @@ class InsuranceClaimCreateInput {
 
   final String membershipId;
 
-  final String fileName;
-  final String storagePath;
-  final String? originalStoragePath;
-  final String? thumbnailStoragePath;
-  final String? downloadUrl;
-
-  final String? contentType;
-  final int? sizeBytes;
-
-  final int? width;
-  final int? height;
-
   final String? invoiceId;
   final String? invoiceNumber;
 
@@ -327,7 +260,7 @@ class InsuranceClaimCreateInput {
   final String? prescriberName;
 
   final String? authCode;
-  final String? claimNo;
+  final String? insurerClaimNo;
   final String? visitNo;
   final String? serviceDate;
 
@@ -338,28 +271,19 @@ class InsuranceClaimCreateInput {
   final String? submittedAt;
   final String? submittedByUid;
 
-  final InsuranceClaimStatus? status;
+  final InsuranceClaimPackStatus? status;
   final bool? isActive;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'membership_id': membershipId,
-      'file_name': fileName,
-      'storage_path': storagePath,
-      'original_storage_path': originalStoragePath,
-      'thumbnail_storage_path': thumbnailStoragePath,
-      'download_url': downloadUrl,
-      'content_type': contentType,
-      'size_bytes': sizeBytes,
-      'width': width,
-      'height': height,
       'invoice_id': invoiceId,
       'invoice_number': invoiceNumber,
       'prescription_id': prescriptionId,
       'prescription_no': prescriptionNo,
       'prescriber_name': prescriberName,
       'auth_code': authCode,
-      'claim_no': claimNo,
+      'insurer_claim_no': insurerClaimNo,
       'visit_no': visitNo,
       'service_date': serviceDate,
       'diagnosis': diagnosis,
@@ -373,25 +297,16 @@ class InsuranceClaimCreateInput {
   }
 }
 
-class InsuranceClaimUpdateInput {
-  const InsuranceClaimUpdateInput({
+class InsuranceClaimPackUpdateInput {
+  const InsuranceClaimPackUpdateInput({
     this.membershipId,
-    this.fileName,
-    this.storagePath,
-    this.originalStoragePath,
-    this.thumbnailStoragePath,
-    this.downloadUrl,
-    this.contentType,
-    this.sizeBytes,
-    this.width,
-    this.height,
     this.invoiceId,
     this.invoiceNumber,
     this.prescriptionId,
     this.prescriptionNo,
     this.prescriberName,
     this.authCode,
-    this.claimNo,
+    this.insurerClaimNo,
     this.visitNo,
     this.serviceDate,
     this.diagnosis,
@@ -405,18 +320,6 @@ class InsuranceClaimUpdateInput {
 
   final String? membershipId;
 
-  final String? fileName;
-  final String? storagePath;
-  final String? originalStoragePath;
-  final String? thumbnailStoragePath;
-  final String? downloadUrl;
-
-  final String? contentType;
-  final int? sizeBytes;
-
-  final int? width;
-  final int? height;
-
   final String? invoiceId;
   final String? invoiceNumber;
 
@@ -425,7 +328,7 @@ class InsuranceClaimUpdateInput {
   final String? prescriberName;
 
   final String? authCode;
-  final String? claimNo;
+  final String? insurerClaimNo;
   final String? visitNo;
   final String? serviceDate;
 
@@ -436,28 +339,19 @@ class InsuranceClaimUpdateInput {
   final String? submittedAt;
   final String? submittedByUid;
 
-  final InsuranceClaimStatus? status;
+  final InsuranceClaimPackStatus? status;
   final bool? isActive;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'membership_id': membershipId,
-      'file_name': fileName,
-      'storage_path': storagePath,
-      'original_storage_path': originalStoragePath,
-      'thumbnail_storage_path': thumbnailStoragePath,
-      'download_url': downloadUrl,
-      'content_type': contentType,
-      'size_bytes': sizeBytes,
-      'width': width,
-      'height': height,
       'invoice_id': invoiceId,
       'invoice_number': invoiceNumber,
       'prescription_id': prescriptionId,
       'prescription_no': prescriptionNo,
       'prescriber_name': prescriberName,
       'auth_code': authCode,
-      'claim_no': claimNo,
+      'insurer_claim_no': insurerClaimNo,
       'visit_no': visitNo,
       'service_date': serviceDate,
       'diagnosis': diagnosis,
@@ -486,15 +380,4 @@ String _s(Object? value) => _cleanString(value);
 String? _sn(Object? value) {
   final String s = _cleanString(value);
   return s.isEmpty ? null : s;
-}
-
-int? _intn(Object? value) {
-  if (value == null) return null;
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-
-  final String s = _cleanString(value);
-  if (s.isEmpty) return null;
-
-  return int.tryParse(s);
 }

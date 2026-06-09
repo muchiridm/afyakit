@@ -1,5 +1,3 @@
-// lib/core/api/afyakit/routes/routes_insurance.dart
-
 part of 'routes.dart';
 
 extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
@@ -56,13 +54,13 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       _uri('insurance/memberships/${_seg(membershipId)}');
 
   // ─────────────────────────────────────────────
-  // 🧾 Insurance / Claims
+  // 🧾 Insurance / Claim Packs
   // ─────────────────────────────────────────────
 
-  /// GET /insurance/claims
+  /// GET /insurance/claim-packs
   ///
   /// Staff global list only.
-  Uri insuranceClaimsList({
+  Uri insuranceClaimPacksList({
     String? search,
     String? membershipId,
     String? patientId,
@@ -70,7 +68,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? invoiceId,
     String? memberNo,
     String? authCode,
-    String? claimNo,
+    String? insurerClaimNo,
     String? visitNo,
     String? prescriptionId,
     String? status,
@@ -92,7 +90,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('invoice_id', invoiceId);
     add('member_no', memberNo);
     add('auth_code', authCode);
-    add('claim_no', claimNo);
+    add('insurer_claim_no', insurerClaimNo);
     add('visit_no', visitNo);
     add('prescription_id', prescriptionId);
     add('status', status);
@@ -101,13 +99,13 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       query['is_active'] = isActive ? 'true' : 'false';
     }
 
-    return _uri('insurance/claims', query: query);
+    return _uri('insurance/claim-packs', query: query);
   }
 
-  /// GET /insurance/patients/:patientId/claims
+  /// GET /insurance/patients/:patientId/claim-packs
   ///
   /// Staff or member patient-scoped list.
-  Uri insuranceClaimsListForPatient({
+  Uri insuranceClaimPacksListForPatient({
     required String patientId,
     String? search,
     String? membershipId,
@@ -115,7 +113,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     String? invoiceId,
     String? memberNo,
     String? authCode,
-    String? claimNo,
+    String? insurerClaimNo,
     String? visitNo,
     String? prescriptionId,
     String? status,
@@ -136,7 +134,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     add('invoice_id', invoiceId);
     add('member_no', memberNo);
     add('auth_code', authCode);
-    add('claim_no', claimNo);
+    add('insurer_claim_no', insurerClaimNo);
     add('visit_no', visitNo);
     add('prescription_id', prescriptionId);
     add('status', status);
@@ -145,26 +143,159 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       query['is_active'] = isActive ? 'true' : 'false';
     }
 
-    return _uri('insurance/patients/${_seg(patientId)}/claims', query: query);
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/claim-packs',
+      query: query,
+    );
   }
 
-  /// GET /insurance/patients/:patientId/claims/:claimId
-  Uri insuranceClaimGet({required String patientId, required String claimId}) =>
-      _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
-
-  /// POST /insurance/patients/:patientId/claims
-  Uri insuranceClaimCreate({required String patientId}) =>
-      _uri('insurance/patients/${_seg(patientId)}/claims');
-
-  /// PUT /insurance/patients/:patientId/claims/:claimId
-  Uri insuranceClaimUpdate({
+  /// GET /insurance/patients/:patientId/claim-packs/:claimPackId
+  Uri insuranceClaimPackGet({
     required String patientId,
-    required String claimId,
-  }) => _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
+    required String claimPackId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/claim-packs/${_seg(claimPackId)}',
+    );
+  }
 
-  /// DELETE /insurance/patients/:patientId/claims/:claimId
-  Uri insuranceClaimDelete({
+  /// POST /insurance/patients/:patientId/claim-packs
+  Uri insuranceClaimPackCreate({required String patientId}) {
+    return _uri('insurance/patients/${_seg(patientId)}/claim-packs');
+  }
+
+  /// PUT /insurance/patients/:patientId/claim-packs/:claimPackId
+  Uri insuranceClaimPackUpdate({
     required String patientId,
-    required String claimId,
-  }) => _uri('insurance/patients/${_seg(patientId)}/claims/${_seg(claimId)}');
+    required String claimPackId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/claim-packs/${_seg(claimPackId)}',
+    );
+  }
+
+  /// DELETE /insurance/patients/:patientId/claim-packs/:claimPackId
+  Uri insuranceClaimPackDelete({
+    required String patientId,
+    required String claimPackId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/claim-packs/${_seg(claimPackId)}',
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // 📎 Insurance / Documents
+  // ─────────────────────────────────────────────
+
+  /// GET /insurance/documents
+  ///
+  /// Staff global list only.
+  Uri insuranceDocumentsList({
+    String? search,
+    String? patientId,
+    String? claimPackId,
+    String? documentType,
+    String? membershipId,
+    String? payerContactId,
+    String? status,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('search', search);
+    add('patient_id', patientId);
+    add('claim_pack_id', claimPackId);
+    add('document_type', documentType);
+    add('membership_id', membershipId);
+    add('payer_contact_id', payerContactId);
+    add('status', status);
+
+    if (isActive != null) {
+      query['is_active'] = isActive ? 'true' : 'false';
+    }
+
+    return _uri('insurance/documents', query: query);
+  }
+
+  /// GET /insurance/patients/:patientId/documents
+  ///
+  /// Staff or member patient-scoped list.
+  Uri insuranceDocumentsListForPatient({
+    required String patientId,
+    String? search,
+    String? claimPackId,
+    String? documentType,
+    String? membershipId,
+    String? payerContactId,
+    String? status,
+    bool? isActive,
+    int perPage = 50,
+    int page = 1,
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('search', search);
+    add('claim_pack_id', claimPackId);
+    add('document_type', documentType);
+    add('membership_id', membershipId);
+    add('payer_contact_id', payerContactId);
+    add('status', status);
+
+    if (isActive != null) {
+      query['is_active'] = isActive ? 'true' : 'false';
+    }
+
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/documents',
+      query: query,
+    );
+  }
+
+  /// GET /insurance/patients/:patientId/documents/:documentId
+  Uri insuranceDocumentGet({
+    required String patientId,
+    required String documentId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/documents/${_seg(documentId)}',
+    );
+  }
+
+  /// POST /insurance/patients/:patientId/documents
+  Uri insuranceDocumentCreate({required String patientId}) {
+    return _uri('insurance/patients/${_seg(patientId)}/documents');
+  }
+
+  /// PUT /insurance/patients/:patientId/documents/:documentId
+  Uri insuranceDocumentUpdate({
+    required String patientId,
+    required String documentId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/documents/${_seg(documentId)}',
+    );
+  }
+
+  /// DELETE /insurance/patients/:patientId/documents/:documentId
+  Uri insuranceDocumentDelete({
+    required String patientId,
+    required String documentId,
+  }) {
+    return _uri(
+      'insurance/patients/${_seg(patientId)}/documents/${_seg(documentId)}',
+    );
+  }
 }

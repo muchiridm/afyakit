@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
@@ -25,21 +26,69 @@ class QuoteActionController {
 
   final Ref _ref;
 
-  bool get _canManageQuotes {
-    final me = _ref.read(currentUserProvider).valueOrNull;
-    return me?.canManageQuotes ?? false;
-  }
-
   Future<ZohoQuotesService> get _svc async {
     return _ref.read(zohoQuotesServiceProvider.future);
   }
 
-  bool _requireCanManageQuotes() {
-    if (_canManageQuotes) return true;
+  // ─────────────────────────────────────────────
+  // Permissions
+  // ─────────────────────────────────────────────
 
-    SnackService.showError('You don’t have permission to perform this action.');
+  bool get _isStaffWorkspaceActive {
+    return _ref.read(isStaffWorkspaceActiveProvider);
+  }
+
+  bool get _canViewQuotePdf {
+    final me = _ref.read(currentUserProvider).valueOrNull;
+    return me?.canViewQuotePdf ?? false;
+  }
+
+  bool get _canSendQuote {
+    final me = _ref.read(currentUserProvider).valueOrNull;
+    return _isStaffWorkspaceActive && (me?.canSendQuote ?? false);
+  }
+
+  bool get _canMarkQuoteSent {
+    final me = _ref.read(currentUserProvider).valueOrNull;
+    return _isStaffWorkspaceActive && (me?.canMarkQuoteSent ?? false);
+  }
+
+  bool get _canConvertQuoteToInvoice {
+    final me = _ref.read(currentUserProvider).valueOrNull;
+    return _isStaffWorkspaceActive && (me?.canConvertQuoteToInvoice ?? false);
+  }
+
+  bool _requireCanViewQuotePdf() {
+    if (_canViewQuotePdf) return true;
+    _showPermissionError();
     return false;
   }
+
+  bool _requireCanSendQuote() {
+    if (_canSendQuote) return true;
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanMarkQuoteSent() {
+    if (_canMarkQuoteSent) return true;
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanConvertQuoteToInvoice() {
+    if (_canConvertQuoteToInvoice) return true;
+    _showPermissionError();
+    return false;
+  }
+
+  void _showPermissionError() {
+    SnackService.showError('You don’t have permission to perform this action.');
+  }
+
+  // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
 
   void _refreshQuote(String quoteId) {
     final String id = quoteId.trim();
@@ -68,6 +117,8 @@ class QuoteActionController {
   Future<void> viewPdf(BuildContext context, {required String quoteId}) async {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
+
+    if (!_requireCanViewQuotePdf()) return;
 
     try {
       final ZohoQuotesService svc = await _svc;
@@ -101,7 +152,7 @@ class QuoteActionController {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanSendQuote()) return;
 
     final bool ok = await SalesDocDialogs.confirm(
       context,
@@ -131,7 +182,7 @@ class QuoteActionController {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanMarkQuoteSent()) return;
 
     final bool ok = await SalesDocDialogs.confirm(
       context,
@@ -164,7 +215,7 @@ class QuoteActionController {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanConvertQuoteToInvoice()) return;
 
     final ZohoQuote? quote = await _readQuoteOrNull(id);
 
@@ -195,7 +246,7 @@ class QuoteActionController {
       context,
       title: 'Convert to invoice?',
       message: isInsuranceQuote
-          ? 'This will create a Zoho invoice from this insurance quote. The insurance claim will be created separately after uploading the claim document.'
+          ? 'This will create a Zoho invoice from this insurance quote. You can create the insurance claim pack separately after conversion.'
           : 'This will create a Zoho invoice from this quote.',
       okLabel: 'Convert',
       danger: false,
@@ -213,9 +264,6 @@ class QuoteActionController {
         prescriptionId: prescriptionId,
         patientSnapshot: quote.patientSnapshot,
         deliveryAddress: quote.deliveryAddress,
-
-        // Claims are no longer created during quote → invoice conversion.
-        createInsuranceClaim: false,
       );
 
       SnackService.showSuccess(_conversionMessage(result));

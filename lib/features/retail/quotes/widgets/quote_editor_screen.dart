@@ -342,7 +342,7 @@ class _QuoteEditLoadingState extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Please wait while we fetch the customer, patient, insurance, prescription, delivery address and quote items.',
+                      'Please wait while we fetch the customer, patient, insurance membership, prescription, delivery address and quote items.',
                       style: theme.textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

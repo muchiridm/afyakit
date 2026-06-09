@@ -74,6 +74,8 @@ enum QuotePaymentContext {
 
   bool get requiresMembership => isInsurance;
 
+  bool get requiresPrescription => isInsurance;
+
   static QuotePaymentContext fromApi(Object? value) {
     final String text = (value ?? '').toString().trim().toLowerCase();
 

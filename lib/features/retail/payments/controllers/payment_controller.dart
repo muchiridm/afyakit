@@ -1,23 +1,125 @@
-// lib/features/retail/payments/zoho/controllers/payment_controller.dart
+// lib/features/retail/payments/controllers/payment_controller.dart
 
-import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/features/retail/payments/controllers/payment_state.dart';
-import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
-import 'package:afyakit/features/retail/payments/models/zoho_payment_draft.dart';
-import 'package:afyakit/features/retail/payments/services/zoho_payments_service.dart';
-import 'package:afyakit/shared/services/snack_service.dart';
-
+import 'package:afyakit/features/retail/mpesa/models/mpesa_payment.dart';
 import 'package:afyakit/features/retail/mpesa/models/mpesa_stk_draft.dart';
 import 'package:afyakit/features/retail/mpesa/services/mpesa_service.dart';
-
+import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
+import 'package:afyakit/features/retail/payments/models/zoho_payment_draft.dart';
 import 'package:afyakit/features/retail/payments/models/zoho_payment_dtos.dart';
+import 'package:afyakit/features/retail/payments/services/zoho_payments_service.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final paymentControllerProvider =
     StateNotifierProvider.family<PaymentController, PaymentState, String>(
-      (ref, invoiceId) => PaymentController(ref, invoiceId),
+      (Ref ref, String invoiceId) => PaymentController(ref, invoiceId),
     );
+
+@immutable
+class PaymentState {
+  PaymentState({
+    this.invoiceId,
+    this.loadingPayments = false,
+    this.savingPayment = false,
+    this.deletingPayment = false,
+    this.payingMpesa = false,
+    this.editingPaymentId,
+    List<ZohoInvoicePayment>? payments,
+    this.invoiceSummary,
+    ZohoPaymentDraft? paymentDraft,
+    this.error,
+    this.mpesaLastPayment,
+    this.pendingAmount,
+    this.suggestedMpesaPhone,
+    this.defaultsSeeded = false,
+  }) : payments = payments ?? const <ZohoInvoicePayment>[],
+       paymentDraft =
+           paymentDraft ??
+           ZohoPaymentDraft.today(invoiceId: (invoiceId ?? '').trim());
+
+  final String? invoiceId;
+
+  final bool loadingPayments;
+  final bool savingPayment;
+  final bool deletingPayment;
+  final bool payingMpesa;
+
+  final String? editingPaymentId;
+
+  final List<ZohoInvoicePayment> payments;
+  final InvoiceBalanceSummary? invoiceSummary;
+  final ZohoPaymentDraft paymentDraft;
+
+  final String? error;
+  final MpesaPayment? mpesaLastPayment;
+
+  final num? pendingAmount;
+  final String? suggestedMpesaPhone;
+  final bool defaultsSeeded;
+
+  bool get busy {
+    return loadingPayments || savingPayment || deletingPayment || payingMpesa;
+  }
+
+  bool get isEditing {
+    return (editingPaymentId ?? '').trim().isNotEmpty;
+  }
+
+  PaymentState copyWith({
+    String? invoiceId,
+    bool? loadingPayments,
+    bool? savingPayment,
+    bool? deletingPayment,
+    bool? payingMpesa,
+    String? editingPaymentId,
+    bool clearEditingPaymentId = false,
+    List<ZohoInvoicePayment>? payments,
+    bool clearPayments = false,
+    InvoiceBalanceSummary? invoiceSummary,
+    bool clearInvoiceSummary = false,
+    ZohoPaymentDraft? paymentDraft,
+    String? error,
+    bool clearError = false,
+    MpesaPayment? mpesaLastPayment,
+    bool clearMpesaLastPayment = false,
+    num? pendingAmount,
+    bool clearPendingAmount = false,
+    String? suggestedMpesaPhone,
+    bool clearSuggestedMpesaPhone = false,
+    bool? defaultsSeeded,
+  }) {
+    return PaymentState(
+      invoiceId: invoiceId ?? this.invoiceId,
+      loadingPayments: loadingPayments ?? this.loadingPayments,
+      savingPayment: savingPayment ?? this.savingPayment,
+      deletingPayment: deletingPayment ?? this.deletingPayment,
+      payingMpesa: payingMpesa ?? this.payingMpesa,
+      editingPaymentId: clearEditingPaymentId
+          ? null
+          : (editingPaymentId ?? this.editingPaymentId),
+      payments: clearPayments
+          ? const <ZohoInvoicePayment>[]
+          : (payments ?? this.payments),
+      invoiceSummary: clearInvoiceSummary
+          ? null
+          : (invoiceSummary ?? this.invoiceSummary),
+      paymentDraft: paymentDraft ?? this.paymentDraft,
+      error: clearError ? null : (error ?? this.error),
+      mpesaLastPayment: clearMpesaLastPayment
+          ? null
+          : (mpesaLastPayment ?? this.mpesaLastPayment),
+      pendingAmount: clearPendingAmount
+          ? null
+          : (pendingAmount ?? this.pendingAmount),
+      suggestedMpesaPhone: clearSuggestedMpesaPhone
+          ? null
+          : (suggestedMpesaPhone ?? this.suggestedMpesaPhone),
+      defaultsSeeded: defaultsSeeded ?? this.defaultsSeeded,
+    );
+  }
+}
 
 class PaymentController extends StateNotifier<PaymentState> {
   PaymentController(this._ref, String invoiceId)
@@ -27,7 +129,8 @@ class PaymentController extends StateNotifier<PaymentState> {
           paymentDraft: ZohoPaymentDraft.today(invoiceId: invoiceId.trim()),
         ),
       ) {
-    final id = (state.invoiceId ?? '').trim();
+    final String id = this.invoiceId;
+
     if (id.isNotEmpty) {
       // ignore: discarded_futures
       load();
@@ -38,14 +141,14 @@ class PaymentController extends StateNotifier<PaymentState> {
 
   PaymentState get publicState => state;
 
+  String get invoiceId {
+    return (state.invoiceId ?? '').trim();
+  }
+
   bool get _busy => state.busy;
 
-  String get invoiceId => (state.invoiceId ?? '').trim();
-
-  // ───────────────────────── Load / Refresh ─────────────────────────
-
   Future<void> load() async {
-    final id = invoiceId;
+    final String id = invoiceId;
     if (id.isEmpty || _busy) return;
 
     state = state.copyWith(
@@ -55,81 +158,74 @@ class PaymentController extends StateNotifier<PaymentState> {
       clearInvoiceSummary: true,
       clearEditingPaymentId: true,
       clearMpesaLastPayment: true,
-
-      // ✅ allow fresh reseeding from parent context after load
       clearPendingAmount: true,
       clearSuggestedMpesaPhone: true,
       defaultsSeeded: false,
-
       paymentDraft: ZohoPaymentDraft.today(invoiceId: id),
     );
 
-    try {
-      final svc = await _ref.read(zohoPaymentsServiceProvider.future);
-      final payRes = await svc.listInvoicePaymentsWithBalance(id);
-
-      state = state.copyWith(
-        loadingPayments: false,
-        payments: payRes.payments,
-        invoiceSummary: payRes.invoice,
-      );
-
-      // NOTE:
-      // - Do NOT fetch contact here.
-      // - Seeding phone should come from the invoice page (parent context).
-      // - Amount seeding can be done from invoiceSummary via ensureSeededDefaults().
-      //
-      // ignore: discarded_futures
-      ensureSeededDefaults();
-    } catch (e) {
-      state = state.copyWith(loadingPayments: false, error: _err(e));
-      SnackService.showError('Failed to load payments');
-    }
+    await _reloadPayments(
+      invoiceId: id,
+      setLoadingFalse: true,
+      resetDefaults: true,
+      errorMessage: 'Failed to load payments',
+    );
   }
 
   Future<void> refresh() async {
-    final id = invoiceId;
+    final String id = invoiceId;
     if (id.isEmpty || _busy) return;
 
     state = state.copyWith(
       loadingPayments: true,
       clearError: true,
-
-      // ✅ after refresh, allow fresh reseeding from latest invoice balance
       clearPendingAmount: true,
-      defaultsSeeded: false,
-
-      // ✅ avoid stale M-Pesa success/failure banner/state lingering
       clearMpesaLastPayment: true,
+      defaultsSeeded: false,
     );
 
-    try {
-      final svc = await _ref.read(zohoPaymentsServiceProvider.future);
-      final payRes = await svc.listInvoicePaymentsWithBalance(id);
+    await _reloadPayments(
+      invoiceId: id,
+      setLoadingFalse: true,
+      resetDefaults: true,
+      errorMessage: 'Failed to load payments',
+    );
+  }
 
-      state = state.copyWith(
-        loadingPayments: false,
-        payments: payRes.payments,
-        invoiceSummary: payRes.invoice,
+  Future<void> _reloadPayments({
+    required String invoiceId,
+    required bool setLoadingFalse,
+    required bool resetDefaults,
+    required String errorMessage,
+  }) async {
+    try {
+      final ZohoPaymentsService svc = await _ref.read(
+        zohoPaymentsServiceProvider.future,
       );
 
-      // ✅ re-seed amount defaults from latest balance if needed
+      final ListInvoicePaymentsResult payRes = await svc
+          .listInvoicePaymentsWithBalance(invoiceId);
+
+      state = state.copyWith(
+        loadingPayments: setLoadingFalse ? false : state.loadingPayments,
+        payments: payRes.payments,
+        invoiceSummary: payRes.invoice,
+        clearError: true,
+        defaultsSeeded: resetDefaults ? false : state.defaultsSeeded,
+      );
+
       // ignore: discarded_futures
       ensureSeededDefaults();
-    } catch (e) {
-      state = state.copyWith(loadingPayments: false, error: _err(e));
-      SnackService.showError('Failed to load payments');
+    } catch (error) {
+      state = state.copyWith(
+        loadingPayments: setLoadingFalse ? false : state.loadingPayments,
+        error: _err(error),
+      );
+
+      SnackService.showError(errorMessage);
     }
   }
 
-  // ───────────────────────── Parent-context seeding (NO network) ─────────────────────────
-
-  /// ✅ Call this from Invoice screen/footer BEFORE opening PaymentEditorSheet.
-  ///
-  /// Rules:
-  /// - never fights user: won’t overwrite amount if they already typed / draft has amount
-  /// - won’t overwrite an existing suggested phone
-  /// - safe to call repeatedly
   void seedFromInvoiceContext({
     num? pendingAmount,
     String? suggestedPhone,
@@ -137,20 +233,18 @@ class PaymentController extends StateNotifier<PaymentState> {
   }) {
     if (_busy) return;
 
-    final nextPending = _normPending(pendingAmount);
-    final nextPhone = _normPhone(suggestedPhone);
+    final num? nextPending = _normPending(pendingAmount);
+    final String? nextPhone = _normPhone(suggestedPhone);
 
-    final curPending = state.pendingAmount;
-    final curPhone = _normPhone(state.suggestedMpesaPhone);
+    final num? curPending = state.pendingAmount;
+    final String? curPhone = _normPhone(state.suggestedMpesaPhone);
 
-    // pending: update state if changed (or force)
-    final shouldSetPending =
+    final bool shouldSetPending =
         force || (nextPending != null && nextPending != curPending);
 
-    // phone: only set if we don't already have one (or force)
-    final shouldSetPhone = force
-        ? (nextPhone != null && nextPhone != curPhone)
-        : (curPhone == null && nextPhone != null);
+    final bool shouldSetPhone = force
+        ? nextPhone != null && nextPhone != curPhone
+        : curPhone == null && nextPhone != null;
 
     if (shouldSetPending || shouldSetPhone) {
       state = state.copyWith(
@@ -161,67 +255,54 @@ class PaymentController extends StateNotifier<PaymentState> {
       );
     }
 
-    // If this is a fresh draft (amount <= 0), seed amount from pending
-    // (unless force is false and user has already set amount)
-    final draftAmt = state.paymentDraft.amount;
+    final num draftAmount = state.paymentDraft.amount;
+
     if (nextPending != null && nextPending > 0) {
-      final shouldSeedAmt = force ? true : (draftAmt <= 0);
-      if (shouldSeedAmt) {
+      final bool shouldSeedAmount = force || draftAmount <= 0;
+
+      if (shouldSeedAmount) {
         patchDraft(amount: nextPending);
       }
     }
   }
 
-  static num? _normPending(num? v) {
-    if (v == null) return null;
-    if (!v.isFinite) return null;
-    if (v <= 0) return null;
-    return v;
-  }
-
-  static String? _normPhone(String? v) {
-    final s = (v ?? '').trim();
-    return s.isEmpty ? null : s;
-  }
-
-  // ───────────────────────── Draft ─────────────────────────
-
   void startNewPayment() {
     if (_busy) return;
 
-    final invId = invoiceId;
+    final String id = invoiceId;
 
     state = state.copyWith(
       clearEditingPaymentId: true,
-      paymentDraft: ZohoPaymentDraft.today(invoiceId: invId),
+      paymentDraft: ZohoPaymentDraft.today(invoiceId: id),
       clearError: true,
     );
 
-    // Note: do not auto-fetch anything here. Parent should call seedFromInvoiceContext().
     // ignore: discarded_futures
     ensureSeededDefaults();
   }
 
-  void startEditPayment(ZohoInvoicePayment p) {
+  void startEditPayment(ZohoInvoicePayment payment) {
     if (_busy) return;
 
-    final pid = p.paymentId.trim();
-    if (pid.isEmpty) return;
+    final String paymentId = payment.paymentId.trim();
+    if (paymentId.isEmpty) return;
 
-    final invId = invoiceId;
-
-    final dt = p.date ?? DateTime.now();
-    final dateOnly = DateTime(dt.year, dt.month, dt.day);
+    final DateTime sourceDate = payment.date ?? DateTime.now();
+    final DateTime dateOnly = DateTime(
+      sourceDate.year,
+      sourceDate.month,
+      sourceDate.day,
+    );
 
     state = state.copyWith(
-      editingPaymentId: pid,
+      editingPaymentId: paymentId,
       paymentDraft: ZohoPaymentDraft(
-        invoiceId: invId,
-        amount: p.amount,
+        invoiceId: invoiceId,
+        amount: payment.amount,
         date: dateOnly,
-        mode: p.mode,
-        description: p.description,
-        accountId: null,
+        mode: payment.mode,
+        description: payment.description,
+        reference: payment.reference,
       ),
       clearError: true,
     );
@@ -229,6 +310,7 @@ class PaymentController extends StateNotifier<PaymentState> {
 
   void cancelPaymentEdit() {
     if (_busy) return;
+
     startNewPayment();
     SnackService.showSuccess('Payment edit cancelled');
   }
@@ -242,45 +324,58 @@ class PaymentController extends StateNotifier<PaymentState> {
     bool clearDescription = false,
     String? accountId,
     bool clearAccountId = false,
+    String? reference,
+    bool clearReference = false,
   }) {
     if (_busy) return;
 
-    final d = state.paymentDraft;
-    final nextDate = date == null
+    final ZohoPaymentDraft draft = state.paymentDraft;
+
+    final DateTime? nextDate = date == null
         ? null
         : DateTime(date.year, date.month, date.day);
 
     state = state.copyWith(
       clearError: true,
-      paymentDraft: d.copyWith(
-        amount: amount ?? d.amount,
-        date: nextDate ?? d.date,
-        mode: clearMode ? null : (mode ?? d.mode),
-        description: clearDescription ? null : (description ?? d.description),
-        accountId: clearAccountId ? null : (accountId ?? d.accountId),
+      paymentDraft: draft.copyWith(
+        amount: amount ?? draft.amount,
+        date: nextDate ?? draft.date,
+        mode: mode,
+        clearMode: clearMode,
+        description: description,
+        clearDescription: clearDescription,
+        accountId: accountId,
+        clearAccountId: clearAccountId,
+        reference: reference,
+        clearReference: clearReference,
       ),
     );
   }
 
-  // ───────────────────────── Actions (Zoho manual) ─────────────────────────
-
   Future<bool> savePayment() async {
     if (_busy) return false;
 
-    final invId = invoiceId;
-    if (invId.isEmpty) {
+    final String id = invoiceId;
+
+    if (id.isEmpty) {
       SnackService.showError('Missing invoice id');
       return false;
     }
 
-    final draft = state.paymentDraft.copyWith(invoiceId: invId).withDateOnly();
+    final ZohoPaymentDraft draft = state.paymentDraft
+        .copyWith(invoiceId: id)
+        .withDateOnly();
+
     if (!_validateDraft(draft)) return false;
 
     state = state.copyWith(savingPayment: true, clearError: true);
 
     try {
-      final svc = await _ref.read(zohoPaymentsServiceProvider.future);
-      final editingId = (state.editingPaymentId ?? '').trim();
+      final ZohoPaymentsService svc = await _ref.read(
+        zohoPaymentsServiceProvider.future,
+      );
+
+      final String editingId = (state.editingPaymentId ?? '').trim();
 
       if (editingId.isNotEmpty) {
         await svc.update(editingId, draft);
@@ -290,16 +385,15 @@ class PaymentController extends StateNotifier<PaymentState> {
         SnackService.showSuccess('Payment recorded');
       }
 
-      final payRes = await svc.listInvoicePaymentsWithBalance(invId);
+      final ListInvoicePaymentsResult payRes = await svc
+          .listInvoicePaymentsWithBalance(id);
 
       state = state.copyWith(
         savingPayment: false,
         payments: payRes.payments,
         invoiceSummary: payRes.invoice,
         clearEditingPaymentId: true,
-        paymentDraft: ZohoPaymentDraft.today(invoiceId: invId),
-
-        // ✅ reseed after save
+        paymentDraft: ZohoPaymentDraft.today(invoiceId: id),
         clearPendingAmount: true,
         defaultsSeeded: false,
       );
@@ -308,8 +402,9 @@ class PaymentController extends StateNotifier<PaymentState> {
       ensureSeededDefaults();
 
       return true;
-    } catch (e) {
-      state = state.copyWith(savingPayment: false, error: _err(e));
+    } catch (error) {
+      state = state.copyWith(savingPayment: false, error: _err(error));
+
       SnackService.showError('Failed to save payment');
       return false;
     }
@@ -318,22 +413,24 @@ class PaymentController extends StateNotifier<PaymentState> {
   Future<bool> deletePayment(String paymentId) async {
     if (_busy) return false;
 
-    final pid = paymentId.trim();
-    if (pid.isEmpty) return false;
+    final String pid = paymentId.trim();
+    final String id = invoiceId;
 
-    final invId = invoiceId;
-    if (invId.isEmpty) return false;
+    if (pid.isEmpty || id.isEmpty) return false;
 
     state = state.copyWith(deletingPayment: true, clearError: true);
 
     try {
-      final svc = await _ref.read(zohoPaymentsServiceProvider.future);
+      final ZohoPaymentsService svc = await _ref.read(
+        zohoPaymentsServiceProvider.future,
+      );
 
       await svc.remove(pid);
 
-      final payRes = await svc.listInvoicePaymentsWithBalance(invId);
+      final ListInvoicePaymentsResult payRes = await svc
+          .listInvoicePaymentsWithBalance(id);
 
-      final wasEditingThis = (state.editingPaymentId ?? '').trim() == pid;
+      final bool wasEditingThis = (state.editingPaymentId ?? '').trim() == pid;
 
       state = state.copyWith(
         deletingPayment: false,
@@ -341,8 +438,10 @@ class PaymentController extends StateNotifier<PaymentState> {
         invoiceSummary: payRes.invoice,
         editingPaymentId: wasEditingThis ? null : state.editingPaymentId,
         paymentDraft: wasEditingThis
-            ? ZohoPaymentDraft.today(invoiceId: invId)
+            ? ZohoPaymentDraft.today(invoiceId: id)
             : state.paymentDraft,
+        clearPendingAmount: true,
+        defaultsSeeded: false,
       );
 
       SnackService.showSuccess('Payment deleted');
@@ -351,95 +450,58 @@ class PaymentController extends StateNotifier<PaymentState> {
       ensureSeededDefaults();
 
       return true;
-    } catch (e) {
-      state = state.copyWith(deletingPayment: false, error: _err(e));
+    } catch (error) {
+      state = state.copyWith(deletingPayment: false, error: _err(error));
+
       SnackService.showError('Failed to delete payment');
       return false;
     }
   }
 
-  // ───────────────────────── Actions (M-Pesa STK) ─────────────────────────
-
-  // ───────────────────────── Actions (M-Pesa STK) ─────────────────────────
-
   Future<bool> payViaMpesaStk({
     required String phone,
-
-    /// ✅ Optional override to support partial payments.
-    /// If null => uses current draft amount.
     num? amount,
-
     Duration timeout = const Duration(minutes: 2),
   }) async {
     if (_busy) return false;
 
-    final invId = invoiceId;
-    if (invId.isEmpty) {
+    final String id = invoiceId;
+
+    if (id.isEmpty) {
       SnackService.showError('Missing invoice id');
       return false;
     }
 
-    // ✅ Normalize phone to M-Pesa MSISDN: 2547XXXXXXXX or 2541XXXXXXXX (no +, no 0-prefix)
-    final normalized = normalizeMpesaPhoneKE(phone);
-    if (normalized == null) {
+    final String? normalizedPhone = normalizeMpesaPhoneKE(phone);
+
+    if (normalizedPhone == null) {
       SnackService.showError(
         'Invalid phone. Use 07XXXXXXXX, 011XYYYYYY or 2547/2541XXXXXXXX',
       );
       return false;
     }
 
-    // Draft base (date only)
-    final baseDraft = state.paymentDraft
-        .copyWith(invoiceId: invId)
+    final ZohoPaymentDraft baseDraft = state.paymentDraft
+        .copyWith(invoiceId: id)
         .withDateOnly();
 
-    // ✅ If caller provided amount, treat it as the effective amount (partial payments).
-    final effectiveAmount = (amount != null && amount.isFinite)
+    final num effectiveAmount = amount != null && amount.isFinite
         ? amount
         : baseDraft.amount;
 
-    // Keep UI draft in sync (does not fight user; this is an explicit pay action)
-    if (amount != null && amount.isFinite && amount > 0) {
-      patchDraft(amount: amount);
-    }
+    if (!_validateMpesaAmount(effectiveAmount)) return false;
 
-    // Validate amount
-    if (effectiveAmount.isNaN ||
-        effectiveAmount.isInfinite ||
-        effectiveAmount <= 0) {
-      SnackService.showError('Amount must be greater than 0');
-      return false;
-    }
+    if (!_validateAgainstPendingBalance(effectiveAmount)) return false;
 
-    // ✅ Enforce partial-payment constraint: cannot exceed pending balance if known
-    final pending =
-        state.pendingAmount; // seeded from invoice screen OR invoice summary
-    if (pending != null &&
-        pending.isFinite &&
-        pending > 0 &&
-        effectiveAmount > pending) {
-      SnackService.showError(
-        'Amount cannot exceed the balance (${pending.toString()})',
-      );
-      return false;
-    }
+    final int amountInt = effectiveAmount.round();
 
-    // M-Pesa is integer KES. Round sensibly.
-    final amtInt = effectiveAmount.round();
-    if (amtInt <= 0) {
+    if (amountInt <= 0) {
       SnackService.showError('Amount must be at least 1');
       return false;
     }
 
-    // If pending exists, also enforce integer vs pending upper bound (rounded)
-    if (pending != null && pending.isFinite && pending > 0) {
-      final pendingInt = pending.round();
-      if (amtInt > pendingInt) {
-        SnackService.showError(
-          'Amount cannot exceed the balance ($pendingInt)',
-        );
-        return false;
-      }
+    if (amount != null && amount.isFinite && amount > 0) {
+      patchDraft(amount: amount);
     }
 
     state = state.copyWith(
@@ -449,109 +511,113 @@ class PaymentController extends StateNotifier<PaymentState> {
     );
 
     try {
-      final mpesaSvc = await _ref.read(mpesaServiceProvider.future);
+      final MpesaService mpesaSvc = await _ref.read(
+        mpesaServiceProvider.future,
+      );
 
-      final p = await mpesaSvc.initiateAndWait(
+      final MpesaPayment payment = await mpesaSvc.initiateAndWait(
         draft: MpesaStkInitiateDraft(
           purpose: 'invoice',
-          purposeRef: invId,
-          amount: amtInt,
-          phone: normalized,
+          purposeRef: id,
+          amount: amountInt,
+          phone: normalizedPhone,
           clientRequestId: 'stk_${DateTime.now().millisecondsSinceEpoch}',
         ),
         timeout: timeout,
-        onTick: (tick) {
+        onTick: (MpesaPayment tick) {
           state = state.copyWith(mpesaLastPayment: tick);
         },
       );
 
-      state = state.copyWith(mpesaLastPayment: p);
+      state = state.copyWith(mpesaLastPayment: payment);
 
-      if (p.isFailed) {
-        final msg = (p.resultDesc ?? '').trim();
-        SnackService.showError(msg.isEmpty ? 'M-Pesa payment failed' : msg);
+      if (payment.isFailed) {
+        final String message = (payment.resultDesc ?? '').trim();
+        SnackService.showError(
+          message.isEmpty ? 'M-Pesa payment failed' : message,
+        );
+
         state = state.copyWith(payingMpesa: false);
         return false;
       }
 
-      if (!p.isSuccess) {
+      if (!payment.isSuccess) {
         SnackService.showError(
           'Payment still pending. Tap refresh to check status.',
         );
+
         state = state.copyWith(payingMpesa: false);
         return false;
       }
 
-      final z = (p.zohoSyncStatus ?? '').trim().toLowerCase();
+      final String syncStatus = (payment.zohoSyncStatus ?? '')
+          .trim()
+          .toLowerCase();
+
       SnackService.showSuccess(
-        z == 'success'
+        syncStatus == 'success'
             ? 'Payment received'
             : 'Payment received. Syncing to Zoho…',
       );
 
-      // ✅ reload payments + invoice summary/balance
-      await refresh();
+      state = state.copyWith(
+        payingMpesa: false,
+        loadingPayments: true,
+        clearPendingAmount: true,
+        defaultsSeeded: false,
+      );
 
-      state = state.copyWith(payingMpesa: false);
+      await _reloadPayments(
+        invoiceId: id,
+        setLoadingFalse: true,
+        resetDefaults: true,
+        errorMessage: 'Payment received, but failed to refresh payments',
+      );
+
       return true;
-    } catch (e) {
-      state = state.copyWith(payingMpesa: false, error: _err(e));
+    } catch (error) {
+      state = state.copyWith(payingMpesa: false, error: _err(error));
+
       SnackService.showError('Failed to initiate M-Pesa STK');
       return false;
     }
   }
 
-  // ───────────────────────── Defaults seeding (typed, NO contact fetch) ─────────────────────────
-
-  /// Only seeds pending amount from invoice summary (balance).
-  /// Phone MUST be seeded via [seedFromInvoiceContext] from the parent screen.
   Future<void> ensureSeededDefaults() async {
     if (state.busy) return;
     if (state.isEditing) return;
     if (state.defaultsSeeded) return;
 
     final InvoiceBalanceSummary? summary = state.invoiceSummary;
-    final pending = _pendingFromSummary(summary);
+    final num? pending = _pendingFromSummary(summary);
 
     if (pending != null && pending > 0) {
-      // store for helper text
       state = state.copyWith(pendingAmount: pending);
 
-      // seed into draft only if draft is still empty
       if (state.paymentDraft.amount <= 0) {
         patchDraft(amount: pending);
       }
     }
 
-    // Mark seeded only when we had a summary to seed from.
     state = state.copyWith(defaultsSeeded: summary != null);
   }
 
-  static num? _pendingFromSummary(InvoiceBalanceSummary? s) {
-    if (s == null) return null;
-    final b = s.balance;
-    if (b == null) return null;
-    if (!b.isFinite) return null;
-    return b <= 0 ? null : b;
-  }
+  bool _validateDraft(ZohoPaymentDraft draft) {
+    final String inv = draft.invoiceId.trim();
 
-  // ───────────────────────── Validation ─────────────────────────
-
-  bool _validateDraft(ZohoPaymentDraft d) {
-    final inv = d.invoiceId.trim();
     if (inv.isEmpty) {
       SnackService.showError('Missing invoice id');
       return false;
     }
 
-    final amt = d.amount;
-    if (amt.isNaN || amt.isInfinite || amt <= 0) {
+    final num amount = draft.amount;
+
+    if (amount.isNaN || amount.isInfinite || amount <= 0) {
       SnackService.showError('Amount must be greater than 0');
       return false;
     }
 
-    final dt = d.date;
-    if (dt.year < 2000) {
+    if (draft.date.year < 2000) {
       SnackService.showError('Invalid payment date');
       return false;
     }
@@ -559,8 +625,68 @@ class PaymentController extends StateNotifier<PaymentState> {
     return true;
   }
 
-  static String _err(Object e) {
-    final s = e.toString().trim();
-    return s.isEmpty ? 'Unknown error' : s;
+  bool _validateMpesaAmount(num amount) {
+    if (amount.isNaN || amount.isInfinite || amount <= 0) {
+      SnackService.showError('Amount must be greater than 0');
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _validateAgainstPendingBalance(num amount) {
+    final num? pending = state.pendingAmount;
+
+    if (pending == null || !pending.isFinite || pending <= 0) {
+      return true;
+    }
+
+    if (amount > pending) {
+      SnackService.showError(
+        'Amount cannot exceed the balance (${pending.toString()})',
+      );
+
+      return false;
+    }
+
+    if (amount.round() > pending.round()) {
+      SnackService.showError(
+        'Amount cannot exceed the balance (${pending.round()})',
+      );
+
+      return false;
+    }
+
+    return true;
+  }
+
+  static num? _pendingFromSummary(InvoiceBalanceSummary? summary) {
+    if (summary == null) return null;
+
+    final num? balance = summary.balance;
+
+    if (balance == null) return null;
+    if (!balance.isFinite) return null;
+
+    return balance <= 0 ? null : balance;
+  }
+
+  static num? _normPending(num? value) {
+    if (value == null) return null;
+    if (!value.isFinite) return null;
+
+    return value <= 0 ? null : value;
+  }
+
+  static String? _normPhone(String? value) {
+    final String text = (value ?? '').trim();
+
+    return text.isEmpty ? null : text;
+  }
+
+  static String _err(Object error) {
+    final String text = error.toString().trim();
+
+    return text.isEmpty ? 'Unknown error' : text;
   }
 }

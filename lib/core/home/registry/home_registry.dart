@@ -15,12 +15,11 @@ import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
-import 'package:afyakit/features/insurance/claims/widgets/insurance_claims_screen.dart';
+import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
-import 'package:afyakit/features/retail/payments/widgets/payments_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 
@@ -227,16 +226,9 @@ final class HomeRegistry {
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
-      labelOverride: 'Invoices',
+      labelOverride: 'Invoices and Payments',
       iconOverride: Icons.receipt_outlined,
       destination: _invoices,
-      allowedRef: _allowRetailForTenant,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.retail,
-      labelOverride: 'Payments',
-      iconOverride: Icons.payments_outlined,
-      destination: _payments,
       allowedRef: _allowRetailForTenant,
     ),
 
@@ -284,16 +276,9 @@ final class HomeRegistry {
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
-      labelOverride: 'My Invoices',
+      labelOverride: 'My Invoices and Payments',
       iconOverride: Icons.receipt_outlined,
       destination: _myInvoices,
-      allowedRef: _allowRetailForTenant,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.retail,
-      labelOverride: 'My Payments',
-      iconOverride: Icons.payments_outlined,
-      destination: _myPayments,
       allowedRef: _allowRetailForTenant,
     ),
   ];
@@ -318,8 +303,6 @@ final class HomeRegistry {
 
   static Widget _invoices(BuildContext _) => const InvoicesListScreen();
 
-  static Widget _payments(BuildContext _) => const PaymentsListScreen();
-
   static Widget _patientProfiles(BuildContext _) =>
       const PatientProfilesScreen(allowExplicitContactLink: true);
 
@@ -341,9 +324,6 @@ final class HomeRegistry {
 
   static Widget _myInvoices(BuildContext _) =>
       const InvoicesListScreen(scope: RetailDocScope.mine);
-
-  static Widget _myPayments(BuildContext _) =>
-      const PaymentsListScreen(scope: RetailDocScope.mine);
 
   static bool _requireStaff(AuthUser u) => u.isStaff;
 

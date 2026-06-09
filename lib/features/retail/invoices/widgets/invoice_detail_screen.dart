@@ -1,43 +1,40 @@
 // lib/features/retail/invoices/widgets/invoice_detail_screen.dart
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-
+import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
+import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claim_detail_screen.dart';
+import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_action_controller.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_controller.dart';
-
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice_line_item.dart';
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
-import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
-
+import 'package:afyakit/features/retail/payments/providers/payment_providers.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_footer.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
-
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
-
-import '../../payments/widgets/payment_footer.dart';
-
-// ✅ Already exists in app
-import 'package:afyakit/features/retail/payments/providers/payment_receipt_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum _InvoiceMenuAction { send, markSent }
 
 class InvoiceDetailScreen extends ConsumerStatefulWidget {
   const InvoiceDetailScreen({super.key, required this.invoiceId});
+
   final String invoiceId;
 
   @override
-  ConsumerState<InvoiceDetailScreen> createState() =>
-      _InvoiceDetailScreenState();
+  ConsumerState<InvoiceDetailScreen> createState() {
+    return _InvoiceDetailScreenState();
+  }
 }
 
 class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
@@ -46,45 +43,41 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   bool _booted = false;
   bool _acting = false;
 
-  // Prevent noisy repeated seeding on every rebuild
   String? _lastSeededPhone;
   num? _lastSeededPending;
+  bool _seedScheduled = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     if (_booted) return;
     _booted = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+
       await ref.read(invoiceControllerProvider.notifier).load(widget.invoiceId);
     });
-  }
-
-  Future<void> _runAction(Future<void> Function() fn) async {
-    if (_acting) return;
-    setState(() => _acting = true);
-    try {
-      await fn();
-    } catch (e) {
-      SnackService.showError(e.toString());
-    } finally {
-      if (mounted) setState(() => _acting = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final me = ref.watch(currentUserProvider).valueOrNull;
-    final canManageInvoices = me?.canManageInvoices ?? false;
 
-    final s = ref.watch(invoiceControllerProvider);
+    final bool staffWorkspace = ref.watch(isStaffWorkspaceActiveProvider);
 
-    final actionsCtl = ref.read(invoiceActionControllerProvider);
+    final bool canManageInvoices =
+        staffWorkspace && (me?.canManageInvoices ?? false);
 
-    final pdfBusy = _acting || s.downloadingPdf;
-    final menuBusy = _acting || s.busy;
+    final InvoiceState state = ref.watch(invoiceControllerProvider);
+
+    final InvoiceActionController actions = ref.read(
+      invoiceActionControllerProvider,
+    );
+
+    final bool pdfBusy = _acting || state.downloadingPdf;
+    final bool menuBusy = _acting || state.busy;
 
     return AppPage(
       title: 'Invoice',
@@ -93,12 +86,12 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       scrollable: true,
       actions: _buildActions(
         canManageInvoices: canManageInvoices,
-        state: s,
+        state: state,
         pdfBusy: pdfBusy,
         menuBusy: menuBusy,
-        actionsCtl: actionsCtl,
+        actions: actions,
       ),
-      body: _buildBody(context, s, canManageInvoices: canManageInvoices),
+      body: _buildBody(context, state, canManageInvoices: canManageInvoices),
       footer: null,
     );
   }
@@ -108,15 +101,15 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     required InvoiceState state,
     required bool pdfBusy,
     required bool menuBusy,
-    required InvoiceActionController actionsCtl,
+    required InvoiceActionController actions,
   }) {
-    return [
+    return <Widget>[
       IconButton(
         tooltip: pdfBusy ? 'Working…' : 'PDF',
         onPressed: pdfBusy
             ? null
             : () => _runAction(
-                () => actionsCtl.viewPdf(context, invoiceId: widget.invoiceId),
+                () => actions.viewPdf(context, invoiceId: widget.invoiceId),
               ),
         icon: const Icon(Icons.picture_as_pdf_outlined),
       ),
@@ -124,32 +117,29 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         tooltip: 'Refresh',
         onPressed: state.busy
             ? null
-            : () => _runAction(() => actionsCtl.refresh(widget.invoiceId)),
+            : () => _runAction(() => actions.refresh(widget.invoiceId)),
         icon: const Icon(Icons.refresh),
       ),
       if (canManageInvoices)
         PopupMenuButton<_InvoiceMenuAction>(
           tooltip: 'More',
           enabled: !menuBusy,
-          onSelected: (a) async {
-            switch (a) {
+          onSelected: (action) async {
+            switch (action) {
               case _InvoiceMenuAction.send:
                 await _runAction(
-                  () => actionsCtl.sendInvoice(
-                    context,
-                    invoiceId: widget.invoiceId,
-                  ),
+                  () =>
+                      actions.sendInvoice(context, invoiceId: widget.invoiceId),
                 );
                 break;
               case _InvoiceMenuAction.markSent:
                 await _runAction(
-                  () =>
-                      actionsCtl.markSent(context, invoiceId: widget.invoiceId),
+                  () => actions.markSent(context, invoiceId: widget.invoiceId),
                 );
                 break;
             }
           },
-          itemBuilder: (context) => const [
+          itemBuilder: (_) => const <PopupMenuEntry<_InvoiceMenuAction>>[
             PopupMenuItem<_InvoiceMenuAction>(
               value: _InvoiceMenuAction.send,
               child: ListTile(
@@ -174,110 +164,146 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
 
   Widget _buildBody(
     BuildContext context,
-    InvoiceState s, {
+    InvoiceState state, {
     required bool canManageInvoices,
   }) {
-    if (s.loading && !s.hasInvoice) {
+    if (state.loading && !state.hasInvoice) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (!s.hasInvoice) {
+    if (!state.hasInvoice) {
       return SalesDocErrorState(
         title: 'Failed to load invoice',
-        message: (s.error ?? 'No invoice data'),
+        message: state.error ?? 'No invoice data',
       );
     }
 
-    final ZohoInvoice inv = s.invoice!;
-    final vm = _buildVm(inv);
+    final ZohoInvoice invoice = state.invoice!;
+    final _InvoiceVm vm = _buildVm(invoice);
+    final String? suggestedPhone = _watchSuggestedPhone(invoice);
 
-    final suggestedPhone = _watchSuggestedPhone(inv);
     _maybeSeedPaymentContext(
-      invoiceId: inv.invoiceId,
+      invoiceId: invoice.invoiceId,
       pendingAmount: vm.pendingAmount,
       suggestedPhone: suggestedPhone,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_acting || s.busy) const LinearProgressIndicator(minHeight: 2),
-        InlineErrorCard(message: (s.error ?? '').trim()),
-
+      children: <Widget>[
+        if (_acting || state.busy) const LinearProgressIndicator(minHeight: 2),
+        InlineErrorCard(message: (state.error ?? '').trim()),
         SalesDocHeader(
           title: 'Invoice',
           meta: vm.meta,
           showStatus: false,
           trailing: _HeaderStatusPill(status: vm.meta.status),
         ),
-
         const Divider(height: 1),
-
+        if (invoice.isInsurancePayment || invoice.hasClaimPack) ...<Widget>[
+          const SizedBox(height: 12),
+          _InvoiceClaimPackCard(
+            invoice: invoice,
+            onOpenClaimPack: () => _openClaimPack(invoice),
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+        ],
         SalesDocLinesList(
           currencyCode: vm.meta.currencyCode,
           lines: vm.lines,
           mode: SalesDocMode.view,
           embedInParentScroll: true,
         ),
-
         SalesDocTotalsStack(
           currencyCode: vm.meta.currencyCode,
           total: vm.meta.total,
           paid: vm.paid > 0 ? vm.paid : null,
           balance: vm.balance,
         ),
-
         const SizedBox(height: 12),
-        const Divider(height: 1),
-        const SizedBox(height: 12),
-
         PaymentFooter(
           currencyCode: vm.currency,
-          invoiceId: inv.invoiceId,
+          invoiceId: invoice.invoiceId,
           canManageInvoices: canManageInvoices,
           pendingAmount: vm.pendingAmount,
           suggestedPhone: suggestedPhone,
-          customerName: inv.customerName,
-          invoiceNumber: inv.invoiceNumber,
-          invoiceDate: inv.date,
-          invoiceTotal: inv.total,
-          onPaymentSuccess: () => _refreshInvoiceAndPayments(inv.invoiceId),
+          customerName: invoice.customerName,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.date,
+          invoiceTotal: invoice.total,
+          onPaymentSuccess: () => _refreshInvoiceAndPayments(invoice.invoiceId),
         ),
-
         const SizedBox(height: 24),
       ],
     );
   }
 
-  // ───────────────────────── VM / Data helpers ─────────────────────────
+  Future<void> _runAction(Future<void> Function() fn) async {
+    if (_acting) return;
 
-  _InvoiceVm _buildVm(ZohoInvoice inv) {
-    final currency = _currency(inv);
+    setState(() => _acting = true);
 
-    final meta = SalesDocMetaVm(
-      partyName: _partyName(inv),
-      docNumberOrId: _docNo(inv),
-      status: inv.status.trim(),
+    try {
+      await fn();
+    } catch (error) {
+      SnackService.showError(error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _acting = false);
+      }
+    }
+  }
+
+  void _openClaimPack(ZohoInvoice invoice) {
+    final String claimPackId = (invoice.resolvedClaimPackId ?? '').trim();
+
+    if (claimPackId.isEmpty) {
+      SnackService.showError('No claim pack is linked to this invoice.');
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => InsuranceClaimDetailScreen(
+          claimPackId: claimPackId,
+          patientId: invoice.resolvedPatientId,
+        ),
+      ),
+    );
+  }
+
+  _InvoiceVm _buildVm(ZohoInvoice invoice) {
+    final String currency = _currency(invoice);
+
+    final SalesDocMetaVm meta = SalesDocMetaVm(
+      partyName: _partyName(invoice),
+      docNumberOrId: _docNo(invoice),
+      status: invoice.status.trim(),
       currencyCode: currency,
-      total: inv.total,
-      date: inv.date,
+      total: invoice.total,
+      date: invoice.date,
     );
 
-    final lines = inv.lineItems
-        .map(
-          (li) => SalesDocLineVm(
-            title: (li.description ?? '').trim().isNotEmpty
-                ? (li.description ?? '').trim()
-                : li.name.trim(),
-            subtitle: _subtitle(li),
-            qty: li.quantity,
-            rate: li.rate,
-          ),
-        )
+    final List<SalesDocLineVm> lines = invoice.lineItems
+        .map((ZohoInvoiceLineItem lineItem) {
+          final String name = lineItem.name.trim();
+          final String desc = (lineItem.description ?? '').trim();
+          final String title = desc.isNotEmpty ? desc : name;
+
+          return SalesDocLineVm(
+            title: title,
+            subtitle: desc.isNotEmpty && name.isNotEmpty && name != title
+                ? name
+                : null,
+            qty: lineItem.quantity,
+            rate: lineItem.rate,
+          );
+        })
         .toList(growable: false);
 
-    final num? balance = inv.balance;
-    final num paid = (balance == null) ? 0 : (inv.total - balance);
+    final num? balance = invoice.balance;
+    final num paid = balance == null ? 0 : invoice.total - balance;
 
     return _InvoiceVm(
       currency: currency,
@@ -289,44 +315,45 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     );
   }
 
-  String? _watchSuggestedPhone(ZohoInvoice inv) {
-    final contactId = (inv.customerId ?? '').trim();
-    final contactAsync = contactId.isEmpty
-        ? const AsyncValue<Object?>.data(null)
-        : ref.watch(zohoContactProvider(contactId));
+  String? _watchSuggestedPhone(ZohoInvoice invoice) {
+    final String contactId = (invoice.customerId ?? '').trim();
+
+    if (contactId.isEmpty) {
+      return null;
+    }
+
+    final AsyncValue<Object?> contactAsync = ref.watch(
+      zohoContactProvider(contactId),
+    );
 
     return contactAsync.maybeWhen(
-      data: (c) => _bestPhoneFromContactObject(c),
+      data: _bestPhoneFromContactObject,
       orElse: () => null,
     );
   }
-
-  bool _seedScheduled = false;
 
   void _maybeSeedPaymentContext({
     required String invoiceId,
     required num? pendingAmount,
     required String? suggestedPhone,
   }) {
-    final pending = _normPending(pendingAmount);
-    final phone = _normPhone(suggestedPhone);
+    final num? pending = _validPending(pendingAmount);
+    final String? phone = _clean(suggestedPhone);
 
-    final didPendingChange = pending != _lastSeededPending;
-    final didPhoneChange = phone != _lastSeededPhone;
+    final bool pendingChanged = pending != _lastSeededPending;
+    final bool phoneChanged = phone != _lastSeededPhone;
 
-    if (!didPendingChange && !didPhoneChange) return;
+    if (!pendingChanged && !phoneChanged) return;
 
     _lastSeededPending = pending;
     _lastSeededPhone = phone;
 
-    // ✅ Never write providers during build.
-    // Schedule a single post-frame write. If build runs again before frame ends,
-    // we still only seed once.
     if (_seedScheduled) return;
     _seedScheduled = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _seedScheduled = false;
+
       if (!mounted) return;
 
       ref
@@ -338,47 +365,51 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     });
   }
 
-  static num? _normPending(num? v) {
-    if (v == null) return null;
-    if (!v.isFinite) return null;
-    if (v <= 0) return null;
-    return v;
+  Future<void> _refreshInvoiceAndPayments(String invoiceId) async {
+    await ref.read(invoiceControllerProvider.notifier).load(invoiceId);
+    await ref.read(paymentControllerProvider(invoiceId).notifier).refresh();
   }
 
-  static String? _normPhone(String? v) {
-    final s = (v ?? '').trim();
-    return s.isEmpty ? null : s;
+  static num? _validPending(num? value) {
+    if (value == null) return null;
+    if (!value.isFinite) return null;
+    if (value <= 0) return null;
+
+    return value;
   }
 
-  static String _currency(ZohoInvoice inv) {
-    final raw = (inv.currencyCode ?? 'KES').trim();
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
+
+    return text.isEmpty ? null : text;
+  }
+
+  static String _currency(ZohoInvoice invoice) {
+    final String raw = (invoice.currencyCode ?? 'KES').trim();
+
     return raw.isEmpty ? 'KES' : raw;
   }
 
-  static String _partyName(ZohoInvoice inv) {
-    final n = inv.customerName.trim();
-    return n.isEmpty ? 'Customer' : n;
+  static String _partyName(ZohoInvoice invoice) {
+    final String name = invoice.customerName.trim();
+
+    return name.isEmpty ? 'Customer' : name;
   }
 
-  static String _docNo(ZohoInvoice inv) {
-    final n = (inv.invoiceNumber ?? '').trim();
-    if (n.isNotEmpty) return n;
-    final id = inv.invoiceId.trim();
+  static String _docNo(ZohoInvoice invoice) {
+    final String number = (invoice.invoiceNumber ?? '').trim();
+
+    if (number.isNotEmpty) return number;
+
+    final String id = invoice.invoiceId.trim();
+
     return id.isEmpty ? '-' : id;
   }
 
-  static String? _subtitle(ZohoInvoiceLineItem li) {
-    final name = li.name.trim();
-    final desc = (li.description ?? '').trim();
-    final title = desc.isNotEmpty ? desc : name;
-    if (desc.isNotEmpty && name.isNotEmpty && name != title) return name;
-    return null;
-  }
-
   static String? _bestPhoneFromContactObject(Object? contact) {
-    String? raw;
-
     if (contact == null) return null;
+
+    String? raw;
 
     if (contact is ZohoContact) {
       raw = contact.bestPhone.trim();
@@ -394,42 +425,155 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       } catch (_) {}
     }
 
-    raw ??= (() {
-      String? norm(Object? v) {
-        final s = (v ?? '').toString().trim();
-        return s.isEmpty ? null : s;
-      }
-
-      Object? safe(Object? Function() fn) {
-        try {
-          return fn();
-        } catch (_) {
-          return null;
-        }
-      }
-
-      final d = contact as dynamic;
-      final cands = <Object?>[
-        safe(() => d.bestPhone),
-        safe(() => d.mobile),
-        safe(() => d.phone),
-        safe(() => d.personContact?.mobile),
-        safe(() => d.personContact?.phone),
-      ];
-
-      for (final v in cands) {
-        final s = norm(v);
-        if (s != null) return s;
-      }
-      return null;
-    })();
+    raw ??= _tryReadPhoneDynamically(contact);
 
     return normalizeMpesaPhoneKE(raw);
   }
 
-  Future<void> _refreshInvoiceAndPayments(String invoiceId) async {
-    await ref.read(invoiceControllerProvider.notifier).load(invoiceId);
-    await ref.read(paymentControllerProvider(invoiceId).notifier).refresh();
+  static String? _tryReadPhoneDynamically(Object contact) {
+    String? read(Object? value) {
+      final String text = (value ?? '').toString().trim();
+
+      return text.isEmpty ? null : text;
+    }
+
+    Object? safe(Object? Function() read) {
+      try {
+        return read();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final dynamic dynamicContact = contact;
+
+    final List<Object?> candidates = <Object?>[
+      safe(() => dynamicContact.bestPhone),
+      safe(() => dynamicContact.mobile),
+      safe(() => dynamicContact.phone),
+      safe(() => dynamicContact.personContact?.mobile),
+      safe(() => dynamicContact.personContact?.phone),
+    ];
+
+    for (final Object? candidate in candidates) {
+      final String? phone = read(candidate);
+
+      if (phone != null) {
+        return phone;
+      }
+    }
+
+    return null;
+  }
+}
+
+class _InvoiceClaimPackCard extends StatelessWidget {
+  const _InvoiceClaimPackCard({
+    required this.invoice,
+    required this.onOpenClaimPack,
+  });
+
+  final ZohoInvoice invoice;
+  final VoidCallback onOpenClaimPack;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String? claimPackId = invoice.resolvedClaimPackId;
+
+    return Card.outlined(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.health_and_safety_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Insurance claim',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (claimPackId != null)
+                  FilledButton.icon(
+                    onPressed: onOpenClaimPack,
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: const Text('Open claim pack'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                _InfoChip(
+                  icon: Icons.payments_outlined,
+                  label: invoice.isInsurancePayment
+                      ? 'Insurance'
+                      : 'Direct pay',
+                ),
+                if (claimPackId != null)
+                  const _InfoChip(
+                    icon: Icons.assignment_outlined,
+                    label: 'Claim pack linked',
+                  )
+                else
+                  const _InfoChip(
+                    icon: Icons.assignment_late_outlined,
+                    label: 'No claim pack link',
+                  ),
+                if (invoice.resolvedPatientNo != null)
+                  _InfoChip(
+                    icon: Icons.person_outline,
+                    label: 'Patient ${invoice.resolvedPatientNo}',
+                  ),
+                if (invoice.resolvedMembershipId != null)
+                  const _InfoChip(
+                    icon: Icons.verified_user_outlined,
+                    label: 'Membership linked',
+                  ),
+                if (invoice.resolvedPrescriptionId != null)
+                  const _InfoChip(
+                    icon: Icons.description_outlined,
+                    label: 'Prescription linked',
+                  ),
+              ],
+            ),
+            if (claimPackId != null) ...<Widget>[
+              const SizedBox(height: 10),
+              SelectableText(
+                claimPackId,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      visualDensity: VisualDensity.compact,
+    );
   }
 }
 
@@ -447,28 +591,30 @@ class _InvoiceVm {
   final String currency;
   final SalesDocMetaVm meta;
   final List<SalesDocLineVm> lines;
-
   final num? balance;
   final num paid;
-
   final num? pendingAmount;
 }
 
 class _HeaderStatusPill extends StatelessWidget {
   const _HeaderStatusPill({required this.status});
+
   final String status;
 
   @override
   Widget build(BuildContext context) {
-    final s = status.trim();
-    if (s.isEmpty) return const SizedBox.shrink();
+    final String text = status.trim();
+
+    if (text.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        SalesDocLeadingIcon(status: s, radius: 14),
+      children: <Widget>[
+        SalesDocLeadingIcon(status: text, radius: 14),
         const SizedBox(width: 8),
-        SalesDocStatusChip(status: s),
+        SalesDocStatusChip(status: text),
       ],
     );
   }

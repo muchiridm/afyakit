@@ -1,19 +1,16 @@
-// lib/features/retail/sales/payments/widgets/payment_detail_screen.dart
-
-import 'package:afyakit/features/retail/payments/controllers/payment_state.dart';
-import 'package:afyakit/features/retail/payments/providers/payment_receipt_providers.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/shared/layout/app_page.dart';
-import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
+// lib/features/retail/payments/widgets/payment_detail_screen.dart
 
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
-import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
-import 'package:afyakit/features/retail/payments/widgets/payment_receipt_summary_card.dart';
-import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
 import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
+import 'package:afyakit/features/retail/payments/providers/payment_providers.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_receipt_summary_card.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/services/dialog_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PaymentDetailScreen extends ConsumerStatefulWidget {
   const PaymentDetailScreen({
@@ -40,23 +37,43 @@ class PaymentDetailScreen extends ConsumerStatefulWidget {
   final bool canManagePayments;
 
   @override
-  ConsumerState<PaymentDetailScreen> createState() =>
-      _PaymentDetailScreenState();
+  ConsumerState<PaymentDetailScreen> createState() {
+    return _PaymentDetailScreenState();
+  }
 }
 
 class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   static const double _maxW = 720;
 
+  String get _invoiceId => widget.invoiceId.trim();
+
+  String get _paymentId => widget.paymentId.trim();
+
   @override
   Widget build(BuildContext context) {
-    final invId = widget.invoiceId.trim();
-    final payId = widget.paymentId.trim();
+    final String invoiceId = _invoiceId;
+    final String paymentId = _paymentId;
 
-    final paymentState = ref.watch(paymentControllerProvider(invId));
-    final paymentCtl = ref.read(paymentControllerProvider(invId).notifier);
+    if (invoiceId.isEmpty || paymentId.isEmpty) {
+      return AppPage(
+        title: 'Receipt',
+        showBack: true,
+        maxWidth: _maxW,
+        scrollable: true,
+        body: const Padding(
+          padding: EdgeInsets.all(16),
+          child: InlineErrorCard(message: 'Missing invoice or payment id.'),
+        ),
+      );
+    }
+
+    final provider = paymentControllerProvider(invoiceId);
+
+    final PaymentState paymentState = ref.watch(provider);
+    final PaymentController paymentCtl = ref.read(provider.notifier);
 
     final vmAsync = ref.watch(
-      paymentReceiptVmProvider((invoiceId: invId, paymentId: payId)),
+      paymentReceiptVmProvider((invoiceId: invoiceId, paymentId: paymentId)),
     );
 
     return AppPage(
@@ -64,43 +81,44 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       showBack: true,
       maxWidth: _maxW,
       scrollable: true,
-      actions: _buildActions(paymentState, paymentCtl, invId),
+      actions: _buildActions(
+        state: paymentState,
+        ctl: paymentCtl,
+        invoiceId: invoiceId,
+        paymentId: paymentId,
+      ),
       body: vmAsync.when(
-        loading: () => _buildLoading(),
-        error: (e, _) => _buildError(e),
-        data: (vm) => _buildReceiptContent(
-          context: context,
-          paymentState: paymentState,
-          paymentCtl: paymentCtl,
-          vm: vm,
-        ),
+        loading: _buildLoading,
+        error: (Object error, StackTrace _) => _buildError(error),
+        data: (PaymentReceiptVm vm) {
+          return _buildReceiptContent(
+            context: context,
+            paymentState: paymentState,
+            paymentCtl: paymentCtl,
+            vm: vm,
+          );
+        },
       ),
     );
   }
 
-  // ─────────────────────────────
-  // Actions
-  // ─────────────────────────────
+  List<Widget> _buildActions({
+    required PaymentState state,
+    required PaymentController ctl,
+    required String invoiceId,
+    required String paymentId,
+  }) {
+    final bool busy = state.busy;
 
-  List<Widget> _buildActions(
-    PaymentState state,
-    PaymentController ctl,
-    String invoiceId,
-  ) {
-    final busy = state.busy;
-
-    return [
+    return <Widget>[
       IconButton(
         tooltip: 'Refresh',
         onPressed: busy
             ? null
             : () async {
-                // refresh mutation-state (optional)
                 await ctl.refresh();
-                // refresh invoice-scoped providers (this is the REAL data source now)
-                ref.invalidate(invoicePaymentsProvider(invoiceId));
-                ref.invalidate(invoiceProvider(invoiceId));
-                ref.invalidate(invoiceContactProvider(invoiceId));
+
+                _invalidateReceipt(invoiceId: invoiceId, paymentId: paymentId);
               },
         icon: const Icon(Icons.refresh),
       ),
@@ -110,22 +128,19 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
               ? null
               : () async {
                   ctl.startNewPayment();
-                  await PaymentEditorSheet.open(
-                    context,
-                    invoiceId: widget.invoiceId,
+
+                  await PaymentEditorSheet.open(context, invoiceId: invoiceId);
+
+                  _invalidateReceipt(
+                    invoiceId: invoiceId,
+                    paymentId: paymentId,
                   );
-                  // after recording, ensure history updates
-                  ref.invalidate(invoicePaymentsProvider(invoiceId.trim()));
                 },
           icon: const Icon(Icons.add),
           label: const Text('Record'),
         ),
     ];
   }
-
-  // ─────────────────────────────
-  // Receipt content
-  // ─────────────────────────────
 
   Widget _buildReceiptContent({
     required BuildContext context,
@@ -137,30 +152,30 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     final contact = vm.contact;
     final ZohoInvoicePayment payment = vm.payment;
 
-    final busy = paymentState.busy;
-    final canManage = widget.canManagePayments;
-    final code = _currency(widget.currencyCode);
+    final bool busy = paymentState.busy;
+    final bool canManage = widget.canManagePayments;
+    final String code = _currency(widget.currencyCode);
 
-    final customerTitle = _pickFirstNonEmpty(
+    final String customerTitle = _pickFirstNonEmpty(
       contact?.title,
       inv.customerName,
       widget.customerName,
       'Customer',
     );
 
-    final invoiceLabel = _pickFirstNonEmpty(
+    final String invoiceLabel = _pickFirstNonEmpty(
       inv.invoiceNumber,
       widget.invoiceNumber,
       widget.invoiceId,
       '-',
     );
 
-    final invoiceDate = inv.date ?? widget.invoiceDate;
-    final invoiceTotal = inv.total != 0 ? inv.total : widget.invoiceTotal;
+    final DateTime? invoiceDate = inv.date ?? widget.invoiceDate;
+    final num? invoiceTotal = inv.total != 0 ? inv.total : widget.invoiceTotal;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+      children: <Widget>[
         if (busy) const LinearProgressIndicator(minHeight: 2),
         InlineErrorCard(message: (paymentState.error ?? '').trim()),
         Padding(
@@ -173,25 +188,32 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             invoiceTotal: invoiceTotal,
             invoiceLoading: false,
             invoiceError: false,
-            paymentId: widget.paymentId,
+            paymentId: _paymentId,
             payment: payment,
             canManage: canManage,
             busy: busy,
-            onEdit: (!canManage || busy)
+            onEdit: !canManage || busy
                 ? null
                 : () async {
                     paymentCtl.startEditPayment(payment);
+
                     await PaymentEditorSheet.open(
                       context,
-                      invoiceId: widget.invoiceId,
+                      invoiceId: _invoiceId,
                     );
-                    ref.invalidate(
-                      invoicePaymentsProvider(widget.invoiceId.trim()),
+
+                    _invalidateReceipt(
+                      invoiceId: _invoiceId,
+                      paymentId: _paymentId,
                     );
                   },
-            onDelete: (!canManage || busy)
+            onDelete: !canManage || busy
                 ? null
-                : () => _confirmAndDelete(context, paymentCtl, payment),
+                : () => _confirmAndDelete(
+                    context: context,
+                    ctl: paymentCtl,
+                    payment: payment,
+                  ),
           ),
         ),
         const SizedBox(height: 12),
@@ -203,48 +225,51 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             title: 'Other payments on this invoice',
             leadingIcon: Icons.history,
             currencyCode: code,
-            invoiceId: widget.invoiceId,
-            excludePaymentId: widget.paymentId,
-            onRefresh: () async {
-              await paymentCtl.refresh();
-              ref.invalidate(invoicePaymentsProvider(widget.invoiceId.trim()));
-            },
+            payments: paymentState.payments,
+            loading: paymentState.loadingPayments,
+            busy: busy,
+            error: paymentState.error,
             canManage: canManage,
+            excludePaymentId: _paymentId,
             maxRows: 8,
             compact: true,
             showHeader: true,
             showEmptyCard: true,
-            selectedPaymentId: widget.paymentId,
-            onOpenReceipt: (p) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => PaymentDetailScreen(
-                    invoiceId: widget.invoiceId,
-                    paymentId: p.paymentId,
-                    currencyCode: code,
-                    customerName: widget.customerName,
-                    invoiceNumber: widget.invoiceNumber,
-                    invoiceDate: widget.invoiceDate,
-                    invoiceTotal: widget.invoiceTotal,
-                    canManagePayments: canManage,
-                  ),
-                ),
-              );
+            selectedPaymentId: _paymentId,
+            onRefresh: () async {
+              await paymentCtl.refresh();
+              _invalidateInvoicePaymentData(_invoiceId);
+            },
+            onOpenReceipt: (ZohoInvoicePayment p) {
+              _openReceiptReplacement(context, p, code, canManage);
             },
             onEdit: canManage && !busy
-                ? (p) async {
+                ? (ZohoInvoicePayment p) async {
                     paymentCtl.startEditPayment(p);
+
                     await PaymentEditorSheet.open(
                       context,
-                      invoiceId: widget.invoiceId,
+                      invoiceId: _invoiceId,
                     );
-                    ref.invalidate(
-                      invoicePaymentsProvider(widget.invoiceId.trim()),
-                    );
+
+                    final String editedPaymentId = p.paymentId.trim();
+
+                    if (editedPaymentId.isNotEmpty) {
+                      _invalidateReceipt(
+                        invoiceId: _invoiceId,
+                        paymentId: editedPaymentId,
+                      );
+                    } else {
+                      _invalidateInvoicePaymentData(_invoiceId);
+                    }
                   }
                 : null,
             onDelete: canManage && !busy
-                ? (p) => _confirmAndDelete(context, paymentCtl, p)
+                ? (ZohoInvoicePayment p) => _confirmAndDelete(
+                    context: context,
+                    ctl: paymentCtl,
+                    payment: p,
+                  )
                 : null,
           ),
         ),
@@ -253,30 +278,42 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     );
   }
 
-  // ─────────────────────────────
-  // Small helpers
-  // ─────────────────────────────
-
-  String _currency(String s) => s.trim().isEmpty ? 'KES' : s.trim();
-
-  Widget _buildLoading() => const Center(
-    child: Padding(
-      padding: EdgeInsets.only(top: 24),
-      child: CircularProgressIndicator(),
-    ),
-  );
-
-  Widget _buildError(Object e) => Padding(
-    padding: const EdgeInsets.all(16),
-    child: Text('Failed to load receipt.\n$e'),
-  );
-
-  Future<void> _confirmAndDelete(
+  void _openReceiptReplacement(
     BuildContext context,
-    PaymentController ctl,
-    ZohoInvoicePayment p,
-  ) async {
-    final ok = await DialogService.confirm(
+    ZohoInvoicePayment payment,
+    String currencyCode,
+    bool canManage,
+  ) {
+    final String nextPaymentId = payment.paymentId.trim();
+
+    if (nextPaymentId.isEmpty) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => PaymentDetailScreen(
+          invoiceId: _invoiceId,
+          paymentId: nextPaymentId,
+          currencyCode: currencyCode,
+          customerName: widget.customerName,
+          invoiceNumber: widget.invoiceNumber,
+          invoiceDate: widget.invoiceDate,
+          invoiceTotal: widget.invoiceTotal,
+          canManagePayments: canManage,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmAndDelete({
+    required BuildContext context,
+    required PaymentController ctl,
+    required ZohoInvoicePayment payment,
+  }) async {
+    final String paymentId = payment.paymentId.trim();
+
+    if (paymentId.isEmpty) return;
+
+    final bool ok = await DialogService.confirm(
       context: context,
       title: 'Delete receipt?',
       content: 'This will delete the payment in Zoho Books.',
@@ -284,15 +321,68 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       confirmColor: Colors.redAccent,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
-    await ctl.deletePayment(p.paymentId);
+    final bool deleted = await ctl.deletePayment(paymentId);
 
-    // Ensure lists refresh after deletion.
-    ref.invalidate(invoicePaymentsProvider(widget.invoiceId.trim()));
+    if (!deleted) return;
+
+    _invalidateInvoicePaymentData(_invoiceId);
+
+    ref.invalidate(
+      paymentReceiptVmProvider((invoiceId: _invoiceId, paymentId: paymentId)),
+    );
 
     if (!context.mounted) return;
+
     Navigator.of(context).maybePop();
+  }
+
+  void _invalidateReceipt({
+    required String invoiceId,
+    required String paymentId,
+  }) {
+    _invalidateInvoicePaymentData(invoiceId);
+
+    final String payId = paymentId.trim();
+
+    if (payId.isEmpty) return;
+
+    ref.invalidate(
+      paymentReceiptVmProvider((invoiceId: invoiceId.trim(), paymentId: payId)),
+    );
+  }
+
+  void _invalidateInvoicePaymentData(String invoiceId) {
+    final String id = invoiceId.trim();
+
+    if (id.isEmpty) return;
+
+    ref.invalidate(invoicePaymentsProvider(id));
+    ref.invalidate(invoiceProvider(id));
+    ref.invalidate(invoiceContactProvider(id));
+  }
+
+  String _currency(String value) {
+    final String text = value.trim();
+    return text.isEmpty ? 'KES' : text;
+  }
+
+  Widget _buildLoading() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.only(top: 24),
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  Widget _buildError(Object error) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: InlineErrorCard(message: 'Failed to load receipt.\n$error'),
+    );
   }
 
   static String _pickFirstNonEmpty(
@@ -301,10 +391,12 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     String? c,
     String? fallback,
   ) {
-    for (final v in [a, b, c, fallback]) {
-      final t = (v ?? '').trim();
-      if (t.isNotEmpty) return t;
+    for (final String? value in <String?>[a, b, c, fallback]) {
+      final String text = (value ?? '').trim();
+
+      if (text.isNotEmpty) return text;
     }
+
     return '';
   }
 }

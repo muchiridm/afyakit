@@ -28,6 +28,7 @@ class ZohoQuote {
     this.patientSnapshot,
     this.membershipId,
     this.prescriptionId,
+    this.claimPackId,
     this.lineItems = const <ZohoQuoteLineItem>[],
   });
 
@@ -61,8 +62,14 @@ class ZohoQuote {
   /// Insurance membership, only meaningful for insurance payment context.
   final String? membershipId;
 
-  /// Patient prescription linked to this quote/claim flow.
+  /// Patient prescription linked to this quote flow.
   final String? prescriptionId;
+
+  /// Backward-compatible only.
+  ///
+  /// Claim packs are no longer created or managed at quote stage.
+  /// They are created/linked when an insurance quote is converted to invoice.
+  final String? claimPackId;
 
   final List<ZohoQuoteLineItem> lineItems;
 
@@ -72,21 +79,22 @@ class ZohoQuote {
 
   bool get isDirectPay => paymentContext == QuotePaymentContext.directPay;
 
-  bool get isInsurancePayment {
-    return paymentContext == QuotePaymentContext.insurance;
-  }
+  bool get isInsurancePayment =>
+      paymentContext == QuotePaymentContext.insurance;
 
   bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
 
   bool get hasPatientContext {
     final String direct = (patientId ?? '').trim();
     final String snap = (patientSnapshot?.patientId ?? '').trim();
+
     return direct.isNotEmpty || snap.isNotEmpty;
   }
 
   bool get hasInsuranceContext {
     final String direct = (membershipId ?? '').trim();
     final String snap = (patientSnapshot?.membershipId ?? '').trim();
+
     return direct.isNotEmpty || snap.isNotEmpty;
   }
 
@@ -94,9 +102,15 @@ class ZohoQuote {
     return resolvedPrescriptionId != null;
   }
 
-  bool get canCreateInsuranceClaim {
+  /// Backward-compatible only.
+  bool get hasClaimPackContext {
+    return resolvedClaimPackId != null;
+  }
+
+  bool get hasRequiredInsuranceQuoteContext {
     return isClinical &&
         isInsurancePayment &&
+        hasPatientContext &&
         hasInsuranceContext &&
         hasPrescriptionContext;
   }
@@ -119,6 +133,12 @@ class ZohoQuote {
 
   String? get resolvedPrescriptionId {
     final String direct = (prescriptionId ?? '').trim();
+    return direct.isEmpty ? null : direct;
+  }
+
+  /// Backward-compatible only.
+  String? get resolvedClaimPackId {
+    final String direct = (claimPackId ?? '').trim();
     return direct.isEmpty ? null : direct;
   }
 
@@ -180,6 +200,10 @@ class ZohoQuote {
       json['prescription_id'] ?? json['prescriptionId'],
     );
 
+    final String? claimPackId = _asCleanOrNull(
+      json['claim_pack_id'] ?? json['claimPackId'],
+    );
+
     final Object? rawLines = json['line_items'];
     final List<ZohoQuoteLineItem> lines = <ZohoQuoteLineItem>[];
 
@@ -210,6 +234,7 @@ class ZohoQuote {
       patientSnapshot: patientSnapshot,
       membershipId: membershipId,
       prescriptionId: prescriptionId,
+      claimPackId: claimPackId,
       lineItems: lines,
     );
   }
@@ -236,6 +261,7 @@ class ZohoQuote {
       'patient_snapshot': patientSnapshot?.toJson(),
       'membership_id': membershipId,
       'prescription_id': prescriptionId,
+      'claim_pack_id': claimPackId,
       'line_items': lineItems
           .map((ZohoQuoteLineItem item) => item.toJson())
           .toList(growable: false),
@@ -271,6 +297,8 @@ class ZohoQuote {
     bool clearMembershipId = false,
     String? prescriptionId,
     bool clearPrescriptionId = false,
+    String? claimPackId,
+    bool clearClaimPackId = false,
     List<ZohoQuoteLineItem>? lineItems,
   }) {
     final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
@@ -311,6 +339,7 @@ class ZohoQuote {
       prescriptionId: clearPrescriptionId
           ? null
           : (prescriptionId ?? this.prescriptionId),
+      claimPackId: clearClaimPackId ? null : (claimPackId ?? this.claimPackId),
       lineItems: lineItems ?? this.lineItems,
     );
   }
@@ -365,6 +394,7 @@ class ZohoQuote {
     if (value is String && value.trim().isEmpty) return true;
     if (value is List && value.isEmpty) return true;
     if (value is Map && value.isEmpty) return true;
+
     return false;
   }
 }

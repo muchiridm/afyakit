@@ -1,7 +1,7 @@
 // lib/features/retail/sales/invoices/widgets/invoice_picker.dart
 
-import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
-import 'package:afyakit/features/retail/invoices/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,15 +19,20 @@ class InvoicePickerCard extends ConsumerStatefulWidget {
 
   final String? initialInvoiceId;
 
-  /// Required scope. We use this as fallback search if patientNo/accountNumber
-  /// is unavailable.
+  /// Patient scope for clinical / insurance workflows.
+  ///
+  /// This may be an internal patient id or patient number depending on the
+  /// calling screen. The backend can use it as patient_id.
   final String patientId;
 
-  /// Preferred patient-scoped key if your Zoho invoices use patient number /
-  /// account number as the reference/account number.
+  /// Preferred patient number. For insurance invoices this is usually the
+  /// most reliable key because Zoho has cf_patient_no.
   final String? patientNo;
 
-  /// Optional explicit override.
+  /// Optional explicit customer/member account scope.
+  ///
+  /// Important:
+  /// Do not pass patientNo here. Account number is a customer/contact scope.
   final String? accountNumber;
 
   final String title;
@@ -48,14 +53,20 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
 
   String get _scopePatientId => widget.patientId.trim();
 
+  String? get _scopePatientNo {
+    final String value = (widget.patientNo ?? '').trim();
+    return value.isEmpty ? null : value;
+  }
+
   String? get _scopeAccountNumber {
-    final String explicit = (widget.accountNumber ?? '').trim();
-    if (explicit.isNotEmpty) return explicit;
+    final String value = (widget.accountNumber ?? '').trim();
+    return value.isEmpty ? null : value;
+  }
 
-    final String patientNo = (widget.patientNo ?? '').trim();
-    if (patientNo.isNotEmpty) return patientNo;
-
-    return null;
+  bool get _hasScope {
+    return _scopePatientId.isNotEmpty ||
+        (_scopePatientNo ?? '').isNotEmpty ||
+        (_scopeAccountNumber ?? '').isNotEmpty;
   }
 
   @override
@@ -84,8 +95,12 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
     }
 
     if (scopeChanged) {
-      _items = const <ZohoInvoice>[];
-      _selectedInvoiceId = nextInitialId;
+      setState(() {
+        _items = const <ZohoInvoice>[];
+        _selectedInvoiceId = nextInitialId;
+        _error = null;
+      });
+
       Future<void>.microtask(_load);
     }
   }
@@ -97,12 +112,15 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
   }
 
   Future<void> _load() async {
-    if (_scopePatientId.isEmpty && (_scopeAccountNumber ?? '').isEmpty) {
+    if (!_hasScope) {
+      if (!mounted) return;
+
       setState(() {
         _items = const <ZohoInvoice>[];
         _error = null;
         _loading = false;
       });
+
       return;
     }
 
@@ -121,10 +139,15 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
       final List<ZohoInvoice> items = await svc.list(
         limit: 100,
         page: 1,
+        q: search.isEmpty ? null : search,
+
+        // Explicit account/customer scope only.
         accountNumber: _scopeAccountNumber,
-        q: search.isNotEmpty
-            ? search
-            : (_scopeAccountNumber == null ? _scopePatientId : null),
+
+        // Patient/claim context. This is what allows insurer-addressed
+        // invoices to still appear in claim-pack workflows.
+        patientId: _scopePatientId.isEmpty ? null : _scopePatientId,
+        patientNo: _scopePatientNo,
       );
 
       if (!mounted) return;
@@ -140,7 +163,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
       setState(() {
         _items = const <ZohoInvoice>[];
         _loading = false;
-        _error = e.toString();
+        _error = _friendlyError(e);
       });
     }
   }
@@ -148,16 +171,27 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
   List<ZohoInvoice> _filterLocally(List<ZohoInvoice> items) {
     final String account = (_scopeAccountNumber ?? '').trim();
     final String patientId = _scopePatientId;
+    final String patientNo = (_scopePatientNo ?? '').trim();
 
-    if (account.isEmpty && patientId.isEmpty) return items;
+    if (account.isEmpty && patientId.isEmpty && patientNo.isEmpty) {
+      return items;
+    }
 
     return items
         .where((ZohoInvoice invoice) {
           final String invoiceAccount = (invoice.accountNumber ?? '').trim();
 
-          if (account.isNotEmpty && invoiceAccount.isNotEmpty) {
-            return invoiceAccount == account;
+          if (account.isNotEmpty) {
+            if (invoiceAccount.isEmpty) return false;
+            return _same(invoiceAccount, account);
           }
+
+          final List<String> needles = <String>[
+            patientId,
+            patientNo,
+          ].where((String value) => value.trim().isNotEmpty).toList();
+
+          if (needles.isEmpty) return true;
 
           final String haystack = <String?>[
             invoice.accountNumber,
@@ -165,11 +199,20 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
             invoice.invoiceNumber,
             invoice.customerName,
             invoice.notes,
+            invoice.resolvedPatientId,
+            invoice.resolvedPatientNo,
+            invoice.resolvedPatientName,
+            invoice.resolvedMembershipId,
+            invoice.resolvedPrescriptionId,
+            invoice.resolvedClaimPackId,
           ].whereType<String>().join(' ').toLowerCase();
 
-          final String needle = account.isNotEmpty ? account : patientId;
+          return needles.any((String needle) {
+            final String n = needle.trim().toLowerCase();
+            if (n.isEmpty) return false;
 
-          return haystack.contains(needle.toLowerCase());
+            return haystack.contains(n);
+          });
         })
         .toList(growable: false);
   }
@@ -177,6 +220,10 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
   String? _cleanOrNull(String? value) {
     final String clean = (value ?? '').trim();
     return clean.isEmpty ? null : clean;
+  }
+
+  bool _same(String a, String b) {
+    return a.trim().toLowerCase() == b.trim().toLowerCase();
   }
 
   bool _contains(String source, String query) {
@@ -201,6 +248,13 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
             invoice.notes,
             invoice.total.toString(),
             invoice.balance?.toString(),
+            invoice.resolvedPatientId,
+            invoice.resolvedPatientNo,
+            invoice.resolvedPatientName,
+            invoice.resolvedMembershipId,
+            invoice.resolvedPrescriptionId,
+            invoice.resolvedClaimPackId,
+            invoice.resolvedPaymentContext,
           ].whereType<String>().join(' ');
 
           return _contains(haystack, q);
@@ -217,6 +271,14 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
     });
 
     widget.onSelected?.call(invoice);
+  }
+
+  String _emptyText() {
+    if (!_hasScope) {
+      return 'Select a patient or membership first.';
+    }
+
+    return widget.emptyText ?? 'No invoices found for this patient.';
   }
 
   @override
@@ -238,6 +300,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
             const SizedBox(height: 12),
             _SearchBox(
               controller: _searchCtl,
+              enabled: !_loading,
               onChanged: (_) => setState(() {}),
               onRefresh: _load,
             ),
@@ -250,11 +313,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
               child: _loading && invoices.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : invoices.isEmpty
-                  ? _EmptyText(
-                      text:
-                          widget.emptyText ??
-                          'No invoices found for this patient.',
-                    )
+                  ? _EmptyText(text: _emptyText())
                   : ListView.separated(
                       itemCount: invoices.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
@@ -277,6 +336,18 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
         ),
       ),
     );
+  }
+
+  static String _friendlyError(Object error) {
+    final String raw = error.toString().trim();
+
+    if (raw.isEmpty) return 'Failed to load invoices';
+
+    return raw
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceFirst(RegExp(r'^StateError:\s*'), '')
+        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .trim();
   }
 }
 
@@ -310,6 +381,7 @@ class InvoicePickerDialog extends StatelessWidget {
           patientId: patientId,
           patientNo: patientNo,
           accountNumber: accountNumber,
+          title: title,
           emptyText: emptyText,
           onSelected: (ZohoInvoice invoice) {
             Navigator.of(context).pop(invoice);
@@ -376,11 +448,13 @@ class _Header extends StatelessWidget {
 class _SearchBox extends StatelessWidget {
   const _SearchBox({
     required this.controller,
+    required this.enabled,
     required this.onChanged,
     required this.onRefresh,
   });
 
   final TextEditingController controller;
+  final bool enabled;
   final ValueChanged<String> onChanged;
   final Future<void> Function() onRefresh;
 
@@ -388,21 +462,24 @@ class _SearchBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      enabled: enabled,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         isDense: true,
         labelText: 'Search invoices',
-        hintText: 'Invoice no, customer, amount, status...',
+        hintText: 'Invoice no, customer, patient, claim pack, amount...',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(
           tooltip: 'Search',
-          onPressed: onRefresh,
+          onPressed: enabled ? onRefresh : null,
           icon: const Icon(Icons.arrow_forward),
         ),
         border: const OutlineInputBorder(),
       ),
       onChanged: onChanged,
-      onSubmitted: (_) => onRefresh(),
+      onSubmitted: (_) {
+        if (enabled) onRefresh();
+      },
     );
   }
 }
@@ -460,10 +537,15 @@ class _InvoiceTile extends StatelessWidget {
       invoice.customerName,
       invoice.status,
       if (invoice.date != null) _formatDate(invoice.date!),
-      '${invoice.currencyCode ?? ''} ${invoice.total}',
+      '${invoice.currencyCode ?? ''} ${invoice.total}'.trim(),
       if (invoice.balance != null) 'Balance ${invoice.balance}',
       if ((invoice.accountNumber ?? '').trim().isNotEmpty)
         'Account ${invoice.accountNumber!.trim()}',
+      if (invoice.resolvedPatientNo != null)
+        'Patient ${invoice.resolvedPatientNo}',
+      if (invoice.resolvedPatientName != null) invoice.resolvedPatientName!,
+      if (invoice.hasClaimPack) 'Claim pack linked',
+      if (invoice.isInsurancePayment) 'Insurance',
     ];
 
     return parts.where((String p) => p.trim().isNotEmpty).join(' · ');

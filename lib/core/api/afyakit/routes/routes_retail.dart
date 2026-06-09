@@ -17,11 +17,13 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   }) {
     final q = <String, String>{'per_page': '$perPage', 'page': '$page'};
 
-    final s = (search ?? '').trim();
-    if (s.isNotEmpty) q['search_text'] = s;
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) q[key] = v;
+    }
 
-    final t = (type ?? '').trim();
-    if (t.isNotEmpty) q['type'] = t;
+    add('search_text', search);
+    add('type', type);
 
     final acct = (accountNumber ?? '').trim();
     if (acct.isNotEmpty) {
@@ -41,8 +43,12 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   }) {
     final q = <String, String>{'per_page': '$perPage', 'page': '$page'};
 
-    final s = (search ?? '').trim();
-    if (s.isNotEmpty) q['search_text'] = s;
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) q[key] = v;
+    }
+
+    add('search_text', search);
 
     final acct = (accountNumber ?? '').trim();
     if (acct.isNotEmpty) {
@@ -74,14 +80,20 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     int page = 1,
     String? q,
     String? accountNumber,
+    String? customerId,
   }) {
     final query = <String, String>{'limit': '$limit', 'page': '$page'};
 
-    final qq = (q ?? '').trim();
-    if (qq.isNotEmpty) query['q'] = qq;
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
 
-    final acct = (accountNumber ?? '').trim();
-    if (acct.isNotEmpty) query['accountNumber'] = acct;
+    add('q', q);
+    add('accountNumber', accountNumber);
+
+    // Backend expects snake_case.
+    add('customer_id', customerId);
 
     return _uri('zoho/v1/quotes', query: query);
   }
@@ -117,16 +129,45 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     int page = 1,
     String? q,
     String? accountNumber,
-  }) => _uri(
-    'zoho/v1/invoices',
-    query: {
-      'limit': '$limit',
-      'page': '$page',
-      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
-      if (accountNumber != null && accountNumber.trim().isNotEmpty)
-        'accountNumber': accountNumber.trim(),
-    },
-  );
+    String? customerId,
+
+    // Clinical / insurance claim context.
+    //
+    // These are important because insurance invoices may be addressed to the
+    // insurer, not the patient. The backend uses these to search invoice
+    // custom fields such as cf_patient_no and cf_claim_pack_id.
+    String? patientId,
+    String? patientNo,
+    String? claimPackId,
+    String? membershipId,
+    String? prescriptionId,
+  }) {
+    final query = <String, String>{'limit': '$limit', 'page': '$page'};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('q', q);
+
+    // Prefer Zoho customer/contact id when available.
+    // Backend expects snake_case.
+    add('customer_id', customerId);
+
+    // Fallback only. Avoid sending this if customerId exists from the caller.
+    if ((customerId ?? '').trim().isEmpty) {
+      add('accountNumber', accountNumber);
+    }
+
+    add('patient_id', patientId);
+    add('patient_no', patientNo);
+    add('claim_pack_id', claimPackId);
+    add('membership_id', membershipId);
+    add('prescription_id', prescriptionId);
+
+    return _uri('zoho/v1/invoices', query: query);
+  }
 
   Uri retailGetInvoice(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}');
@@ -149,16 +190,16 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
 
   Uri retailInvoicePayments(
     String invoiceId, {
-    int perPage = 200,
+    int perPage = 100,
     int page = 1,
-  }) => _uri(
-    'zoho/v1/payments',
-    query: {
-      'invoice_id': invoiceId.trim(),
-      'per_page': '$perPage',
-      'page': '$page',
-    },
-  );
+  }) {
+    final id = invoiceId.trim();
+
+    return _uri(
+      'zoho/v1/payments/invoice/${_seg(id)}',
+      query: <String, String>{'per_page': '$perPage', 'page': '$page'},
+    );
+  }
 
   Uri retailPaymentsList({
     int perPage = 200,
@@ -166,18 +207,20 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? invoiceId,
     String? q,
     String? accountNumber,
-  }) => _uri(
-    'zoho/v1/payments',
-    query: {
-      'per_page': '$perPage',
-      'page': '$page',
-      if (invoiceId != null && invoiceId.trim().isNotEmpty)
-        'invoice_id': invoiceId.trim(),
-      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
-      if (accountNumber != null && accountNumber.trim().isNotEmpty)
-        'accountNumber': accountNumber.trim(),
-    },
-  );
+  }) {
+    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('invoice_id', invoiceId);
+    add('q', q);
+    add('accountNumber', accountNumber);
+
+    return _uri('zoho/v1/payments', query: query);
+  }
 
   Uri retailPaymentsCreate() => _uri('zoho/v1/payments');
 
@@ -203,15 +246,23 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   // Retail meta
   // ─────────────────────────────────────────────
 
-  Uri retailMetaAccounts({String? search, String? type, bool? active}) => _uri(
-    'zoho/v1/meta/accounts',
-    query: {
-      if (search != null && search.trim().isNotEmpty)
-        'search_text': search.trim(),
-      if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
-      if (active != null) 'active': active ? 'true' : 'false',
-    },
-  );
+  Uri retailMetaAccounts({String? search, String? type, bool? active}) {
+    final query = <String, String>{};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('search_text', search);
+    add('type', type);
+
+    if (active != null) {
+      query['active'] = active ? 'true' : 'false';
+    }
+
+    return _uri('zoho/v1/meta/accounts', query: query);
+  }
 
   Uri retailMetaAccountById(String accountId) =>
       _uri('zoho/v1/meta/accounts/${_seg(accountId)}');
@@ -225,13 +276,17 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? form,
     int limit = 50,
     int offset = 0,
-  }) => _uri(
-    'dawaindex/v1/sales/tiles',
-    query: {
-      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
-      if (form != null && form.trim().isNotEmpty) 'form': form.trim(),
-      'limit': '$limit',
-      'offset': '$offset',
-    },
-  );
+  }) {
+    final query = <String, String>{'limit': '$limit', 'offset': '$offset'};
+
+    void add(String key, String? value) {
+      final v = (value ?? '').trim();
+      if (v.isNotEmpty) query[key] = v;
+    }
+
+    add('q', q);
+    add('form', form);
+
+    return _uri('dawaindex/v1/sales/tiles', query: query);
+  }
 }

@@ -1,27 +1,33 @@
-// lib/features/retail/invoices/controllers/invoices_list_controller.dart
+// lib/features/retail/payments/controllers/payments_by_invoice_controller.dart
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
-import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/shared/state/paged_query_controller.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+import 'package:afyakit/shared/state/paged_query_controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final invoicesListControllerProvider = StateNotifierProvider.autoDispose
+final paymentsByInvoiceControllerProvider = StateNotifierProvider.autoDispose
     .family<
-      InvoicesListController,
+      PaymentsByInvoiceController,
       PagedQueryState<ZohoInvoice>,
       RetailDocScope
     >((ref, scope) {
-      final ctl = InvoicesListController(ref, scope: scope);
+      final PaymentsByInvoiceController ctl = PaymentsByInvoiceController(
+        ref,
+        scope: scope,
+      );
+
       ctl.refresh(reset: true);
+
       return ctl;
     });
 
-class InvoicesListController extends PagedQueryController<ZohoInvoice> {
-  InvoicesListController(this._ref, {required this.scope});
+class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
+  PaymentsByInvoiceController(this._ref, {required this.scope});
+
+  static const int _maxPageSize = 25;
 
   final Ref _ref;
   final RetailDocScope scope;
@@ -31,6 +37,8 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
   bool get _isMine => scope == RetailDocScope.mine;
 
   String? get searchQuery => _searchQuery;
+
+  bool get hasSearch => _searchQuery != null;
 
   void applySearch(String value) {
     final String? next = _clean(value);
@@ -58,12 +66,8 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
       zohoInvoicesServiceProvider.future,
     );
 
-    // q is ignored because this app's PagedQueryController.refresh()
-    // does not expose a q parameter. We keep the active query locally.
-    final String? search = _searchQuery;
-
-    // Keep invoice list cheap while stabilising Zoho calls.
-    final int effectiveLimit = limit > 25 ? 25 : limit;
+    final String? search = _searchQuery ?? _clean(q);
+    final int effectiveLimit = limit > _maxPageSize ? _maxPageSize : limit;
 
     if (!_isMine) {
       final List<ZohoInvoice> items = await svc.list(
@@ -119,13 +123,8 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
     }
 
     final me = _ref.read(currentUserValueProvider);
-    final String? userAccountNumber = _clean(me?.accountNumber);
 
-    if (userAccountNumber != null) {
-      return _MemberInvoiceScope(accountNumber: userAccountNumber);
-    }
-
-    return const _MemberInvoiceScope();
+    return _MemberInvoiceScope(accountNumber: _clean(me?.accountNumber));
   }
 
   static String? _clean(String? value) {
@@ -141,7 +140,10 @@ class _MemberInvoiceScope {
   final String? accountNumber;
 
   bool get hasScope {
-    return (customerId != null && customerId!.trim().isNotEmpty) ||
-        (accountNumber != null && accountNumber!.trim().isNotEmpty);
+    return _hasText(customerId) || _hasText(accountNumber);
+  }
+
+  static bool _hasText(String? value) {
+    return value != null && value.trim().isNotEmpty;
   }
 }

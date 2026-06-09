@@ -1,16 +1,13 @@
-// lib/features/retail/payments/zoho/widgets/payment_footer.dart
-
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// lib/features/retail/payments/widgets/payment_footer.dart
 
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
+import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
-import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
-
-import 'package:afyakit/shared/services/dialog_service.dart';
-
 import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
+import 'package:afyakit/shared/services/dialog_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PaymentFooter extends ConsumerWidget {
   const PaymentFooter({
@@ -18,18 +15,12 @@ class PaymentFooter extends ConsumerWidget {
     required this.currencyCode,
     required this.invoiceId,
     required this.canManageInvoices,
-
-    // Invoice context (optional)
     this.customerName,
     this.invoiceNumber,
     this.invoiceDate,
     this.invoiceTotal,
-
-    // Preload helpers (from invoice + contact already on page)
     this.pendingAmount,
     this.suggestedPhone,
-
-    // Callback to reload invoice / parent after successful payment mutations
     this.onPaymentSuccess,
   });
 
@@ -42,191 +33,165 @@ class PaymentFooter extends ConsumerWidget {
   final DateTime? invoiceDate;
   final num? invoiceTotal;
 
-  /// ✅ invoice.balance (balance due / pending)
   final num? pendingAmount;
-
-  /// ✅ best phone from invoice/contact context
   final String? suggestedPhone;
 
-  /// ✅ parent hook (invoice reload). Called after payment mutation + refresh.
   final Future<void> Function()? onPaymentSuccess;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final invId = invoiceId.trim();
-    if (invId.isEmpty) return const SizedBox.shrink();
+    final String invId = invoiceId.trim();
 
-    final s = ref.watch(paymentControllerProvider(invId));
-    final ctl = ref.read(paymentControllerProvider(invId).notifier);
+    if (invId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final PaymentState state = ref.watch(paymentControllerProvider(invId));
+    final PaymentController controller = ref.read(
+      paymentControllerProvider(invId).notifier,
+    );
 
     final num? pending =
-        _normPending(s.pendingAmount) ?? _normPending(pendingAmount);
-    final String? phoneHint =
-        _normPhone(s.suggestedMpesaPhone) ?? _normPhone(suggestedPhone);
+        _validPending(state.pendingAmount) ?? _validPending(pendingAmount);
 
-    final bool busy = s.busy;
+    final String? phoneHint =
+        _clean(state.suggestedMpesaPhone) ?? _clean(suggestedPhone);
+
+    final bool busy = state.busy;
     final bool hasBalance = pending != null && pending > 0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      children: <Widget>[
         const Divider(height: 1),
-
         if (hasBalance)
-          _buildMpesaCard(
-            context: context,
-            pending: pending,
-            phoneHint: phoneHint,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: _MpesaPromptPayCard(
+              currencyCode: _currency(currencyCode),
+              pendingAmount: pending,
+              phoneHint: phoneHint,
+              busy: busy,
+              payingMpesa: state.payingMpesa,
+              mpesaStatusText: _mpesaStatusText(state.mpesaLastPayment),
+              onPay: busy
+                  ? null
+                  : (String phone, num amount) {
+                      return _handleMpesaPay(
+                        controller: controller,
+                        phone: phone,
+                        amount: amount,
+                        pending: pending,
+                        phoneHint: phoneHint,
+                      );
+                    },
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: PaymentHistorySection(
+            currencyCode: _currency(currencyCode),
+            payments: state.payments,
+            loading: state.loadingPayments,
             busy: busy,
-            payingMpesa: s.payingMpesa,
-            mpesaStatusText: _mpesaStatusText(s.mpesaLastPayment),
-            onPay: (!busy && !s.payingMpesa)
-                ? (phone, amount) => _handleMpesaPay(
-                    ctl: ctl,
-                    phone: phone,
-                    amount: amount,
-                    pending: pending,
-                    phoneHint: phoneHint,
+            error: state.error,
+            canManage: canManageInvoices,
+            onRefresh: controller.refresh,
+            onRecord: !canManageInvoices || busy
+                ? null
+                : () => _handleRecord(
+                    context: context,
+                    controller: controller,
+                    invoiceId: invId,
+                  ),
+            maxRows: 4,
+            onOpenReceipt: (ZohoInvoicePayment payment) {
+              _openReceipt(context, payment);
+            },
+            onEdit: canManageInvoices && !busy
+                ? (ZohoInvoicePayment payment) => _handleEdit(
+                    context: context,
+                    controller: controller,
+                    invoiceId: invId,
+                    payment: payment,
+                  )
+                : null,
+            onDelete: canManageInvoices && !busy
+                ? (ZohoInvoicePayment payment) => _handleDelete(
+                    context: context,
+                    controller: controller,
+                    payment: payment,
                   )
                 : null,
           ),
-
-        _buildHistory(context: context, ctl: ctl, invId: invId, busy: busy),
+        ),
       ],
     );
   }
 
-  // ─────────────────────────────
-  // Private builders
-  // ─────────────────────────────
-
-  Widget _buildMpesaCard({
-    required BuildContext context,
-    required num pending,
-    required String? phoneHint,
-    required bool busy,
-    required bool payingMpesa,
-    required String? mpesaStatusText,
-    required Future<void> Function(String phone, num amount)? onPay,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: _MpesaPromptPayCard(
-        currencyCode: currencyCode,
-        pendingAmount: pending,
-        phoneHint: phoneHint,
-        busy: busy,
-        payingMpesa: payingMpesa,
-        mpesaStatusText: mpesaStatusText,
-        onPay: onPay,
-      ),
-    );
-  }
-
-  Widget _buildHistory({
-    required BuildContext context,
-    required PaymentController ctl,
-    required String invId,
-    required bool busy,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: PaymentHistorySection(
-        currencyCode: currencyCode,
-        invoiceId: invId,
-        onRefresh: ctl.refresh,
-        canManage: canManageInvoices,
-
-        // Staff-only manual record
-        onRecord: (!canManageInvoices || busy)
-            ? null
-            : () => _handleStaffRecord(context, ctl, invId),
-
-        maxRows: 4,
-        onOpenReceipt: (p) => _openReceipt(context, p),
-
-        // Staff-only edit/delete
-        onEdit: canManageInvoices && !busy
-            ? (p) => _handleStaffEdit(context, ctl, invId, p)
-            : null,
-
-        onDelete: canManageInvoices && !busy
-            ? (p) => _handleStaffDelete(context, ctl, p)
-            : null,
-      ),
-    );
-  }
-
-  // ─────────────────────────────
-  // Actions (DRY)
-  // ─────────────────────────────
-
   Future<void> _handleMpesaPay({
-    required PaymentController ctl,
+    required PaymentController controller,
     required String phone,
     required num amount,
     required num? pending,
     required String? phoneHint,
   }) async {
-    // Seed draft hints (no network)
-    ctl.seedFromInvoiceContext(
+    controller.seedFromInvoiceContext(
       pendingAmount: pending,
       suggestedPhone: phoneHint,
     );
 
-    await ctl.payViaMpesaStk(phone: phone, amount: amount);
+    final bool ok = await controller.payViaMpesaStk(
+      phone: phone,
+      amount: amount,
+    );
 
-    // Reload payment list for history
-    await ctl.refresh();
+    if (!ok) return;
 
-    // Reload invoice / parent (so footer can disappear if balance cleared)
     await onPaymentSuccess?.call();
   }
 
-  Future<void> _handleStaffRecord(
-    BuildContext context,
-    PaymentController ctl,
-    String invId,
-  ) async {
-    ctl.startNewPayment();
+  Future<void> _handleRecord({
+    required BuildContext context,
+    required PaymentController controller,
+    required String invoiceId,
+  }) async {
+    controller.startNewPayment();
 
-    // Seed from parent context (no network)
-    ctl.seedFromInvoiceContext(
+    controller.seedFromInvoiceContext(
       pendingAmount: pendingAmount,
       suggestedPhone: suggestedPhone,
     );
 
-    await PaymentEditorSheet.open(context, invoiceId: invId);
+    await PaymentEditorSheet.open(context, invoiceId: invoiceId);
 
-    await ctl.refresh();
     await onPaymentSuccess?.call();
   }
 
-  Future<void> _handleStaffEdit(
-    BuildContext context,
-    PaymentController ctl,
-    String invId,
-    ZohoInvoicePayment p,
-  ) async {
-    ctl.startEditPayment(p);
+  Future<void> _handleEdit({
+    required BuildContext context,
+    required PaymentController controller,
+    required String invoiceId,
+    required ZohoInvoicePayment payment,
+  }) async {
+    controller.startEditPayment(payment);
 
-    ctl.seedFromInvoiceContext(
+    controller.seedFromInvoiceContext(
       pendingAmount: pendingAmount,
       suggestedPhone: suggestedPhone,
     );
 
-    await PaymentEditorSheet.open(context, invoiceId: invId);
+    await PaymentEditorSheet.open(context, invoiceId: invoiceId);
 
-    await ctl.refresh();
     await onPaymentSuccess?.call();
   }
 
-  Future<void> _handleStaffDelete(
-    BuildContext context,
-    PaymentController ctl,
-    ZohoInvoicePayment p,
-  ) async {
-    final ok = await DialogService.confirm(
+  Future<void> _handleDelete({
+    required BuildContext context,
+    required PaymentController controller,
+    required ZohoInvoicePayment payment,
+  }) async {
+    final bool ok = await DialogService.confirm(
       context: context,
       title: 'Delete payment?',
       content: 'This will remove the payment in Zoho Books.',
@@ -235,76 +200,83 @@ class PaymentFooter extends ConsumerWidget {
       confirmColor: Colors.redAccent,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
-    await ctl.deletePayment(p.paymentId);
+    final bool deleted = await controller.deletePayment(payment.paymentId);
 
-    await ctl.refresh();
+    if (!deleted) return;
+
     await onPaymentSuccess?.call();
   }
 
-  void _openReceipt(BuildContext context, ZohoInvoicePayment p) {
+  void _openReceipt(BuildContext context, ZohoInvoicePayment payment) {
+    final String paymentId = payment.paymentId.trim();
+
+    if (paymentId.isEmpty) return;
+
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => PaymentDetailScreen(
           invoiceId: invoiceId,
-          currencyCode: currencyCode,
+          paymentId: paymentId,
+          currencyCode: _currency(currencyCode),
           customerName: customerName,
           invoiceNumber: invoiceNumber,
           invoiceDate: invoiceDate,
           invoiceTotal: invoiceTotal,
           canManagePayments: canManageInvoices,
-          paymentId: p.paymentId,
         ),
       ),
     );
   }
 
-  // ─────────────────────────────
-  // Small helpers
-  // ─────────────────────────────
+  static num? _validPending(num? value) {
+    if (value == null) return null;
+    if (!value.isFinite) return null;
+    if (value <= 0) return null;
 
-  static num? _normPending(num? v) {
-    if (v == null) return null;
-    if (!v.isFinite) return null;
-    if (v <= 0) return null;
-    return v;
+    return value;
   }
 
-  static String? _normPhone(String? v) {
-    final s = (v ?? '').trim();
-    return s.isEmpty ? null : s;
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
+
+    return text.isEmpty ? null : text;
+  }
+
+  static String _currency(String value) {
+    final String text = value.trim();
+
+    return text.isEmpty ? 'KES' : text;
   }
 
   static String? _mpesaStatusText(Object? last) {
     if (last == null) return null;
 
-    // Keep loosely typed: controller owns actual mpesa models.
     try {
-      final d = last as dynamic;
+      final dynamic payment = last;
 
-      final desc = (d.resultDesc ?? '').toString().trim();
-      final status = (d.status ?? '').toString().trim();
-      final code = (d.resultCode ?? '').toString().trim();
+      final String status = (payment.status ?? '').toString().trim();
+      final String code = (payment.resultCode ?? '').toString().trim();
+      final String desc = (payment.resultDesc ?? '').toString().trim();
 
-      final parts = <String>[];
+      final List<String> parts = <String>[];
+
       if (status.isNotEmpty) parts.add(status);
       if (code.isNotEmpty) parts.add('($code)');
       if (desc.isNotEmpty) parts.add(desc);
 
-      final out = parts.join(' ');
-      return out.isEmpty ? null : out;
+      final String text = parts.join(' ');
+
+      return text.isEmpty ? null : text;
     } catch (_) {
       return null;
     }
   }
 }
 
-// ─────────────────────────────
-// M-Pesa card (partial payments)
-// ─────────────────────────────
-
-typedef MpesaPayFn = Future<void> Function(String phone, num amount);
+typedef _MpesaPayFn = Future<void> Function(String phone, num amount);
 
 class _MpesaPromptPayCard extends StatefulWidget {
   const _MpesaPromptPayCard({
@@ -323,12 +295,12 @@ class _MpesaPromptPayCard extends StatefulWidget {
   final bool busy;
   final bool payingMpesa;
   final String? mpesaStatusText;
-
-  /// If null => disabled
-  final MpesaPayFn? onPay;
+  final _MpesaPayFn? onPay;
 
   @override
-  State<_MpesaPromptPayCard> createState() => _MpesaPromptPayCardState();
+  State<_MpesaPromptPayCard> createState() {
+    return _MpesaPromptPayCardState();
+  }
 }
 
 class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
@@ -338,29 +310,19 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
   @override
   void initState() {
     super.initState();
+
     _phoneCtl = TextEditingController(text: widget.phoneHint ?? '');
-    _amountCtl = TextEditingController(text: _fmt(widget.pendingAmount));
+    _amountCtl = TextEditingController(
+      text: _formatAmount(widget.pendingAmount),
+    );
   }
 
   @override
   void didUpdateWidget(covariant _MpesaPromptPayCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Seed phone only if user hasn't typed anything.
-    final curPhone = _phoneCtl.text.trim();
-    final nextPhone = (widget.phoneHint ?? '').trim();
-    if (curPhone.isEmpty && nextPhone.isNotEmpty) {
-      _phoneCtl.text = nextPhone;
-    }
-
-    // Seed amount only if user hasn't edited it (still equals old pending).
-    final curAmt = _amountCtl.text.trim();
-    final oldPendingText = _fmt(oldWidget.pendingAmount).trim();
-    final newPendingText = _fmt(widget.pendingAmount).trim();
-
-    if (curAmt == oldPendingText && newPendingText != oldPendingText) {
-      _amountCtl.text = newPendingText;
-    }
+    _seedPhoneIfEmpty();
+    _seedAmountIfStillOldPending(oldWidget.pendingAmount);
   }
 
   @override
@@ -372,12 +334,11 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
 
   @override
   Widget build(BuildContext context) {
-    final pending = widget.pendingAmount;
-    final canPay =
+    final bool canPay =
         widget.onPay != null &&
         !widget.busy &&
         !widget.payingMpesa &&
-        pending > 0;
+        widget.pendingAmount > 0;
 
     return Card(
       elevation: 0,
@@ -387,15 +348,53 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(context, pending),
+          children: <Widget>[
+            _Header(
+              currencyCode: widget.currencyCode,
+              pendingAmount: widget.pendingAmount,
+              payingMpesa: widget.payingMpesa,
+            ),
             const SizedBox(height: 10),
-            _buildPhoneField(),
+            TextField(
+              controller: _phoneCtl,
+              keyboardType: TextInputType.phone,
+              enabled: !widget.busy && !widget.payingMpesa,
+              decoration: const InputDecoration(
+                labelText: 'Phone (M-Pesa)',
+                hintText: '07XXXXXXXX / 01XXXXXXXX / 2547XXXXXXXX',
+                prefixIcon: Icon(Icons.call_outlined),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
             const SizedBox(height: 10),
-            _buildAmountField(pending),
-            _buildStatusText(context),
+            TextField(
+              controller: _amountCtl,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              enabled: !widget.busy && !widget.payingMpesa,
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                hintText: _formatAmount(widget.pendingAmount),
+                prefixIcon: const Icon(Icons.payments_outlined),
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            if ((widget.mpesaStatusText ?? '').trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                widget.mpesaStatusText!.trim(),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 10),
-            _buildPayButton(context, canPay, pending),
+            ElevatedButton.icon(
+              onPressed: canPay ? () => _submit(context) : null,
+              icon: const Icon(Icons.payments_outlined),
+              label: Text(widget.payingMpesa ? 'Prompting…' : 'Prompt & Pay'),
+            ),
             const SizedBox(height: 6),
             Text(
               'You’ll receive an M-Pesa prompt on your phone. Complete it to pay this invoice.',
@@ -407,29 +406,102 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, num pending) {
+  Future<void> _submit(BuildContext context) async {
+    final String phone = _phoneCtl.text.trim();
+
+    if (phone.isEmpty) {
+      _showSnack(context, 'Enter your M-Pesa phone number');
+      return;
+    }
+
+    final num? amount = num.tryParse(_amountCtl.text.trim());
+
+    if (amount == null || amount <= 0) {
+      _showSnack(context, 'Enter a valid amount');
+      return;
+    }
+
+    if (amount > widget.pendingAmount) {
+      _showSnack(
+        context,
+        'Amount cannot exceed balance (${_formatAmount(widget.pendingAmount)})',
+      );
+      return;
+    }
+
+    await widget.onPay?.call(phone, amount);
+  }
+
+  void _seedPhoneIfEmpty() {
+    final String current = _phoneCtl.text.trim();
+    final String next = (widget.phoneHint ?? '').trim();
+
+    if (current.isEmpty && next.isNotEmpty) {
+      _phoneCtl.text = next;
+    }
+  }
+
+  void _seedAmountIfStillOldPending(num oldPending) {
+    final String current = _amountCtl.text.trim();
+    final String oldText = _formatAmount(oldPending);
+    final String nextText = _formatAmount(widget.pendingAmount);
+
+    if (current == oldText && current != nextText) {
+      _amountCtl.text = nextText;
+    }
+  }
+
+  static void _showSnack(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  static String _formatAmount(num value) {
+    if (!value.isFinite) return '0';
+
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+
+    return value.toStringAsFixed(2);
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.currencyCode,
+    required this.pendingAmount,
+    required this.payingMpesa,
+  });
+
+  final String currencyCode;
+  final num pendingAmount;
+  final bool payingMpesa;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
-      children: [
+      children: <Widget>[
         const Icon(Icons.phone_iphone),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: <Widget>[
               Text(
-                'Pay by M-Pesa (STK Prompt)',
+                'Pay by M-Pesa',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 2),
               Text(
-                'Balance: ${widget.currencyCode} ${_fmt(pending)}',
+                'Balance: $currencyCode ${_MpesaPromptPayCardState._formatAmount(pendingAmount)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
         ),
-        if (widget.payingMpesa) const SizedBox(width: 8),
-        if (widget.payingMpesa)
+        if (payingMpesa)
           const SizedBox(
             width: 18,
             height: 18,
@@ -437,90 +509,5 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
           ),
       ],
     );
-  }
-
-  Widget _buildPhoneField() {
-    return TextField(
-      controller: _phoneCtl,
-      keyboardType: TextInputType.phone,
-      enabled: !widget.busy && !widget.payingMpesa,
-      decoration: const InputDecoration(
-        labelText: 'Phone (M-Pesa)',
-        hintText: '07XXXXXXXX / 01XXXXXXXX / 2547XXXXXXXX / 2541XXXXXXXX',
-        prefixIcon: Icon(Icons.call_outlined),
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
-    );
-  }
-
-  Widget _buildAmountField(num pending) {
-    return TextField(
-      controller: _amountCtl,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      enabled: !widget.busy && !widget.payingMpesa,
-      decoration: InputDecoration(
-        labelText: 'Amount',
-        hintText: _fmt(pending),
-        prefixIcon: const Icon(Icons.payments_outlined),
-        border: const OutlineInputBorder(),
-        isDense: true,
-      ),
-    );
-  }
-
-  Widget _buildStatusText(BuildContext context) {
-    final t = (widget.mpesaStatusText ?? '').trim();
-    if (t.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Text(t, style: Theme.of(context).textTheme.bodySmall),
-    );
-  }
-
-  Widget _buildPayButton(BuildContext context, bool canPay, num pending) {
-    return ElevatedButton.icon(
-      onPressed: canPay ? () => _submit(context, pending) : null,
-      icon: const Icon(Icons.payments_outlined),
-      label: Text(widget.payingMpesa ? 'Prompting…' : 'Prompt & Pay'),
-    );
-  }
-
-  Future<void> _submit(BuildContext context, num pending) async {
-    final phone = _phoneCtl.text.trim();
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your M-Pesa phone number')),
-      );
-      return;
-    }
-
-    final raw = _amountCtl.text.trim();
-    final amount = num.tryParse(raw);
-
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
-      return;
-    }
-
-    if (amount > pending) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Amount cannot exceed balance (${_fmt(pending)})'),
-        ),
-      );
-      return;
-    }
-
-    await widget.onPay!(phone, amount);
-  }
-
-  static String _fmt(num v) {
-    if (!v.isFinite) return '0';
-    if (v == v.roundToDouble()) return v.toInt().toString();
-    return v.toStringAsFixed(2);
   }
 }

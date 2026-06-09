@@ -13,75 +13,75 @@ class ZohoInvoicePayment {
     this.date,
     this.mode,
     this.description,
+    this.reference,
+    this.invoiceNumber,
+    this.customerId,
+    this.customerName,
+    this.patientNo,
+    this.patientName,
   });
 
   final String paymentId;
   final num amount;
 
-  /// "Primary" invoice id (best-effort). May be null.
+  /// Primary invoice id, best-effort.
   final String? invoiceId;
 
-  /// ✅ All invoice ids the payment is applied to.
-  ///
-  /// NOTE:
-  /// - Backend currently returns PaymentDTO without allocations arrays,
-  ///   so invoiceIds will usually be either:
-  ///     - [invoiceId] when invoice_id is present
-  ///     - [] when invoice_id is absent (then UI may need to resolve detail)
+  /// All invoice ids this payment is applied to.
   final List<String> invoiceIds;
 
-  /// Customer link (Zoho Books contact_id) - typically NOT present in PaymentDTO.
+  /// Zoho contact/customer id.
   final String? contactId;
 
-  /// ✅ Optional: your app account number (ONLY if backend injects it)
-  ///
-  /// IMPORTANT:
-  /// - Do NOT infer from reference_number; that is not your identity key anymore.
+  /// App-level account/member number, only if backend injects it.
   final String? accountNumber;
 
   final DateTime? date;
   final String? mode;
   final String? description;
 
+  /// Payment reference / M-Pesa receipt / bank reference.
+  final String? reference;
+
+  /// Hydrated invoice/customer context.
+  final String? invoiceNumber;
+  final String? customerId;
+  final String? customerName;
+
+  /// Hydrated clinical context.
+  final String? patientNo;
+  final String? patientName;
+
   factory ZohoInvoicePayment.fromJson(JsonMap json) {
     final j = json.cast<String, Object?>();
 
-    final id = readString(j['payment_id'] ?? j['id']);
-    final amount = readNum(j['amount']);
-
-    final date = readDateTime(j['date'] ?? j['payment_date']);
-
     final invoiceId = _readInvoiceId(j);
-    final invoiceIds = _extractInvoiceIds(j, primaryInvoiceId: invoiceId);
-
-    final contactId = _extractContactId(j);
-
-    final mode = readStringOrNull(j['payment_mode'] ?? j['mode']);
-    final desc = readStringOrNull(j['description'] ?? j['notes']);
-
-    // ✅ explicit only (aligned with backend)
-    final accountNumber = _extractAccountNumberExplicitOnly(j);
 
     return ZohoInvoicePayment(
-      paymentId: id,
-      amount: amount,
+      paymentId: readString(j['payment_id'] ?? j['id']),
+      amount: readNum(j['amount']),
       invoiceId: invoiceId,
-      invoiceIds: invoiceIds,
-      contactId: contactId,
-      accountNumber: accountNumber,
-      date: date,
-      mode: mode,
-      description: desc,
+      invoiceIds: _extractInvoiceIds(j, primaryInvoiceId: invoiceId),
+      contactId: _extractContactId(j),
+      accountNumber: _extractAccountNumberExplicitOnly(j),
+      date: readDateTime(j['date'] ?? j['payment_date']),
+      mode: readStringOrNull(j['payment_mode'] ?? j['mode']),
+      description: readStringOrNull(j['description'] ?? j['notes']),
+      reference: readStringOrNull(
+        j['reference'] ?? j['reference_number'] ?? j['referenceNumber'],
+      ),
+      invoiceNumber: readStringOrNull(
+        j['invoice_number'] ?? j['invoiceNumber'],
+      ),
+      customerId: readStringOrNull(j['customer_id'] ?? j['customerId']),
+      customerName: readStringOrNull(j['customer_name'] ?? j['customerName']),
+      patientNo: readStringOrNull(j['patient_no'] ?? j['patientNo']),
+      patientName: readStringOrNull(j['patient_name'] ?? j['patientName']),
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Invoice ids extraction (tolerant, backend-aligned)
-  // ─────────────────────────────────────────────
-
   static String? _readInvoiceId(Map<String, Object?> j) {
-    final direct = readStringOrNull(j['invoice_id'] ?? j['invoiceId']);
-    return direct;
+    return readStringOrNull(j['invoice_id'] ?? j['invoiceId']);
   }
 
   static List<String> _extractInvoiceIds(
@@ -91,24 +91,22 @@ class ZohoInvoicePayment {
     final out = <String>[];
     final seen = <String>{};
 
-    void addId(String? v) {
-      final s = (v ?? '').trim();
-      if (s.isEmpty) return;
-      if (seen.add(s)) out.add(s);
+    void addId(String? value) {
+      final id = (value ?? '').trim();
+      if (id.isEmpty) return;
+      if (seen.add(id)) out.add(id);
     }
 
-    // 0) If backend ever emits invoice_ids: ["...","..."]
     final invoiceIdsRaw = j['invoice_ids'] ?? j['invoiceIds'];
+
     if (invoiceIdsRaw is List) {
       for (final row in invoiceIdsRaw) {
         addId(row?.toString());
       }
     }
 
-    // 1) direct
     addId(primaryInvoiceId);
 
-    // 2) allocations arrays (only present if backend later returns raw Zoho objects)
     _collectStringsFromList(
       j['invoices'],
       keys: const ['invoice_id', 'invoiceId'],
@@ -121,63 +119,52 @@ class ZohoInvoicePayment {
       add: addId,
     );
 
-    // ✅ backend-aligned fallback: if only invoiceId exists, make invoiceIds = [invoiceId]
-    if (out.isEmpty &&
-        primaryInvoiceId != null &&
-        primaryInvoiceId.trim().isNotEmpty) {
-      out.add(primaryInvoiceId.trim());
-    }
-
     return List<String>.unmodifiable(out);
   }
 
   static void _collectStringsFromList(
-    Object? v, {
+    Object? value, {
     required List<String> keys,
-    required void Function(String? s) add,
+    required void Function(String? value) add,
   }) {
-    if (v is! List) return;
+    if (value is! List) return;
 
-    for (final row in v) {
+    for (final row in value) {
       if (!isRecord(row)) continue;
+
       final m = (row as Map).cast<String, Object?>();
-      for (final k in keys) {
-        add(readStringOrNull(m[k]));
+
+      for (final key in keys) {
+        add(readStringOrNull(m[key]));
       }
     }
   }
-
-  // ─────────────────────────────────────────────
-  // Contact id extraction (kept tolerant)
-  // ─────────────────────────────────────────────
 
   static String? _extractContactId(Map<String, Object?> j) {
     final direct = readStringOrNull(j['contact_id'] ?? j['contactId']);
     if (direct != null) return direct;
 
-    final cust = readStringOrNull(j['customer_id'] ?? j['customerId']);
-    if (cust != null) return cust;
+    final customerId = readStringOrNull(j['customer_id'] ?? j['customerId']);
+    if (customerId != null) return customerId;
 
     final customer = j['customer'];
+
     if (isRecord(customer)) {
       final m = (customer as Map).cast<String, Object?>();
-      final v = readStringOrNull(m['contact_id'] ?? m['contactId']);
-      if (v != null) return v;
+      final value = readStringOrNull(m['contact_id'] ?? m['contactId']);
+      if (value != null) return value;
     }
 
     final contact = j['contact'];
+
     if (isRecord(contact)) {
       final m = (contact as Map).cast<String, Object?>();
-      final v = readStringOrNull(m['contact_id'] ?? m['contactId']);
-      if (v != null) return v;
+      final value = readStringOrNull(m['contact_id'] ?? m['contactId']);
+      if (value != null) return value;
     }
 
     return null;
   }
-
-  // ─────────────────────────────────────────────
-  // Account number extraction (backend-aligned)
-  // ─────────────────────────────────────────────
 
   static String? _extractAccountNumberExplicitOnly(Map<String, Object?> j) {
     return readStringOrNull(

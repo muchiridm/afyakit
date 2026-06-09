@@ -1,24 +1,24 @@
-// lib/features/retail/payments/zoho/widgets/payment_history_section.dart
+// lib/features/retail/payments/widgets/payment_history_section.dart
 
+import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
+import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
-import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
+typedef PaymentTap = void Function(ZohoInvoicePayment payment);
+typedef PaymentAction = Future<void> Function(ZohoInvoicePayment payment);
 
-typedef PaymentTap = void Function(ZohoInvoicePayment p);
-
-class PaymentHistorySection extends ConsumerWidget {
+class PaymentHistorySection extends StatelessWidget {
   const PaymentHistorySection({
     super.key,
     required this.currencyCode,
-    required this.invoiceId,
-    required this.onRefresh,
+    required this.payments,
+    required this.loading,
+    required this.busy,
     required this.canManage,
+    required this.onRefresh,
+    this.error,
     this.onRecord,
     this.maxRows,
     this.onOpenReceipt,
@@ -34,16 +34,19 @@ class PaymentHistorySection extends ConsumerWidget {
   });
 
   final String currencyCode;
-  final String invoiceId;
+  final List<ZohoInvoicePayment> payments;
+  final bool loading;
+  final bool busy;
+  final bool canManage;
+  final String? error;
 
   final Future<void> Function() onRefresh;
-  final bool canManage;
   final Future<void> Function()? onRecord;
 
   final int? maxRows;
   final PaymentTap? onOpenReceipt;
-  final Future<void> Function(ZohoInvoicePayment p)? onEdit;
-  final Future<void> Function(ZohoInvoicePayment p)? onDelete;
+  final PaymentAction? onEdit;
+  final PaymentAction? onDelete;
 
   final String title;
   final IconData leadingIcon;
@@ -51,88 +54,67 @@ class PaymentHistorySection extends ConsumerWidget {
   final bool showEmptyCard;
   final bool compact;
   final String? selectedPaymentId;
-
-  /// Exclude one payment (used by receipt screen)
   final String? excludePaymentId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final code = _currency(currencyCode);
-    final invId = invoiceId.trim();
+  Widget build(BuildContext context) {
+    final String err = (error ?? '').trim();
 
-    // ✅ single source of truth: controller (already invoice-scoped)
-    final s = ref.watch(paymentControllerProvider(invId));
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    if (s.loadingPayments) return _buildLoading();
-    if ((s.error ?? '').trim().isNotEmpty) return _buildError(s.error!);
+    if (err.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Failed to load payments.\n$err'),
+      );
+    }
 
-    final pays = s.payments;
-
-    return _buildData(context: context, code: code, pays: pays);
-  }
-
-  // ─────────────────────────────
-  // Private builders
-  // ─────────────────────────────
-
-  String _currency(String s) => s.trim().isEmpty ? 'KES' : s.trim();
-
-  Widget _buildLoading() => const Padding(
-    padding: EdgeInsets.all(16),
-    child: Center(child: CircularProgressIndicator()),
-  );
-
-  Widget _buildError(Object e) => Padding(
-    padding: const EdgeInsets.all(16),
-    child: Text('Failed to load payments.\n$e'),
-  );
-
-  Widget _buildEmptyCard(BuildContext context) => AppTile(
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        'No payments recorded.',
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
-    ),
-  );
-
-  Widget _buildData({
-    required BuildContext context,
-    required String code,
-    required List<ZohoInvoicePayment> pays,
-  }) {
-    final rows = _prepareRows(pays);
-    final visible = _takeMax(rows, maxRows);
+    final List<ZohoInvoicePayment> rows = _prepareRows();
+    final List<ZohoInvoicePayment> visible = _takeMax(rows);
 
     if (rows.isEmpty && showEmptyCard) {
-      return _buildEmptyCard(context);
+      return AppTile(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            'No payments recorded.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showHeader) ...[
+      children: <Widget>[
+        if (showHeader) ...<Widget>[
           _HeaderRow(
             title: title,
             leadingIcon: leadingIcon,
             canManage: canManage,
+            busy: busy,
             onRefresh: onRefresh,
             onRecord: onRecord,
           ),
           const SizedBox(height: 10),
         ],
-        for (final p in visible) ...[
+        for (final ZohoInvoicePayment payment in visible) ...<Widget>[
           PaymentHistoryTile(
-            currencyCode: code,
-            p: p,
+            currencyCode: _currency(currencyCode),
+            payment: payment,
             compact: compact,
-            busy: false,
+            busy: busy,
             canManage: canManage,
-            isSelected: p.paymentId.trim() == (selectedPaymentId ?? '').trim(),
-            onTap: onOpenReceipt == null ? null : () => onOpenReceipt!(p),
-            onEdit: onEdit == null ? null : () => onEdit!(p),
-            onDelete: onDelete == null ? null : () => onDelete!(p),
+            isSelected:
+                payment.paymentId.trim() == (selectedPaymentId ?? '').trim(),
+            onTap: onOpenReceipt == null ? null : () => onOpenReceipt!(payment),
+            onEdit: onEdit == null ? null : () => onEdit!(payment),
+            onDelete: onDelete == null ? null : () => onDelete!(payment),
           ),
           const SizedBox(height: 8),
         ],
@@ -140,19 +122,32 @@ class PaymentHistorySection extends ConsumerWidget {
     );
   }
 
-  List<ZohoInvoicePayment> _prepareRows(List<ZohoInvoicePayment> pays) {
-    final exclude = (excludePaymentId ?? '').trim();
-    if (exclude.isEmpty) return pays;
+  List<ZohoInvoicePayment> _prepareRows() {
+    final String exclude = (excludePaymentId ?? '').trim();
+
+    if (exclude.isEmpty) {
+      return payments;
+    }
 
     return <ZohoInvoicePayment>[
-      for (final p in pays)
-        if (p.paymentId.trim() != exclude) p,
+      for (final ZohoInvoicePayment payment in payments)
+        if (payment.paymentId.trim() != exclude) payment,
     ];
   }
 
-  List<ZohoInvoicePayment> _takeMax(List<ZohoInvoicePayment> xs, int? maxRows) {
-    if (maxRows == null || xs.length <= maxRows) return xs;
-    return xs.take(maxRows).toList();
+  List<ZohoInvoicePayment> _takeMax(List<ZohoInvoicePayment> rows) {
+    final int? max = maxRows;
+
+    if (max == null || rows.length <= max) {
+      return rows;
+    }
+
+    return rows.take(max).toList(growable: false);
+  }
+
+  static String _currency(String value) {
+    final String text = value.trim();
+    return text.isEmpty ? 'KES' : text;
   }
 }
 
@@ -161,6 +156,7 @@ class _HeaderRow extends StatelessWidget {
     required this.title,
     required this.leadingIcon,
     required this.canManage,
+    required this.busy,
     required this.onRefresh,
     required this.onRecord,
   });
@@ -168,16 +164,17 @@ class _HeaderRow extends StatelessWidget {
   final String title;
   final IconData leadingIcon;
   final bool canManage;
+  final bool busy;
   final Future<void> Function() onRefresh;
   final Future<void> Function()? onRecord;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: [
+      children: <Widget>[
         Expanded(
           child: Row(
-            children: [
+            children: <Widget>[
               Icon(leadingIcon, size: 18),
               const SizedBox(width: 10),
               Text(
@@ -192,12 +189,12 @@ class _HeaderRow extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'Refresh',
-          onPressed: () => onRefresh(),
+          onPressed: busy ? null : () => onRefresh(),
           icon: const Icon(Icons.refresh),
         ),
         if (canManage)
           FilledButton.icon(
-            onPressed: onRecord == null ? null : () => onRecord?.call(),
+            onPressed: busy || onRecord == null ? null : () => onRecord!(),
             icon: const Icon(Icons.add),
             label: const Text('Record'),
           ),
@@ -210,19 +207,19 @@ class PaymentHistoryTile extends StatelessWidget {
   const PaymentHistoryTile({
     super.key,
     required this.currencyCode,
-    required this.p,
+    required this.payment,
     required this.compact,
     required this.busy,
     required this.canManage,
     required this.isSelected,
-    required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
     this.secondaryText,
   });
 
   final String currencyCode;
-  final ZohoInvoicePayment p;
+  final ZohoInvoicePayment payment;
 
   final bool compact;
   final bool busy;
@@ -237,29 +234,32 @@ class PaymentHistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = p.date == null ? '—' : ymd.format(p.date!);
-    final mode = (p.mode ?? '').trim().isEmpty ? 'Payment' : p.mode!.trim();
-    final amount = money(p.amount, currencyCode);
+    final String date = payment.date == null ? '—' : ymd.format(payment.date!);
+    final String mode = (payment.mode ?? '').trim().isEmpty
+        ? 'Payment'
+        : payment.mode!.trim();
+    final String amount = money(payment.amount, currencyCode);
+    final String subtitle = _subtitle(date);
 
-    final scheme = Theme.of(context).colorScheme;
+    final ColorScheme scheme = Theme.of(context).colorScheme;
 
-    final bg = isSelected ? scheme.primary.withOpacity(0.08) : scheme.surface;
-    final border = Border.all(
+    final Color background = isSelected
+        ? scheme.primary.withOpacity(0.08)
+        : scheme.surface;
+
+    final Border border = Border.all(
       color: isSelected
           ? scheme.primary.withOpacity(0.35)
           : scheme.outlineVariant.withOpacity(0.25),
     );
 
-    final pad = compact
+    final EdgeInsets padding = compact
         ? const EdgeInsets.fromLTRB(10, 8, 6, 8)
         : const EdgeInsets.fromLTRB(12, 10, 8, 10);
 
-    final line2 = (secondaryText ?? '').trim();
-    final subtitle = line2.isNotEmpty ? line2 : date;
-
     return Material(
       borderRadius: BorderRadius.circular(12),
-      color: bg,
+      color: background,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -268,15 +268,15 @@ class PaymentHistoryTile extends StatelessWidget {
             border: border,
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: pad,
+          padding: padding,
           child: Row(
-            children: [
+            children: <Widget>[
               const Icon(Icons.receipt_long_outlined, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  children: <Widget>[
                     Text(
                       mode,
                       style: TextStyle(
@@ -298,30 +298,30 @@ class PaymentHistoryTile extends StatelessWidget {
               ),
               const SizedBox(width: AppShape.gap12),
               Text(amount, style: const TextStyle(fontWeight: FontWeight.w800)),
-              if (canManage) ...[
+              if (canManage) ...<Widget>[
                 const SizedBox(width: 4),
-                PopupMenuButton<_PayRowAction>(
+                PopupMenuButton<_PaymentRowAction>(
                   tooltip: 'More',
                   enabled: !busy,
-                  onSelected: (a) async {
-                    switch (a) {
-                      case _PayRowAction.edit:
+                  onSelected: (action) async {
+                    switch (action) {
+                      case _PaymentRowAction.edit:
                         await onEdit?.call();
                         break;
-                      case _PayRowAction.delete:
+                      case _PaymentRowAction.delete:
                         await onDelete?.call();
                         break;
                     }
                   },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem<_PayRowAction>(
-                      value: _PayRowAction.edit,
+                  itemBuilder: (_) => <PopupMenuEntry<_PaymentRowAction>>[
+                    const PopupMenuItem<_PaymentRowAction>(
+                      value: _PaymentRowAction.edit,
                       child: Text('Edit'),
                     ),
-                    PopupMenuItem<_PayRowAction>(
-                      value: _PayRowAction.delete,
+                    PopupMenuItem<_PaymentRowAction>(
+                      value: _PaymentRowAction.delete,
                       child: Row(
-                        children: [
+                        children: <Widget>[
                           Icon(
                             Icons.delete_outline,
                             size: 18,
@@ -342,6 +342,22 @@ class PaymentHistoryTile extends StatelessWidget {
       ),
     );
   }
+
+  String _subtitle(String date) {
+    final String line = (secondaryText ?? '').trim();
+
+    if (line.isNotEmpty) {
+      return line;
+    }
+
+    final String reference = (payment.reference ?? '').trim();
+
+    if (reference.isNotEmpty) {
+      return '$date • $reference';
+    }
+
+    return date;
+  }
 }
 
-enum _PayRowAction { edit, delete }
+enum _PaymentRowAction { edit, delete }

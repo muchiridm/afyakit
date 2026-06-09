@@ -2,7 +2,7 @@
 
 import 'dart:typed_data';
 
-import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
@@ -31,27 +31,23 @@ final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
 });
 
 class QuoteConversionResult {
-  const QuoteConversionResult({required this.invoice, this.claim});
+  const QuoteConversionResult({required this.invoice, this.claimPackId});
 
   final JsonMap invoice;
-  final InsuranceClaim? claim;
-
-  bool get hasClaim => claim != null;
+  final String? claimPackId;
 
   factory QuoteConversionResult.fromJson(JsonMap json) {
     final Object? rawInvoice = json['invoice'];
+
     if (rawInvoice is! Map) {
       throw StateError('Unexpected response: missing "invoice"');
     }
 
-    final Object? rawClaim = json['claim'];
-    final InsuranceClaim? claim = rawClaim is Map
-        ? InsuranceClaim.fromJson(rawClaim.cast<String, Object?>())
-        : null;
-
     return QuoteConversionResult(
       invoice: rawInvoice.cast<String, dynamic>(),
-      claim: claim,
+      claimPackId: ZohoQuotesService.asCleanStringOrNull(
+        json['claim_pack_id']?.toString(),
+      ),
     );
   }
 }
@@ -69,15 +65,18 @@ class ZohoQuotesService {
     int page = 1,
     String? q,
     String? accountNumber,
+    String? customerId,
   }) async {
     final String qq = (q ?? '').trim();
     final String acct = (accountNumber ?? '').trim();
+    final String cust = (customerId ?? '').trim();
 
     final Uri uri = routes.retailListQuotes(
       limit: limit,
       page: page,
       q: qq.isEmpty ? null : qq,
       accountNumber: acct.isEmpty ? null : acct,
+      customerId: cust.isEmpty ? null : cust,
     );
 
     final Response<dynamic> res = await api.getUri(uri);
@@ -134,6 +133,7 @@ class ZohoQuotesService {
     } on DioException catch (e) {
       final int? code = e.response?.statusCode;
       if (code == 404) return null;
+
       rethrow;
     }
   }
@@ -266,7 +266,6 @@ class ZohoQuotesService {
     DateTime? dueDate,
     String? membershipId,
     String? prescriptionId,
-    bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     SalesDocumentAddress? deliveryAddress,
   }) async {
@@ -277,14 +276,6 @@ class ZohoQuotesService {
 
     final String? cleanMembershipId = asCleanStringOrNull(membershipId);
     final String? cleanPrescriptionId = asCleanStringOrNull(prescriptionId);
-
-    if (createInsuranceClaim && cleanMembershipId == null) {
-      throw StateError('Please select an insurance membership.');
-    }
-
-    if (createInsuranceClaim && cleanPrescriptionId == null) {
-      throw StateError('Please select a verified prescription.');
-    }
 
     final Map<String, Object?> body = <String, Object?>{
       if (invoiceDate != null)
@@ -297,7 +288,6 @@ class ZohoQuotesService {
       },
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
       if (cleanPrescriptionId != null) 'prescription_id': cleanPrescriptionId,
-      if (createInsuranceClaim) 'create_insurance_claim': true,
     };
 
     final Response<dynamic> res = await api.postUri(
@@ -313,21 +303,13 @@ class ZohoQuotesService {
     QuoteDraft draft, {
     DateTime? invoiceDate,
     DateTime? dueDate,
-    bool createInsuranceClaim = false,
   }) {
     return convertToInvoice(
       quoteId,
       invoiceDate: invoiceDate,
       dueDate: dueDate,
-
-      // Always carry clinical/insurance context forward to the invoice.
-      // Claim creation is no longer done during quote → invoice conversion.
       membershipId: draft.resolvedMembershipId,
       prescriptionId: draft.resolvedPrescriptionId,
-
-      // Deprecated behaviour. Claims are created separately after claim document upload.
-      createInsuranceClaim: false,
-
       patientSnapshot: draft.patientSnapshot,
       deliveryAddress: draft.deliveryAddress,
     );
@@ -484,12 +466,14 @@ class ZohoQuotesService {
   static int _safeQty(int quantity) {
     if (quantity < 1) return 1;
     if (quantity > 9999) return 9999;
+
     return quantity;
   }
 
   static num _safeRate(num rate) {
     if (rate.isNaN || rate.isInfinite) return 0;
     if (rate < 0) return 0;
+
     return rate;
   }
 
@@ -501,6 +485,7 @@ class ZohoQuotesService {
     if (title.isNotEmpty) return _truncate(title, 120);
 
     final String fallback = (line.tile.tileDesc ?? '').trim();
+
     return _truncate(fallback.isNotEmpty ? fallback : 'Item', 120);
   }
 

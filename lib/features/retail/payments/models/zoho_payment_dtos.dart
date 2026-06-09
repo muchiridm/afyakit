@@ -1,8 +1,8 @@
-// lib/features/retail/shared/models/zoho_payment_dtos.dart
+// lib/features/retail/payments/models/zoho_payment_dtos.dart
 
-import 'package:afyakit/shared/utils/utils.dart';
-import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
+import 'package:afyakit/shared/utils/utils.dart';
 
 class InvoiceBalanceSummary {
   const InvoiceBalanceSummary({

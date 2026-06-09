@@ -1,5 +1,3 @@
-// lib/features/retail/quotes/widgets/quote_clinical_context_dialog.dart
-
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
@@ -9,8 +7,6 @@ import 'package:afyakit/features/clinical/prescriptions/models/prescription_mode
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
 import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
-import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
-import 'package:afyakit/features/insurance/claims/widgets/insurance_claim_picker.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
@@ -32,7 +28,6 @@ class QuoteClinicalContextSelection {
     this.payerContact,
     this.prescription,
     this.prescriptionId,
-    this.claim,
   });
 
   final SalesDocumentPatientSnapshot patientSnapshot;
@@ -45,13 +40,6 @@ class QuoteClinicalContextSelection {
   /// Prescription object has not hydrated yet.
   final String? prescriptionId;
 
-  /// Optional existing claim selected for workflow continuity.
-  ///
-  /// For now, this is returned by the dialog but does not automatically persist
-  /// to the quote unless QuoteMetaController/QuoteDraft are later extended to
-  /// store claim_id.
-  final InsuranceClaim? claim;
-
   bool get isInsurance => paymentContext == QuotePaymentContext.insurance;
 }
 
@@ -61,14 +49,18 @@ class QuoteClinicalContextDialog extends ConsumerStatefulWidget {
     this.initialPatientId,
     this.initialMembershipId,
     this.initialPrescriptionId,
-    this.initialClaimId,
+    this.initialClaimPackId,
     this.initialPaymentContext = QuotePaymentContext.directPay,
   });
 
   final String? initialPatientId;
   final String? initialMembershipId;
   final String? initialPrescriptionId;
-  final String? initialClaimId;
+
+  /// Backward-compatible only. Ignored by the quote context dialog.
+  ///
+  /// Claim packs are created/linked after conversion to invoice, not at quote stage.
+  final String? initialClaimPackId;
   final QuotePaymentContext initialPaymentContext;
 
   @override
@@ -83,8 +75,6 @@ class _QuoteClinicalContextDialogState
   PatientProfile? _patient;
   InsuranceMembership? _membership;
   Prescription? _prescription;
-  InsuranceClaim? _claim;
-
   bool _initialHydrationAttempted = false;
 
   late QuotePaymentContext _paymentContext;
@@ -134,7 +124,7 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _loadLinkedPatientsForMembershipGuard() async {
-    final controller = ref.read(
+    final PatientProfilesController controller = ref.read(
       patientProfilesControllerProvider(_memberPatientScope).notifier,
     );
 
@@ -224,7 +214,7 @@ class _QuoteClinicalContextDialogState
 
     if (!_isMemberScoped) return null;
 
-    final state = ref.read(
+    final PatientProfilesState state = ref.read(
       patientProfilesControllerProvider(_memberPatientScope),
     );
 
@@ -252,7 +242,7 @@ class _QuoteClinicalContextDialogState
   Set<String>? _allowedPatientIdsForMemberships() {
     if (!_isMemberScoped) return null;
 
-    final state = ref.watch(
+    final PatientProfilesState state = ref.watch(
       patientProfilesControllerProvider(_memberPatientScope),
     );
 
@@ -271,17 +261,6 @@ class _QuoteClinicalContextDialogState
     return 420;
   }
 
-  double _claimPickerHeight({
-    required bool hasMembership,
-    required int membershipCount,
-  }) {
-    if (!hasMembership) return 220;
-
-    if (membershipCount <= 1) return 240;
-
-    return 300;
-  }
-
   void _setPatient(PatientProfile patient) {
     setState(() {
       final String? previousPatientId = _patient?.patientId.trim();
@@ -294,7 +273,6 @@ class _QuoteClinicalContextDialogState
           previousPatientId != nextPatientId) {
         _membership = null;
         _prescription = null;
-        _claim = null;
       }
     });
 
@@ -309,8 +287,6 @@ class _QuoteClinicalContextDialogState
     setState(() {
       _paymentContext = QuotePaymentContext.insurance;
       _membership = membership;
-      _claim = null;
-
       _patient ??=
           loadedPatient ??
           PatientProfile(
@@ -325,11 +301,9 @@ class _QuoteClinicalContextDialogState
   }
 
   void _setPrescription(Prescription? prescription) {
-    setState(() => _prescription = prescription);
-  }
-
-  void _setClaim(InsuranceClaim claim) {
-    setState(() => _claim = claim);
+    setState(() {
+      _prescription = prescription;
+    });
   }
 
   Future<void> _uploadPrescription() async {
@@ -462,7 +436,6 @@ class _QuoteClinicalContextDialogState
         payerContact: payerContact,
         prescription: prescription,
         prescriptionId: resolvedPrescriptionId,
-        claim: _requiresInsurance ? _claim : null,
       ),
     );
   }
@@ -558,16 +531,11 @@ class _QuoteClinicalContextDialogState
       visibleMembershipCount,
     );
 
-    final double claimPickerHeight = _claimPickerHeight(
-      hasMembership: _membership != null,
-      membershipCount: visibleMembershipCount,
-    );
-
     final bool memberContactMissing =
         _isMemberScoped && _memberContactId.isEmpty;
 
     return AlertDialog(
-      title: const Text('Clinical context'),
+      title: const Text('Quote context'),
       content: SizedBox(
         width: 820,
         height: MediaQuery.of(context).size.height * 0.82,
@@ -602,7 +570,7 @@ class _QuoteClinicalContextDialogState
                     icon: Icons.payments_outlined,
                     title: 'Payment',
                     subtitle:
-                        'Choose whether this is direct-pay or insurance billing.',
+                        'Choose direct-pay or insurance billing. Claim packs start after invoice conversion.',
                   ),
                   SegmentedButton<QuotePaymentContext>(
                     showSelectedIcon: false,
@@ -625,7 +593,6 @@ class _QuoteClinicalContextDialogState
 
                         if (_paymentContext == QuotePaymentContext.directPay) {
                           _membership = null;
-                          _claim = null;
                         }
                       });
                     },
@@ -661,41 +628,13 @@ class _QuoteClinicalContextDialogState
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _SectionTitle(
-                      icon: Icons.assignment_outlined,
-                      title: 'Existing claim',
-                      subtitle: _membership == null
-                          ? 'Pick a membership first to check existing claims.'
-                          : 'Optional. Select an existing claim if this quote belongs to an open claim workflow.',
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        height: claimPickerHeight,
-                        child: InsuranceClaimPickerCard(
-                          initialClaimId:
-                              _claim?.claimId ?? widget.initialClaimId,
-                          patientId: patientId,
-                          membershipId: _membership?.membershipId,
-                          allowedPatientIds: allowedPatientIds,
-                          title: 'Existing claims',
-                          emptyText: _membership == null
-                              ? 'Pick an insurance membership first.'
-                              : 'No active claim found for this patient/member.',
-                          onSelected: _setClaim,
-                        ),
-                      ),
-                    ),
                   ],
                   const SizedBox(height: 16),
                   _SectionTitle(
                     icon: Icons.description_outlined,
                     title: 'Prescription',
                     subtitle: _requiresInsurance
-                        ? 'Pick or upload a prescription for claim support.'
+                        ? 'Required for insurance quotes and later claim support.'
                         : 'Optional for direct-pay clinical quotes.',
                   ),
                   PrescriptionPickerCard(

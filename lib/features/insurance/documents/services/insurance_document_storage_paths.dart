@@ -1,15 +1,15 @@
-// lib/features/insurance/claims/services/insurance_claim_storage_paths.dart
+// lib/features/insurance/documents/services/insurance_document_storage_paths.dart
 
 import 'dart:math';
 
-final class InsuranceClaimStoragePaths {
-  const InsuranceClaimStoragePaths._();
+final class InsuranceDocumentStoragePaths {
+  const InsuranceDocumentStoragePaths._();
 
   static String newUploadId() {
     final int now = DateTime.now().toUtc().millisecondsSinceEpoch;
     final String rand = Random.secure().nextInt(0x7fffffff).toRadixString(36);
 
-    return 'insurance_claim_${now.toRadixString(36)}_$rand';
+    return 'insurance_document_${now.toRadixString(36)}_$rand';
   }
 
   static String cleanExt(String? ext) {
@@ -53,7 +53,7 @@ final class InsuranceClaimStoragePaths {
       _safeSegment(tenantId),
       'clinical_patients',
       _safeSegment(patientId),
-      'insurance_claims',
+      'insurance_documents',
       _safeSegment(uploadId),
       'original.${cleanExt(ext)}',
     ].join('/');
@@ -69,7 +69,7 @@ final class InsuranceClaimStoragePaths {
       _safeSegment(tenantId),
       'clinical_patients',
       _safeSegment(patientId),
-      'insurance_claims',
+      'insurance_documents',
       _safeSegment(uploadId),
       'thumb.jpg',
     ].join('/');

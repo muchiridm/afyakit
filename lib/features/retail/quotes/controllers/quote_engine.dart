@@ -8,6 +8,7 @@ import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
@@ -359,7 +360,6 @@ class QuoteEngine {
     DateTime? dueDate,
     String? membershipId,
     String? prescriptionId,
-    bool createInsuranceClaim = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     SalesDocumentAddress? deliveryAddress,
   }) async {
@@ -369,11 +369,6 @@ class QuoteEngine {
       dueDate: dueDate,
       membershipId: membershipId,
       prescriptionId: prescriptionId,
-
-      // Claims are no longer created during quote → invoice conversion.
-      // The insurance claim is now created separately after uploading the claim document.
-      createInsuranceClaim: false,
-
       patientSnapshot: patientSnapshot,
       deliveryAddress: deliveryAddress,
     );
@@ -384,7 +379,6 @@ class QuoteEngine {
     QuoteDraft draft, {
     DateTime? invoiceDate,
     DateTime? dueDate,
-    bool createInsuranceClaim = false,
   }) {
     return convertToInvoice(
       quoteId,
@@ -392,10 +386,6 @@ class QuoteEngine {
       dueDate: dueDate,
       membershipId: draft.resolvedMembershipId,
       prescriptionId: draft.resolvedPrescriptionId,
-
-      // Claims are no longer created here.
-      createInsuranceClaim: false,
-
       patientSnapshot: draft.patientSnapshot,
       deliveryAddress: draft.deliveryAddress,
     );

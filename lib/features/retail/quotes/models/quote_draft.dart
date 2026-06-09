@@ -1,6 +1,7 @@
 // lib/features/retail/quotes/models/quote_draft.dart
 
 import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
@@ -9,79 +10,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../catalog/models/di_sales_tile.dart';
 import 'zoho_quote.dart';
-
-@immutable
-class QuoteLineDraft {
-  const QuoteLineDraft({
-    required this.tile,
-    required this.quantity,
-    required this.rate,
-    this.description,
-    this.lineItemId,
-    this.zohoItemId,
-    this.unit,
-  });
-
-  final DiSalesTile tile;
-  final int quantity;
-  final num rate;
-
-  final String? description;
-  final String? lineItemId;
-  final String? zohoItemId;
-  final String? unit;
-
-  String get key {
-    final String id = (lineItemId ?? '').trim();
-    if (id.isNotEmpty) return id;
-
-    final String canonKey = tile.canonKey.trim();
-    if (canonKey.isNotEmpty) return canonKey;
-
-    final String groupKey = tile.groupKey.trim();
-    if (groupKey.isNotEmpty) return groupKey;
-
-    final String title = tile.tileTitle.trim();
-    return title.isNotEmpty ? title : 'line';
-  }
-
-  int get safeQty {
-    if (quantity < 0) return 0;
-    if (quantity > 9999) return 9999;
-    return quantity;
-  }
-
-  num get safeRate {
-    if (rate.isNaN || rate.isInfinite || rate < 0) return 0;
-    return rate;
-  }
-
-  num get amount => safeRate * safeQty;
-
-  QuoteLineDraft copyWith({
-    DiSalesTile? tile,
-    int? quantity,
-    num? rate,
-    String? description,
-    bool clearDescription = false,
-    String? lineItemId,
-    bool clearLineItemId = false,
-    String? zohoItemId,
-    bool clearZohoItemId = false,
-    String? unit,
-    bool clearUnit = false,
-  }) {
-    return QuoteLineDraft(
-      tile: tile ?? this.tile,
-      quantity: quantity ?? this.quantity,
-      rate: rate ?? this.rate,
-      description: clearDescription ? null : (description ?? this.description),
-      lineItemId: clearLineItemId ? null : (lineItemId ?? this.lineItemId),
-      zohoItemId: clearZohoItemId ? null : (zohoItemId ?? this.zohoItemId),
-      unit: clearUnit ? null : (unit ?? this.unit),
-    );
-  }
-}
 
 @immutable
 class QuoteDraft {
@@ -98,6 +26,7 @@ class QuoteDraft {
     this.patientSnapshot,
     this.membershipId,
     this.prescriptionId,
+    this.claimPackId,
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
@@ -106,52 +35,40 @@ class QuoteDraft {
 
   /// Zoho customer/contact being billed.
   ///
-  /// This may be:
-  /// - the patient,
-  /// - a parent/guardian/contact paying for the patient,
-  /// - a company/employer,
-  /// - an insurer,
-  /// - an OTC/B2B customer.
+  /// For direct-pay clinical quotes, this is usually the patient/member contact.
+  /// For insurance quotes, this is usually the insurer/payer contact.
   final String? contactId;
   final String? contactName;
 
   final String? customerNotes;
   final String? reference;
 
-  /// clinical:
-  ///   Patient-linked quote. Requires patient + delivery address.
-  ///
-  /// general:
-  ///   OTC / B2B / walk-in / institutional quote. Patient and delivery optional.
   final QuoteSaleContext saleContext;
-
-  /// directPay:
-  ///   The selected Zoho customer/contact pays directly.
-  ///   This includes patient self-pay, parent paying for child,
-  ///   employer/company direct-pay, OTC, and B2B.
-  ///
-  /// insurance:
-  ///   Insurance payer is being billed and a membership is required
-  ///   before claim creation.
   final QuotePaymentContext paymentContext;
 
   final SalesDocumentAddress? deliveryAddress;
 
   /// Person receiving care/medicine.
   ///
-  /// This is separate from the Zoho customer/contact being billed.
+  /// This is separate from [contactId], which is the payer/customer.
   final String? patientId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
   /// Insurance membership context.
   ///
-  /// Only required when [paymentContext] is insurance.
+  /// Required only for clinical insurance quotes.
   final String? membershipId;
 
-  /// Patient prescription selected for this quote/claim flow.
+  /// Patient prescription selected for this quote flow.
   ///
-  /// Required before creating an insurance claim.
+  /// Required only for clinical insurance quotes.
   final String? prescriptionId;
+
+  /// Backward-compatible only.
+  ///
+  /// Claim packs are no longer created or managed at quote stage.
+  /// They are created/linked when an insurance quote is converted to invoice.
+  final String? claimPackId;
 
   final String? currencyCode;
 
@@ -175,9 +92,8 @@ class QuoteDraft {
 
   bool get isDirectPay => paymentContext == QuotePaymentContext.directPay;
 
-  bool get isInsurancePayment {
-    return paymentContext == QuotePaymentContext.insurance;
-  }
+  bool get isInsurancePayment =>
+      paymentContext == QuotePaymentContext.insurance;
 
   bool get requiresPatient => saleContext.requiresPatient;
 
@@ -188,10 +104,9 @@ class QuoteDraft {
   }
 
   bool get requiresPrescription {
-    return isClinical && isInsurancePayment;
+    return isClinical && paymentContext.requiresPrescription;
   }
 
-  /// General sales cannot be insurance claims in the current model.
   QuotePaymentContext get effectivePaymentContext {
     return isGeneral ? QuotePaymentContext.directPay : paymentContext;
   }
@@ -217,11 +132,28 @@ class QuoteDraft {
     return direct.isEmpty ? null : direct;
   }
 
+  /// Backward-compatible only.
+  String? get resolvedClaimPackId {
+    final String direct = (claimPackId ?? '').trim();
+    return direct.isEmpty ? null : direct;
+  }
+
   bool get hasPatientContext => resolvedPatientId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
 
   bool get hasPrescriptionContext => resolvedPrescriptionId != null;
+
+  /// Backward-compatible only.
+  bool get hasClaimPackContext => resolvedClaimPackId != null;
+
+  bool get hasRequiredInsuranceQuoteContext {
+    return isClinical &&
+        isInsurancePayment &&
+        hasPatientContext &&
+        hasInsuranceContext &&
+        hasPrescriptionContext;
+  }
 
   bool get canCreateQuote {
     if (!hasCustomer || !hasLines) return false;
@@ -232,14 +164,9 @@ class QuoteDraft {
 
     if (requiresMembership && !hasInsuranceContext) return false;
 
-    return true;
-  }
+    if (requiresPrescription && !hasPrescriptionContext) return false;
 
-  bool get canCreateInsuranceClaim {
-    return isClinical &&
-        isInsurancePayment &&
-        hasInsuranceContext &&
-        hasPrescriptionContext;
+    return true;
   }
 
   num get total {
@@ -281,6 +208,8 @@ class QuoteDraft {
     bool clearMembershipId = false,
     String? prescriptionId,
     bool clearPrescriptionId = false,
+    String? claimPackId,
+    bool clearClaimPackId = false,
     List<QuoteLineDraft>? lines,
     bool clearLines = false,
     String? currencyCode,
@@ -316,6 +245,7 @@ class QuoteDraft {
       prescriptionId: clearPrescriptionId
           ? null
           : (prescriptionId ?? this.prescriptionId),
+      claimPackId: clearClaimPackId ? null : (claimPackId ?? this.claimPackId),
       lines: clearLines ? const <QuoteLineDraft>[] : (lines ?? this.lines),
       currencyCode: clearCurrencyCode
           ? null
@@ -325,6 +255,7 @@ class QuoteDraft {
 
   QuoteDraft upsertLine(QuoteLineDraft next) {
     final String nextKey = next.key;
+
     final int idx = lines.indexWhere((QuoteLineDraft line) {
       return line.key == nextKey;
     });
@@ -381,21 +312,22 @@ class QuoteDraft {
       clearPatientSnapshot: true,
       clearMembershipId: true,
       clearPrescriptionId: true,
+      clearClaimPackId: true,
     );
   }
 
   QuoteDraft withPatientSnapshot(SalesDocumentPatientSnapshot snapshot) {
+    final bool patientChanged =
+        resolvedPatientId != null && resolvedPatientId != snapshot.patientId;
+
     return copyWith(
       patientId: snapshot.patientId,
       patientSnapshot: snapshot,
       membershipId: snapshot.membershipId,
       saleContext: QuoteSaleContext.clinical,
-      // Important:
-      // Do not auto-switch to insurance just because membership exists.
-      // Parent/self/company direct-pay can still involve a patient with insurance.
       paymentContext: paymentContext,
-      clearPrescriptionId:
-          resolvedPatientId != null && resolvedPatientId != snapshot.patientId,
+      clearPrescriptionId: patientChanged,
+      clearClaimPackId: patientChanged,
     );
   }
 
@@ -405,6 +337,19 @@ class QuoteDraft {
     return copyWith(
       prescriptionId: clean.isEmpty ? null : clean,
       clearPrescriptionId: clean.isEmpty,
+      clearClaimPackId: true,
+    );
+  }
+
+  /// Backward-compatible only.
+  ///
+  /// New quote creation should not select/manage claim packs.
+  QuoteDraft withClaimPackId(String? claimPackId) {
+    final String clean = (claimPackId ?? '').trim();
+
+    return copyWith(
+      claimPackId: clean.isEmpty ? null : clean,
+      clearClaimPackId: clean.isEmpty,
     );
   }
 
@@ -416,7 +361,10 @@ class QuoteDraft {
   }
 
   QuoteDraft withDirectPayment() {
-    return copyWith(paymentContext: QuotePaymentContext.directPay);
+    return copyWith(
+      paymentContext: QuotePaymentContext.directPay,
+      clearClaimPackId: true,
+    );
   }
 
   factory QuoteDraft.fromZohoQuote(ZohoQuote quote) {
@@ -466,6 +414,7 @@ class QuoteDraft {
       patientSnapshot: quote.patientSnapshot,
       membershipId: quote.resolvedMembershipId,
       prescriptionId: quote.resolvedPrescriptionId,
+      claimPackId: quote.resolvedClaimPackId,
       currencyCode: quote.currencyCode,
       lines: hydratedLines,
     );

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/retail/invoices/zoho_invoice.dart';
-import 'package:afyakit/features/retail/invoices/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 
 /// Cached per invoiceId by Riverpod.
 /// Used by payments UI to show customer name / invoice number without

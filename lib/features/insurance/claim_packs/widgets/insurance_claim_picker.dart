@@ -1,24 +1,22 @@
-// lib/features/insurance/claims/widgets/insurance_claim_picker.dart
-
-import 'package:afyakit/features/insurance/claims/controllers/insurance_claims_controller.dart';
-import 'package:afyakit/features/insurance/claims/models/insurance_claim.dart';
+import 'package:afyakit/features/insurance/claim_packs/controllers/insurance_claim_packs_controller.dart';
+import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InsuranceClaimPickerCard extends ConsumerStatefulWidget {
   const InsuranceClaimPickerCard({
     super.key,
-    this.initialClaimId,
+    this.initialClaimPackId,
     this.patientId,
     this.membershipId,
     this.invoiceId,
     this.allowedPatientIds,
-    this.title = 'Insurance claim',
+    this.title = 'Insurance claim pack',
     this.emptyText,
     this.onSelected,
   });
 
-  final String? initialClaimId;
+  final String? initialClaimPackId;
 
   /// Optional hard filters.
   final String? patientId;
@@ -30,7 +28,7 @@ class InsuranceClaimPickerCard extends ConsumerStatefulWidget {
 
   final String title;
   final String? emptyText;
-  final ValueChanged<InsuranceClaim>? onSelected;
+  final ValueChanged<InsuranceClaimPack>? onSelected;
 
   @override
   ConsumerState<InsuranceClaimPickerCard> createState() =>
@@ -41,13 +39,13 @@ class _InsuranceClaimPickerCardState
     extends ConsumerState<InsuranceClaimPickerCard> {
   final TextEditingController _searchCtl = TextEditingController();
 
-  String? _selectedClaimId;
+  String? _selectedClaimPackId;
 
   @override
   void initState() {
     super.initState();
 
-    _selectedClaimId = _cleanOrNull(widget.initialClaimId);
+    _selectedClaimPackId = _cleanOrNull(widget.initialClaimPackId);
 
     Future<void>.microtask(_load);
   }
@@ -65,11 +63,12 @@ class _InsuranceClaimPickerCardState
     final String oldInvoiceId = _clean(oldWidget.invoiceId);
     final String nextInvoiceId = _clean(widget.invoiceId);
 
-    final String? oldInitialId = _cleanOrNull(oldWidget.initialClaimId);
-    final String? nextInitialId = _cleanOrNull(widget.initialClaimId);
+    final String? oldInitialId = _cleanOrNull(oldWidget.initialClaimPackId);
+    final String? nextInitialId = _cleanOrNull(widget.initialClaimPackId);
 
-    if (oldInitialId != nextInitialId && nextInitialId != _selectedClaimId) {
-      _selectedClaimId = nextInitialId;
+    if (oldInitialId != nextInitialId &&
+        nextInitialId != _selectedClaimPackId) {
+      _selectedClaimPackId = nextInitialId;
     }
 
     final bool filterChanged =
@@ -78,7 +77,7 @@ class _InsuranceClaimPickerCardState
         oldInvoiceId != nextInvoiceId;
 
     if (filterChanged) {
-      _selectedClaimId = nextInitialId;
+      _selectedClaimPackId = nextInitialId;
       Future<void>.microtask(_load);
     }
   }
@@ -91,8 +90,9 @@ class _InsuranceClaimPickerCardState
 
   Future<void> _load() {
     final String? patientId = _cleanOrNull(widget.patientId);
-    final InsuranceClaimsController controller = ref.read(
-      insuranceClaimsControllerProvider.notifier,
+
+    final InsuranceClaimPacksController controller = ref.read(
+      insuranceClaimPacksControllerProvider.notifier,
     );
 
     if (patientId != null) {
@@ -125,69 +125,69 @@ class _InsuranceClaimPickerCardState
   bool _contains(String source, String query) {
     final String q = query.trim().toLowerCase();
     if (q.isEmpty) return true;
+
     return source.toLowerCase().contains(q);
   }
 
-  bool _isAllowed(InsuranceClaim claim) {
+  bool _isAllowed(InsuranceClaimPack pack) {
     final Set<String>? allowed = widget.allowedPatientIds;
 
     if (allowed == null) return true;
     if (allowed.isEmpty) return false;
 
-    return allowed.contains(claim.patientId.trim());
+    return allowed.contains(pack.patientId.trim());
   }
 
-  List<InsuranceClaim> _filtered(List<InsuranceClaim> items) {
+  List<InsuranceClaimPack> _filtered(List<InsuranceClaimPack> items) {
     final String q = _searchCtl.text.trim();
 
     return items
-        .where((InsuranceClaim claim) {
-          if (!claim.isActive) return false;
-          if (!_isAllowed(claim)) return false;
+        .where((InsuranceClaimPack pack) {
+          if (!pack.isActive) return false;
+          if (!_isAllowed(pack)) return false;
 
           final String patientId = _clean(widget.patientId);
           final String membershipId = _clean(widget.membershipId);
           final String invoiceId = _clean(widget.invoiceId);
 
-          if (patientId.isNotEmpty && claim.patientId.trim() != patientId) {
+          if (patientId.isNotEmpty && pack.patientId.trim() != patientId) {
             return false;
           }
 
           if (membershipId.isNotEmpty &&
-              claim.membershipId.trim() != membershipId) {
+              pack.membershipId.trim() != membershipId) {
             return false;
           }
 
           if (invoiceId.isNotEmpty &&
-              (claim.invoiceId ?? '').trim() != invoiceId) {
+              (pack.invoiceId ?? '').trim() != invoiceId) {
             return false;
           }
 
           final String haystack = <String?>[
-            claim.claimId,
-            claim.patientId,
-            claim.patientNo,
-            claim.patientDisplayName,
-            claim.invoiceId,
-            claim.invoiceNumber,
-            claim.payerContactId,
-            claim.payerDisplayName,
-            claim.memberNo,
-            claim.memberName,
-            claim.principalName,
-            claim.scheme,
-            claim.medicalCardNo,
-            claim.policyNo,
-            claim.authCode,
-            claim.claimNo,
-            claim.visitNo,
-            claim.serviceDate,
-            claim.prescriptionNo,
-            claim.prescriptionId,
-            claim.diagnosis,
-            claim.icd10Code,
-            claim.fileName,
-            claim.status.label,
+            pack.claimPackId,
+            pack.patientId,
+            pack.patientNo,
+            pack.patientDisplayName,
+            pack.invoiceId,
+            pack.invoiceNumber,
+            pack.payerContactId,
+            pack.payerDisplayName,
+            pack.memberNo,
+            pack.memberName,
+            pack.principalName,
+            pack.scheme,
+            pack.medicalCardNo,
+            pack.policyNo,
+            pack.authCode,
+            pack.insurerClaimNo,
+            pack.visitNo,
+            pack.serviceDate,
+            pack.prescriptionNo,
+            pack.prescriptionId,
+            pack.diagnosis,
+            pack.icd10Code,
+            pack.status.label,
           ].whereType<String>().join(' ');
 
           return _contains(haystack, q);
@@ -195,23 +195,24 @@ class _InsuranceClaimPickerCardState
         .toList(growable: false);
   }
 
-  void _select(InsuranceClaim claim) {
-    final String claimId = claim.claimId.trim();
-    if (claimId.isEmpty) return;
+  void _select(InsuranceClaimPack pack) {
+    final String claimPackId = pack.claimPackId.trim();
+    if (claimPackId.isEmpty) return;
 
     setState(() {
-      _selectedClaimId = claimId;
+      _selectedClaimPackId = claimPackId;
     });
 
-    widget.onSelected?.call(claim);
+    widget.onSelected?.call(pack);
   }
 
   @override
   Widget build(BuildContext context) {
-    final InsuranceClaimsState state = ref.watch(
-      insuranceClaimsControllerProvider,
+    final InsuranceClaimPacksState state = ref.watch(
+      insuranceClaimPacksControllerProvider,
     );
-    final List<InsuranceClaim> claims = _filtered(state.items);
+
+    final List<InsuranceClaimPack> claimPacks = _filtered(state.items);
 
     return Card(
       child: Padding(
@@ -221,7 +222,7 @@ class _InsuranceClaimPickerCardState
           children: <Widget>[
             _Header(
               title: widget.title,
-              count: claims.length,
+              count: claimPacks.length,
               isLoading: state.isLoading,
               onRefresh: _load,
             ),
@@ -237,27 +238,26 @@ class _InsuranceClaimPickerCardState
             ],
             const SizedBox(height: 8),
             Expanded(
-              child: state.isLoading && claims.isEmpty
+              child: state.isLoading && claimPacks.isEmpty
                   ? const Center(child: CircularProgressIndicator())
-                  : claims.isEmpty
+                  : claimPacks.isEmpty
                   ? _EmptyText(
-                      text:
-                          widget.emptyText ??
-                          'No active insurance claims found.',
+                      text: widget.emptyText ?? 'No active claim packs found.',
                     )
                   : ListView.separated(
-                      itemCount: claims.length,
+                      itemCount: claimPacks.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (BuildContext context, int index) {
-                        final InsuranceClaim claim = claims[index];
+                        final InsuranceClaimPack pack = claimPacks[index];
 
                         final bool selected =
-                            claim.claimId.trim() == _clean(_selectedClaimId);
+                            pack.claimPackId.trim() ==
+                            _clean(_selectedClaimPackId);
 
-                        return _ClaimTile(
-                          claim: claim,
+                        return _ClaimPackTile(
+                          pack: pack,
                           selected: selected,
-                          onTap: () => _select(claim),
+                          onTap: () => _select(pack),
                         );
                       },
                     ),
@@ -272,16 +272,16 @@ class _InsuranceClaimPickerCardState
 class InsuranceClaimPickerDialog extends StatelessWidget {
   const InsuranceClaimPickerDialog({
     super.key,
-    this.initialClaimId,
+    this.initialClaimPackId,
     this.patientId,
     this.membershipId,
     this.invoiceId,
     this.allowedPatientIds,
-    this.title = 'Select insurance claim',
+    this.title = 'Select claim pack',
     this.emptyText,
   });
 
-  final String? initialClaimId;
+  final String? initialClaimPackId;
   final String? patientId;
   final String? membershipId;
   final String? invoiceId;
@@ -297,14 +297,14 @@ class InsuranceClaimPickerDialog extends StatelessWidget {
         width: 760,
         height: MediaQuery.of(context).size.height * 0.72,
         child: InsuranceClaimPickerCard(
-          initialClaimId: initialClaimId,
+          initialClaimPackId: initialClaimPackId,
           patientId: patientId,
           membershipId: membershipId,
           invoiceId: invoiceId,
           allowedPatientIds: allowedPatientIds,
           emptyText: emptyText,
-          onSelected: (InsuranceClaim claim) {
-            Navigator.of(context).pop(claim);
+          onSelected: (InsuranceClaimPack pack) {
+            Navigator.of(context).pop(pack);
           },
         ),
       ),
@@ -347,14 +347,16 @@ class _Header extends StatelessWidget {
               Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
-                count == 1 ? '1 claim available.' : '$count claims available.',
+                count == 1
+                    ? '1 claim pack available.'
+                    : '$count claim packs available.',
                 style: theme.textTheme.bodySmall,
               ),
             ],
           ),
         ),
         IconButton(
-          tooltip: 'Refresh claims',
+          tooltip: 'Refresh claim packs',
           onPressed: isLoading ? null : onRefresh,
           icon: const Icon(Icons.refresh),
         ),
@@ -380,7 +382,7 @@ class _SearchBox extends StatelessWidget {
       controller: controller,
       decoration: InputDecoration(
         isDense: true,
-        labelText: 'Search claims',
+        labelText: 'Search claim packs',
         hintText: 'Patient, invoice, member no, claim no, auth...',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(
@@ -395,14 +397,14 @@ class _SearchBox extends StatelessWidget {
   }
 }
 
-class _ClaimTile extends StatelessWidget {
-  const _ClaimTile({
-    required this.claim,
+class _ClaimPackTile extends StatelessWidget {
+  const _ClaimPackTile({
+    required this.pack,
     required this.selected,
     required this.onTap,
   });
 
-  final InsuranceClaim claim;
+  final InsuranceClaimPack pack;
   final bool selected;
   final VoidCallback onTap;
 
@@ -418,45 +420,42 @@ class _ClaimTile extends StatelessWidget {
         foregroundColor: selected ? scheme.onPrimaryContainer : null,
         child: Icon(selected ? Icons.check : Icons.assignment_outlined),
       ),
-      title: Text(_title(claim), maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(_title(pack), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        _subtitle(claim),
+        _subtitle(pack),
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Wrap(
-        spacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: <Widget>[
-          _DocumentStatusIcon(claim: claim),
-          FilledButton(
-            onPressed: onTap,
-            child: Text(selected ? 'Selected' : 'Use'),
-          ),
-        ],
+      trailing: FilledButton(
+        onPressed: onTap,
+        child: Text(selected ? 'Selected' : 'Use'),
       ),
       onTap: onTap,
     );
   }
 
-  static String _title(InsuranceClaim claim) {
-    final String patient = _clean(claim.patientDisplayName) ?? claim.patientId;
-    final String invoice =
-        _clean(claim.invoiceNumber) ?? _clean(claim.invoiceId) ?? claim.claimId;
+  static String _title(InsuranceClaimPack pack) {
+    final String patient = _clean(pack.patientDisplayName) ?? pack.patientId;
 
-    return '$patient · $invoice';
+    final String ref =
+        _clean(pack.invoiceNumber) ??
+        _clean(pack.invoiceId) ??
+        _clean(pack.insurerClaimNo) ??
+        pack.claimPackId;
+
+    return '$patient · $ref';
   }
 
-  static String _subtitle(InsuranceClaim claim) {
+  static String _subtitle(InsuranceClaimPack pack) {
     final List<String> parts = <String>[
-      claim.status.label,
-      if (_clean(claim.payerDisplayName) != null) claim.payerDisplayName!,
-      if (_clean(claim.memberNo) != null) 'Member ${claim.memberNo}',
-      if (_clean(claim.scheme) != null) claim.scheme!,
-      if (_clean(claim.claimNo) != null) 'Claim ${claim.claimNo}',
-      if (_clean(claim.authCode) != null) 'Auth ${claim.authCode}',
-      if (_clean(claim.prescriptionId) != null) 'Rx linked',
-      if (claim.hasFile) 'Document uploaded',
+      pack.status.label,
+      if (_clean(pack.payerDisplayName) != null) pack.payerDisplayName!,
+      if (_clean(pack.memberNo) != null) 'Member ${pack.memberNo}',
+      if (_clean(pack.scheme) != null) pack.scheme!,
+      if (_clean(pack.insurerClaimNo) != null) 'Claim ${pack.insurerClaimNo}',
+      if (_clean(pack.authCode) != null) 'Auth ${pack.authCode}',
+      if (_clean(pack.prescriptionId) != null) 'Rx linked',
+      if (pack.hasInvoice) 'Invoice linked',
     ];
 
     return parts.join(' · ');
@@ -465,27 +464,6 @@ class _ClaimTile extends StatelessWidget {
   static String? _clean(String? value) {
     final String s = (value ?? '').trim();
     return s.isEmpty ? null : s;
-  }
-}
-
-class _DocumentStatusIcon extends StatelessWidget {
-  const _DocumentStatusIcon({required this.claim});
-
-  final InsuranceClaim claim;
-
-  @override
-  Widget build(BuildContext context) {
-    if (claim.hasFile) {
-      return const Tooltip(
-        message: 'Claim document uploaded',
-        child: Icon(Icons.verified_outlined),
-      );
-    }
-
-    return const Tooltip(
-      message: 'Claim document missing',
-      child: Icon(Icons.pending_actions_outlined),
-    );
   }
 }
 

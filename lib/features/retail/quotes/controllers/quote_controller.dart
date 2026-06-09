@@ -483,7 +483,7 @@ class QuoteController extends StateNotifier<QuoteState> {
     DateTime? invoiceDate,
     DateTime? dueDate,
     String? membershipId,
-    bool createInsuranceClaim = false,
+    String? prescriptionId,
     SalesDocumentPatientSnapshot? patientSnapshot,
     SalesDocumentAddress? deliveryAddress,
   }) async {
@@ -500,7 +500,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         invoiceDate: invoiceDate,
         dueDate: dueDate,
         membershipId: membershipId,
-        createInsuranceClaim: false,
+        prescriptionId: prescriptionId,
         patientSnapshot: patientSnapshot,
         deliveryAddress: deliveryAddress,
       );
