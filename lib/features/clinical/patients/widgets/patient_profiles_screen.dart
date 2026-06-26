@@ -6,12 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_details_screen.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_payer_link_dialog.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_payer_self_link_dialog.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
-import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -118,6 +116,18 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     super.dispose();
   }
 
+  void _openPatientDetails(PatientProfile patient) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PatientDetailsScreen(
+          patient: patient,
+          contactId: _contactScope,
+          allowExplicitContactLink: widget.allowExplicitContactLink,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCreateDialog() async {
     final input = await showDialog<PatientProfileUpsertInput>(
       context: context,
@@ -139,293 +149,6 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     } catch (_) {
       if (!mounted) return;
       _showErrorFromState();
-    }
-  }
-
-  Future<void> _openEditDialog(PatientProfile patient) async {
-    final input = await showDialog<PatientProfileUpsertInput>(
-      context: context,
-      builder: (_) => PatientProfileFormDialog(
-        initial: patient,
-        allowExplicitContactLink: widget.allowExplicitContactLink,
-      ),
-    );
-
-    if (input == null || !mounted) return;
-
-    try {
-      await _controller.update(patient.patientId, input);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Patient profile updated')));
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<void> _deletePatient(PatientProfile patient) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(
-          widget.allowExplicitContactLink
-              ? 'Delete patient profile'
-              : 'Remove patient profile',
-        ),
-        content: Text(
-          widget.allowExplicitContactLink
-              ? 'Delete ${patient.fullName}?'
-              : 'Remove ${patient.fullName} from your linked profiles?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(widget.allowExplicitContactLink ? 'Delete' : 'Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await _controller.remove(patient.patientId);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.allowExplicitContactLink
-                ? 'Patient profile deleted'
-                : 'Patient profile removed',
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<void> _openLinkToSelfDialog(PatientProfile patient) async {
-    final input = await PatientLinkSelfDialog.show(
-      context: context,
-      patient: patient,
-    );
-
-    if (input == null || !mounted) return;
-
-    try {
-      await _controller.linkToSelf(patient.patientId, input);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Patient linked successfully')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<void> _openRequestPayerLinkDialog(PatientProfile patient) async {
-    final input = await PatientPayerLinkDialog.showRequest(
-      context: context,
-      patient: patient,
-    );
-
-    if (input == null || !mounted) return;
-
-    try {
-      await _controller.requestPayerLink(patient.patientId, input);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Link request submitted')));
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<void> _openLinkContactDialog(PatientProfile patient) async {
-    if (!widget.allowExplicitContactLink) return;
-
-    final contact = await showDialog<ZohoContact>(
-      context: context,
-      builder: (_) => const ContactPickerDialog(forcePickerMode: true),
-    );
-
-    if (contact == null || !mounted) return;
-
-    final relationship = await _pickRelationship(
-      title: 'Link contact to patient',
-      subtitle: '${contact.displayName} will be linked to ${patient.fullName}.',
-      initial: PatientContactRelationship.other,
-    );
-
-    if (relationship == null || !mounted) return;
-
-    try {
-      await _controller.linkContactToPatient(
-        patientId: patient.patientId,
-        input: PatientContactLinkInput(
-          contactId: contact.contactId,
-          accountNumber: contact.accountNumber,
-          contactDisplayName: contact.displayName,
-          relationship: relationship,
-          isActive: true,
-        ),
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Contact linked to patient')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<void> _delinkContact(
-    PatientProfile patient,
-    PatientLinkedContact link,
-  ) async {
-    if (!widget.allowExplicitContactLink) return;
-
-    final label = link.contactDisplayName?.trim().isNotEmpty == true
-        ? link.contactDisplayName!.trim()
-        : link.contactId;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delink contact?'),
-        content: Text(
-          'Delink $label from ${patient.fullName}? This will deactivate the link only. It will not delete the patient or Zoho contact.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delink'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await _controller.delinkContactFromPatient(
-        patientId: patient.patientId,
-        contactId: link.contactId,
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Contact delinked')));
-    } catch (_) {
-      if (!mounted) return;
-      _showErrorFromState();
-    }
-  }
-
-  Future<PatientContactRelationship?> _pickRelationship({
-    required String title,
-    required String subtitle,
-    required PatientContactRelationship initial,
-  }) async {
-    final selected = ValueNotifier<PatientContactRelationship>(initial);
-
-    try {
-      return await showDialog<PatientContactRelationship>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 420,
-            child: ValueListenableBuilder<PatientContactRelationship>(
-              valueListenable: selected,
-              builder: (_, value, __) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(subtitle),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<PatientContactRelationship>(
-                      initialValue: value,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Relationship',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: PatientProfilesLabels.staffLinkRelationships
-                          .map(
-                            (rel) =>
-                                DropdownMenuItem<PatientContactRelationship>(
-                                  value: rel,
-                                  child: Text(
-                                    PatientProfilesLabels.relationship(rel),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                          )
-                          .toList(growable: false),
-                      selectedItemBuilder: (context) {
-                        return PatientProfilesLabels.staffLinkRelationships
-                            .map(
-                              (rel) => Text(
-                                PatientProfilesLabels.relationship(rel),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            )
-                            .toList(growable: false);
-                      },
-                      onChanged: (next) {
-                        if (next != null) selected.value = next;
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(selected.value),
-              child: const Text('Link'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      selected.dispose();
     }
   }
 
@@ -602,17 +325,9 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                           .map(
                             (patient) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: PatientProfileCard(
+                              child: _PatientProfileListTile(
                                 patient: patient,
-                                state: state,
-                                allowExplicitContactLink:
-                                    widget.allowExplicitContactLink,
-                                onLinkToSelf: _openLinkToSelfDialog,
-                                onRequestPayerLink: _openRequestPayerLinkDialog,
-                                onLinkContact: _openLinkContactDialog,
-                                onDelinkContact: _delinkContact,
-                                onEdit: _openEditDialog,
-                                onDelete: _deletePatient,
+                                onTap: () => _openPatientDetails(patient),
                               ),
                             ),
                           )
@@ -625,5 +340,75 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
         ],
       ),
     );
+  }
+}
+
+class _PatientProfileListTile extends StatelessWidget {
+  const _PatientProfileListTile({required this.patient, required this.onTap});
+
+  final PatientProfile patient;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    final subtitleParts = <String>[];
+
+    if (patient.relationship != null) {
+      subtitleParts.add(
+        PatientProfilesLabels.relationship(patient.relationship!),
+      );
+    }
+
+    final contactName = (patient.contactDisplayName ?? '').trim();
+    if (contactName.isNotEmpty) {
+      subtitleParts.add(contactName);
+    }
+
+    final phone = (patient.phone ?? '').trim();
+    if (phone.isNotEmpty) {
+      subtitleParts.add(phone);
+    }
+
+    if (!patient.isActive) {
+      subtitleParts.add('Inactive');
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(child: Text(_initials(patient.fullName))),
+        title: Text(
+          patient.fullName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          subtitleParts.isEmpty ? patient.patientId : subtitleParts.join(' • '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  static String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 }

@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';

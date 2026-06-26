@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';

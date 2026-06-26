@@ -1,18 +1,25 @@
-// lib/core/home/widgets/activities/patient_activity_adapter.dart
+// lib/core/home/activities/patients/patient_activity_adapter.dart
 
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/home/models/activity_entry.dart';
-import 'package:afyakit/core/home/widgets/activities/activity_event_tile.dart';
+import 'package:afyakit/core/home/activities/shared/activity_event_tile.dart';
+import 'package:afyakit/core/home/activities/shared/activity_time_format.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+
+typedef PatientActivityTapBuilder =
+    VoidCallback? Function(PatientProfile patient);
+
+typedef PatientLinkRequestActivityTapBuilder =
+    VoidCallback? Function(PatientLinkRequest request);
 
 class PatientActivityAdapter {
   const PatientActivityAdapter._();
 
   static List<ActivityEntry> fromPatients(
     List<PatientProfile> patients, {
-    VoidCallback? onTap,
+    PatientActivityTapBuilder? onTapForPatient,
   }) {
     return [
       for (final patient in patients)
@@ -22,7 +29,12 @@ class PatientActivityAdapter {
             icon: Icons.person_outline,
             title: 'Patient profile • ${patient.fullName}',
             subtitle: _patientSubtitle(patient),
-            onTap: onTap,
+            timestamp: activityTimestampLabel(
+              date: _patientActivityDate(patient),
+              createdAt: patient.createdAt,
+              updatedAt: patient.updatedAt,
+            ),
+            onTap: onTapForPatient?.call(patient),
           ),
         ),
     ];
@@ -30,7 +42,7 @@ class PatientActivityAdapter {
 
   static List<ActivityEntry> fromLinkRequests(
     List<PatientLinkRequest> requests, {
-    VoidCallback? onTap,
+    PatientLinkRequestActivityTapBuilder? onTapForRequest,
   }) {
     return [
       for (final request in requests)
@@ -40,7 +52,12 @@ class PatientActivityAdapter {
             icon: Icons.link_outlined,
             title: 'Patient link request • ${request.patientDisplayName}',
             subtitle: _linkRequestSubtitle(request),
-            onTap: onTap,
+            timestamp: activityTimestampLabel(
+              date: _linkRequestActivityDate(request),
+              createdAt: request.createdAt,
+              updatedAt: request.updatedAt,
+            ),
+            onTap: onTapForRequest?.call(request),
           ),
         ),
     ];

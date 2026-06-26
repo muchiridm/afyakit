@@ -14,6 +14,14 @@ final patientProfilesServiceProvider = Provider<PatientProfilesService>((ref) {
   return PatientProfilesService(api: api, routes: routes);
 });
 
+final patientProfilesServiceReadyProvider =
+    FutureProvider.autoDispose<PatientProfilesService>((ref) async {
+      final api = await ref.watch(afyakitClientFutureProvider.future);
+      final routes = ref.afyakitRoutes;
+
+      return PatientProfilesService(api: api, routes: routes);
+    });
+
 class PatientProfilesService {
   const PatientProfilesService({required this.api, required this.routes});
 

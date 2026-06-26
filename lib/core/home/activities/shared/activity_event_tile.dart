@@ -1,4 +1,4 @@
-// lib/core/home/widgets/activities/activity_event_tile.dart
+// lib/core/home/activities/shared/activity_event_tile.dart
 
 import 'package:flutter/material.dart';
 
@@ -10,17 +10,20 @@ class ActivityEventTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.timestamp,
     this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final String? timestamp;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final timestampText = timestamp?.trim();
 
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -50,6 +53,18 @@ class ActivityEventTile extends StatelessWidget {
                     color: theme.hintColor,
                   ),
                 ),
+                if (timestampText != null && timestampText.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    timestampText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

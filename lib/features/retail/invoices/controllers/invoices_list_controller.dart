@@ -1,7 +1,7 @@
 // lib/features/retail/invoices/controllers/invoices_list_controller.dart
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

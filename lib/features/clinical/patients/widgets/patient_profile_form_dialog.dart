@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 
 class PatientProfileFormDialog extends StatefulWidget {
   const PatientProfileFormDialog({

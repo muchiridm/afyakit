@@ -4,8 +4,7 @@ import 'dart:async';
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/home/widgets/home_shell.dart';
-import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
+import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoices_list_controller.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
@@ -63,10 +62,14 @@ class _InvoicesListScreenState extends ConsumerState<InvoicesListScreen> {
     final InvoicesListController controller = ref.read(provider.notifier);
 
     final me = ref.watch(currentUserProvider).valueOrNull;
-    final bool staffWorkspace = ref.watch(isStaffWorkspaceActiveProvider);
+
+    // This screen’s scope is more reliable than workspaceModeProvider.
+    // RetailDocScope.mine = member-facing.
+    // Any other scope = staff/admin-facing.
+    final bool openAsStaff = !_isMine;
 
     final bool canManagePayments =
-        staffWorkspace && (me?.canManageInvoices ?? false);
+        openAsStaff && (me?.canManageInvoices ?? true);
 
     final String title = _isMine
         ? 'My Invoices and Payments'
@@ -261,9 +264,14 @@ class _InvoicesListScreenState extends ConsumerState<InvoicesListScreen> {
       return;
     }
 
+    final bool openAsStaff = !_isMine;
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => InvoiceDetailScreen(invoiceId: id),
+        builder: (_) => InvoiceDetailScreen(
+          invoiceId: id,
+          forceStaffWorkspace: openAsStaff,
+        ),
       ),
     );
   }

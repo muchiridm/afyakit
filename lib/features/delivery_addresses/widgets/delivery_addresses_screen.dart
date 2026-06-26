@@ -1,5 +1,6 @@
 // lib/features/delivery_addresses/widgets/delivery_addresses_screen.dart
 
+import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,17 +13,32 @@ import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 
 class DeliveryAddressesScreen extends ConsumerWidget {
-  const DeliveryAddressesScreen({super.key, this.pickerMode = false});
+  const DeliveryAddressesScreen({
+    super.key,
+    required this.scope,
+    this.pickerMode = false,
+  });
 
+  final DeliveryAddressScope scope;
   final bool pickerMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(deliveryAddressStateProvider);
-    final controller = ref.read(deliveryAddressControllerProvider.notifier);
+    final state = ref.watch(deliveryAddressStateProvider(scope));
+    final controller = ref.read(
+      deliveryAddressControllerProvider(scope).notifier,
+    );
     final launcher = ref.read(deliveryNavigationLauncherProvider);
 
-    final title = pickerMode ? 'Select Delivery Address' : 'Delivery Addresses';
+    final ownerLabel = (scope.ownerLabel ?? '').trim();
+
+    final title = pickerMode
+        ? ownerLabel.isEmpty
+              ? 'Select Delivery Address'
+              : 'Select Address · $ownerLabel'
+        : ownerLabel.isEmpty
+        ? 'Delivery Addresses'
+        : 'Delivery Addresses · $ownerLabel';
 
     return AppPage(
       title: title,
@@ -33,16 +49,32 @@ class DeliveryAddressesScreen extends ConsumerWidget {
       actions: [
         IconButton(
           tooltip: 'Add address',
-          onPressed: () => _showAddressSheet(context, existing: null),
+          onPressed: scope.isUsable
+              ? () => _showAddressSheet(context, scope: scope, existing: null)
+              : null,
           icon: const Icon(Icons.add),
         ),
       ],
       fab: FloatingActionButton(
-        onPressed: () => _showAddressSheet(context, existing: null),
+        onPressed: scope.isUsable
+            ? () => _showAddressSheet(context, scope: scope, existing: null)
+            : null,
         child: const Icon(Icons.add),
       ),
       body: Builder(
         builder: (_) {
+          if (!scope.isUsable) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Select a customer before managing delivery addresses.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
           if (state.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -50,7 +82,8 @@ class DeliveryAddressesScreen extends ConsumerWidget {
           if (!state.hasActiveItems) {
             return _EmptyState(
               pickerMode: pickerMode,
-              onAddPressed: () => _showAddressSheet(context, existing: null),
+              onAddPressed: () =>
+                  _showAddressSheet(context, scope: scope, existing: null),
             );
           }
 
@@ -66,7 +99,8 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                 onSelect: pickerMode
                     ? () => Navigator.of(context).pop<DeliveryAddress>(address)
                     : null,
-                onEdit: () => _showAddressSheet(context, existing: address),
+                onEdit: () =>
+                    _showAddressSheet(context, scope: scope, existing: address),
                 onNavigate: address.pinLocation == null
                     ? null
                     : () async {
@@ -81,28 +115,28 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                       },
                 onSetDefault: () async {
                   await controller.setDefault(address.id);
-                  if (context.mounted) {
-                    final error = ref.read(deliveryAddressErrorProvider);
-                    if (error == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Default address updated'),
-                        ),
-                      );
-                    }
+
+                  if (!context.mounted) return;
+
+                  final error = ref.read(deliveryAddressErrorProvider(scope));
+                  if (error == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Default address updated')),
+                    );
                   }
                 },
                 onArchive: () => _confirmArchive(
                   context,
                   onConfirm: () async {
                     await controller.archive(address.id);
-                    if (context.mounted) {
-                      final error = ref.read(deliveryAddressErrorProvider);
-                      if (error == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Address removed')),
-                        );
-                      }
+
+                    if (!context.mounted) return;
+
+                    final error = ref.read(deliveryAddressErrorProvider(scope));
+                    if (error == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Address removed')),
+                      );
                     }
                   },
                 ),
@@ -114,12 +148,16 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddressSheet(BuildContext context, {DeliveryAddress? existing}) {
+  void _showAddressSheet(
+    BuildContext context, {
+    required DeliveryAddressScope scope,
+    DeliveryAddress? existing,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _AddressFormSheet(existing: existing),
+      builder: (_) => _AddressFormSheet(scope: scope, existing: existing),
     );
   }
 
@@ -132,7 +170,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
       builder: (_) => AlertDialog(
         title: const Text('Remove address?'),
         content: const Text(
-          'This address will be archived and removed from your active list.',
+          'This address will be archived and removed from the active list.',
         ),
         actions: [
           TextButton(
@@ -260,8 +298,9 @@ class _AddressCard extends StatelessWidget {
 }
 
 class _AddressFormSheet extends ConsumerStatefulWidget {
-  const _AddressFormSheet({this.existing});
+  const _AddressFormSheet({required this.scope, this.existing});
 
+  final DeliveryAddressScope scope;
   final DeliveryAddress? existing;
 
   @override
@@ -290,6 +329,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   @override
   void initState() {
     super.initState();
+
     final existing = widget.existing;
 
     _labelController = TextEditingController(text: existing?.label ?? '');
@@ -330,8 +370,11 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = ref.watch(deliveryAddressBusyProvider);
-    final controller = ref.read(deliveryAddressControllerProvider.notifier);
+    final busy = ref.watch(deliveryAddressBusyProvider(widget.scope));
+    final controller = ref.read(
+      deliveryAddressControllerProvider(widget.scope).notifier,
+    );
+
     final title = _isEdit ? 'Edit Address' : 'Add Address';
 
     return Align(
@@ -534,6 +577,7 @@ class _PinTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasPin = pinLocation != null;
+
     final subtitle = hasPin
         ? (pinLocation!.placeName?.trim().isNotEmpty == true
               ? '${pinLocation!.placeName}\n'

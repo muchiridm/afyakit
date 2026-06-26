@@ -1,6 +1,6 @@
 // lib/features/retail/quotes/models/quote_draft.dart
 
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';

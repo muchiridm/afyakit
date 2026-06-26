@@ -9,8 +9,8 @@ import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
-import '../contacts_controller.dart';
-import '../zoho_contact.dart';
+import '../controllers/contacts_controller.dart';
+import '../models/zoho_contact.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
@@ -23,6 +23,7 @@ class ContactsScreen extends ConsumerWidget {
     final ctl = ref.read(contactsControllerProvider.notifier);
 
     final loadingAny = state.loadingList || state.loadingDetail;
+    final count = state.items.length;
 
     return AppPage(
       scrollable: false,
@@ -30,6 +31,11 @@ class ContactsScreen extends ConsumerWidget {
       title: 'Contacts',
       showBack: true,
       actions: [
+        _CountChip(
+          count: count,
+          loading: state.loadingList,
+          hasSearch: state.search.trim().isNotEmpty,
+        ),
         IconButton(
           tooltip: 'Refresh',
           onPressed: state.saving ? null : () => ctl.refresh(),
@@ -99,6 +105,9 @@ class ContactsScreen extends ConsumerWidget {
     ContactsState state,
     ContactsController ctl,
   ) {
+    final count = state.items.length;
+    final hasQuery = state.search.trim().isNotEmpty;
+
     if (state.items.isEmpty && state.loadingList) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -107,8 +116,6 @@ class ContactsScreen extends ConsumerWidget {
     }
 
     if (state.items.isEmpty) {
-      final hasQuery = state.search.trim().isNotEmpty;
-
       return SliverFillRemaining(
         hasScrollBody: false,
         child: AppEmptyState(
@@ -116,7 +123,7 @@ class ContactsScreen extends ConsumerWidget {
           title: hasQuery ? 'No results' : 'No contacts yet',
           subtitle: hasQuery
               ? 'Try a different search.'
-              : 'Create your first contact to start quoting in Zoho.',
+              : 'Create your first customer contact to start quoting in Zoho.',
           actionLabel: hasQuery ? 'Clear search' : 'Create contact',
           onAction: () {
             if (hasQuery) {
@@ -132,7 +139,7 @@ class ContactsScreen extends ConsumerWidget {
 
     return SliverToBoxAdapter(
       child: AppCard(
-        title: 'Contacts',
+        title: hasQuery ? 'Results ($count)' : 'Customers ($count)',
         icon: Icons.people_alt_outlined,
         child: Column(
           children: [
@@ -149,6 +156,39 @@ class ContactsScreen extends ConsumerWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({
+    required this.count,
+    required this.loading,
+    required this.hasSearch,
+  });
+
+  final int count;
+  final bool loading;
+  final bool hasSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = loading
+        ? 'Loading…'
+        : hasSearch
+        ? '$count found'
+        : '$count customers';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Chip(
+        visualDensity: VisualDensity.compact,
+        avatar: Icon(
+          hasSearch ? Icons.manage_search : Icons.people_alt_outlined,
+          size: 16,
+        ),
+        label: Text(label),
       ),
     );
   }
@@ -178,7 +218,7 @@ class _SearchBar extends StatelessWidget {
     return TextField(
       enabled: enabled,
       decoration: InputDecoration(
-        hintText: 'Search contacts…',
+        hintText: 'Search customers…',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: trimmed.isEmpty
             ? (loading
@@ -252,8 +292,8 @@ class _ContactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = contact.displayName.trim();
-    final subtitle = _subtitleFrom(contact);
+    final title = contact.title.trim().isEmpty ? 'Contact' : contact.title;
+    final subtitle = contact.subtitle.trim();
     final linkedCount = contact.activeLinkedPatientCount;
 
     return ListTile(
@@ -261,12 +301,32 @@ class _ContactTile extends StatelessWidget {
       enabled: enabled,
       onTap: enabled ? onTap : null,
       contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(child: Text(_initials(title))),
-      title: Text(title.isEmpty ? 'Contact' : title),
+      leading: CircleAvatar(
+        child: contact.isCompanyOnly
+            ? const Icon(Icons.apartment_outlined, size: 20)
+            : Text(_initials(title)),
+      ),
+      title: Text(title),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (contact.isVendor && !contact.isCustomer)
+            const Tooltip(
+              message: 'Vendor only',
+              child: Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.local_shipping_outlined, size: 20),
+              ),
+            ),
+          if (contact.isInsurancePayer)
+            const Tooltip(
+              message: 'Insurance payer',
+              child: Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.verified_user_outlined, size: 20),
+              ),
+            ),
           if (linkedCount > 0)
             Tooltip(
               message: linkedCount == 1
@@ -283,34 +343,6 @@ class _ContactTile extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _subtitleFrom(ZohoContact c) {
-    final display = c.displayName.trim();
-
-    final person = c.personContact?.personName.trim() ?? '';
-    final company = (c.companyName ?? '').trim();
-
-    final linked = c.linkedPatientsSummary.trim();
-    final phone = c.bestPhone.trim();
-    final email = (c.personContact?.email ?? '').trim();
-    final acct = (c.accountNumber ?? '').trim();
-
-    final parts = <String>[];
-
-    if (acct.isNotEmpty) parts.add(acct);
-    if (linked.isNotEmpty) parts.add(linked);
-
-    if (person.isNotEmpty && person != display) parts.add(person);
-    if (company.isNotEmpty && company != display) parts.add(company);
-
-    if (phone.isNotEmpty) {
-      parts.add(phone);
-    } else if (email.isNotEmpty) {
-      parts.add(email);
-    }
-
-    return parts.take(3).join(' • ');
   }
 
   String _initials(String name) {

@@ -1,4 +1,4 @@
-// lib/features/retail/contacts/zoho_contact.dart
+// lib/features/retail/contacts/models/zoho_contact.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/utils.dart';
@@ -177,6 +177,11 @@ class ZohoContact {
     this.status,
     this.contactType,
     this.accountNumber,
+    this.phone,
+    this.mobile,
+    this.email,
+    this.createdTime,
+    this.lastModifiedTime,
     this.isInsurancePayer = false,
     this.linkedPatients = const <ContactLinkedPatient>[],
   });
@@ -194,6 +199,21 @@ class ZohoContact {
   /// Wire name from BE: account_number
   final String? accountNumber;
 
+  /// Contact-level phone fields from backend/Zoho.
+  ///
+  /// These are important for company-only contacts where personContact is null.
+  final String? phone;
+  final String? mobile;
+  final String? email;
+
+  /// Zoho timestamps passed through by the backend.
+  ///
+  /// Wire names:
+  /// - created_time
+  /// - last_modified_time
+  final DateTime? createdTime;
+  final DateTime? lastModifiedTime;
+
   /// Contact-level flag from Zoho Books custom field cf_is_insurance_payer.
   /// Wire name from BE: is_insurance_payer
   final bool isInsurancePayer;
@@ -205,6 +225,36 @@ class ZohoContact {
   final List<ContactLinkedPatient> linkedPatients;
 
   bool get isActive => (status ?? '').toLowerCase() != 'inactive';
+
+  /// Used by activity panels.
+  ///
+  /// Prefer last modification time, fallback to creation time, then epoch so
+  /// older/incomplete records sort below real timestamped records.
+  DateTime get activityDate {
+    return lastModifiedTime ??
+        createdTime ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  bool get isCompanyOnly {
+    final company = (companyName ?? '').trim().toLowerCase();
+    if (company.isEmpty) return false;
+
+    final person = personContact?.personName.trim();
+    if (person != null && person.isNotEmpty) return false;
+
+    final display = displayName.trim().toLowerCase();
+
+    // True company-only contact:
+    // SRH / South Rift Hospital where contact_name == company_name.
+    if (display.isNotEmpty && display == company) return true;
+
+    // If display is just the generic fallback, company is the real identity.
+    if (display.isEmpty || display == 'contact') return true;
+
+    // Otherwise this is probably a person/contact attached to a company.
+    return false;
+  }
 
   bool get hasLinkedPatients => linkedPatients.isNotEmpty;
 
@@ -235,18 +285,39 @@ class ZohoContact {
   }
 
   String get bestPhone {
-    final m = personContact?.mobile?.trim();
-    if (m != null && m.isNotEmpty) return m;
+    final contactMobile = mobile?.trim();
+    if (contactMobile != null && contactMobile.isNotEmpty) {
+      return contactMobile;
+    }
 
-    final p = personContact?.phone?.trim();
-    if (p != null && p.isNotEmpty) return p;
+    final personMobile = personContact?.mobile?.trim();
+    if (personMobile != null && personMobile.isNotEmpty) {
+      return personMobile;
+    }
+
+    final contactPhone = phone?.trim();
+    if (contactPhone != null && contactPhone.isNotEmpty) {
+      return contactPhone;
+    }
+
+    final personPhone = personContact?.phone?.trim();
+    if (personPhone != null && personPhone.isNotEmpty) {
+      return personPhone;
+    }
 
     return '';
   }
 
   String get bestEmail {
-    final e = personContact?.email?.trim();
-    if (e != null && e.isNotEmpty) return e;
+    final contactEmail = email?.trim();
+    if (contactEmail != null && contactEmail.isNotEmpty) {
+      return contactEmail;
+    }
+
+    final personEmail = personContact?.email?.trim();
+    if (personEmail != null && personEmail.isNotEmpty) {
+      return personEmail;
+    }
 
     return '';
   }
@@ -263,38 +334,69 @@ class ZohoContact {
     return t == 'vendor' || t == 'customer_vendor';
   }
 
-  String get title {
-    final d = displayName.trim();
-    if (d.isNotEmpty) return d;
+  /// Primary label for tiles/search pickers.
+  ///
+  /// Company-only contacts must still show. Do not depend on personContact.
+  String get displayLabel {
+    final display = displayName.trim();
 
-    final p = personContact?.personName.trim();
-    if (p != null && p.isNotEmpty) return p;
+    if (display.isNotEmpty && display.toLowerCase() != 'contact') {
+      return display;
+    }
 
-    final c = companyName?.trim();
-    if (c != null && c.isNotEmpty) return c;
+    final person = personContact?.personName.trim();
+    if (person != null && person.isNotEmpty) return person;
 
-    return '';
+    final company = companyName?.trim();
+    if (company != null && company.isNotEmpty) return company;
+
+    final id = contactId.trim();
+    if (id.isNotEmpty) return id;
+
+    return 'Contact';
   }
 
+  String get title => displayLabel;
+
   String get subtitle {
-    final acct = (accountNumber ?? '').trim();
+    final parts = <String>[];
+
+    final company = companyName?.trim();
+    if (company != null &&
+        company.isNotEmpty &&
+        company.toLowerCase() != displayLabel.toLowerCase()) {
+      parts.add(company);
+    }
+
+    final person = personContact?.personName.trim();
+    if (person != null &&
+        person.isNotEmpty &&
+        person.toLowerCase() != displayLabel.toLowerCase()) {
+      parts.add(person);
+    }
+
     final linked = linkedPatientsSummary.trim();
-    final type = contactTypeNorm;
-
-    final flags = <String>[
-      if (isInsurancePayer) 'Insurance payer',
-      if (acct.isNotEmpty) acct,
-      if (linked.isNotEmpty) linked,
-      if (acct.isEmpty && linked.isEmpty && type.isNotEmpty) type,
-    ];
-
-    if (flags.isNotEmpty) return flags.join(' • ');
+    if (linked.isNotEmpty) parts.add(linked);
 
     final p = bestPhone.trim();
-    if (p.isNotEmpty) return p;
+    if (p.isNotEmpty) parts.add(p);
 
     final e = bestEmail.trim();
-    if (e.isNotEmpty) return e;
+    if (e.isNotEmpty) parts.add(e);
+
+    if (isInsurancePayer) {
+      parts.add('Insurance payer');
+    } else if (isCompanyOnly) {
+      parts.add('Company');
+    }
+
+    final acct = (accountNumber ?? '').trim();
+    if (acct.isNotEmpty) parts.add(acct);
+
+    if (parts.isNotEmpty) return parts.join(' • ');
+
+    final type = contactTypeNorm;
+    if (type.isNotEmpty) return type;
 
     return '';
   }
@@ -316,6 +418,26 @@ class ZohoContact {
 
     final accountNumberRaw = readStringOrNull(
       j['account_number'] ?? j['accountNumber'],
+    );
+
+    final phone = readStringOrNull(j['phone']);
+    final mobile = readStringOrNull(j['mobile']);
+    final email = readStringOrNull(j['email']);
+
+    final createdTime = _readDateTime(
+      j['created_time'] ??
+          j['createdTime'] ??
+          j['created_at'] ??
+          j['createdAt'],
+    );
+
+    final lastModifiedTime = _readDateTime(
+      j['last_modified_time'] ??
+          j['lastModifiedTime'] ??
+          j['updated_time'] ??
+          j['updatedTime'] ??
+          j['updated_at'] ??
+          j['updatedAt'],
     );
 
     final isInsurancePayer =
@@ -352,9 +474,34 @@ class ZohoContact {
       status: status,
       contactType: contactType,
       accountNumber: acct.isNotEmpty ? acct : null,
+      phone: _cleanOrNull(phone),
+      mobile: _cleanOrNull(mobile),
+      email: _cleanOrNull(email),
+      createdTime: createdTime,
+      lastModifiedTime: lastModifiedTime,
       isInsurancePayer: isInsurancePayer,
       linkedPatients: _readLinkedPatients(j),
     );
+  }
+
+  static String? _cleanOrNull(String? value) {
+    final v = value?.trim();
+    if (v == null || v.isEmpty) return null;
+    return v;
+  }
+
+  static DateTime? _readDateTime(Object? value) {
+    final raw = value?.toString().trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    final direct = DateTime.tryParse(raw);
+    if (direct != null) return direct;
+
+    // Zoho may return: 2026-06-25 15:25:49
+    final normalized = raw.replaceFirst(' ', 'T');
+    final parsed = DateTime.tryParse(normalized);
+
+    return parsed;
   }
 
   static List<ContactLinkedPatient> _readLinkedPatients(
@@ -459,6 +606,11 @@ class ZohoContact {
     String? status,
     String? contactType,
     String? accountNumber,
+    String? phone,
+    String? mobile,
+    String? email,
+    DateTime? createdTime,
+    DateTime? lastModifiedTime,
     bool? isInsurancePayer,
     List<ContactLinkedPatient>? linkedPatients,
   }) {
@@ -470,6 +622,11 @@ class ZohoContact {
       status: status ?? this.status,
       contactType: contactType ?? this.contactType,
       accountNumber: accountNumber ?? this.accountNumber,
+      phone: phone ?? this.phone,
+      mobile: mobile ?? this.mobile,
+      email: email ?? this.email,
+      createdTime: createdTime ?? this.createdTime,
+      lastModifiedTime: lastModifiedTime ?? this.lastModifiedTime,
       isInsurancePayer: isInsurancePayer ?? this.isInsurancePayer,
       linkedPatients: linkedPatients ?? this.linkedPatients,
     );

@@ -1,10 +1,10 @@
-// lib/features/retail/contacts/zoho_contacts_service.dart
+// lib/features/retail/contacts/services/zoho_contacts_service.dart
 
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
@@ -138,7 +138,7 @@ class ZohoContactsService {
 
   Future<List<ZohoContact>> list({
     String? search,
-    int perPage = 50,
+    int perPage = 100,
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
     String? accountNumber,
@@ -147,57 +147,133 @@ class ZohoContactsService {
     final cleanSearch = (search ?? '').trim();
     final cleanAcct = _acctKey(accountNumber);
 
-    final uri0 = routes.retailListContacts(
-      search: cleanSearch.isEmpty ? null : cleanSearch,
-      perPage: perPage,
-      page: page,
-      type: _toZohoType(type),
-      accountNumber: cleanAcct.isEmpty ? null : cleanAcct,
-    );
+    final startPage = page < 1 ? 1 : page;
+    final safePerPage = perPage.clamp(1, 100);
 
-    final uri = _withInsurancePayerFilter(
-      _withSearchText(uri0, cleanSearch),
-      isInsurancePayer,
-    );
+    // For normal list/search, fetch several pages because Zoho may not return
+    // company/business contacts on the first page.
+    final maxPages = cleanSearch.isNotEmpty ? 5 : 5;
 
-    if (_debug) {
-      debugPrint(
-        '[ZohoContactsService.list] q="$cleanSearch" '
-        'account="$cleanAcct" insurancePayer="$isInsurancePayer" uri=$uri',
+    final byId = <String, ZohoContact>{};
+
+    for (int offset = 0; offset < maxPages; offset += 1) {
+      final currentPage = startPage + offset;
+
+      final uri0 = routes.retailListContacts(
+        search: cleanSearch.isEmpty ? null : cleanSearch,
+        perPage: safePerPage,
+        page: currentPage,
+        // Important: do not force type=customer from FE.
+        // Some Zoho company/business contacts may not behave as expected with
+        // contact_type filtering. Let backend/Zoho return them, then filter safely.
+        type: _toZohoType(type),
+        accountNumber: cleanAcct.isEmpty ? null : cleanAcct,
       );
+
+      final uri = _withInsurancePayerFilter(
+        _withSearchText(uri0, cleanSearch),
+        isInsurancePayer,
+      );
+
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('[FE][ZohoContactsService.list] GET page=$currentPage');
+      debugPrint('[FE][ZohoContactsService.list] uri=$uri');
+      debugPrint('[FE][ZohoContactsService.list] search="$cleanSearch"');
+      debugPrint('[FE][ZohoContactsService.list] type=$type');
+      debugPrint('[FE][ZohoContactsService.list] account="$cleanAcct"');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      final res = await api.getUri<Object?>(uri);
+      final data = _asJsonMap(res.data);
+
+      final raw = data['contacts'];
+      if (raw is! List) {
+        debugPrint('[FE][ZohoContactsService.list] contacts missing/not list');
+        break;
+      }
+
+      final pageItems = raw
+          .whereType<Map>()
+          .map((m) => ZohoContact.fromJson(m.cast<String, Object?>()))
+          .toList(growable: false);
+
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint(
+        '[FE][ZohoContactsService.list] page=$currentPage count=${pageItems.length}',
+      );
+      debugPrint(
+        '[FE][ZohoContactsService.list] page items=${pageItems.map((c) => {'id': c.contactId, 'title': c.title, 'display': c.displayName, 'company': c.companyName, 'person': c.personContact?.personName, 'type': c.contactType, 'isCompanyOnly': c.isCompanyOnly}).take(30).toList()}',
+      );
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      for (final contact in pageItems) {
+        final id = contact.contactId.trim();
+        if (id.isEmpty) continue;
+        byId[id] = contact;
+      }
+
+      if (pageItems.length < safePerPage) break;
     }
 
-    final res = await api.getUri<Object?>(uri);
-    final data = _asJsonMap(res.data);
+    var items = byId.values.toList(growable: false);
 
-    final raw = data['contacts'];
-    if (raw is! List) return const <ZohoContact>[];
-
-    final items = raw
-        .whereType<Map>()
-        .map((m) => ZohoContact.fromJson(m.cast<String, Object?>()))
-        .toList(growable: false);
-
+    // Safe client-side type filter.
+    // If type is any, keep all contacts.
+    // If backend/Zoho omitted contact_type, keep the contact rather than hiding it.
     final filteredByType = type == ZohoContactTypeFilter.any
         ? items
         : items.where((c) => _matchesFilter(c, type)).toList(growable: false);
 
-    final filtered = isInsurancePayer == null
+    final filteredByInsurance = isInsurancePayer == null
         ? filteredByType
         : filteredByType
               .where((c) => c.isInsurancePayer == isInsurancePayer)
               .toList(growable: false);
 
-    for (final contact in filtered) {
+    final q = cleanSearch.toLowerCase();
+
+    final filteredBySearch = q.isEmpty
+        ? filteredByInsurance
+        : filteredByInsurance
+              .where((c) {
+                final fields = <String>[
+                  c.title,
+                  c.displayName,
+                  c.companyName ?? '',
+                  c.personContact?.personName ?? '',
+                  c.bestPhone,
+                  c.bestEmail,
+                  c.accountNumber ?? '',
+                  c.contactId,
+                  c.contactType ?? '',
+                ];
+
+                return fields.any((v) => v.trim().toLowerCase().contains(q));
+              })
+              .toList(growable: false);
+
+    for (final contact in filteredBySearch) {
       _cacheByAccount(contact);
     }
 
-    if (cleanAcct.isNotEmpty && filtered.isNotEmpty) {
-      final best = _pickBestAccountMatch(filtered, accountNumber: cleanAcct);
+    if (cleanAcct.isNotEmpty && filteredBySearch.isNotEmpty) {
+      final best = _pickBestAccountMatch(
+        filteredBySearch,
+        accountNumber: cleanAcct,
+      );
       _cacheByAccount(best);
     }
 
-    return filtered;
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint(
+      '[FE][ZohoContactsService.list] FINAL count=${filteredBySearch.length}',
+    );
+    debugPrint(
+      '[FE][ZohoContactsService.list] FINAL=${filteredBySearch.map((c) => {'id': c.contactId, 'title': c.title, 'company': c.companyName, 'person': c.personContact?.personName, 'type': c.contactType, 'isCompanyOnly': c.isCompanyOnly}).take(50).toList()}',
+    );
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    return filteredBySearch;
   }
 
   Future<List<ZohoContact>> listInsurancePayers({
@@ -328,18 +404,54 @@ class ZohoContactsService {
 
   Future<ZohoContact> create(ZohoContact input) async {
     final uri = routes.retailCreateContact();
-    final res = await api.postUri<Object?>(uri, data: input.toCreateJson());
+    final body = input.toCreateJson();
 
-    final data = _asJsonMap(res.data);
-    final raw = data['contact'];
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('[FE][ZohoContactsService.create] START');
+    debugPrint('[FE][ZohoContactsService.create] uri=$uri');
+    debugPrint('[FE][ZohoContactsService.create] body=$body');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    if (raw is Map) {
-      final contact = ZohoContact.fromJson(raw.cast<String, Object?>());
-      _cacheByAccount(contact);
-      return contact;
+    try {
+      final res = await api.postUri<Object?>(uri, data: body);
+
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('[FE][ZohoContactsService.create] RESPONSE');
+      debugPrint('[FE][ZohoContactsService.create] status=${res.statusCode}');
+      debugPrint('[FE][ZohoContactsService.create] data=${res.data}');
+      debugPrint('[FE][ZohoContactsService.create] headers=${res.headers}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      final data = _asJsonMap(res.data);
+      final raw = data['contact'];
+
+      if (raw is Map) {
+        final contact = ZohoContact.fromJson(raw.cast<String, Object?>());
+
+        debugPrint('[FE][ZohoContactsService.create] parsed contact:');
+        debugPrint('  contactId=${contact.contactId}');
+        debugPrint('  displayName=${contact.displayName}');
+        debugPrint('  accountNumber=${contact.accountNumber}');
+        debugPrint('  contactType=${contact.contactType}');
+        debugPrint('  status=${contact.status}');
+
+        _cacheByAccount(contact);
+        return contact;
+      }
+
+      debugPrint(
+        '[FE][ZohoContactsService.create] ERROR missing contact in response',
+      );
+
+      throw StateError('Unexpected response shape: missing "contact"');
+    } catch (e, st) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('[FE][ZohoContactsService.create] FAILED');
+      debugPrint('[FE][ZohoContactsService.create] error=$e');
+      debugPrint('[FE][ZohoContactsService.create] stack=$st');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      rethrow;
     }
-
-    throw StateError('Unexpected response shape: missing "contact"');
   }
 
   Future<ZohoContact> updatePatch(

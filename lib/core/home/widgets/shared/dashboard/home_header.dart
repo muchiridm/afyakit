@@ -4,7 +4,7 @@ import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
-import 'package:afyakit/core/home/widgets/dashboard/catalog_button.dart';
+import 'package:afyakit/core/home/widgets/shared/dashboard/catalog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

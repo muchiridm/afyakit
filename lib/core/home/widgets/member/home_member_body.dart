@@ -1,10 +1,12 @@
 // lib/core/home/widgets/member/home_member_body.dart
 
+import 'package:afyakit/core/home/activities/shared/member_activity_history_screen.dart';
+import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/home/widgets/activities/member_latest_activity_panel.dart';
-import 'package:afyakit/core/home/widgets/dashboard/home_shared.dart';
+import 'package:afyakit/core/home/activities/shared/member_latest_activity_panel.dart';
+import 'package:afyakit/core/home/widgets/shared/dashboard/home_shared.dart';
 
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
@@ -15,6 +17,7 @@ import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class HomeMemberBody extends StatelessWidget {
   const HomeMemberBody({super.key, required this.user});
@@ -153,7 +156,18 @@ class _MemberMainColumn extends StatelessWidget {
         const HomeMemberMissingAccountHint()
       else
         QuietHomePanel(
-          child: MemberLatestActivityPanel(contactId: user!.contactId),
+          child: MemberLatestActivityPanel(
+            contactId: user!.contactId,
+            accountNumber: user!.accountNumber,
+            onTitleTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => MemberActivityHistoryScreen(
+                  contactId: user!.contactId,
+                  accountNumber: user!.accountNumber,
+                ),
+              ),
+            ),
+          ),
         ),
     ], gap: AppShape.gap14);
   }
@@ -223,14 +237,22 @@ class HomeMemberQuickActions extends StatelessWidget {
             ),
           ),
         ),
-        HomeActionChip(
-          icon: Icons.location_on_outlined,
-          label: 'Delivery Addresses',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const DeliveryAddressesScreen(),
-            ),
-          ),
+        Consumer(
+          builder: (context, ref, _) {
+            return HomeActionChip(
+              icon: Icons.location_on_outlined,
+              label: 'Delivery Addresses',
+              onTap: () {
+                final scope = ref.read(currentUserDeliveryAddressScopeProvider);
+
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => DeliveryAddressesScreen(scope: scope),
+                  ),
+                );
+              },
+            );
+          },
         ),
         HomeActionChip(
           icon: Icons.receipt_long_outlined,

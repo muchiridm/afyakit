@@ -1,14 +1,12 @@
 // lib/features/retail/invoices/widgets/invoice_detail_screen.dart
 
-import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claim_detail_screen.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_action_controller.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_controller.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice_line_item.dart';
+import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_permissions.dart';
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
 import 'package:afyakit/features/retail/payments/providers/payment_providers.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_footer.dart';
@@ -24,12 +22,18 @@ import 'package:afyakit/shared/utils/normalize/normalize_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum _InvoiceMenuAction { send, markSent }
-
 class InvoiceDetailScreen extends ConsumerStatefulWidget {
-  const InvoiceDetailScreen({super.key, required this.invoiceId});
+  const InvoiceDetailScreen({
+    super.key,
+    required this.invoiceId,
+    this.forceStaffWorkspace,
+  });
 
   final String invoiceId;
+
+  /// When null, the screen falls back to isStaffWorkspaceActiveProvider.
+  /// When true/false, callers can explicitly decide staff vs member mode.
+  final bool? forceStaffWorkspace;
 
   @override
   ConsumerState<InvoiceDetailScreen> createState() {
@@ -63,109 +67,125 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final me = ref.watch(currentUserProvider).valueOrNull;
-
-    final bool staffWorkspace = ref.watch(isStaffWorkspaceActiveProvider);
-
-    final bool canManageInvoices =
-        staffWorkspace && (me?.canManageInvoices ?? false);
-
     final InvoiceState state = ref.watch(invoiceControllerProvider);
 
     final InvoiceActionController actions = ref.read(
       invoiceActionControllerProvider,
     );
 
-    final bool pdfBusy = _acting || state.downloadingPdf;
-    final bool menuBusy = _acting || state.busy;
+    final ZohoInvoice? invoice = state.invoice;
+
+    final InvoiceUiPermissions? permissions = invoice == null
+        ? null
+        : buildInvoiceUiPermissions(
+            ref,
+            invoice,
+            forceStaffWorkspace: widget.forceStaffWorkspace,
+          );
 
     return AppPage(
       title: 'Invoice',
       showBack: true,
       maxWidth: _contentMaxW,
       scrollable: true,
-      actions: _buildActions(
-        canManageInvoices: canManageInvoices,
+      actions: _buildTopActions(
+        context,
         state: state,
-        pdfBusy: pdfBusy,
-        menuBusy: menuBusy,
         actions: actions,
+        permissions: permissions,
       ),
-      body: _buildBody(context, state, canManageInvoices: canManageInvoices),
+      body: _buildBody(context, state, permissions: permissions),
       footer: null,
     );
   }
 
-  List<Widget> _buildActions({
-    required bool canManageInvoices,
+  List<Widget> _buildTopActions(
+    BuildContext context, {
     required InvoiceState state,
-    required bool pdfBusy,
-    required bool menuBusy,
     required InvoiceActionController actions,
+    required InvoiceUiPermissions? permissions,
   }) {
-    return <Widget>[
+    final List<Widget> out = <Widget>[];
+
+    if (permissions?.canRecordPayment == true) {
+      out.add(
+        _TopBarActionButton(
+          tooltip: 'Record payment',
+          icon: Icons.payments_outlined,
+          label: 'Payment',
+          onPressed: _acting || state.busy
+              ? null
+              : () => _runAction(
+                  () => actions.recordPayment(
+                    context,
+                    invoiceId: widget.invoiceId,
+                  ),
+                ),
+        ),
+      );
+    }
+
+    if (permissions?.canSend == true) {
+      out.add(
+        _TopBarActionButton(
+          tooltip: 'Send invoice',
+          icon: Icons.send_outlined,
+          label: 'Send',
+          onPressed: _acting || state.busy
+              ? null
+              : () => _runAction(
+                  () =>
+                      actions.sendInvoice(context, invoiceId: widget.invoiceId),
+                ),
+        ),
+      );
+    }
+
+    if (permissions?.canMarkSent == true) {
+      out.add(
+        IconButton(
+          tooltip: 'Mark as sent',
+          icon: const Icon(Icons.mark_email_read_outlined),
+          onPressed: _acting || state.busy
+              ? null
+              : () => _runAction(
+                  () => actions.markSent(context, invoiceId: widget.invoiceId),
+                ),
+        ),
+      );
+    }
+
+    if (permissions?.canViewPdf == true) {
+      out.add(
+        IconButton(
+          tooltip: _acting || state.downloadingPdf ? 'Working…' : 'PDF',
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          onPressed: _acting || state.downloadingPdf
+              ? null
+              : () => _runAction(
+                  () => actions.viewPdf(context, invoiceId: widget.invoiceId),
+                ),
+        ),
+      );
+    }
+
+    out.add(
       IconButton(
-        tooltip: pdfBusy ? 'Working…' : 'PDF',
-        onPressed: pdfBusy
-            ? null
-            : () => _runAction(
-                () => actions.viewPdf(context, invoiceId: widget.invoiceId),
-              ),
-        icon: const Icon(Icons.picture_as_pdf_outlined),
-      ),
-      IconButton(
-        tooltip: 'Refresh',
-        onPressed: state.busy
+        tooltip: state.busy ? 'Working…' : 'Refresh',
+        onPressed: state.busy || _acting
             ? null
             : () => _runAction(() => actions.refresh(widget.invoiceId)),
         icon: const Icon(Icons.refresh),
       ),
-      if (canManageInvoices)
-        PopupMenuButton<_InvoiceMenuAction>(
-          tooltip: 'More',
-          enabled: !menuBusy,
-          onSelected: (action) async {
-            switch (action) {
-              case _InvoiceMenuAction.send:
-                await _runAction(
-                  () =>
-                      actions.sendInvoice(context, invoiceId: widget.invoiceId),
-                );
-                break;
-              case _InvoiceMenuAction.markSent:
-                await _runAction(
-                  () => actions.markSent(context, invoiceId: widget.invoiceId),
-                );
-                break;
-            }
-          },
-          itemBuilder: (_) => const <PopupMenuEntry<_InvoiceMenuAction>>[
-            PopupMenuItem<_InvoiceMenuAction>(
-              value: _InvoiceMenuAction.send,
-              child: ListTile(
-                dense: true,
-                leading: Icon(Icons.send_outlined),
-                title: Text('Send invoice'),
-              ),
-            ),
-            PopupMenuItem<_InvoiceMenuAction>(
-              value: _InvoiceMenuAction.markSent,
-              child: ListTile(
-                dense: true,
-                leading: Icon(Icons.mark_email_read_outlined),
-                title: Text('Mark as sent'),
-              ),
-            ),
-          ],
-          icon: const Icon(Icons.more_vert),
-        ),
-    ];
+    );
+
+    return out;
   }
 
   Widget _buildBody(
     BuildContext context,
     InvoiceState state, {
-    required bool canManageInvoices,
+    required InvoiceUiPermissions? permissions,
   }) {
     if (state.loading && !state.hasInvoice) {
       return const Center(child: CircularProgressIndicator());
@@ -187,6 +207,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       pendingAmount: vm.pendingAmount,
       suggestedPhone: suggestedPhone,
     );
+
+    final bool canManagePayments = permissions?.isStaffWorkspaceActive == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -225,7 +247,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         PaymentFooter(
           currencyCode: vm.currency,
           invoiceId: invoice.invoiceId,
-          canManageInvoices: canManageInvoices,
+          canManageInvoices: canManagePayments,
           pendingAmount: vm.pendingAmount,
           suggestedPhone: suggestedPhone,
           customerName: invoice.customerName,
@@ -464,6 +486,44 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     }
 
     return null;
+  }
+}
+
+class _TopBarActionButton extends StatelessWidget {
+  const _TopBarActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: TextButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(label),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
   }
 }
 

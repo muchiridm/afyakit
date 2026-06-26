@@ -1,15 +1,12 @@
 // lib/features/retail/quotes/widgets/quote_detail_screen.dart
 
-import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
-
 import 'package:afyakit/features/retail/quotes/controllers/quote_action_controller.dart';
-import 'package:afyakit/features/retail/quotes/extensions/quote_action_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_detail_permissions.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
@@ -25,9 +22,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QuoteDetailScreen extends ConsumerStatefulWidget {
-  const QuoteDetailScreen({super.key, required this.quoteId});
+  const QuoteDetailScreen({
+    super.key,
+    required this.quoteId,
+    this.forceStaffWorkspace,
+  });
 
   final String quoteId;
+
+  /// When null, the screen falls back to isStaffWorkspaceActiveProvider.
+  /// When true/false, callers can explicitly decide staff vs member mode.
+  final bool? forceStaffWorkspace;
 
   @override
   ConsumerState<QuoteDetailScreen> createState() => _QuoteDetailScreenState();
@@ -71,6 +76,25 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     }
   }
 
+  Future<void> _deleteDraft(
+    BuildContext context, {
+    required QuoteActionController actionsCtl,
+    required String quoteId,
+    required bool forceStaffWorkspace,
+  }) async {
+    await _run(
+      () => actionsCtl.deleteQuote(
+        context,
+        quoteId: quoteId,
+        forceStaffWorkspace: forceStaffWorkspace,
+      ),
+    );
+
+    if (!mounted) return;
+
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final String quoteId = widget.quoteId.trim();
@@ -91,163 +115,165 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
       zohoQuoteProvider(quoteId),
     );
 
-    final me = ref.watch(currentUserProvider).valueOrNull;
-
-    final bool isStaffWorkspaceActive = ref.watch(
-      isStaffWorkspaceActiveProvider,
-    );
-
-    final bool canViewQuotePdf = me?.canViewQuotePdf ?? false;
-
-    final bool canEditQuote =
-        isStaffWorkspaceActive && (me?.canEditQuote ?? false);
-
-    final bool canSendQuote =
-        isStaffWorkspaceActive && (me?.canSendQuote ?? false);
-
-    final bool canMarkQuoteSent =
-        isStaffWorkspaceActive && (me?.canMarkQuoteSent ?? false);
-
-    final bool canConvertQuoteToInvoice =
-        isStaffWorkspaceActive && (me?.canConvertQuoteToInvoice ?? false);
-
     final QuoteActionController actionsCtl = ref.read(
       quoteActionControllerProvider,
     );
 
-    return AppPage(
-      title: 'Quote',
-      showBack: true,
-      scrollable: false,
-      actions: _buildActions(
-        context,
-        actionsCtl: actionsCtl,
-        canViewQuotePdf: canViewQuotePdf,
-        canEditQuote: canEditQuote,
-        canSendQuote: canSendQuote,
-        canMarkQuoteSent: canMarkQuoteSent,
-        canConvertQuoteToInvoice: canConvertQuoteToInvoice,
-        quoteId: quoteId,
-      ),
-      body: _buildBody(quoteAsync, actionsCtl: actionsCtl, quoteId: quoteId),
-    );
-  }
-
-  Widget _buildBody(
-    AsyncValue<ZohoQuote> quoteAsync, {
-    required QuoteActionController actionsCtl,
-    required String quoteId,
-  }) {
     return quoteAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => SalesDocErrorState(
-        title: 'Failed to load quote',
-        message: e.toString(),
+      loading: () => const AppPage(
+        title: 'Quote',
+        showBack: true,
+        scrollable: false,
+        body: Center(child: CircularProgressIndicator()),
       ),
-      data: (ZohoQuote quote) => RefreshIndicator(
-        onRefresh: () => actionsCtl.refresh(quoteId),
-        child: _buildDetail(quote),
+      error: (Object e, _) => AppPage(
+        title: 'Quote',
+        showBack: true,
+        scrollable: false,
+        body: SalesDocErrorState(
+          title: 'Failed to load quote',
+          message: e.toString(),
+        ),
       ),
+      data: (ZohoQuote quote) {
+        final QuoteUiPermissions permissions = buildQuoteUiPermissions(
+          ref,
+          quote,
+          forceStaffWorkspace: widget.forceStaffWorkspace,
+        );
+
+        return AppPage(
+          title: 'Quote',
+          showBack: true,
+          scrollable: false,
+          actions: _buildTopActions(
+            context,
+            actionsCtl: actionsCtl,
+            permissions: permissions,
+            quoteId: quoteId,
+          ),
+          body: RefreshIndicator(
+            onRefresh: () => actionsCtl.refresh(quoteId),
+            child: _buildDetail(quote),
+          ),
+        );
+      },
     );
   }
 
-  List<Widget> _buildActions(
+  List<Widget> _buildTopActions(
     BuildContext context, {
     required QuoteActionController actionsCtl,
-    required bool canViewQuotePdf,
-    required bool canEditQuote,
-    required bool canSendQuote,
-    required bool canMarkQuoteSent,
-    required bool canConvertQuoteToInvoice,
+    required QuoteUiPermissions permissions,
     required String quoteId,
   }) {
     final List<Widget> actions = <Widget>[];
+    final bool forceStaffWorkspace = permissions.isStaffWorkspaceActive;
 
-    if (canViewQuotePdf) {
+    if (permissions.isDraft && permissions.canEdit) {
+      actions.add(
+        _TopBarActionButton(
+          tooltip: permissions.isStaffWorkspaceActive
+              ? 'Edit quote'
+              : 'Edit request',
+          icon: Icons.edit_outlined,
+          label: 'Edit',
+          onPressed: _acting
+              ? null
+              : () => _editQuote(context, quoteId: quoteId),
+        ),
+      );
+    }
+
+    if (permissions.isDraft && permissions.canSend) {
+      actions.add(
+        _TopBarActionButton(
+          tooltip: 'Send quotation',
+          icon: Icons.send_outlined,
+          label: 'Send',
+          onPressed: _acting
+              ? null
+              : () => _run(
+                  () => actionsCtl.sendQuote(
+                    context,
+                    quoteId: quoteId,
+                    forceStaffWorkspace: forceStaffWorkspace,
+                  ),
+                ),
+        ),
+      );
+    }
+
+    if (permissions.isDraft && permissions.canDelete) {
+      actions.add(
+        IconButton(
+          tooltip: permissions.isStaffWorkspaceActive
+              ? 'Delete draft quote'
+              : 'Delete draft request',
+          icon: const Icon(Icons.delete_outline),
+          onPressed: _acting
+              ? null
+              : () => _deleteDraft(
+                  context,
+                  actionsCtl: actionsCtl,
+                  quoteId: quoteId,
+                  forceStaffWorkspace: forceStaffWorkspace,
+                ),
+        ),
+      );
+    }
+
+    if (permissions.isDraft && permissions.canMarkSent) {
+      actions.add(
+        IconButton(
+          tooltip: 'Mark as sent',
+          icon: const Icon(Icons.done_all_outlined),
+          onPressed: _acting
+              ? null
+              : () => _run(
+                  () => actionsCtl.markSent(
+                    context,
+                    quoteId: quoteId,
+                    forceStaffWorkspace: forceStaffWorkspace,
+                  ),
+                ),
+        ),
+      );
+    }
+
+    if (permissions.canConvertToInvoice) {
+      actions.add(
+        _TopBarActionButton(
+          tooltip: 'Convert to invoice',
+          icon: Icons.receipt_long_outlined,
+          label: 'Invoice',
+          onPressed: _acting
+              ? null
+              : () => _run(
+                  () => actionsCtl.convertToInvoice(
+                    context,
+                    quoteId: quoteId,
+                    forceStaffWorkspace: forceStaffWorkspace,
+                  ),
+                ),
+        ),
+      );
+    }
+
+    if (permissions.canViewPdf) {
       actions.add(
         IconButton(
           tooltip: _acting ? 'Working…' : 'PDF',
           icon: const Icon(Icons.picture_as_pdf_outlined),
           onPressed: _acting
               ? null
-              : () => _run(() => actionsCtl.viewPdf(context, quoteId: quoteId)),
-        ),
-      );
-    }
-
-    final List<PopupMenuEntry<QuoteAction>> menuItems =
-        <PopupMenuEntry<QuoteAction>>[];
-
-    if (canSendQuote) {
-      menuItems.add(
-        const PopupMenuItem<QuoteAction>(
-          value: QuoteAction.send,
-          child: Text('Send quote'),
-        ),
-      );
-    }
-
-    if (canMarkQuoteSent) {
-      menuItems.add(
-        const PopupMenuItem<QuoteAction>(
-          value: QuoteAction.markSent,
-          child: Text('Mark as sent'),
-        ),
-      );
-    }
-
-    if (canConvertQuoteToInvoice) {
-      if (menuItems.isNotEmpty) {
-        menuItems.add(const PopupMenuDivider());
-      }
-
-      menuItems.add(
-        const PopupMenuItem<QuoteAction>(
-          value: QuoteAction.invoice,
-          child: Text('Convert to invoice'),
-        ),
-      );
-    }
-
-    if (menuItems.isNotEmpty) {
-      actions.add(
-        PopupMenuButton<QuoteAction>(
-          tooltip: 'Actions',
-          enabled: !_acting,
-          onSelected: (QuoteAction action) {
-            switch (action) {
-              case QuoteAction.send:
-                if (!canSendQuote) return;
-                _run(() => actionsCtl.sendQuote(context, quoteId: quoteId));
-                break;
-
-              case QuoteAction.markSent:
-                if (!canMarkQuoteSent) return;
-                _run(() => actionsCtl.markSent(context, quoteId: quoteId));
-                break;
-
-              case QuoteAction.invoice:
-                if (!canConvertQuoteToInvoice) return;
-                _run(
-                  () => actionsCtl.convertToInvoice(context, quoteId: quoteId),
-                );
-                break;
-            }
-          },
-          itemBuilder: (_) => menuItems,
-          icon: const Icon(Icons.more_vert),
-        ),
-      );
-    }
-
-    if (canEditQuote) {
-      actions.add(
-        IconButton(
-          tooltip: 'Edit quote',
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: _acting
-              ? null
-              : () => _editQuote(context, quoteId: quoteId),
+              : () => _run(
+                  () => actionsCtl.viewPdf(
+                    context,
+                    quoteId: quoteId,
+                    forceStaffWorkspace: forceStaffWorkspace,
+                  ),
+                ),
         ),
       );
     }
@@ -275,6 +301,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
         ),
+        if (_isDraftQuote(quote)) const _DraftEditHint(),
         if (hasClinicalContext) ...<Widget>[
           const Divider(height: 1),
           _PatientInsurancePrescriptionCard(q: quote),
@@ -302,17 +329,23 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     );
   }
 
+  static bool _isDraftQuote(ZohoQuote quote) {
+    final String status = quote.status.trim().toLowerCase();
+    return status.isEmpty || status == 'draft';
+  }
+
   static SalesDocMetaVm _buildMeta(ZohoQuote q) {
     final String party = q.customerName.trim().isEmpty
         ? 'Customer'
         : q.customerName;
+
     final String docNo = _bestDocNumber(q);
     final String currency = (q.currencyCode ?? '').trim();
 
     return SalesDocMetaVm(
       partyName: party,
       docNumberOrId: docNo,
-      status: q.status.trim(),
+      status: q.status.trim().isEmpty ? 'draft' : q.status.trim(),
       currencyCode: currency,
       total: q.total,
       date: q.date,
@@ -370,6 +403,75 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   }
 }
 
+class _TopBarActionButton extends StatelessWidget {
+  const _TopBarActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: TextButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(label),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DraftEditHint extends StatelessWidget {
+  const _DraftEditHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      color: scheme.primaryContainer.withOpacity(0.35),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.edit_note_outlined, size: 18, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This quote is still a draft. It can still be edited.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PatientInsurancePrescriptionCard extends StatelessWidget {
   const _PatientInsurancePrescriptionCard({required this.q});
 
@@ -398,7 +500,6 @@ class _PatientInsurancePrescriptionCard extends StatelessWidget {
         membershipId.isNotEmpty;
 
     final bool hasPrescription = prescriptionId.isNotEmpty;
-
     final bool shouldWarnMissingPrescription = hasInsurance && !hasPrescription;
 
     if (!hasPatient && !hasInsurance && !hasPrescription) {
@@ -534,7 +635,7 @@ class _DeliveryAddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final a = q.deliveryAddress!;
+    final SalesDocumentAddress a = q.deliveryAddress!;
     final ThemeData theme = Theme.of(context);
 
     final String recipient = a.recipientDisplay.trim();
@@ -542,12 +643,10 @@ class _DeliveryAddressCard extends StatelessWidget {
     final String label = (a.label ?? '').trim();
     final String placeName = (a.placeName ?? '').trim();
 
-    final List<String> helperParts = <String>[
+    final String helper = <String>[
       if (label.isNotEmpty) label,
       if (placeName.isNotEmpty && placeName != label) placeName,
-    ];
-
-    final String helper = helperParts.join(' • ').trim();
+    ].join(' • ').trim();
 
     final bool showCoordsOnly = singleLine.isEmpty && a.hasCoordinates;
 

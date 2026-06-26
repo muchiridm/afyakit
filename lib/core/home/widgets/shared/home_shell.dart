@@ -6,7 +6,7 @@ import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/core/home/widgets/dashboard/home_screen.dart';
+import 'package:afyakit/core/home/widgets/shared/dashboard/home_screen.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';

@@ -1,9 +1,11 @@
 // lib/features/retail/quotes/widgets/quote_editor_meta_section.dart
 
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
+import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_clinical_context_dialog.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
@@ -39,22 +41,65 @@ Future<DateTime?> pickQuoteEditorDate(
 Future<void> pickQuoteDeliveryAddress(
   BuildContext context, {
   required Future<bool> Function() ensureAuthed,
+  required QuoteMetaState meta,
   required QuoteMetaController metaCtl,
+  required String tenantId,
 }) async {
   final bool ok = await ensureAuthed();
   if (!ok) return;
   if (!context.mounted) return;
 
+  final DeliveryAddressScope? scope = _deliveryAddressScopeForQuote(
+    tenantId: tenantId,
+    meta: meta,
+  );
+
+  if (scope == null || !scope.isUsable) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Select a customer before choosing a delivery address.'),
+      ),
+    );
+    return;
+  }
+
   final DeliveryAddress? result = await Navigator.of(context)
       .push<DeliveryAddress>(
         MaterialPageRoute<DeliveryAddress>(
-          builder: (_) => const DeliveryAddressesScreen(pickerMode: true),
+          builder: (_) =>
+              DeliveryAddressesScreen(pickerMode: true, scope: scope),
         ),
       );
 
   if (result == null) return;
 
   metaCtl.setDeliveryAddress(SalesDocumentAddress.fromDeliveryAddress(result));
+}
+
+DeliveryAddressScope? _deliveryAddressScopeForQuote({
+  required String tenantId,
+  required QuoteMetaState meta,
+}) {
+  final String cleanTenantId = tenantId.trim();
+
+  final String accountNumber = (meta.contact?.accountNumber ?? '').trim();
+  final String contactId = (meta.contact?.contactId ?? '').trim();
+  final String customerName = (meta.contact?.title ?? '').trim();
+
+  final String ownerUid = accountNumber.isNotEmpty
+      ? 'acct_$accountNumber'
+      : contactId.isNotEmpty
+      ? 'zoho_$contactId'
+      : '';
+
+  if (cleanTenantId.isEmpty || ownerUid.isEmpty) return null;
+
+  return DeliveryAddressScope(
+    tenantId: cleanTenantId,
+    ownerUid: ownerUid,
+    ownerAccountNumber: accountNumber.isEmpty ? null : accountNumber,
+    ownerLabel: customerName.isEmpty ? null : customerName,
+  );
 }
 
 Future<void> pickQuoteClinicalContext(
@@ -126,6 +171,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
     required this.refController,
     required this.notesController,
     required this.onEnsureAuthed,
+    required this.tenantId,
   });
 
   final bool busy;
@@ -134,6 +180,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
   final TextEditingController refController;
   final TextEditingController notesController;
   final Future<bool> Function() onEnsureAuthed;
+  final String tenantId;
 
   @override
   Widget build(BuildContext context) {
@@ -141,16 +188,13 @@ class QuoteEditorMetaSection extends StatelessWidget {
     final DateTime expiryDate =
         meta.expiryDate ?? _defaultExpiry(meta.quoteDate);
 
-    final Widget dateRow = _DateRow(
+    final bool isClinicalSale = meta.isClinical;
+    final bool isGeneralSale = meta.isGeneral;
+
+    final Widget saleContextField = _SaleContextTile(
       busy: busy,
-      quoteDate: meta.quoteDate,
-      expiryDate: meta.expiryDate,
-      initialQuoteDate: quoteDate,
-      initialExpiryDate: expiryDate,
-      onPickQuoteDate: () => _pickQuoteDate(context),
-      onClearQuoteDate: metaCtl.clearQuoteDate,
-      onPickExpiryDate: () => _pickExpiryDate(context),
-      onClearExpiryDate: metaCtl.clearExpiryDate,
+      saleContext: meta.saleContext,
+      onChanged: metaCtl.setSaleContext,
     );
 
     final Widget clinicalContextField = _ClinicalContextTile(
@@ -166,6 +210,20 @@ class QuoteEditorMetaSection extends StatelessWidget {
       onClear: meta.hasPatientContext ? metaCtl.clearPatientContext : null,
     );
 
+    final Widget generalSaleInfoField = const _GeneralSaleInfoTile();
+
+    final Widget dateRow = _DateRow(
+      busy: busy,
+      quoteDate: meta.quoteDate,
+      expiryDate: meta.expiryDate,
+      initialQuoteDate: quoteDate,
+      initialExpiryDate: expiryDate,
+      onPickQuoteDate: () => _pickQuoteDate(context),
+      onClearQuoteDate: metaCtl.clearQuoteDate,
+      onPickExpiryDate: () => _pickExpiryDate(context),
+      onClearExpiryDate: metaCtl.clearExpiryDate,
+    );
+
     final Widget addressField = _DeliveryAddressTile(
       busy: busy,
       address: meta.deliveryAddress,
@@ -173,7 +231,9 @@ class QuoteEditorMetaSection extends StatelessWidget {
       onPick: () => pickQuoteDeliveryAddress(
         context,
         ensureAuthed: onEnsureAuthed,
+        meta: meta,
         metaCtl: metaCtl,
+        tenantId: tenantId,
       ),
       onClear: meta.deliveryAddress == null
           ? null
@@ -184,7 +244,7 @@ class QuoteEditorMetaSection extends StatelessWidget {
       controller: refController,
       enabled: !busy,
       labelText: 'Reference',
-      hintText: 'e.g. PO number',
+      hintText: isGeneralSale ? 'e.g. LPO / PO number' : 'e.g. PO number',
       onChanged: metaCtl.setReference,
     );
 
@@ -207,9 +267,17 @@ class QuoteEditorMetaSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
             child: Column(
               children: <Widget>[
-                dateRow,
+                saleContextField,
                 const SizedBox(height: 6),
-                clinicalContextField,
+                if (isClinicalSale) ...<Widget>[
+                  clinicalContextField,
+                  const SizedBox(height: 6),
+                ],
+                if (isGeneralSale) ...<Widget>[
+                  generalSaleInfoField,
+                  const SizedBox(height: 6),
+                ],
+                dateRow,
                 const SizedBox(height: 6),
                 addressField,
                 const SizedBox(height: 6),
@@ -228,8 +296,19 @@ class QuoteEditorMetaSection extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Expanded(child: clinicalContextField),
+                  Expanded(child: saleContextField),
                   const SizedBox(width: 8),
+                  Expanded(
+                    child: isClinicalSale
+                        ? clinicalContextField
+                        : generalSaleInfoField,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
                   Expanded(
                     child: Column(
                       children: <Widget>[
@@ -239,15 +318,16 @@ class QuoteEditorMetaSection extends StatelessWidget {
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(child: referenceField),
                   const SizedBox(width: 8),
-                  Expanded(child: notesField),
+                  Expanded(
+                    child: Column(
+                      children: <Widget>[
+                        referenceField,
+                        const SizedBox(height: 6),
+                        notesField,
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -384,6 +464,63 @@ class _MetaTextField extends StatelessWidget {
       style: theme.textTheme.bodyMedium,
       decoration: _denseDecoration(labelText: labelText, hintText: hintText),
       onChanged: onChanged,
+    );
+  }
+}
+
+class _SaleContextTile extends StatelessWidget {
+  const _SaleContextTile({
+    required this.busy,
+    required this.saleContext,
+    required this.onChanged,
+  });
+
+  final bool busy;
+  final QuoteSaleContext saleContext;
+  final ValueChanged<QuoteSaleContext> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: _denseDecoration(labelText: 'Sale type'),
+      child: SegmentedButton<QuoteSaleContext>(
+        segments: const <ButtonSegment<QuoteSaleContext>>[
+          ButtonSegment<QuoteSaleContext>(
+            value: QuoteSaleContext.general,
+            label: Text('Company / B2B'),
+            icon: Icon(Icons.business_outlined),
+          ),
+          ButtonSegment<QuoteSaleContext>(
+            value: QuoteSaleContext.clinical,
+            label: Text('Patient sale'),
+            icon: Icon(Icons.person_outline),
+          ),
+        ],
+        selected: <QuoteSaleContext>{saleContext},
+        onSelectionChanged: busy
+            ? null
+            : (Set<QuoteSaleContext> selected) {
+                if (selected.isEmpty) return;
+                onChanged(selected.first);
+              },
+      ),
+    );
+  }
+}
+
+class _GeneralSaleInfoTile extends StatelessWidget {
+  const _GeneralSaleInfoTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: _denseDecoration(labelText: 'B2B purchase'),
+      child: const _TileBody(
+        icon: Icons.business_outlined,
+        title: 'Company / doctor’s office purchase',
+        subtitle:
+            'No patient or prescription required. Use this for clinics, doctors’ offices, companies, NGOs, schools, institutions and corporate buyers.',
+      ),
     );
   }
 }

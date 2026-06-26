@@ -1,7 +1,7 @@
 // lib/features/retail/payments/controllers/payments_by_invoice_controller.dart
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';

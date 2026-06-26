@@ -2,15 +2,15 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_search_field.dart';
 
-import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';

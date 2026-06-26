@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/widgets/dashboard/home_header.dart';
-import 'package:afyakit/core/home/widgets/dashboard/home_shared.dart';
+import 'package:afyakit/core/home/widgets/shared/dashboard/home_header.dart';
+import 'package:afyakit/core/home/widgets/shared/dashboard/home_shared.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 

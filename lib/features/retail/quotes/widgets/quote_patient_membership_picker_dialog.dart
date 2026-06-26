@@ -5,8 +5,8 @@ import 'package:afyakit/features/clinical/patients/patient_profiles_controller.d
 import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';

@@ -8,7 +8,7 @@ import 'package:afyakit/features/clinical/patients/models/patient_profile_models
 import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
 
-import '../zoho_contact.dart';
+import '../models/zoho_contact.dart';
 import 'contact_sheet_models.dart';
 
 enum _ContactKind { person, companyOnly }
@@ -60,6 +60,9 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
 
     _displayCtl = TextEditingController(text: c?.displayName ?? '');
     _companyCtl = TextEditingController(text: c?.companyName ?? '');
+
+    // DawaPap/AfyaKit account number is system-generated.
+    // It is displayed read-only for existing contacts only.
     _acctCtl = TextEditingController(text: c?.accountNumber ?? '');
 
     final pc = c?.personContact;
@@ -147,7 +150,11 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
   ZohoContact _buildDraft() {
     final display = _displayCtl.text.trim();
     final company = _companyCtl.text.trim();
-    final account = _acctCtl.text.trim();
+
+    // Account number is generated internally by DawaPap/AfyaKit.
+    // Do not allow normal staff contact creation to invent one.
+    // Preserve only an existing value already attached to the contact.
+    final account = _isExisting ? _acctCtl.text.trim() : '';
 
     final person = _personCtl.text.trim();
     final email = _emailCtl.text.trim();
@@ -202,6 +209,30 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Text(text, style: t.labelLarge),
+    );
+  }
+
+  Widget _systemIdentitySection(BuildContext context) {
+    if (!_isExisting) return const SizedBox.shrink();
+
+    final account = _acctCtl.text.trim();
+    if (account.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'System identity'),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: _acctCtl,
+          readOnly: true,
+          decoration: const InputDecoration(
+            labelText: 'DawaPap account no.',
+            hintText: 'Auto-generated internally',
+            prefixIcon: Icon(Icons.confirmation_number_outlined),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -808,19 +839,10 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
                         textInputAction: TextInputAction.next,
                       ),
 
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _acctCtl,
-                        readOnly: _readOnly,
-                        decoration: const InputDecoration(
-                          labelText: 'Account No. (optional)',
-                          hintText: 'e.g. AC-K4D7-P9Q',
-                          prefixIcon: Icon(Icons.confirmation_number_outlined),
-                        ),
-                        textInputAction: TextInputAction.next,
-                      ),
-
                       const SizedBox(height: 16),
+
+                      _systemIdentitySection(context),
+
                       _insurancePayerSection(context),
 
                       _sectionLabel(context, 'Contact type'),

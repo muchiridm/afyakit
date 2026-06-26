@@ -212,7 +212,10 @@ class _InsuranceClaimDetailScreenState
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => InvoiceDetailScreen(invoiceId: invoiceId),
+        builder: (_) => InvoiceDetailScreen(
+          invoiceId: invoiceId,
+          forceStaffWorkspace: true,
+        ),
       ),
     );
   }

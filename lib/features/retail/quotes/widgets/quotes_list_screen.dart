@@ -14,7 +14,7 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 
-import 'package:afyakit/core/home/widgets/home_shell.dart';
+import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -169,7 +169,10 @@ class _QuotesListScreenState extends ConsumerState<QuotesListScreen> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => QuoteDetailScreen(quoteId: id)),
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            QuoteDetailScreen(quoteId: id, forceStaffWorkspace: !_isMine),
+      ),
     );
   }
 

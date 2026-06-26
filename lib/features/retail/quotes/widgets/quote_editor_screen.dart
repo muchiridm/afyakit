@@ -1,6 +1,7 @@
 // lib/features/retail/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
@@ -210,6 +211,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String tenantId = ref.watch(tenantIdProvider);
+
     final QuoteState state = ref.watch(quoteControllerProvider);
     final QuoteController ctl = ref.read(quoteControllerProvider.notifier);
 
@@ -279,6 +282,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                     refController: _refCtl,
                     notesController: _notesCtl,
                     onEnsureAuthed: () => _ensureAuthed(context),
+                    tenantId: tenantId,
                   ),
                   const Divider(height: 1),
                   Expanded(

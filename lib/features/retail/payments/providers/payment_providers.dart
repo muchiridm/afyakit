@@ -2,11 +2,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/retail/contacts/zoho_contacts_service.dart';
+import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:afyakit/features/retail/payments/services/zoho_payments_service.dart';
 
-import 'package:afyakit/features/retail/contacts/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
 
