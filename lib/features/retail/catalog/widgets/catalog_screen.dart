@@ -2,6 +2,8 @@
 
 import 'dart:async';
 
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
 import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
@@ -9,7 +11,6 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catal
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/utils/app_error_message.dart';
 import 'package:afyakit/shared/widgets/app_error_pane.dart';
@@ -18,15 +19,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'catalog_components/catalog_grid.dart';
-import 'catalog_components/catalog_header.dart';
 import 'catalog_components/catalog_ui_bits.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
 String _formatPriceCeil(num? v) {
   if (v == null) return '';
+
   final int rounded = v.ceil();
   final NumberFormat nf = NumberFormat.decimalPattern();
+
   return nf.format(rounded);
 }
 
@@ -53,12 +55,14 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   bool get _showDiscovery {
     final CatalogState state = ref.read(catalogControllerProvider);
+
     return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
   }
 
   @override
   void initState() {
     super.initState();
+
     _scroll.addListener(_onScroll);
 
     final String seed = (widget.initialQuery ?? '').trim();
@@ -73,6 +77,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     _scroll.dispose();
     _searchC.dispose();
     _searchFocus.dispose();
+
     super.dispose();
   }
 
@@ -86,9 +91,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       if (!mounted) return;
 
       final String q = (widget.initialQuery ?? '').trim();
+
       final CatalogController ctrl = ref.read(
         catalogControllerProvider.notifier,
       );
+
       final CatalogState state = ref.read(catalogControllerProvider);
 
       if (q.isNotEmpty && state.query.q.trim() != q) {
@@ -107,6 +114,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     if (!_scroll.hasClients) return;
 
     final CatalogState state = ref.read(catalogControllerProvider);
+
     final bool atEnd =
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
 
@@ -119,6 +127,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     if (!mounted) return;
 
     final String next = q.trim();
+
     _searchC.text = next;
     _searchC.selection = TextSelection.collapsed(offset: _searchC.text.length);
 
@@ -157,48 +166,15 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         final AsyncValue<List<CatalogTile>> itemsAsync = ref.watch(
           catalogItemsProvider,
         );
+
         final CatalogState state = ref.watch(catalogControllerProvider);
-        final CatalogController ctrl = ref.read(
-          catalogControllerProvider.notifier,
-        );
-
-        final quoteLinesState = ref.watch(quoteLinesControllerProvider);
-        final int quoteLineCount = quoteLinesState.lines.length;
-
-        final String? quoteTotalLabel = quoteLineCount == 0
-            ? null
-            : 'KES ${_formatPriceCeil(quoteLinesState.estimatedTotal)}';
 
         return AppPage(
           scrollable: true,
           maxWidth: 1100,
-          header: CatalogHeader(
-            selectedForm: state.query.form,
-            onFormChanged: (form) {
-              ctrl.refreshDebounced(query: state.query.copyWith(form: form));
-            },
-            quoteItemCount: quoteLineCount,
-            quoteTotalLabel: quoteTotalLabel,
-            onClearQuote: quoteLineCount == 0
-                ? null
-                : () {
-                    ref.read(quoteLinesControllerProvider.notifier).clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Quote cleared'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-            onViewQuote: quoteLineCount == 0
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const QuoteEditorScreen(),
-                      ),
-                    );
-                  },
+          header: const HomeHeader(
+            entry: EntryMode.guest,
+            showHomeButton: true,
           ),
           body: _buildBody(itemsAsync, state),
         );
@@ -211,6 +187,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     CatalogState state,
   ) {
     final CatalogController ctrl = ref.read(catalogControllerProvider.notifier);
+
     final bool showDiscovery =
         state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
 
@@ -235,15 +212,18 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           showClear: hasActiveFilters,
           onClear: () {
             if (!mounted) return;
+
             _searchC.clear();
             ctrl.refresh(query: const CatalogQuery());
           },
           onSubmit: (q) {
             if (!mounted) return;
+
             ctrl.refresh(query: state.query.copyWith(q: q));
           },
           onChanged: (q) {
             if (!mounted) return;
+
             ctrl.refreshDebounced(query: state.query.copyWith(q: q));
           },
         ),
@@ -383,12 +363,14 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                             ref
                                 .read(quoteLinesControllerProvider.notifier)
                                 .addOrIncrement(t);
+
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Added to quote'),
                                 duration: Duration(seconds: 1),
                               ),
                             );
+
                             Navigator.of(ctx).maybePop();
                           },
                         ),
@@ -464,12 +446,14 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                         ref
                             .read(quoteLinesControllerProvider.notifier)
                             .addOrIncrement(t);
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Added to quote'),
                             duration: Duration(seconds: 1),
                           ),
                         );
+
                         Navigator.of(ctx).maybePop();
                       },
                     ),

@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/home/activities/shared/member_latest_activity_panel.dart';
-import 'package:afyakit/shared/theme/app_shape.dart';
+import 'package:afyakit/shared/layout/app_header.dart';
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
 class MemberActivityHistoryScreen extends StatelessWidget {
   const MemberActivityHistoryScreen({
@@ -17,19 +19,18 @@ class MemberActivityHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Activity History')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppShape.gap16),
-          child: MemberLatestActivityPanel(
-            contactId: contactId,
-            accountNumber: accountNumber,
-            title: 'Activity History',
-            maxItems: null,
-            emptyText: 'No activity history yet.',
-          ),
-        ),
+    return AppPage(
+      maxWidth: AppLayout.contentMaxWidth,
+      header: const AppHeader(
+        title: 'Activity History',
+        variant: AppHeaderVariant.card,
+      ),
+      body: MemberLatestActivityPanel(
+        contactId: contactId,
+        accountNumber: accountNumber,
+        title: 'All Activity',
+        maxItems: null,
+        emptyText: 'No activity history yet.',
       ),
     );
   }

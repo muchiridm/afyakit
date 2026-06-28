@@ -2,24 +2,19 @@
 
 import 'package:afyakit/core/home/activities/shared/staff_activity_history_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/home/widgets/shared/dashboard/home_shared.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_shared.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_features_panel.dart';
 import 'package:afyakit/core/home/activities/shared/staff_latest_activity_panel.dart';
-import 'package:afyakit/core/home/widgets/staff/staff_primary_actions.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
-import 'package:afyakit/features/retail/contacts/controllers/contacts_controller.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 
-class HomeStaffBody extends ConsumerWidget {
+class HomeStaffBody extends StatelessWidget {
   const HomeStaffBody({super.key, required this.user});
 
   final AuthUser? user;
@@ -37,56 +32,14 @@ class HomeStaffBody extends ConsumerWidget {
     );
   }
 
-  void _openChatsInbox(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Staff chat inbox (TODO)')));
-  }
-
-  Future<void> _openAddPatientDialog(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final input = await showDialog<PatientProfileUpsertInput>(
-      context: context,
-      builder: (_) =>
-          const PatientProfileFormDialog(allowExplicitContactLink: true),
-    );
-
-    if (input == null || !context.mounted) return;
-
-    try {
-      final service = ref.read(patientProfilesServiceProvider);
-      await service.create(input);
-
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Patient profile created')));
-    } catch (e) {
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create patient profile: $e')),
-      );
-    }
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tenantName = ref.watch(tenantDisplayNameProvider);
-
-    final quickActions = StaffPrimaryActions(
-      dense: true,
-      onAddCustomer: () =>
-          ref.read(contactsControllerProvider.notifier).openCreateFlow(context),
-      onAddPatient: () => _openAddPatientDialog(context, ref),
-      onRespondToChats: () => _openChatsInbox(context),
-    );
-
+  Widget build(BuildContext context) {
     return homeVerticalStack([
-      HomeDashboardTopBar(title: tenantName, trailing: quickActions),
+      const HomeHeader(
+        entry: EntryMode.staff,
+        showDeliveryBanner: false,
+        showHomeButton: false,
+      ),
 
       HomeDashboardTwoColumnLayout(
         leading: const StaffFeaturesPanel(),

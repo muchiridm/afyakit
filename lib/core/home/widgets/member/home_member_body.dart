@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/activities/shared/member_latest_activity_panel.dart';
-import 'package:afyakit/core/home/widgets/shared/dashboard/home_shared.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_shared.dart';
 
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
@@ -41,19 +43,17 @@ class HomeMemberBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final u = user;
 
-    final greeting = (u == null) ? 'Member' : u.computedDisplayName;
+    final greeting = u == null ? 'Member' : u.computedDisplayName;
     final memberId = (u?.accountNumber ?? '').trim();
     final showMemberId = memberId.isEmpty ? null : memberId;
 
     return homeVerticalStack([
-      HomeDashboardTopBar(
-        title: 'DawaPap',
-        fallbackTitle: 'DawaPap',
-        trailing: _MemberHeaderMeta(
-          greetingName: greeting,
-          memberId: showMemberId,
-          align: TextAlign.right,
-        ),
+      HomeHeader(
+        entry: EntryMode.member,
+        greetingName: greeting,
+        memberId: showMemberId,
+        showDeliveryBanner: false,
+        showHomeButton: false,
       ),
 
       HomeDashboardTwoColumnLayout(
@@ -68,57 +68,6 @@ class HomeMemberBody extends StatelessWidget {
 
       const SizedBox(height: AppShape.gap12),
     ], gap: AppShape.gap14);
-  }
-}
-
-class _MemberHeaderMeta extends StatelessWidget {
-  const _MemberHeaderMeta({
-    required this.greetingName,
-    required this.memberId,
-    required this.align,
-  });
-
-  final String greetingName;
-  final String? memberId;
-  final TextAlign align;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-
-    final cleanName = greetingName.trim().isEmpty
-        ? 'Member'
-        : greetingName.trim();
-
-    return Column(
-      crossAxisAlignment: align == TextAlign.center
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Welcome, $cleanName',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: align,
-          style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        if (memberId != null) ...[
-          const SizedBox(height: 2),
-          Text(
-            'Member ID: $memberId',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: align,
-            style: t.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ],
-    );
   }
 }
 

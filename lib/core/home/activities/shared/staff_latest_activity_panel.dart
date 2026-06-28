@@ -3,18 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/home/models/activity_entry.dart';
-import 'package:afyakit/core/home/activities/contacts/contact_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/contacts/contact_activity_providers.dart';
-import 'package:afyakit/core/home/activities/patients/patient_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/patients/patient_activity_providers.dart';
-import 'package:afyakit/core/home/activities/quotes/quote_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/quotes/quote_activity_providers.dart';
+import 'package:afyakit/core/home/activities/feed/activity_feed_adapter.dart';
+import 'package:afyakit/core/home/activities/feed/activity_feed_providers.dart';
 import 'package:afyakit/core/home/activities/shared/latest_activity_panel.dart';
+import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
-import 'package:afyakit/features/clinical/patients/widgets/patient_details_screen.dart';
 import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
@@ -23,6 +18,8 @@ import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_r
 import 'package:afyakit/features/inventory/records/issues/providers/issue_streams_provider.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/issue_record_tile.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
 
 class StaffLatestActivityPanel extends ConsumerWidget {
@@ -41,93 +38,94 @@ class StaffLatestActivityPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider);
-    final inventoryEnabled = ref.watch(tenantInventoryEnabledProvider);
+    final String tenantId = ref.watch(tenantIdProvider);
+    final bool inventoryEnabled = ref.watch(tenantInventoryEnabledProvider);
 
-    final inventoryResult = inventoryEnabled
+    final _ActivityResult inventoryResult = inventoryEnabled
         ? _watchInventoryActivity(ref, tenantId)
         : const _ActivityResult.empty();
 
-    final patientsAsync = ref.watch(staffPatientActivityProvider);
-    final quotesAsync = ref.watch(staffSubmittedQuoteActivityProvider);
-    final customersAsync = ref.watch(staffCustomerActivityProvider);
+    final activityAsync = ref.watch(staffActivityFeedProvider);
 
-    final patientBundle = patientsAsync.valueOrNull;
+    final List<ActivityEntry> feedEntries = ActivityFeedAdapter.fromFeed(
+      activityAsync.valueOrNull ?? const [],
+      onTapForActivity: (activity) {
+        final String? paymentId = activity.paymentId?.trim();
+        final String? invoiceId = activity.invoiceId?.trim();
 
-    final patientEntries = <ActivityEntry>[
-      ...PatientActivityAdapter.fromPatients(
-        patientBundle?.patients ?? const [],
-        onTapForPatient: (patient) {
+        if (_hasText(paymentId) && _hasText(invoiceId)) {
           return () => Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => PatientDetailsScreen(
-                patient: patient,
-                allowExplicitContactLink: true,
+              builder: (_) => PaymentDetailScreen(
+                invoiceId: invoiceId!,
+                paymentId: paymentId!,
+                currencyCode: activity.currencyCode ?? 'KES',
+                customerName: activity.subtitle,
+                invoiceNumber: activity.invoiceNumber,
+                canManagePayments: true,
               ),
             ),
           );
-        },
-      ),
-      ...PatientActivityAdapter.fromLinkRequests(
-        patientBundle?.linkRequests ?? const [],
-        onTapForRequest: (_) {
+        }
+
+        if (_hasText(invoiceId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => InvoiceDetailScreen(
+                invoiceId: invoiceId!,
+                forceStaffWorkspace: true,
+              ),
+            ),
+          );
+        }
+
+        final String? quoteId = activity.quoteId?.trim();
+
+        if (_hasText(quoteId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => QuoteDetailScreen(
+                quoteId: quoteId!,
+                forceStaffWorkspace: true,
+              ),
+            ),
+          );
+        }
+
+        final bool isPatientActivity = activity.type.startsWith('patient_');
+
+        if (isPatientActivity) {
           return () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) =>
                   const PatientProfilesScreen(allowExplicitContactLink: true),
             ),
           );
-        },
-      ),
-    ];
+        }
 
-    final quoteEntries = QuoteActivityAdapter.fromSubmittedQuotes(
-      quotesAsync.valueOrNull ?? const [],
-      onTapForQuote: (quote) {
-        final quoteId = quote.quoteId.trim();
-        if (quoteId.isEmpty) return null;
+        final bool isContactActivity = activity.type.startsWith('contact_');
 
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                QuoteDetailScreen(quoteId: quoteId, forceStaffWorkspace: true),
-          ),
-        );
+        if (isContactActivity) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
+          );
+        }
+
+        return null;
       },
     );
 
-    final customerEntries = ContactActivityAdapter.fromCustomers(
-      customersAsync.valueOrNull ?? const [],
-      onTapForContact: (contact) {
-        final contactId = contact.contactId.trim();
-        if (contactId.isEmpty) return null;
-
-        return () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: (_) => const ContactsScreen()));
-      },
-    );
-
-    final entries = <ActivityEntry>[
+    final List<ActivityEntry> entries = <ActivityEntry>[
       ...inventoryResult.entries,
-      ...patientEntries,
-      ...quoteEntries,
-      ...customerEntries,
-    ];
+      ...feedEntries,
+    ]..sort((ActivityEntry a, ActivityEntry b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,
       icon: Icons.notifications_none,
-      loading:
-          inventoryResult.loading ||
-          patientsAsync.isLoading ||
-          quotesAsync.isLoading ||
-          customersAsync.isLoading,
-      hasError:
-          inventoryResult.hasError ||
-          patientsAsync.hasError ||
-          quotesAsync.hasError ||
-          customersAsync.hasError,
+      loading: inventoryResult.loading || activityAsync.isLoading,
+      hasError: inventoryResult.hasError || activityAsync.hasError,
+      errorText: 'Could not load activity.',
       entries: entries,
       emptyText: emptyText,
       maxItems: maxItems,
@@ -142,17 +140,18 @@ class StaffLatestActivityPanel extends ConsumerWidget {
     final storesAsync = ref.watch(
       inventoryLocationProvider(InventoryLocationType.store),
     );
+
     final dispensariesAsync = ref.watch(
       inventoryLocationProvider(InventoryLocationType.dispensary),
     );
 
-    final loading =
+    final bool loading =
         issuesAsync.isLoading ||
         deliveriesAsync.isLoading ||
         storesAsync.isLoading ||
         dispensariesAsync.isLoading;
 
-    final hasError =
+    final bool hasError =
         issuesAsync.hasError ||
         deliveriesAsync.hasError ||
         storesAsync.hasError ||
@@ -161,7 +160,7 @@ class StaffLatestActivityPanel extends ConsumerWidget {
     final stores = storesAsync.valueOrNull ?? const [];
     final dispensaries = dispensariesAsync.valueOrNull ?? const [];
 
-    final entries = <ActivityEntry>[
+    final List<ActivityEntry> entries = <ActivityEntry>[
       for (final issue in issuesAsync.valueOrNull ?? const [])
         ActivityEntry(
           date: issue.dateIssuedOrReceived ?? issue.dateRequested,
@@ -176,13 +175,17 @@ class StaffLatestActivityPanel extends ConsumerWidget {
           date: delivery.date,
           widget: DeliveryRecordTile(record: delivery, stores: stores),
         ),
-    ];
+    ]..sort((ActivityEntry a, ActivityEntry b) => b.date.compareTo(a.date));
 
     return _ActivityResult(
       loading: loading,
       hasError: hasError,
       entries: entries,
     );
+  }
+
+  static bool _hasText(String? value) {
+    return value != null && value.trim().isNotEmpty;
   }
 }
 

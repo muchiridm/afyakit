@@ -2,6 +2,11 @@
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -165,52 +170,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(loginControllerProvider);
-    final theme = Theme.of(context);
 
     return Stack(
       children: [
-        Scaffold(
+        AppPage(
+          scrollable: true,
+          maxWidth: AppLayout.contentMaxWidth,
+          padding: AppLayout.pagePadding,
           backgroundColor: widget.backgroundColor,
-          appBar: _buildAppBar(),
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: 420,
-                        minHeight: constraints.maxHeight - 48,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildHeader(theme),
-                          const SizedBox(height: 20),
-                          _StepHint(text: state.stepHint),
-                          const SizedBox(height: 16),
-                          switch (state.step) {
-                            LoginStep.phone => _phoneStep(state),
-                            LoginStep.otp => _otpStep(state),
-                            LoginStep.emailEntry => _emailEntryStep(state),
-                            LoginStep.emailOtp => _emailOtpStep(state),
-                            LoginStep.nameEntry => _nameStep(state),
-                            LoginStep.recoverAccount => _recoverAccountStep(
-                              state,
-                            ),
-                          },
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+          header: const HomeHeader(
+            entry: EntryMode.guest,
+            showDeliveryBanner: false,
+            showHomeButton: false,
+            showIdentityActions: false,
+          ),
+          body: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: _LoginCard(
+                onClose: _close,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(context),
+                    const SizedBox(height: 20),
+                    _StepHint(text: state.stepHint),
+                    const SizedBox(height: 16),
+                    switch (state.step) {
+                      LoginStep.phone => _phoneStep(state),
+                      LoginStep.otp => _otpStep(state),
+                      LoginStep.emailEntry => _emailEntryStep(state),
+                      LoginStep.emailOtp => _emailOtpStep(state),
+                      LoginStep.nameEntry => _nameStep(state),
+                      LoginStep.recoverAccount => _recoverAccountStep(state),
+                    },
+                  ],
+                ),
+              ),
             ),
           ),
         ),
 
-        // 👇 FULL SCREEN LOADING OVERLAY
+        // Full-screen loading overlay.
         if (state.savingProfile)
           Container(
             color: Colors.black.withOpacity(0.4),
@@ -232,48 +233,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.close),
-        tooltip: 'Close',
-        onPressed: _close,
-      ),
-      title: Text(widget.copy.appTitle),
-      centerTitle: true,
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme) {
-    final primary = theme.colorScheme.primary;
+  Widget _buildHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        Icon(Icons.lock_outline_rounded, size: 34, color: scheme.primary),
+        const SizedBox(height: AppShape.gap8),
         Text(
           widget.copy.headerTitle,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: primary,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: scheme.primary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           widget.copy.headerSubtitle,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: primary.withOpacity(0.85),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: scheme.primary.withOpacity(0.86),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppShape.gap10),
         Text(
           widget.copy.description,
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            height: 1.3,
+          ),
         ),
       ],
     );
@@ -654,8 +647,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
+class _LoginCard extends StatelessWidget {
+  const _LoginCard({required this.child, required this.onClose});
+
+  final Widget child;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(top: AppShape.gap16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: scheme.outlineVariant.withOpacity(0.7)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton.filledTonal(
+                tooltip: 'Close',
+                icon: const Icon(Icons.close),
+                onPressed: onClose,
+              ),
+            ),
+            const SizedBox(height: AppShape.gap4),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StepHint extends StatelessWidget {
   const _StepHint({required this.text});
+
   final String? text;
 
   @override
@@ -664,6 +698,7 @@ class _StepHint extends StatelessWidget {
     if (t.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+
     return Text(
       t,
       textAlign: TextAlign.center,

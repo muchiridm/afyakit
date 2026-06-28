@@ -1,8 +1,9 @@
-// lib/core/home/widgets/home_shared.dart
+// lib/core/home/widgets/shared/home_dashboard/home_shared.dart
 
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
+import 'package:afyakit/core/hq/branding/widgets/tenant_brand_logo.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 const double homeDashboardTwoColBreakpoint = 900;
@@ -82,7 +83,6 @@ class HomeDashboardTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
     final cleanTitle = title.trim().isEmpty ? fallbackTitle : title.trim();
 
     return Card(
@@ -105,7 +105,10 @@ class HomeDashboardTopBar extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 180),
-                    child: HomeHeaderTitle(cleanTitle, style: t.titleMedium),
+                    child: TenantBrandLogo(
+                      size: TenantBrandLogoSize.large,
+                      fallbackLabel: cleanTitle,
+                    ),
                   ),
                   Align(
                     alignment: Alignment.centerRight,
@@ -124,7 +127,10 @@ class HomeDashboardTopBar extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  HomeHeaderTitle(cleanTitle, style: t.titleMedium),
+                  TenantBrandLogo(
+                    size: TenantBrandLogoSize.large,
+                    fallbackLabel: cleanTitle,
+                  ),
                   const SizedBox(height: AppShape.gap10),
                   Row(
                     children: [
@@ -147,7 +153,10 @@ class HomeDashboardTopBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                HomeHeaderTitle(cleanTitle, style: t.titleMedium),
+                TenantBrandLogo(
+                  size: TenantBrandLogoSize.large,
+                  fallbackLabel: cleanTitle,
+                ),
                 const SizedBox(height: AppShape.gap8),
                 const UserBadge(),
                 const SizedBox(height: AppShape.gap10),
@@ -187,7 +196,7 @@ class _HomeDashboardTopBarShell extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 58),
+      constraints: const BoxConstraints(minHeight: 88),
       color: scheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: child,
@@ -376,6 +385,7 @@ class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
   @override
   void initState() {
     super.initState();
+
     if (widget.autofocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _focus.requestFocus();
@@ -390,7 +400,9 @@ class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
     super.dispose();
   }
 
-  void _submit() => widget.onSearch(_c.text.trim());
+  void _submit() {
+    widget.onSearch(_c.text.trim());
+  }
 
   @override
   Widget build(BuildContext context) {

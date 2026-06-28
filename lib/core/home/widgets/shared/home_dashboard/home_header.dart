@@ -1,65 +1,107 @@
-// lib/core/catalog/widgets/catalog_components/catalog_header.dart
+// lib/core/home/widgets/shared/home_dashboard/home_header.dart
 
-import 'dart:ui' show lerpDouble;
-
-import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/hq/branding/providers/tenant_logo_providers.dart';
+import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
+import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
+import 'package:afyakit/core/hq/branding/widgets/tenant_brand_logo.dart';
 import 'package:afyakit/core/hq/tenants/models/tenant_profile.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
+import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CatalogHeader extends ConsumerWidget {
-  final String selectedForm;
-  final ValueChanged<String> onFormChanged;
-
-  final int? quoteItemCount;
-  final String? quoteTotalLabel;
-  final VoidCallback? onViewQuote;
-  final VoidCallback? onClearQuote;
-  final VoidCallback? onExportCsv;
-
-  const CatalogHeader({
+class HomeHeader extends ConsumerWidget {
+  const HomeHeader({
     super.key,
-    required this.selectedForm,
-    required this.onFormChanged,
-    this.quoteItemCount,
-    this.quoteTotalLabel,
-    this.onViewQuote,
-    this.onClearQuote,
-    this.onExportCsv,
+    required this.entry,
+    this.greetingName,
+    this.memberId,
+    this.showDeliveryBanner = false,
+
+    /// Use this on catalog pages.
+    ///
+    /// When logged in:
+    /// - true  => show Home button above Logout
+    /// - false => show UserBadge above Logout
+    ///
+    /// When logged out:
+    /// - Home/UserBadge is suppressed
+    /// - AuthButton shows Login
+    this.showHomeButton = false,
+
+    /// Use false on the LoginScreen so the page can reuse the shared
+    /// brand/contact/logo header without showing a duplicate Login button.
+    this.showIdentityActions = true,
   });
+
+  final EntryMode entry;
+  final String? greetingName;
+  final String? memberId;
+  final bool showDeliveryBanner;
+  final bool showHomeButton;
+  final bool showIdentityActions;
+
+  bool get _isMemberUx => entry != EntryMode.staff;
 
   static const double _bp = 860;
 
-  static double _responsiveGap(double w) {
-    const minG = 8.0;
-    const maxG = 16.0;
-    const start = 480.0;
-    const end = 1440.0;
-    final t = ((w - start) / (end - start)).clamp(0.0, 1.0);
-    return lerpDouble(minG, maxG, t)!;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final tenantName = ref.watch(tenantDisplayNameProvider);
     final width = MediaQuery.of(context).size.width;
     final isNarrow = width < _bp;
-    final gap = _responsiveGap(width);
 
-    final logoUrl = ref.watch(tenantPrimaryLogoUrlProvider);
-    final logo = Image.network(
-      logoUrl,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BrandHeaderBar(
+          fallbackLabel: tenantName,
+          isNarrow: isNarrow,
+          showHomeButton: showHomeButton,
+          showIdentityActions: showIdentityActions,
+        ),
+        if (_isMemberUx) ...[
+          const SizedBox(height: AppShape.gap10),
+          _MemberGreeting(name: greetingName, memberId: memberId),
+        ],
+        if (showDeliveryBanner) ...[
+          const SizedBox(height: AppShape.gap8),
+          const DeliveryBanner(),
+        ],
+      ],
+    );
+  }
+}
+
+class _BrandHeaderBar extends StatelessWidget {
+  const _BrandHeaderBar({
+    required this.fallbackLabel,
+    required this.isNarrow,
+    required this.showHomeButton,
+    required this.showIdentityActions,
+  });
+
+  final String fallbackLabel;
+  final bool isNarrow;
+  final bool showHomeButton;
+  final bool showIdentityActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final logo = TenantBrandLogo(
       height: isNarrow ? 82 : 88,
-      fit: BoxFit.contain,
+      maxWidth: 220,
+      fallbackLabel: fallbackLabel,
     );
 
-    return Container(
-      width: double.infinity,
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -76,18 +118,14 @@ class CatalogHeader extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox(height: 86, child: Center(child: logo)),
-                  const SizedBox(height: 8),
-                  _HeaderButtons(
-                    quoteItemCount: quoteItemCount,
-                    quoteTotalLabel: quoteTotalLabel,
-                    onViewQuote: onViewQuote,
-                    onClearQuote: onClearQuote,
-                    onExportCsv: onExportCsv,
-                    onLogin: () async => requireAuth(context, ref),
-                    centered: true,
-                    horizontal: true,
-                  ),
-                  SizedBox(height: gap),
+                  if (showIdentityActions) ...[
+                    const SizedBox(height: AppShape.gap8),
+                    _HeaderIdentityActions(
+                      showHomeButton: showHomeButton,
+                      centered: true,
+                    ),
+                  ],
+                  const SizedBox(height: AppShape.gap12),
                   const _HeaderContact(centered: true, horizontalLayout: true),
                 ],
               )
@@ -107,16 +145,12 @@ class CatalogHeader extends ConsumerWidget {
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: _HeaderButtons(
-                        quoteItemCount: quoteItemCount,
-                        quoteTotalLabel: quoteTotalLabel,
-                        onViewQuote: onViewQuote,
-                        onClearQuote: onClearQuote,
-                        onExportCsv: onExportCsv,
-                        onLogin: () async => requireAuth(context, ref),
-                        centered: false,
-                        horizontal: true,
-                      ),
+                      child: showIdentityActions
+                          ? _HeaderIdentityActions(
+                              showHomeButton: showHomeButton,
+                              centered: false,
+                            )
+                          : const SizedBox.shrink(),
                     ),
                   ),
                 ],
@@ -127,13 +161,13 @@ class CatalogHeader extends ConsumerWidget {
 }
 
 class _HeaderContact extends ConsumerWidget {
-  final bool centered;
-  final bool horizontalLayout;
-
   const _HeaderContact({
     required this.centered,
     required this.horizontalLayout,
   });
+
+  final bool centered;
+  final bool horizontalLayout;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -150,7 +184,7 @@ class _HeaderContact extends ConsumerWidget {
 
         String? clean(String? v) {
           final t = v?.trim();
-          return (t == null || t.isEmpty) ? null : t;
+          return t == null || t.isEmpty ? null : t;
         }
 
         whatsapp = clean(d.whatsapp);
@@ -185,6 +219,7 @@ class _HeaderContact extends ConsumerWidget {
 
     if (horizontalLayout) {
       final align = centered ? WrapAlignment.center : WrapAlignment.start;
+
       return Wrap(
         spacing: 14,
         runSpacing: 4,
@@ -202,23 +237,23 @@ class _HeaderContact extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: align,
       children: [
-        for (final w in items)
-          Padding(padding: const EdgeInsets.only(bottom: 3), child: w),
+        for (final item in items)
+          Padding(padding: const EdgeInsets.only(bottom: 3), child: item),
       ],
     );
   }
 }
 
 class _ContactItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
   const _ContactItem({
     required this.icon,
     required this.label,
     required this.value,
   });
+
+  final IconData icon;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -228,13 +263,13 @@ class _ContactItem extends StatelessWidget {
     final baseValue = theme.textTheme.bodySmall;
 
     final labelStyle = baseLabel?.copyWith(
-      fontSize: (baseLabel.fontSize ?? 11),
+      fontSize: baseLabel.fontSize ?? 11,
       color: theme.colorScheme.onSurface.withOpacity(0.62),
       fontWeight: FontWeight.w500,
     );
 
     final valueStyle = baseValue?.copyWith(
-      fontSize: (baseValue.fontSize ?? 12),
+      fontSize: baseValue.fontSize ?? 12,
       color: theme.colorScheme.onSurface.withOpacity(0.88),
       fontWeight: FontWeight.w600,
     );
@@ -267,46 +302,37 @@ class _ContactItem extends StatelessWidget {
   }
 }
 
-class _HeaderButtons extends ConsumerWidget {
-  final int? quoteItemCount;
-  final String? quoteTotalLabel;
-  final VoidCallback? onViewQuote;
-  final VoidCallback? onClearQuote;
-  final VoidCallback? onExportCsv;
-  final VoidCallback? onLogin;
-  final bool centered;
-  final bool horizontal;
-
-  const _HeaderButtons({
+class _HeaderIdentityActions extends ConsumerWidget {
+  const _HeaderIdentityActions({
+    required this.showHomeButton,
     required this.centered,
-    required this.horizontal,
-    this.quoteItemCount,
-    this.quoteTotalLabel,
-    this.onViewQuote,
-    this.onClearQuote,
-    this.onExportCsv,
-    this.onLogin,
   });
+
+  final bool showHomeButton;
+  final bool centered;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(currentUserProvider);
-    final user = userAsync.value;
+    final tenantId = ref.watch(tenantIdProvider);
+    final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
-    final count = quoteItemCount ?? 0;
-    final canView = onViewQuote != null && count > 0;
-    final canClear = onClearQuote != null && count > 0;
+    final user = sessionAsync.maybeWhen(data: (u) => u, orElse: () => null);
 
-    String quoteLabel() {
-      if (count <= 0) return 'Quote';
-      final total = quoteTotalLabel;
-      return total == null || total.isEmpty
-          ? 'Quote ($count)'
-          : 'Quote ($count) · $total';
-    }
+    final isLoggedIn = user != null;
 
-    final homeButton = user != null
-        ? FilledButton.tonalIcon(
+    final shouldShowHomeButton = showHomeButton && isLoggedIn;
+    final shouldShowUserBadge = !showHomeButton && isLoggedIn;
+
+    final crossAxisAlignment = centered
+        ? CrossAxisAlignment.center
+        : CrossAxisAlignment.end;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: crossAxisAlignment,
+      children: [
+        if (shouldShowHomeButton)
+          FilledButton.tonalIcon(
             icon: const Icon(Icons.home_outlined, size: 18),
             label: const Text('Home'),
             style: FilledButton.styleFrom(
@@ -319,69 +345,48 @@ class _HeaderButtons extends ConsumerWidget {
               );
             },
           )
-        : null;
+        else if (shouldShowUserBadge)
+          const UserBadge(),
 
-    final loginButton = (user == null && onLogin != null)
-        ? FilledButton.tonal(
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-            onPressed: onLogin,
-            child: const Text('Login / Register'),
-          )
-        : null;
+        if (shouldShowHomeButton || shouldShowUserBadge)
+          const SizedBox(height: AppShape.gap8),
 
-    final clearButton = count > 0
-        ? IconButton(
-            tooltip: 'Clear quote',
-            visualDensity: VisualDensity.compact,
-            onPressed: canClear ? onClearQuote : null,
-            icon: const Icon(Icons.delete_outline),
-          )
-        : null;
+        const AuthButton(loginLabel: 'Login', logoutLabel: 'Logout'),
+      ],
+    );
+  }
+}
 
-    final quoteButton = (onViewQuote != null)
-        ? FilledButton.icon(
-            onPressed: canView ? onViewQuote : null,
-            icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-            label: Text(quoteLabel(), overflow: TextOverflow.ellipsis),
-          )
-        : null;
+class _MemberGreeting extends StatelessWidget {
+  const _MemberGreeting({required this.name, required this.memberId});
 
-    final children = <Widget>[
-      if (homeButton != null) homeButton,
-      if (clearButton != null) clearButton,
-      if (quoteButton != null) quoteButton,
-      if (loginButton != null) loginButton,
-    ];
+  final String? name;
+  final String? memberId;
 
-    if (children.isEmpty) return const SizedBox.shrink();
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-    if (horizontal) {
-      final align = centered ? WrapAlignment.center : WrapAlignment.end;
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: align,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: children,
-      );
-    }
+    final n = (name ?? '').trim();
+    if (n.isEmpty) return const SizedBox.shrink();
 
-    final align = centered ? CrossAxisAlignment.center : CrossAxisAlignment.end;
+    final id = (memberId ?? '').trim();
+
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: align,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        children.first,
-        if (children.length > 1) ...[
-          const SizedBox(height: 8),
-          ...children.skip(1),
+        Text(
+          'Hi, $n 👋',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (id.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Member ID: $id',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          ),
         ],
       ],
     );
@@ -390,6 +395,7 @@ class _HeaderButtons extends ConsumerWidget {
 
 void _copyToClipboard(BuildContext context, String text, String label) {
   Clipboard.setData(ClipboardData(text: text));
+
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text('$label copied'),

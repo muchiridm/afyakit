@@ -3,17 +3,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/home/models/activity_entry.dart';
-import 'package:afyakit/core/home/activities/contacts/contact_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/contacts/contact_activity_providers.dart';
-import 'package:afyakit/core/home/activities/patients/patient_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/patients/patient_activity_providers.dart';
-import 'package:afyakit/core/home/activities/quotes/quote_activity_adapter.dart';
-import 'package:afyakit/core/home/activities/quotes/quote_activity_providers.dart';
+import 'package:afyakit/core/home/activities/feed/activity_feed_adapter.dart';
+import 'package:afyakit/core/home/activities/feed/activity_feed_providers.dart';
 import 'package:afyakit/core/home/activities/shared/latest_activity_panel.dart';
+import 'package:afyakit/core/home/models/activity_entry.dart';
 
-import 'package:afyakit/features/clinical/patients/widgets/patient_details_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
 
 class MemberLatestActivityPanel extends ConsumerWidget {
@@ -41,21 +38,23 @@ class MemberLatestActivityPanel extends ConsumerWidget {
   static const int _fallbackMaxItems = 5;
 
   String? get _cleanContactId {
-    final id = contactId?.trim();
+    final String? id = contactId?.trim();
     if (id == null || id.isEmpty) return null;
+
     return id;
   }
 
   String? get _cleanAccountNumber {
-    final id = accountNumber?.trim();
+    final String? id = accountNumber?.trim();
     if (id == null || id.isEmpty) return null;
+
     return id;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scopedContactId = _cleanContactId;
-    final scopedAccountNumber = _cleanAccountNumber;
+    final String? scopedContactId = _cleanContactId;
+    final String? scopedAccountNumber = _cleanAccountNumber;
 
     if (scopedContactId == null && scopedAccountNumber == null) {
       return const LatestActivityPanel(
@@ -69,92 +68,88 @@ class MemberLatestActivityPanel extends ConsumerWidget {
       );
     }
 
-    final patientsAsync = scopedContactId == null
-        ? null
-        : ref.watch(memberPatientActivityProvider(scopedContactId));
-
-    final quotesAsync = ref.watch(
-      memberSubmittedQuoteActivityProvider(
-        MemberQuoteActivityScope(
+    final activityAsync = ref.watch(
+      memberActivityFeedProvider(
+        MemberActivityScope(
           contactId: scopedContactId,
           accountNumber: scopedAccountNumber,
+          limit: 20,
         ),
       ),
     );
 
-    final customersAsync = ref.watch(
-      memberCustomerActivityProvider(
-        MemberCustomerActivityScope(
-          contactId: scopedContactId,
-          accountNumber: scopedAccountNumber,
-        ),
-      ),
-    );
+    final entries = ActivityFeedAdapter.fromFeed(
+      activityAsync.valueOrNull ?? const [],
+      onTapForActivity: (activity) {
+        final String? paymentId = activity.paymentId?.trim();
+        final String? invoiceId = activity.invoiceId?.trim();
 
-    final patientEntries = PatientActivityAdapter.fromPatients(
-      patientsAsync?.valueOrNull ?? const [],
-      onTapForPatient: (patient) {
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PatientDetailsScreen(
-              patient: patient,
-              contactId: scopedContactId,
-              allowExplicitContactLink: false,
+        if (_hasText(paymentId) && _hasText(invoiceId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PaymentDetailScreen(
+                invoiceId: invoiceId!,
+                paymentId: paymentId!,
+                currencyCode: activity.currencyCode ?? 'KES',
+                customerName: activity.subtitle,
+                invoiceNumber: activity.invoiceNumber,
+                canManagePayments: false,
+              ),
             ),
-          ),
-        );
+          );
+        }
+
+        if (_hasText(invoiceId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => InvoiceDetailScreen(
+                invoiceId: invoiceId!,
+                forceStaffWorkspace: false,
+              ),
+            ),
+          );
+        }
+
+        final String? quoteId = activity.quoteId?.trim();
+
+        if (_hasText(quoteId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => QuoteDetailScreen(
+                quoteId: quoteId!,
+                forceStaffWorkspace: false,
+              ),
+            ),
+          );
+        }
+
+        final String? activityContactId = activity.contactId?.trim();
+        final bool isContactActivity = activity.type.startsWith('contact_');
+
+        if (isContactActivity && _hasText(activityContactId)) {
+          return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
+          );
+        }
+
+        return null;
       },
-    );
-
-    final quoteEntries = QuoteActivityAdapter.fromSubmittedQuotes(
-      quotesAsync.valueOrNull ?? const [],
-      onTapForQuote: (quote) {
-        final quoteId = quote.quoteId.trim();
-        if (quoteId.isEmpty) return null;
-
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                QuoteDetailScreen(quoteId: quoteId, forceStaffWorkspace: false),
-          ),
-        );
-      },
-    );
-
-    final customerEntries = ContactActivityAdapter.fromCustomers(
-      customersAsync.valueOrNull ?? const [],
-      onTapForContact: (contact) {
-        final contactId = contact.contactId.trim();
-        if (contactId.isEmpty) return null;
-
-        return () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: (_) => const ContactsScreen()));
-      },
-    );
-
-    final entries = <ActivityEntry>[
-      ...patientEntries,
-      ...quoteEntries,
-      ...customerEntries,
-    ];
+    )..sort((ActivityEntry a, ActivityEntry b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,
       icon: Icons.notifications_none,
-      loading:
-          (patientsAsync?.isLoading ?? false) ||
-          quotesAsync.isLoading ||
-          customersAsync.isLoading,
-      hasError:
-          (patientsAsync?.hasError ?? false) ||
-          quotesAsync.hasError ||
-          customersAsync.hasError,
+      loading: activityAsync.isLoading,
+      hasError: activityAsync.hasError,
       errorText: 'Could not load activity.',
       entries: entries,
       emptyText: emptyText,
       maxItems: maxItems,
       onTitleTap: onTitleTap,
     );
+  }
+
+  static bool _hasText(String? value) {
+    return value != null && value.trim().isNotEmpty;
   }
 }

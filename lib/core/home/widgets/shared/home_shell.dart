@@ -6,7 +6,7 @@ import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/core/home/widgets/shared/dashboard/home_screen.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_screen.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
@@ -27,11 +27,7 @@ class HomeShell extends ConsumerWidget {
     final tenantId = ref.watch(tenantIdProvider);
     final tenantName = ref.watch(tenantDisplayNameProvider);
 
-    // Guests:
-    // - if retail enabled: show guest surface
-    // - else: force login
     final retailEnabled = ref.watch(tenantRetailEnabledProvider);
-
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
@@ -41,13 +37,19 @@ class HomeShell extends ConsumerWidget {
       data: (user) {
         final realEntry = _entryModeFor(user);
 
+        // Guests:
+        // - retail tenant: browse catalog directly, logged out
+        // - non-retail tenant: force login
         if (realEntry == EntryMode.guest) {
-          if (retailEnabled) return const CatalogScreen();
+          if (retailEnabled) {
+            return const CatalogScreen();
+          }
+
           return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName));
         }
 
         // Authenticated users land in member mode by default.
-        // Staff can still switch to staff mode explicitly through staffViewModeProvider.
+        // Staff can still switch to staff mode explicitly.
         final staffView = ref.watch(staffViewModeProvider);
 
         final effectiveEntry = switch (realEntry) {
