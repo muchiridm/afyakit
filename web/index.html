@@ -6,40 +6,100 @@
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
 
-    <!-- Neutral default; will be overwritten by tenant branding on web -->
-    <meta name="description" content="AfyaKit platform is loading…" />
-    <meta name="theme-color" content="#2196F3" />
+    <!-- Neutral defaults. Do not use AfyaKit here to avoid tenant flicker. -->
+    <meta id="app-description" name="description" content="Loading…" />
+    <meta id="app-theme-color" name="theme-color" content="#2196F3" />
 
     <!-- iOS / PWA bits -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="AfyaKit" />
-
-    <!-- Fallback Apple icon; real per-tenant icon can override via DOM helper -->
-    <link
-      id="apple-touch-icon"
-      rel="apple-touch-icon"
-      href="/icons/_default/icon-192.png"
+    <meta
+      id="apple-mobile-web-app-title"
+      name="apple-mobile-web-app-title"
+      content="Loading…"
     />
 
-    <!-- Fallback favicon; will be replaced using TenantProfile.assets.faviconUrl -->
-    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.png" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/favicon.png" />
 
-    <!-- Neutral title; will be replaced by profile.webTitle -->
-    <title>AfyaKit</title>
+    <!-- Tenant-aware favicon served by Hosting redirect/function -->
+    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.ico" />
 
-    <!-- Dynamic, tenant-aware manifest (backend can serve per-tenant JSON here) -->
+    <!-- Neutral boot title. Flutter and branding JS patch this. -->
+    <title>Loading…</title>
+
+    <!-- Tenant-aware manifest served by Firebase Function -->
     <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
   </head>
 
   <body>
-    <!--
-      Firebase Phone Auth reCAPTCHA anchor (Web)
-      Keep this element stable during Flutter bootstrap to avoid DOM race issues
-      like: "Cannot read properties of null (reading 'style')"
-    -->
     <div id="firebase-recaptcha-container"></div>
 
-    <script src="flutter_bootstrap.js" async></script>
+    <!-- Keep Flutter boot first and unconditional. Do not block it on branding. -->
+    <script src="flutter_bootstrap.js" defer></script>
+
+    <!-- Background-only branding patch. This must never block Flutter. -->
+    <script>
+      (() => {
+        const setMetaContent = (id, value) => {
+          const el = document.getElementById(id);
+          if (el && value) el.setAttribute("content", value);
+        };
+
+        const setHref = (id, value) => {
+          const el = document.getElementById(id);
+          if (el && value) el.setAttribute("href", value);
+        };
+
+        const pickIcon = (manifest) => {
+          const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+
+          const preferred =
+            icons.find((i) => i.sizes === "192x192" && !i.purpose) ||
+            icons.find((i) => i.sizes === "512x512" && !i.purpose) ||
+            icons.find((i) => i.src);
+
+          return preferred && preferred.src ? preferred.src : "/favicon.png";
+        };
+
+        const applyBranding = (manifest) => {
+          if (!manifest) return;
+
+          const title = manifest.name || manifest.short_name || "";
+
+          if (title) {
+            document.title = title;
+            setMetaContent("apple-mobile-web-app-title", title);
+          }
+
+          setMetaContent("app-description", manifest.description || title);
+          setMetaContent("app-theme-color", manifest.theme_color);
+          setHref("apple-touch-icon", pickIcon(manifest));
+        };
+
+        const loadBranding = async () => {
+          try {
+            const res = await fetch("/manifest.webmanifest", {
+              cache: "no-store",
+              credentials: "same-origin",
+            });
+
+            if (!res.ok) return;
+
+            const manifest = await res.json();
+            applyBranding(manifest);
+          } catch (_) {
+            // Branding must never affect Flutter boot.
+          }
+        };
+
+        window.addEventListener(
+          "load",
+          () => {
+            window.setTimeout(loadBranding, 0);
+          },
+          { once: true },
+        );
+      })();
+    </script>
   </body>
 </html>

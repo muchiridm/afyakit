@@ -137,7 +137,7 @@ Color _colorFromHex(String hex, {String fallback = '#2196F3'}) {
 }
 
 extension TenantProfileWebAssetsX on TenantProfile {
-  String get _webAssetBasePath => 'public/$id/web';
+  String get _webAssetBasePath => 'public/$id/branding/web';
 
   String get _webBucket => assets.bucket.isNotEmpty
       ? assets.bucket
@@ -153,4 +153,10 @@ extension TenantProfileWebAssetsX on TenantProfile {
 
   String get icon512Url =>
       'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/icon-512.png$_versionSuffix';
+
+  String get maskableIcon192Url =>
+      'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/icon-maskable-192.png$_versionSuffix';
+
+  String get maskableIcon512Url =>
+      'https://storage.googleapis.com/$_webBucket/$_webAssetBasePath/icon-maskable-512.png$_versionSuffix';
 }

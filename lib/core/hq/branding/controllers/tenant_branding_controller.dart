@@ -106,6 +106,8 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
 
   /// Upload favicon/icons and persist a web-safe HTTPS download URL into assets.logos.
   /// Also bumps assets.version for cache busting.
+  /// Upload favicon/icons and persist a web-safe HTTPS download URL into assets.logos.
+  /// Also bumps assets.version.
   Future<bool> uploadWebAsset({
     required String tenantId,
     required TenantWebAssetType type,
@@ -115,14 +117,15 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
     try {
       final storage = TenantStorageService();
 
-      // 1) Upload bytes to storage path: public/{tenantId}/web/{file}.png
+      // 1) Upload bytes to storage path:
+      // public/{tenantId}/branding/web/{file}.png
       await storage.uploadWebAssetBytes(
         tenantId: tenantId,
         type: type,
         bytes: bytes,
       );
 
-      // 2) Get a web-safe download URL (firebasestorage.googleapis.com/...token...)
+      // 2) Get a web-safe download URL.
       final url = await storage.getWebAssetDownloadUrl(
         tenantId: tenantId,
         type: type,
@@ -132,7 +135,7 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
         throw StateError('Upload succeeded but download URL was null/empty');
       }
 
-      // 3) Persist into tenant assets.logos + bump version (via service helper)
+      // 3) Persist into tenant assets.logos + bump version.
       final svc = await _svc();
       await svc.updateTenantWebAsset(
         tenantId: tenantId,
@@ -200,6 +203,10 @@ class TenantBrandingController extends StateNotifier<TenantBrandingState> {
         return 'icon192';
       case TenantWebAssetType.icon512:
         return 'icon512';
+      case TenantWebAssetType.maskableIcon192:
+        return 'maskableIcon192';
+      case TenantWebAssetType.maskableIcon512:
+        return 'maskableIcon512';
     }
   }
 }

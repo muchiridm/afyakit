@@ -21,7 +21,14 @@
         "source": "/manifest.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
-
+      {
+        "source": "/favicon.ico",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/favicon.png",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
       {
         "source": "/**/*.{js,css,json,wasm,map}",
         "headers": [
@@ -31,7 +38,6 @@
           }
         ]
       },
-
       {
         "source": "/canvaskit/**",
         "headers": [
@@ -41,7 +47,6 @@
           }
         ]
       },
-
       {
         "source": "/**",
         "headers": [
@@ -49,7 +54,10 @@
             "key": "Strict-Transport-Security",
             "value": "max-age=31536000; includeSubDomains; preload"
           },
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
           {
             "key": "Referrer-Policy",
             "value": "strict-origin-when-cross-origin"
@@ -65,20 +73,44 @@
         ]
       }
     ],
+    "redirects": [
+      {
+        "source": "/favicon.ico",
+        "destination": "https://firebasestorage.googleapis.com/v0/b/afyakit-api.firebasestorage.app/o/public%2Fdawapap%2Fbranding%2Fweb%2Ffavicon.png?alt=media",
+        "type": 302
+      },
+      {
+        "source": "/favicon.png",
+        "destination": "https://firebasestorage.googleapis.com/v0/b/afyakit-api.firebasestorage.app/o/public%2Fdawapap%2Fbranding%2Fweb%2Ffavicon.png?alt=media",
+        "type": 302
+      }
+    ],
     "rewrites": [
       {
         "source": "/api/**",
-        "function": { "functionId": "api", "region": "europe-west1" }
+        "function": {
+          "functionId": "api",
+          "region": "europe-west1"
+        }
       },
       {
         "source": "/manifest.webmanifest",
-        "function": { "functionId": "manifest", "region": "europe-west1" }
+        "function": {
+          "functionId": "manifest",
+          "region": "europe-west1"
+        }
       },
       {
         "source": "/manifest.json",
-        "function": { "functionId": "manifest", "region": "europe-west1" }
+        "function": {
+          "functionId": "manifest",
+          "region": "europe-west1"
+        }
       },
-      { "source": "**", "destination": "/index.html" }
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
   }
 }
