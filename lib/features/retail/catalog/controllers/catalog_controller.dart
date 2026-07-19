@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/catalog_controller.dart
+// lib/features/retail/catalog/controllers/catalog_controller.dart
 
 import 'dart:async';
 
@@ -6,7 +6,7 @@ import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'catalog_service.dart';
+import '../services/catalog_service.dart';
 
 @immutable
 class CatalogState {

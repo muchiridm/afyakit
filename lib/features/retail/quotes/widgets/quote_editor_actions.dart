@@ -1,6 +1,5 @@
 // lib/features/retail/quotes/widgets/quote_editor_actions.dart
 
-import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
@@ -293,31 +292,11 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     final String? submitBlockReason = _submitBlockReason();
     final bool canSubmit = submitBlockReason == null && !busy;
 
-    Future<void> openCatalog() async {
-      final bool ok = await onEnsureAuthed();
-      if (!ok) return;
-      if (!context.mounted) return;
-
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const CatalogScreen()));
-    }
-
     final String amountText = requirePrices
         ? '$currencyCode ${linesState.estimatedTotal.toStringAsFixed(2)}'
         : '—';
 
     final ButtonStyle compactStyle = _compactButtonStyle();
-
-    final Widget addFromCatalogButton = OutlinedButton.icon(
-      icon: const Icon(Icons.search),
-      label: _buttonText('Add from Catalog'),
-      onPressed: busy ? null : openCatalog,
-      style: compactStyle.copyWith(
-        foregroundColor: WidgetStateProperty.all(colorScheme.primary),
-        side: WidgetStateProperty.all(BorderSide(color: colorScheme.primary)),
-      ),
-    );
 
     final Widget addCustomItemButton = OutlinedButton.icon(
       icon: const Icon(Icons.add_circle_outline),
@@ -358,12 +337,12 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     final Widget totalBlock = _EstimatedTotalBlock(amountText: amountText);
 
     final List<Widget> actionButtons = <Widget>[
-      addFromCatalogButton,
       if (!isMemberScoped) ...<Widget>[
         addCustomItemButton,
         addDeliveryChargeButton,
       ],
     ];
+    final bool hasActionButtons = actionButtons.isNotEmpty;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -387,14 +366,15 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   alignment: WrapAlignment.spaceBetween,
                   children: <Widget>[
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: actionButtons,
+                    if (hasActionButtons)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: actionButtons,
+                        ),
                       ),
-                    ),
                     ConstrainedBox(
                       constraints: const BoxConstraints(
                         minWidth: 150,
@@ -426,21 +406,23 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                       child: totalBlock,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: actionButtons
-                        .map(
-                          (Widget button) => SizedBox(
-                            width: constraints.maxWidth >= 520
-                                ? (constraints.maxWidth - 10) / 2
-                                : constraints.maxWidth,
-                            child: button,
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
+                  if (hasActionButtons) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: actionButtons
+                          .map(
+                            (Widget button) => SizedBox(
+                              width: constraints.maxWidth >= 520
+                                  ? (constraints.maxWidth - 10) / 2
+                                  : constraints.maxWidth,
+                              child: button,
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(width: double.infinity, child: submitButton),
                 ],

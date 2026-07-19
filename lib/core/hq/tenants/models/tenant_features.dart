@@ -23,7 +23,7 @@ class TenantFeatures {
     }
 
     return TenantFeatures({
-      for (final e in src.entries) e.key: toBool(e.value),
+      for (final entry in src.entries) entry.key: toBool(entry.value),
     });
   }
 

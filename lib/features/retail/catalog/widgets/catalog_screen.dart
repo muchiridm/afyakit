@@ -4,13 +4,14 @@ import 'dart:async';
 
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
-import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
-import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
+import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
+import 'package:afyakit/features/retail/catalog/providers/catalog_providers.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
+import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/utils/app_error_message.dart';
 import 'package:afyakit/shared/widgets/app_error_pane.dart';
@@ -136,6 +137,43 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         .refresh(query: state.query.copyWith(q: next));
   }
 
+  Future<void> _openQuoteEditor(BuildContext context) async {
+    if (!mounted) return;
+
+    await Navigator.of(context).push<QuoteEditorResult>(
+      MaterialPageRoute<QuoteEditorResult>(
+        builder: (_) => const QuoteEditorScreen(),
+      ),
+    );
+  }
+
+  void _addToQuote(
+    BuildContext context,
+    CatalogTile tile, {
+    BuildContext? closeContext,
+  }) {
+    if (!mounted) return;
+
+    ref.read(quoteLinesControllerProvider.notifier).addOrIncrement(tile);
+
+    if (closeContext != null) {
+      Navigator.of(closeContext).maybePop();
+    }
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Added to quote'),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'VIEW',
+          onPressed: () => _openQuoteEditor(context),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<void> readyAsync = ref.watch(catalogReadyProvider);
@@ -168,6 +206,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         );
 
         final CatalogState state = ref.watch(catalogControllerProvider);
+        final QuoteLinesState quoteState = ref.watch(
+          quoteLinesControllerProvider,
+        );
 
         return AppPage(
           scrollable: true,
@@ -176,7 +217,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             entry: EntryMode.guest,
             showHomeButton: true,
           ),
-          body: _buildBody(itemsAsync, state),
+          body: _buildBody(itemsAsync, state, quoteState),
         );
       },
     );
@@ -185,6 +226,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   Widget _buildBody(
     AsyncValue<List<CatalogTile>> itemsAsync,
     CatalogState state,
+    QuoteLinesState quoteState,
   ) {
     final CatalogController ctrl = ref.read(catalogControllerProvider.notifier);
 
@@ -229,6 +271,13 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         ),
         const SizedBox(height: 8),
         const CatalogDisclaimer(),
+        if (quoteState.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _QuoteCartBanner(
+            linesState: quoteState,
+            onTap: () => _openQuoteEditor(context),
+          ),
+        ],
         const SizedBox(height: 14),
         CatalogFiltersBar(
           selectedForm: state.query.form,
@@ -360,18 +409,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                           icon: const Icon(Icons.add_shopping_cart),
                           label: const Text('Add to quote'),
                           onPressed: () {
-                            ref
-                                .read(quoteLinesControllerProvider.notifier)
-                                .addOrIncrement(t);
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Added to quote'),
-                                duration: Duration(seconds: 1),
-                              ),
-                            );
-
-                            Navigator.of(ctx).maybePop();
+                            _addToQuote(context, t, closeContext: ctx);
                           },
                         ),
                       ),
@@ -443,18 +481,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                       icon: const Icon(Icons.add_shopping_cart),
                       label: const Text('Add to quote'),
                       onPressed: () {
-                        ref
-                            .read(quoteLinesControllerProvider.notifier)
-                            .addOrIncrement(t);
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Added to quote'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-
-                        Navigator.of(ctx).maybePop();
+                        _addToQuote(context, t, closeContext: ctx);
                       },
                     ),
                   ),
@@ -665,6 +692,64 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           const SizedBox(height: 2),
           Text(v, style: theme.textTheme.bodyMedium),
         ],
+      ),
+    );
+  }
+}
+
+class _QuoteCartBanner extends StatelessWidget {
+  const _QuoteCartBanner({required this.linesState, required this.onTap});
+
+  final QuoteLinesState linesState;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+
+    final String itemText = linesState.itemCount == 1
+        ? '1 item'
+        : '${linesState.itemCount} items';
+
+    final String lineText = linesState.lineCount == 1
+        ? '1 line'
+        : '${linesState.lineCount} lines';
+
+    return Material(
+      color: colors.primaryContainer,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long, color: colors.onPrimaryContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$itemText in quote · $lineText',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'View quote',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.onPrimaryContainer,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: colors.onPrimaryContainer),
+            ],
+          ),
+        ),
       ),
     );
   }

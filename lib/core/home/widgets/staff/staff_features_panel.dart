@@ -7,8 +7,13 @@ import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.da
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/models/staff_feature_def.dart';
 import 'package:afyakit/core/home/registry/home_registry.dart';
-import 'package:afyakit/shared/services/snack_service.dart';
+import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 
+import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+
+import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
@@ -21,13 +26,18 @@ class StaffFeaturesPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider).valueOrNull;
-    if (user == null) return const SizedBox.shrink();
+
+    if (user == null) {
+      return const SizedBox.shrink();
+    }
 
     final features = _orderedFeatures(
       HomeRegistry.featureTiles(ref, user, scope: HomeScope.staff),
     );
 
-    if (features.isEmpty) return const SizedBox.shrink();
+    if (features.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final theme = Theme.of(context);
 
@@ -43,37 +53,37 @@ class StaffFeaturesPanel extends ConsumerWidget {
           ),
           const SizedBox(height: AppShape.gap12),
           LayoutBuilder(
-            builder: (context, c) {
-              final twoCol = c.maxWidth >= _twoColBreakpoint;
+            builder: (context, constraints) {
+              final useTwoColumns = constraints.maxWidth >= _twoColBreakpoint;
 
-              if (!twoCol) {
+              if (!useTwoColumns) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (int i = 0; i < features.length; i++) ...[
+                    for (int index = 0; index < features.length; index++) ...[
                       _FeatureTile(
-                        feature: features[i],
+                        feature: features[index],
                         user: user,
                         scope: HomeScope.staff,
                       ),
-                      if (i != features.length - 1)
+                      if (index != features.length - 1)
                         const SizedBox(height: AppShape.gap12),
                     ],
                   ],
                 );
               }
 
-              final tileW = (c.maxWidth - AppShape.gap12) / 2;
+              final tileWidth = (constraints.maxWidth - AppShape.gap12) / 2;
 
               return Wrap(
                 spacing: AppShape.gap12,
                 runSpacing: AppShape.gap12,
                 children: [
-                  for (final f in features)
+                  for (final feature in features)
                     SizedBox(
-                      width: tileW,
+                      width: tileWidth,
                       child: _FeatureTile(
-                        feature: f,
+                        feature: feature,
                         user: user,
                         scope: HomeScope.staff,
                       ),
@@ -94,10 +104,16 @@ class StaffFeaturesPanel extends ConsumerWidget {
 
     ordered.sort((a, b) {
       final byGroup = _featureGroupRank(a).compareTo(_featureGroupRank(b));
-      if (byGroup != 0) return byGroup;
+
+      if (byGroup != 0) {
+        return byGroup;
+      }
 
       final byLabel = a.label.toLowerCase().compareTo(b.label.toLowerCase());
-      if (byLabel != 0) return byLabel;
+
+      if (byLabel != 0) {
+        return byLabel;
+      }
 
       return _featureKeyText(a).compareTo(_featureKeyText(b));
     });
@@ -106,13 +122,64 @@ class StaffFeaturesPanel extends ConsumerWidget {
   }
 
   static int _featureGroupRank(StaffFeatureDef feature) {
+    final key = _featureKeyText(feature);
+
+    switch (key) {
+      case FeatureKeys.healthMetrics:
+        return 10;
+
+      case FeatureKeys.clinical:
+        return 20;
+
+      case FeatureKeys.messaging:
+        return 30;
+
+      case FeatureKeys.retail:
+        return 40;
+
+      case FeatureKeys.insurance:
+        return 50;
+
+      case FeatureKeys.inventory:
+        return 60;
+
+      case FeatureKeys.rider:
+        return 70;
+
+      case FeatureKeys.reporting:
+        return 80;
+
+      case FeatureKeys.hq:
+        return 90;
+
+      default:
+        return _fallbackGroupRank(feature);
+    }
+  }
+
+  static int _fallbackGroupRank(StaffFeatureDef feature) {
     final haystack = [
       _featureKeyText(feature),
       feature.label,
       feature.description ?? '',
     ].join(' ').toLowerCase();
 
-    // 1. Clinical first.
+    if (_containsAny(haystack, const [
+      'health metrics',
+      'health metric',
+      'vital signs',
+      'vitals',
+      'blood pressure',
+      'blood glucose',
+      'blood sugar',
+      'weight',
+      'bmi',
+      'oxygen saturation',
+      'spo2',
+    ])) {
+      return 10;
+    }
+
     if (_containsAny(haystack, const [
       'clinical',
       'patient',
@@ -122,11 +189,9 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'doctor',
       'consult',
     ])) {
-      return 10;
+      return 20;
     }
 
-    // 2. Messaging / contacts.
-    // Contacts/customers live here, not Retail.
     if (_containsAny(haystack, const [
       'messaging',
       'message',
@@ -144,10 +209,9 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'email',
       'inbox',
     ])) {
-      return 20;
+      return 30;
     }
 
-    // 3. Retail / sales / commerce.
     if (_containsAny(haystack, const [
       'retail',
       'catalog',
@@ -166,10 +230,9 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'cart',
       'checkout',
     ])) {
-      return 30;
+      return 40;
     }
 
-    // 4. Insurance.
     if (_containsAny(haystack, const [
       'insurance',
       'claim',
@@ -183,10 +246,9 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'policy',
       'policies',
     ])) {
-      return 40;
+      return 50;
     }
 
-    // 5. Inventory / stock / stores.
     if (_containsAny(haystack, const [
       'inventory',
       'stock',
@@ -204,10 +266,30 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'consumable',
       'equipment',
     ])) {
-      return 50;
+      return 60;
     }
 
-    // 6. Admin / HQ / users / settings.
+    if (_containsAny(haystack, const [
+      'rider',
+      'riders',
+      'dispatch',
+      'courier',
+    ])) {
+      return 70;
+    }
+
+    if (_containsAny(haystack, const [
+      'reporting',
+      'report',
+      'reports',
+      'analytics',
+      'dashboard',
+      'export',
+      'exports',
+    ])) {
+      return 80;
+    }
+
     if (_containsAny(haystack, const [
       'admin',
       'hq',
@@ -217,30 +299,29 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'tenants',
       'setting',
       'settings',
-      'profile',
-      'profiles',
       'role',
       'roles',
       'permission',
       'permissions',
     ])) {
-      return 60;
+      return 90;
     }
 
-    // Everything else last.
-    return 90;
+    return 100;
   }
 
   static bool _containsAny(String value, List<String> needles) {
     for (final needle in needles) {
-      if (value.contains(needle)) return true;
+      if (value.contains(needle)) {
+        return true;
+      }
     }
 
     return false;
   }
 
   static String _featureKeyText(StaffFeatureDef feature) {
-    return feature.featureKey.toString().trim().toLowerCase();
+    return feature.featureKey.trim().toLowerCase();
   }
 }
 
@@ -271,13 +352,15 @@ class _FeatureTile extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _FeatureHeader(feature: feature),
-            _FeatureDesc(feature: feature),
+            _FeatureDescription(feature: feature),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: AppShape.gap10),
               Wrap(
                 spacing: AppShape.gap10,
                 runSpacing: AppShape.gap10,
-                children: actions.map((a) => _ActionChip(action: a)).toList(),
+                children: [
+                  for (final action in actions) _ActionChip(action: action),
+                ],
               ),
             ],
           ],
@@ -308,27 +391,32 @@ class _FeatureHeader extends StatelessWidget {
             ),
           ),
         ),
-        const Icon(Icons.chevron_right, size: 20),
+        if (feature.destination != null)
+          const Icon(Icons.chevron_right, size: 20),
       ],
     );
   }
 }
 
-class _FeatureDesc extends StatelessWidget {
-  const _FeatureDesc({required this.feature});
+class _FeatureDescription extends StatelessWidget {
+  const _FeatureDescription({required this.feature});
 
   final StaffFeatureDef feature;
 
   @override
   Widget build(BuildContext context) {
+    final description = (feature.description ?? '').trim();
+
+    if (description.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final theme = Theme.of(context);
-    final d = (feature.description ?? '').trim();
-    if (d.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Text(
-        d,
+        description,
         style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
       ),
     );
@@ -347,15 +435,47 @@ class _ActionChip extends StatelessWidget {
       child: OutlinedButton.icon(
         icon: Icon(action.icon, size: 18),
         label: Text(action.label),
-        onPressed: () {
-          final dest = action.destination;
-          if (dest == null) {
-            SnackService.showError('🚧 ${action.label} is not wired yet.');
-            return;
-          }
+        onPressed: () => _handleTap(context),
+      ),
+    );
+  }
 
-          Navigator.of(context).push(MaterialPageRoute(builder: dest));
-        },
+  Future<void> _handleTap(BuildContext context) async {
+    if (action.featureKey == FeatureKeys.healthMetrics) {
+      await _openHealthMetrics(context);
+      return;
+    }
+
+    final destination = action.destination;
+
+    if (destination == null) {
+      SnackService.showError('🚧 ${action.label} is not wired yet.');
+      return;
+    }
+
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: destination));
+  }
+
+  Future<void> _openHealthMetrics(BuildContext context) async {
+    final patient = await Navigator.of(context).push<PatientProfile>(
+      MaterialPageRoute<PatientProfile>(
+        builder: (_) => const PatientProfilesScreen(
+          allowExplicitContactLink: true,
+          selectionMode: true,
+          selectionTitle: 'Select patient for health metrics',
+        ),
+      ),
+    );
+
+    if (patient == null || !context.mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => HealthMetricsDashboardScreen(initialPatient: patient),
       ),
     );
   }

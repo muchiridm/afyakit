@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/catalog_providers.dart
+// lib/features/retail/catalog/providers/catalog_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,9 +6,9 @@ import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
-import 'catalog_controller.dart';
-import 'catalog_service.dart';
-import 'models/catalog_models.dart';
+import '../controllers/catalog_controller.dart';
+import '../services/catalog_service.dart';
+import '../models/catalog_models.dart';
 
 final catalogServiceFutureProvider = FutureProvider<CatalogService>((
   ref,

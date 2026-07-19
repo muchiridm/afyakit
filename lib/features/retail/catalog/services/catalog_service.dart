@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/catalog_service.dart
+// lib/features/retail/catalog/services/catalog_service.dart
 
 import 'dart:convert';
 
@@ -7,7 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 
-import 'models/catalog_models.dart';
+import '../models/catalog_models.dart';
 
 class CatalogService {
   const CatalogService({required this.api, required this.routes});

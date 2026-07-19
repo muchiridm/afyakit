@@ -1,14 +1,14 @@
 // lib/core/home/widgets/staff/home_staff_body.dart
 
-import 'package:afyakit/core/home/activities/shared/staff_activity_history_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/home/activities/shared/staff_activity_history_screen.dart';
+import 'package:afyakit/core/home/activities/shared/staff_latest_activity_panel.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_shared.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_features_panel.dart';
-import 'package:afyakit/core/home/activities/shared/staff_latest_activity_panel.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 
@@ -40,15 +40,13 @@ class HomeStaffBody extends StatelessWidget {
         showDeliveryBanner: false,
         showHomeButton: false,
       ),
-
       HomeDashboardTwoColumnLayout(
         leading: const StaffFeaturesPanel(),
         trailing: _StaffMainColumn(
-          onSearch: (q) => _openCatalog(context, q: q),
+          onSearch: (query) => _openCatalog(context, q: query),
           onBrowseCatalog: () => _openCatalog(context, autofocus: true),
         ),
       ),
-
       const SizedBox(height: AppShape.gap12),
     ], gap: AppShape.gap14);
   }
@@ -77,7 +75,6 @@ class _StaffMainColumn extends StatelessWidget {
           onBrowse: onBrowseCatalog,
         ),
       ),
-
       QuietHomePanel(
         child: StaffLatestActivityPanel(
           onTitleTap: () => Navigator.of(context).push(
