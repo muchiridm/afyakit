@@ -38,15 +38,24 @@ class ContactsScreen extends ConsumerWidget {
         ),
         IconButton(
           tooltip: 'Refresh',
-          onPressed: state.saving ? null : () => ctl.refresh(),
+          onPressed: state.saving ? null : ctl.refresh,
           icon: const Icon(Icons.refresh),
         ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
+            icon: state.saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: const Text('Add customer'),
+          ),
+        ),
       ],
-      fab: FloatingActionButton.extended(
-        onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New'),
-      ),
       body: Stack(
         children: [
           RefreshIndicator(
@@ -83,7 +92,9 @@ class ContactsScreen extends ConsumerWidget {
                     child: SizedBox(height: AppShape.gap12),
                   ),
                 _buildSliverBody(context, state, ctl),
-                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppShape.gap16),
+                ),
               ],
             ),
           ),
@@ -120,11 +131,11 @@ class ContactsScreen extends ConsumerWidget {
         hasScrollBody: false,
         child: AppEmptyState(
           icon: Icons.people_alt_outlined,
-          title: hasQuery ? 'No results' : 'No contacts yet',
+          title: hasQuery ? 'No results' : 'No customers yet',
           subtitle: hasQuery
               ? 'Try a different search.'
-              : 'Create your first customer contact to start quoting in Zoho.',
-          actionLabel: hasQuery ? 'Clear search' : 'Create contact',
+              : 'Add your first customer to start creating quotes.',
+          actionLabel: hasQuery ? 'Clear search' : 'Add customer',
           onAction: () {
             if (hasQuery) {
               ctl.setSearch('');

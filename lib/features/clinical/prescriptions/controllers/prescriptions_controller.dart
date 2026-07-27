@@ -56,11 +56,11 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
   final PrescriptionsService _service;
 
   Future<void> load({
-    String? patientId,
+    String? profileId,
     bool? isActive,
     PrescriptionStatus? status,
   }) async {
-    final pid = (patientId ?? state.patientId ?? '').trim();
+    final pid = (profileId ?? state.patientId ?? '').trim();
 
     state = state.copyWith(
       patientId: pid.isEmpty ? null : pid,

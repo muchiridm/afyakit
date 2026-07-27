@@ -1,8 +1,8 @@
 // lib/features/clinical/prescriptions/widgets/prescriptions_screen.dart
 
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
@@ -17,49 +17,83 @@ import 'package:url_launcher/url_launcher.dart';
 class PrescriptionsScreen extends ConsumerStatefulWidget {
   const PrescriptionsScreen({
     super.key,
-    this.patientId,
-    this.initialPatient,
+    this.profileId,
+    this.initialProfile,
     this.contactId,
-    this.forcePatientPickerMode = false,
+    this.forceProfilePickerMode = false,
   });
 
-  final String? patientId;
-  final PatientProfile? initialPatient;
+  final String? profileId;
+  final Profile? initialProfile;
 
-  /// Member/contact scope for patient picker.
+  /// Member/contact scope for profile selection.
   final String? contactId;
 
-  /// Staff/admin escape hatch. True means picker searches all patients.
-  final bool forcePatientPickerMode;
+  /// Staff/admin escape hatch. True searches all profiles.
+  final bool forceProfilePickerMode;
+
+  static Future<void> open({
+    required BuildContext context,
+    String? contactId,
+    bool forceProfilePickerMode = false,
+    Profile? profile,
+  }) async {
+    final selectedProfile =
+        profile ??
+        await showProfilePickerScreen(
+          context: context,
+          contactId: contactId,
+          forcePickerMode: forceProfilePickerMode,
+        );
+
+    if (selectedProfile == null || !context.mounted) return;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PrescriptionsScreen(
+          profileId: selectedProfile.profileId,
+          initialProfile: selectedProfile,
+          contactId: forceProfilePickerMode ? null : contactId,
+          forceProfilePickerMode: forceProfilePickerMode,
+        ),
+      ),
+    );
+  }
 
   @override
-  ConsumerState<PrescriptionsScreen> createState() =>
-      _PrescriptionsScreenState();
+  ConsumerState<PrescriptionsScreen> createState() {
+    return _PrescriptionsScreenState();
+  }
 }
 
 class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
-  PatientProfile? _selectedPatient;
-  String? _selectedPatientId;
+  Profile? _selectedProfile;
 
-  double get _maxWidth => AppLayout.contentMaxWidth;
-
-  String? get _patientId {
-    final fromWidget = (widget.patientId ?? '').trim();
-    if (fromWidget.isNotEmpty) return fromWidget;
-
-    final fromSelected = (_selectedPatient?.patientId ?? '').trim();
-    if (fromSelected.isNotEmpty) return fromSelected;
-
-    final fromId = (_selectedPatientId ?? '').trim();
-    return fromId.isEmpty ? null : fromId;
+  String? get _fixedProfileId {
+    final value = (widget.profileId ?? '').trim();
+    return value.isEmpty ? null : value;
   }
 
-  String get _title {
-    final patient = _selectedPatient;
-    final fixedPatientId = (widget.patientId ?? '').trim();
+  String? get _profileId {
+    final fixedProfileId = _fixedProfileId;
+    if (fixedProfileId != null) return fixedProfileId;
 
-    if (patient != null) return 'Prescriptions · ${patient.fullName}';
-    if (fixedPatientId.isNotEmpty) return 'Patient Prescriptions';
+    final selectedProfileId = (_selectedProfile?.profileId ?? '').trim();
+    return selectedProfileId.isEmpty ? null : selectedProfileId;
+  }
+
+  bool get _fixedToProfile => _fixedProfileId != null;
+
+  String get _title {
+    final profile = _selectedProfile;
+
+    if (profile != null) {
+      return 'Prescriptions · ${profile.fullName}';
+    }
+
+    if (_fixedToProfile) {
+      return 'Profile Prescriptions';
+    }
 
     return 'Prescriptions';
   }
@@ -68,96 +102,150 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
   void initState() {
     super.initState();
 
-    _selectedPatient = widget.initialPatient;
+    _selectedProfile = widget.initialProfile;
 
-    final fixedPatientId = (widget.patientId ?? '').trim();
-    if (fixedPatientId.isNotEmpty) {
-      _selectedPatientId = fixedPatientId;
-    } else {
-      _selectedPatientId = widget.initialPatient?.patientId;
-    }
+    final profile = _selectedProfile;
+
+    if (profile == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ref
+          .read(prescriptionsControllerProvider(profile.profileId).notifier)
+          .load(profileId: profile.profileId);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PrescriptionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final oldProfileId = oldWidget.initialProfile?.profileId;
+    final newProfileId = widget.initialProfile?.profileId;
+
+    if (oldProfileId == newProfileId) return;
+
+    _selectedProfile = widget.initialProfile;
+
+    final profile = _selectedProfile;
+
+    if (profile == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ref
+          .read(prescriptionsControllerProvider(profile.profileId).notifier)
+          .load(profileId: profile.profileId);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final patientId = _patientId;
-    final fixedToPatient = (widget.patientId ?? '').trim().isNotEmpty;
+    final profileId = _profileId;
 
-    if (patientId == null || patientId.trim().isEmpty) {
-      return AppPage(
-        title: _title,
-        showBack: true,
-        maxWidth: _maxWidth,
-        padding: AppLayout.pagePadding,
-        scrollable: false,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: null,
-            icon: const Icon(Icons.refresh),
+    final provider = profileId == null
+        ? null
+        : prescriptionsControllerProvider(profileId);
+
+    final state = provider == null ? null : ref.watch(provider);
+    final controller = provider == null ? null : ref.read(provider.notifier);
+
+    final busy = state?.busy ?? false;
+    final canUsePrescriptions = profileId != null && controller != null;
+
+    final children = <Widget>[
+      if (!_fixedToProfile || _selectedProfile != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: ProfilePickerCard(
+            selectedProfile: _selectedProfile,
+            busy: busy,
+            contactId: widget.contactId,
+            forcePickerMode: widget.forceProfilePickerMode,
+            canChange: !_fixedToProfile,
+            onChanged: _selectProfile,
           ),
+        ),
+      if (!canUsePrescriptions)
+        const _PickProfilePrompt()
+      else ...[
+        if (state!.error != null && state.error!.trim().isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Upload prescription'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _ErrorBanner(message: state.error!),
+          ),
+        if (state.isLoading && state.items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (state.items.isEmpty)
+          const _EmptyPrescriptions()
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: state.items
+                  .map(
+                    (prescription) => Padding(
+                      padding: const EdgeInsets.only(
+                        left: 16,
+                        right: 16,
+                        bottom: 8,
+                      ),
+                      child: _PrescriptionTile(
+                        prescription: prescription,
+                        busy: state.busy,
+                        onOpen: () => _openPrescription(
+                          context: context,
+                          controller: controller,
+                          prescription: prescription,
+                        ),
+                        onChangeStatus: () => _changeStatus(
+                          context: context,
+                          controller: controller,
+                          prescription: prescription,
+                        ),
+                        onDelete: () => _confirmDelete(
+                          context: context,
+                          controller: controller,
+                          prescription: prescription,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
             ),
           ),
-        ],
-        body: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            if (!fixedToPatient)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: PatientPickerCard(
-                  selectedPatient: _selectedPatient,
-                  busy: false,
-                  contactId: widget.contactId,
-                  forcePickerMode: widget.forcePatientPickerMode,
-                  onChanged: (patient) {
-                    setState(() {
-                      _selectedPatient = patient;
-                      _selectedPatientId = patient.patientId;
-                    });
-                  },
-                ),
-              ),
-            const _PickPatientPrompt(),
-          ],
-        ),
-      );
-    }
+      ],
+    ];
 
-    final provider = prescriptionsControllerProvider(patientId);
-    final state = ref.watch(provider);
-    final controller = ref.read(provider.notifier);
-
-    final canUpload = patientId.trim().isNotEmpty;
+    final list = ListView(padding: EdgeInsets.zero, children: children);
 
     return AppPage(
       title: _title,
       showBack: true,
-      maxWidth: _maxWidth,
+      maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
       scrollable: false,
       actions: [
         IconButton(
           tooltip: 'Refresh',
-          onPressed: state.busy || !canUpload
+          onPressed: !canUsePrescriptions || busy
               ? null
-              : () => controller.load(patientId: _patientId),
+              : () => controller.load(profileId: profileId),
           icon: const Icon(Icons.refresh),
         ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.busy || !canUpload
+            onPressed: !canUsePrescriptions || busy
                 ? null
                 : () =>
                       _pickAndUpload(context: context, controller: controller),
-            icon: state.isUploading
+            icon: state?.isUploading == true
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -168,112 +256,35 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
           ),
         ),
       ],
-      body: Column(
-        children: [
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => controller.load(patientId: _patientId),
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  if (!fixedToPatient) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: PatientPickerCard(
-                        selectedPatient: _selectedPatient,
-                        busy: state.busy,
-                        contactId: widget.contactId,
-                        forcePickerMode: widget.forcePatientPickerMode,
-                        onChanged: (patient) {
-                          setState(() {
-                            _selectedPatient = patient;
-                            _selectedPatientId = patient.patientId;
-                          });
-
-                          ref
-                              .read(
-                                prescriptionsControllerProvider(
-                                  patient.patientId,
-                                ).notifier,
-                              )
-                              .load(patientId: patient.patientId);
-                        },
-                      ),
-                    ),
-                  ] else if (_selectedPatient != null) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: _SelectedPatientHeader(patient: _selectedPatient!),
-                    ),
-                  ],
-                  if (state.error != null && state.error!.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: _ErrorBanner(message: state.error!),
-                    ),
-                  if (state.isLoading && state.items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (state.items.isEmpty)
-                    const _EmptyPrescriptions()
-                  else
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Column(
-                        children: state.items
-                            .map(
-                              (p) => Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 16,
-                                  right: 16,
-                                  bottom: 8,
-                                ),
-                                child: _PrescriptionTile(
-                                  prescription: p,
-                                  busy: state.busy,
-                                  onOpen: () => _openPrescription(
-                                    context: context,
-                                    controller: controller,
-                                    prescription: p,
-                                  ),
-                                  onChangeStatus: () => _changeStatus(
-                                    context: context,
-                                    controller: controller,
-                                    prescription: p,
-                                  ),
-                                  onDelete: () => _confirmDelete(
-                                    context: context,
-                                    controller: controller,
-                                    prescription: p,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      body: canUsePrescriptions
+          ? RefreshIndicator(
+              onRefresh: () => controller.load(profileId: profileId),
+              child: list,
+            )
+          : list,
     );
+  }
+
+  void _selectProfile(Profile profile) {
+    if (profile.profileId == _selectedProfile?.profileId) return;
+
+    setState(() {
+      _selectedProfile = profile;
+    });
+
+    ref
+        .read(prescriptionsControllerProvider(profile.profileId).notifier)
+        .load(profileId: profile.profileId);
   }
 
   Future<void> _pickAndUpload({
     required BuildContext context,
     required PrescriptionsController controller,
   }) async {
-    final patientId = _patientId;
+    final profileId = _profileId;
 
-    if (patientId == null || patientId.trim().isEmpty) {
-      _showSnack(context, 'Pick a patient first.');
+    if (profileId == null) {
+      _showSnack(context, 'Select a profile first.');
       return;
     }
 
@@ -303,23 +314,21 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
       return;
     }
 
-    final pickedFile = PickedPrescriptionFile(
-      fileName: file.name,
-      extension: file.extension ?? 'jpg',
-      bytes: bytes,
-    );
-
     await controller.upload(
       tenantId: tenantId,
-      patientId: patientId,
-      file: pickedFile,
+      patientId: profileId,
+      file: PickedPrescriptionFile(
+        fileName: file.name,
+        extension: file.extension ?? 'jpg',
+        bytes: bytes,
+      ),
       note: meta.note,
       prescribedOn: meta.prescribedOn,
     );
 
     if (!context.mounted) return;
 
-    final error = ref.read(prescriptionsControllerProvider(patientId)).error;
+    final error = ref.read(prescriptionsControllerProvider(profileId)).error;
     if (error == null) {
       _showSnack(context, 'Prescription uploaded.');
     }
@@ -340,9 +349,9 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
         builder: (_) =>
             _PrescriptionPreviewDialog(prescription: prescription, url: url),
       );
-    } catch (e) {
+    } catch (error) {
       if (!context.mounted) return;
-      _showSnack(context, e.toString());
+      _showSnack(context, error.toString());
     }
   }
 
@@ -351,7 +360,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     required PrescriptionsController controller,
     required Prescription prescription,
   }) async {
-    final PrescriptionStatus? nextStatus = await showDialog<PrescriptionStatus>(
+    final nextStatus = await showDialog<PrescriptionStatus>(
       context: context,
       builder: (_) =>
           _PrescriptionStatusDialog(currentStatus: prescription.status),
@@ -364,7 +373,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
       return;
     }
 
-    final Prescription? updated = await controller.update(
+    final updated = await controller.update(
       prescription: prescription,
       input: PrescriptionUpdateInput(status: nextStatus, isActive: true),
     );
@@ -388,12 +397,13 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     required PrescriptionsController controller,
     required Prescription prescription,
   }) async {
-    final ok = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete prescription?'),
         content: const Text(
-          'This removes the prescription record. The uploaded Storage file is not deleted by this MVP action.',
+          'This removes the prescription record. The uploaded Storage file is '
+          'not deleted by this MVP action.',
         ),
         actions: [
           TextButton(
@@ -409,7 +419,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
       ),
     );
 
-    if (ok != true) return;
+    if (confirmed != true) return;
 
     await controller.delete(prescription);
 
@@ -421,33 +431,6 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class _SelectedPatientHeader extends StatelessWidget {
-  const _SelectedPatientHeader({required this.patient});
-
-  final PatientProfile patient;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-        title: Text(
-          patient.fullName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          [
-            patient.patientId,
-            if ((patient.dob ?? '').trim().isNotEmpty) 'DOB: ${patient.dob}',
-            if ((patient.phone ?? '').trim().isNotEmpty) patient.phone,
-          ].join(' • '),
-        ),
-      ),
-    );
   }
 }
 
@@ -955,8 +938,8 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _PickPatientPrompt extends StatelessWidget {
-  const _PickPatientPrompt();
+class _PickProfilePrompt extends StatelessWidget {
+  const _PickProfilePrompt();
 
   @override
   Widget build(BuildContext context) {
@@ -964,7 +947,7 @@ class _PickPatientPrompt extends StatelessWidget {
       padding: EdgeInsets.all(32),
       child: Center(
         child: Text(
-          'Pick a patient to view or upload prescriptions.',
+          'Select a profile to view or upload prescriptions.',
           textAlign: TextAlign.center,
         ),
       ),

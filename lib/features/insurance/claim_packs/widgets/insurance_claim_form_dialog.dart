@@ -215,7 +215,7 @@ class _InsuranceClaimFormDialogState
         accountNumber: null,
 
         title: 'Select patient invoice',
-        emptyText: 'No invoices found for this patient.',
+        emptyText: 'No invoices found for this profile.',
       ),
     );
 
@@ -252,7 +252,7 @@ class _InsuranceClaimFormDialogState
 
     return ref
         .read(prescriptionsControllerProvider(patientId).notifier)
-        .load(patientId: patientId, isActive: true);
+        .load(profileId: patientId, isActive: true);
   }
 
   Future<void> _uploadPrescription() async {

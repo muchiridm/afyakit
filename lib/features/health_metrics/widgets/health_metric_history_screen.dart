@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -24,7 +24,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
     required this.type,
   });
 
-  final PatientProfile patient;
+  final Profile patient;
   final HealthMetricType type;
 
   @override
@@ -84,7 +84,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
 
   HealthMetricEntriesQuery _historyQuery() {
     return HealthMetricEntriesQuery(
-      patientId: patient.patientId,
+      patientId: patient.profileId,
       type: type,
       isActive: true,
       page: 1,
@@ -99,7 +99,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
   }) async {
     final input = await HealthMetricEntryDialog.show(
       context,
-      patientId: patient.patientId,
+      patientId: patient.profileId,
       patientName: patient.fullName,
       type: type,
     );
@@ -148,7 +148,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
     ref.invalidate(
       healthMetricEntriesProvider(
         HealthMetricEntriesQuery(
-          patientId: patient.patientId,
+          patientId: patient.profileId,
           isActive: true,
           page: 1,
           perPage: 100,
@@ -167,7 +167,7 @@ class _HistoryHeader extends StatelessWidget {
     required this.onRecord,
   });
 
-  final PatientProfile patient;
+  final Profile patient;
   final HealthMetricType type;
   final HealthMetricEntry? latest;
   final int readingCount;

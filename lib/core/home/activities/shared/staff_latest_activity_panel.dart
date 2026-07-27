@@ -10,7 +10,7 @@ import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/inventory/records/deliveries/providers/delivery_records_stream_provider.dart';
@@ -98,7 +98,7 @@ class StaffLatestActivityPanel extends ConsumerWidget {
           return () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) =>
-                  const PatientProfilesScreen(allowExplicitContactLink: true),
+                  const ProfilesScreen(allowExplicitContactLink: true),
             ),
           );
         }

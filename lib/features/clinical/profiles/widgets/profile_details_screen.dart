@@ -1,27 +1,27 @@
-// lib/features/clinical/patients/widgets/patient_details_screen.dart
+// lib/features/clinical/profiles/widgets/profile_details_screen.dart
 
+import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 
-class PatientDetailsScreen extends ConsumerStatefulWidget {
-  const PatientDetailsScreen({
+class ProfileDetailsScreen extends ConsumerStatefulWidget {
+  const ProfileDetailsScreen({
     super.key,
-    required this.patient,
+    required this.profile,
     this.contactId,
     this.allowExplicitContactLink = false,
   });
 
-  final PatientProfile patient;
+  final Profile profile;
 
   /// Member mode passes this so refresh/update remains scoped.
   final String? contactId;
@@ -30,43 +30,43 @@ class PatientDetailsScreen extends ConsumerStatefulWidget {
   final bool allowExplicitContactLink;
 
   @override
-  ConsumerState<PatientDetailsScreen> createState() =>
+  ConsumerState<ProfileDetailsScreen> createState() =>
       _PatientDetailsScreenState();
 }
 
-class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
+class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   String? get _contactScope {
     final id = widget.contactId?.trim();
     if (id == null || id.isEmpty) return null;
     return id;
   }
 
-  PatientProfilesScope get _scope {
-    return PatientProfilesScope(
+  ProfilesScope get _scope {
+    return ProfilesScope(
       contactId: _contactScope,
       allowExplicitContactLink: widget.allowExplicitContactLink,
     );
   }
 
-  PatientProfilesController get _controller {
-    return ref.read(patientProfilesControllerProvider(_scope).notifier);
+  ProfilesController get _controller {
+    return ref.read(profilesControllerProvider(_scope).notifier);
   }
 
-  PatientProfilesState get _state {
-    return ref.watch(patientProfilesControllerProvider(_scope));
+  ProfilesState get _state {
+    return ref.watch(profilesControllerProvider(_scope));
   }
 
-  PatientProfile get _patient {
-    final patientId = widget.patient.patientId.trim();
+  Profile get _patient {
+    final patientId = widget.profile.profileId.trim();
     final state = _state;
 
     for (final patient in state.items) {
-      if (patient.patientId.trim() == patientId) {
+      if (patient.profileId.trim() == patientId) {
         return patient;
       }
     }
 
-    return widget.patient;
+    return widget.profile;
   }
 
   @override
@@ -79,10 +79,10 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
     });
   }
 
-  Future<void> _openEditDialog(PatientProfile patient) async {
-    final input = await showDialog<PatientProfileUpsertInput>(
+  Future<void> _openEditDialog(Profile patient) async {
+    final input = await showDialog<ProfileUpsertInput>(
       context: context,
-      builder: (_) => PatientProfileFormDialog(
+      builder: (_) => ProfileFormDialog(
         initial: patient,
         allowExplicitContactLink: widget.allowExplicitContactLink,
       ),
@@ -91,7 +91,7 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await _controller.update(patient.patientId, input);
+      await _controller.update(patient.profileId, input);
 
       if (!mounted) return;
 
@@ -104,7 +104,7 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
     }
   }
 
-  Future<void> _deletePatient(PatientProfile patient) async {
+  Future<void> _deletePatient(Profile patient) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -134,7 +134,7 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await _controller.remove(patient.patientId);
+      await _controller.remove(patient.profileId);
 
       if (!mounted) return;
 
@@ -156,7 +156,7 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
   }
 
   void _showErrorFromState() {
-    final error = ref.read(patientProfilesControllerProvider(_scope)).error;
+    final error = ref.read(profilesControllerProvider(_scope)).error;
     if (error == null || error.trim().isEmpty) return;
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
@@ -230,7 +230,7 @@ class _PatientDetailsScreenState extends ConsumerState<PatientDetailsScreen> {
 class _PatientHeaderCard extends StatelessWidget {
   const _PatientHeaderCard({required this.patient});
 
-  final PatientProfile patient;
+  final Profile patient;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +253,7 @@ class _PatientHeaderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 SelectableText(
-                  patient.patientId,
+                  patient.profileId,
                   style: t.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -272,9 +272,7 @@ class _PatientHeaderCard extends StatelessWidget {
                       Chip(
                         visualDensity: VisualDensity.compact,
                         label: Text(
-                          PatientProfilesLabels.relationship(
-                            patient.relationship!,
-                          ),
+                          ProfilesLabels.relationship(patient.relationship!),
                         ),
                       ),
                   ],
@@ -304,7 +302,7 @@ class _PatientHeaderCard extends StatelessWidget {
 class _PatientDemographicsCard extends StatelessWidget {
   const _PatientDemographicsCard({required this.patient});
 
-  final PatientProfile patient;
+  final Profile patient;
 
   @override
   Widget build(BuildContext context) {
@@ -325,14 +323,14 @@ class _PatientDemographicsCard extends StatelessWidget {
     );
   }
 
-  static String? _genderLabel(PatientGender? gender) {
+  static String? _genderLabel(ProfileGender? gender) {
     if (gender == null) return null;
 
     return switch (gender) {
-      PatientGender.male => 'Male',
-      PatientGender.female => 'Female',
-      PatientGender.other => 'Other',
-      PatientGender.unknown => 'Unknown',
+      ProfileGender.male => 'Male',
+      ProfileGender.female => 'Female',
+      ProfileGender.other => 'Other',
+      ProfileGender.unknown => 'Unknown',
     };
   }
 }
@@ -340,7 +338,7 @@ class _PatientDemographicsCard extends StatelessWidget {
 class _PatientLinkedContactsCard extends StatelessWidget {
   const _PatientLinkedContactsCard({required this.patient});
 
-  final PatientProfile patient;
+  final Profile patient;
 
   @override
   Widget build(BuildContext context) {
@@ -366,7 +364,7 @@ class _PatientLinkedContactsCard extends StatelessWidget {
 class _LinkedContactTile extends StatelessWidget {
   const _LinkedContactTile({required this.link});
 
-  final PatientLinkedContact link;
+  final ProfileLinkedContact link;
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +375,7 @@ class _LinkedContactTile extends StatelessWidget {
         : link.contactId;
 
     final subtitleParts = <String>[
-      PatientProfilesLabels.relationship(link.relationship),
+      ProfilesLabels.relationship(link.relationship),
       link.isActive ? 'Active' : 'Inactive',
     ];
 

@@ -5,21 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:afyakit/core/home/models/activity_entry.dart';
 import 'package:afyakit/core/home/activities/shared/activity_event_tile.dart';
 import 'package:afyakit/core/home/activities/shared/activity_time_format.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 
-typedef PatientActivityTapBuilder =
-    VoidCallback? Function(PatientProfile patient);
+typedef ProfileActivityTapBuilder = VoidCallback? Function(Profile patient);
 
-typedef PatientLinkRequestActivityTapBuilder =
-    VoidCallback? Function(PatientLinkRequest request);
+typedef ProfileLinkRequestActivityTapBuilder =
+    VoidCallback? Function(ProfileLinkRequest request);
 
-class PatientActivityAdapter {
-  const PatientActivityAdapter._();
+class ProfileActivityAdapter {
+  const ProfileActivityAdapter._();
 
   static List<ActivityEntry> fromPatients(
-    List<PatientProfile> patients, {
-    PatientActivityTapBuilder? onTapForPatient,
+    List<Profile> patients, {
+    ProfileActivityTapBuilder? onTapForPatient,
   }) {
     return [
       for (final patient in patients)
@@ -41,8 +40,8 @@ class PatientActivityAdapter {
   }
 
   static List<ActivityEntry> fromLinkRequests(
-    List<PatientLinkRequest> requests, {
-    PatientLinkRequestActivityTapBuilder? onTapForRequest,
+    List<ProfileLinkRequest> requests, {
+    ProfileLinkRequestActivityTapBuilder? onTapForRequest,
   }) {
     return [
       for (final request in requests)
@@ -50,7 +49,7 @@ class PatientActivityAdapter {
           date: _linkRequestActivityDate(request),
           widget: ActivityEventTile(
             icon: Icons.link_outlined,
-            title: 'Patient link request • ${request.patientDisplayName}',
+            title: 'Patient link request • ${request.profileDisplayName}',
             subtitle: _linkRequestSubtitle(request),
             timestamp: activityTimestampLabel(
               date: _linkRequestActivityDate(request),
@@ -63,13 +62,13 @@ class PatientActivityAdapter {
     ];
   }
 
-  static DateTime _patientActivityDate(PatientProfile patient) {
+  static DateTime _patientActivityDate(Profile patient) {
     return patient.updatedAt ??
         patient.createdAt ??
         DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  static DateTime _linkRequestActivityDate(PatientLinkRequest request) {
+  static DateTime _linkRequestActivityDate(ProfileLinkRequest request) {
     return request.updatedAt ??
         request.approvedAt ??
         request.rejectedAt ??
@@ -77,7 +76,7 @@ class PatientActivityAdapter {
         DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  static String _patientSubtitle(PatientProfile patient) {
+  static String _patientSubtitle(Profile patient) {
     final parts = <String>[];
 
     final relationship = patient.relationship;
@@ -108,7 +107,7 @@ class PatientActivityAdapter {
     return parts.join(' • ');
   }
 
-  static String _linkRequestSubtitle(PatientLinkRequest request) {
+  static String _linkRequestSubtitle(ProfileLinkRequest request) {
     final parts = <String>[
       _linkStatusLabel(request.status),
       _approvalModeLabel(request.approvalMode),
@@ -121,32 +120,32 @@ class PatientActivityAdapter {
     return parts.join(' • ');
   }
 
-  static String _relationshipLabel(PatientContactRelationship relationship) {
+  static String _relationshipLabel(ProfileContactRelationship relationship) {
     return switch (relationship) {
-      PatientContactRelationship.self => 'Self',
-      PatientContactRelationship.child => 'Child',
-      PatientContactRelationship.spouse => 'Spouse',
-      PatientContactRelationship.parent => 'Parent',
-      PatientContactRelationship.guardian => 'Guardian',
-      PatientContactRelationship.insurance => 'Insurance',
-      PatientContactRelationship.other => 'Other',
+      ProfileContactRelationship.self => 'Self',
+      ProfileContactRelationship.child => 'Child',
+      ProfileContactRelationship.spouse => 'Spouse',
+      ProfileContactRelationship.parent => 'Parent',
+      ProfileContactRelationship.guardian => 'Guardian',
+      ProfileContactRelationship.insurance => 'Insurance',
+      ProfileContactRelationship.other => 'Other',
     };
   }
 
-  static String _approvalModeLabel(PatientLinkApprovalMode mode) {
+  static String _approvalModeLabel(ProfileLinkApprovalMode mode) {
     return switch (mode) {
-      PatientLinkApprovalMode.owner => 'Owner approval',
-      PatientLinkApprovalMode.staff => 'Staff approval',
+      ProfileLinkApprovalMode.owner => 'Owner approval',
+      ProfileLinkApprovalMode.staff => 'Staff approval',
     };
   }
 
-  static String _linkStatusLabel(PatientLinkRequestStatus status) {
+  static String _linkStatusLabel(ProfileLinkRequestStatus status) {
     return switch (status) {
-      PatientLinkRequestStatus.pendingOwnerApproval => 'Pending owner approval',
-      PatientLinkRequestStatus.pendingStaffApproval => 'Pending staff approval',
-      PatientLinkRequestStatus.approved => 'Approved',
-      PatientLinkRequestStatus.rejected => 'Rejected',
-      PatientLinkRequestStatus.cancelled => 'Cancelled',
+      ProfileLinkRequestStatus.pendingOwnerApproval => 'Pending owner approval',
+      ProfileLinkRequestStatus.pendingStaffApproval => 'Pending staff approval',
+      ProfileLinkRequestStatus.approved => 'Approved',
+      ProfileLinkRequestStatus.rejected => 'Rejected',
+      ProfileLinkRequestStatus.cancelled => 'Cancelled',
     };
   }
 }

@@ -1,88 +1,88 @@
 // lib/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart
 
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
+import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:flutter/material.dart';
 
-class PatientProfilesLabels {
-  const PatientProfilesLabels._();
+class ProfilesLabels {
+  const ProfilesLabels._();
 
-  static const List<PatientContactRelationship> selfLinkRelationships = [
-    PatientContactRelationship.self,
-    PatientContactRelationship.child,
-    PatientContactRelationship.spouse,
-    PatientContactRelationship.parent,
-    PatientContactRelationship.guardian,
+  static const List<ProfileContactRelationship> selfLinkRelationships = [
+    ProfileContactRelationship.self,
+    ProfileContactRelationship.child,
+    ProfileContactRelationship.spouse,
+    ProfileContactRelationship.parent,
+    ProfileContactRelationship.guardian,
   ];
 
-  static const List<PatientContactRelationship> payerRequestRelationships = [
-    PatientContactRelationship.insurance,
-    PatientContactRelationship.other,
+  static const List<ProfileContactRelationship> payerRequestRelationships = [
+    ProfileContactRelationship.insurance,
+    ProfileContactRelationship.other,
   ];
 
-  static const List<PatientContactRelationship> staffLinkRelationships = [
-    PatientContactRelationship.self,
-    PatientContactRelationship.child,
-    PatientContactRelationship.spouse,
-    PatientContactRelationship.parent,
-    PatientContactRelationship.guardian,
-    PatientContactRelationship.insurance,
-    PatientContactRelationship.other,
+  static const List<ProfileContactRelationship> staffLinkRelationships = [
+    ProfileContactRelationship.self,
+    ProfileContactRelationship.child,
+    ProfileContactRelationship.spouse,
+    ProfileContactRelationship.parent,
+    ProfileContactRelationship.guardian,
+    ProfileContactRelationship.insurance,
+    ProfileContactRelationship.other,
   ];
 
-  static String relationship(PatientContactRelationship value) {
+  static String relationship(ProfileContactRelationship value) {
     switch (value) {
-      case PatientContactRelationship.self:
+      case ProfileContactRelationship.self:
         return 'Self';
-      case PatientContactRelationship.child:
+      case ProfileContactRelationship.child:
         return 'Child';
-      case PatientContactRelationship.spouse:
+      case ProfileContactRelationship.spouse:
         return 'Spouse';
-      case PatientContactRelationship.parent:
+      case ProfileContactRelationship.parent:
         return 'Parent';
-      case PatientContactRelationship.guardian:
+      case ProfileContactRelationship.guardian:
         return 'Guardian';
-      case PatientContactRelationship.insurance:
+      case ProfileContactRelationship.insurance:
         return 'Insurance';
-      case PatientContactRelationship.other:
+      case ProfileContactRelationship.other:
         return 'Other payer/contact';
     }
   }
 
-  static String gender(PatientGender value) {
+  static String gender(ProfileGender value) {
     switch (value) {
-      case PatientGender.male:
+      case ProfileGender.male:
         return 'Male';
-      case PatientGender.female:
+      case ProfileGender.female:
         return 'Female';
-      case PatientGender.other:
+      case ProfileGender.other:
         return 'Other';
-      case PatientGender.unknown:
+      case ProfileGender.unknown:
         return 'Unknown';
     }
   }
 
-  static String status(PatientLinkRequestStatus value) {
+  static String status(ProfileLinkRequestStatus value) {
     switch (value) {
-      case PatientLinkRequestStatus.pendingOwnerApproval:
+      case ProfileLinkRequestStatus.pendingOwnerApproval:
         return 'Pending owner approval';
-      case PatientLinkRequestStatus.pendingStaffApproval:
+      case ProfileLinkRequestStatus.pendingStaffApproval:
         return 'Pending staff approval';
-      case PatientLinkRequestStatus.approved:
+      case ProfileLinkRequestStatus.approved:
         return 'Approved';
-      case PatientLinkRequestStatus.rejected:
+      case ProfileLinkRequestStatus.rejected:
         return 'Rejected';
-      case PatientLinkRequestStatus.cancelled:
+      case ProfileLinkRequestStatus.cancelled:
         return 'Cancelled';
     }
   }
 
-  static String approvalMode(PatientLinkApprovalMode value) {
+  static String approvalMode(ProfileLinkApprovalMode value) {
     switch (value) {
-      case PatientLinkApprovalMode.owner:
+      case ProfileLinkApprovalMode.owner:
         return 'Owner approval';
-      case PatientLinkApprovalMode.staff:
+      case ProfileLinkApprovalMode.staff:
         return 'Staff approval';
     }
   }
@@ -93,8 +93,8 @@ class PatientProfilesLabels {
   }
 }
 
-class PatientProfilesFilterBar extends StatelessWidget {
-  const PatientProfilesFilterBar({
+class ProfilesFilterBar extends StatelessWidget {
+  const ProfilesFilterBar({
     super.key,
     required this.searchController,
     required this.contactIdController,
@@ -110,13 +110,13 @@ class PatientProfilesFilterBar extends StatelessWidget {
 
   final TextEditingController searchController;
   final TextEditingController contactIdController;
-  final PatientContactRelationship? relationship;
+  final ProfileContactRelationship? relationship;
   final bool? isActive;
   final bool allowExplicitContactLink;
 
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<String> onContactIdSubmitted;
-  final ValueChanged<PatientContactRelationship?> onRelationshipChanged;
+  final ValueChanged<ProfileContactRelationship?> onRelationshipChanged;
   final ValueChanged<String?> onStatusChanged;
   final VoidCallback onClearFilters;
 
@@ -134,7 +134,7 @@ class PatientProfilesFilterBar extends StatelessWidget {
             child: TextField(
               controller: searchController,
               decoration: const InputDecoration(
-                labelText: 'Search patients',
+                labelText: 'Search profiles',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -156,7 +156,7 @@ class PatientProfilesFilterBar extends StatelessWidget {
             ),
           SizedBox(
             width: 260,
-            child: DropdownButtonFormField<PatientContactRelationship?>(
+            child: DropdownButtonFormField<ProfileContactRelationship?>(
               initialValue: relationship,
               isExpanded: true,
               decoration: const InputDecoration(
@@ -165,15 +165,15 @@ class PatientProfilesFilterBar extends StatelessWidget {
                 isDense: true,
               ),
               items: [
-                const DropdownMenuItem<PatientContactRelationship?>(
+                const DropdownMenuItem<ProfileContactRelationship?>(
                   value: null,
                   child: Text('All', overflow: TextOverflow.ellipsis),
                 ),
-                ...PatientContactRelationship.values.map(
-                  (value) => DropdownMenuItem<PatientContactRelationship?>(
+                ...ProfileContactRelationship.values.map(
+                  (value) => DropdownMenuItem<ProfileContactRelationship?>(
                     value: value,
                     child: Text(
-                      PatientProfilesLabels.relationship(value),
+                      ProfilesLabels.relationship(value),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -182,9 +182,9 @@ class PatientProfilesFilterBar extends StatelessWidget {
               selectedItemBuilder: (context) {
                 return [
                   const Text('All', overflow: TextOverflow.ellipsis),
-                  ...PatientContactRelationship.values.map(
+                  ...ProfileContactRelationship.values.map(
                     (value) => Text(
-                      PatientProfilesLabels.relationship(value),
+                      ProfilesLabels.relationship(value),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -232,8 +232,8 @@ class PatientProfilesFilterBar extends StatelessWidget {
   }
 }
 
-class PatientProfilesErrorBanner extends StatelessWidget {
-  const PatientProfilesErrorBanner({super.key, required this.error});
+class ProfilesErrorBanner extends StatelessWidget {
+  const ProfilesErrorBanner({super.key, required this.error});
 
   final String error;
 
@@ -269,8 +269,8 @@ class PatientProfilesErrorBanner extends StatelessWidget {
   }
 }
 
-class PatientProfileCard extends StatelessWidget {
-  const PatientProfileCard({
+class ProfileCard extends StatelessWidget {
+  const ProfileCard({
     super.key,
     required this.patient,
     required this.state,
@@ -283,20 +283,20 @@ class PatientProfileCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  final PatientProfile patient;
-  final PatientProfilesState state;
+  final Profile patient;
+  final ProfilesState state;
   final bool allowExplicitContactLink;
 
   /// Kept for now because the parent screen still wires this callback.
   /// The card no longer exposes this as a per-patient action.
-  final ValueChanged<PatientProfile> onLinkToSelf;
+  final ValueChanged<Profile> onLinkToSelf;
 
-  final ValueChanged<PatientProfile> onRequestPayerLink;
-  final ValueChanged<PatientProfile> onLinkContact;
-  final void Function(PatientProfile patient, PatientLinkedContact link)
+  final ValueChanged<Profile> onRequestPayerLink;
+  final ValueChanged<Profile> onLinkContact;
+  final void Function(Profile patient, ProfileLinkedContact link)
   onDelinkContact;
-  final ValueChanged<PatientProfile> onEdit;
-  final ValueChanged<PatientProfile> onDelete;
+  final ValueChanged<Profile> onEdit;
+  final ValueChanged<Profile> onDelete;
 
   Widget _infoLine(String label, String value) {
     return Text('$label: $value');
@@ -308,7 +308,7 @@ class PatientProfileCard extends StatelessWidget {
 
       return _infoLine(
         'Linked contacts',
-        PatientProfilesLabels.nullable(contextualContact),
+        ProfilesLabels.nullable(contextualContact),
       );
     }
 
@@ -326,7 +326,7 @@ class PatientProfileCard extends StatelessWidget {
                     ? link.contactDisplayName!.trim()
                     : link.contactId;
 
-                final relationship = PatientProfilesLabels.relationship(
+                final relationship = ProfilesLabels.relationship(
                   link.relationship,
                 );
 
@@ -369,7 +369,7 @@ class PatientProfileCard extends StatelessWidget {
     final contact = patient.contactDisplayName ?? patient.contactId;
     final relationship = patient.relationship;
 
-    if (PatientProfilesLabels.nullable(contact).trim() == '—' &&
+    if (ProfilesLabels.nullable(contact).trim() == '—' &&
         relationship == null) {
       return const SizedBox.shrink();
     }
@@ -377,8 +377,8 @@ class PatientProfileCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Text(
-        'Current association: ${PatientProfilesLabels.nullable(contact)}'
-        '${relationship == null ? '' : ' · ${PatientProfilesLabels.relationship(relationship)}'}',
+        'Current association: ${ProfilesLabels.nullable(contact)}'
+        '${relationship == null ? '' : ' · ${ProfilesLabels.relationship(relationship)}'}',
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );
@@ -419,19 +419,19 @@ class PatientProfileCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _infoLine('ID', patient.patientId),
-              _infoLine('DOB', PatientProfilesLabels.nullable(patient.dob)),
+              _infoLine('ID', patient.profileId),
+              _infoLine('DOB', ProfilesLabels.nullable(patient.dob)),
               _infoLine(
                 'Gender',
                 patient.gender == null
                     ? '—'
-                    : PatientProfilesLabels.gender(patient.gender!),
+                    : ProfilesLabels.gender(patient.gender!),
               ),
-              _infoLine('Phone', PatientProfilesLabels.nullable(patient.phone)),
-              _infoLine('Email', PatientProfilesLabels.nullable(patient.email)),
+              _infoLine('Phone', ProfilesLabels.nullable(patient.phone)),
+              _infoLine('Email', ProfilesLabels.nullable(patient.email)),
               _infoLine(
                 'National ID',
-                PatientProfilesLabels.nullable(patient.nationalId),
+                ProfilesLabels.nullable(patient.nationalId),
               ),
               const SizedBox(height: 6),
               _linkedContactsView(context),
@@ -450,7 +450,7 @@ class PatientProfileCard extends StatelessWidget {
 class RequestSummaryBox extends StatelessWidget {
   const RequestSummaryBox({super.key, required this.request});
 
-  final PatientLinkRequest request;
+  final ProfileLinkRequest request;
 
   @override
   Widget build(BuildContext context) {
@@ -467,18 +467,18 @@ class RequestSummaryBox extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.patientDisplayName,
+                  request.profileDisplayName,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
-                Text('Patient ID: ${request.patientId}'),
+                Text('Patient ID: ${request.profileId}'),
                 Text('Requested target: ${request.bestTargetLabel}'),
                 Text(
-                  'Relationship: ${PatientProfilesLabels.relationship(request.relationship)}',
+                  'Relationship: ${ProfilesLabels.relationship(request.relationship)}',
                 ),
-                Text('Status: ${PatientProfilesLabels.status(request.status)}'),
+                Text('Status: ${ProfilesLabels.status(request.status)}'),
                 Text(
-                  'Approval: ${PatientProfilesLabels.approvalMode(request.approvalMode)}',
+                  'Approval: ${ProfilesLabels.approvalMode(request.approvalMode)}',
                 ),
                 if (request.matchesCount != null)
                   Text('Identifier matches: ${request.matchesCount}'),
@@ -493,8 +493,8 @@ class RequestSummaryBox extends StatelessWidget {
   }
 }
 
-class PatientLinkRequestCard extends StatelessWidget {
-  const PatientLinkRequestCard({
+class ProfileLinkRequestCard extends StatelessWidget {
+  const ProfileLinkRequestCard({
     super.key,
     required this.request,
     required this.state,
@@ -502,10 +502,10 @@ class PatientLinkRequestCard extends StatelessWidget {
     required this.onReject,
   });
 
-  final PatientLinkRequest request;
-  final PatientProfilesState state;
-  final ValueChanged<PatientLinkRequest> onApprove;
-  final ValueChanged<PatientLinkRequest> onReject;
+  final ProfileLinkRequest request;
+  final ProfilesState state;
+  final ValueChanged<ProfileLinkRequest> onApprove;
+  final ValueChanged<ProfileLinkRequest> onReject;
 
   Widget _infoLine(String label, String value) {
     return Text('$label: $value');
@@ -518,22 +518,22 @@ class PatientLinkRequestCard extends StatelessWidget {
     return Card(
       child: ListTile(
         title: Text(
-          '${request.patientDisplayName} → ${request.bestTargetLabel}',
+          '${request.profileDisplayName} → ${request.bestTargetLabel}',
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _infoLine('Patient ID', request.patientId),
+              _infoLine('Patient ID', request.profileId),
               _infoLine(
                 'Relationship',
-                PatientProfilesLabels.relationship(request.relationship),
+                ProfilesLabels.relationship(request.relationship),
               ),
-              _infoLine('Status', PatientProfilesLabels.status(request.status)),
+              _infoLine('Status', ProfilesLabels.status(request.status)),
               _infoLine(
                 'Approval',
-                PatientProfilesLabels.approvalMode(request.approvalMode),
+                ProfilesLabels.approvalMode(request.approvalMode),
               ),
               if (request.matchesCount != null)
                 _infoLine('Identifier matches', '${request.matchesCount}'),
@@ -564,8 +564,8 @@ class PatientLinkRequestCard extends StatelessWidget {
   }
 }
 
-class PatientLinkRequestsPanel extends StatelessWidget {
-  const PatientLinkRequestsPanel({
+class ProfileLinkRequestsPanel extends StatelessWidget {
+  const ProfileLinkRequestsPanel({
     super.key,
     required this.state,
     required this.allowExplicitContactLink,
@@ -574,11 +574,11 @@ class PatientLinkRequestsPanel extends StatelessWidget {
     required this.onReject,
   });
 
-  final PatientProfilesState state;
+  final ProfilesState state;
   final bool allowExplicitContactLink;
   final VoidCallback onRefresh;
-  final ValueChanged<PatientLinkRequest> onApprove;
-  final ValueChanged<PatientLinkRequest> onReject;
+  final ValueChanged<ProfileLinkRequest> onApprove;
+  final ValueChanged<ProfileLinkRequest> onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -631,7 +631,7 @@ class PatientLinkRequestsPanel extends StatelessWidget {
             ...state.linkRequests.map(
               (request) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: PatientLinkRequestCard(
+                child: ProfileLinkRequestCard(
                   request: request,
                   state: state,
                   onApprove: onApprove,

@@ -1,12 +1,12 @@
-// lib/features/clinical/patients/widgets/patient_payer_link_dialog.dart
+// lib/features/clinical/profiles/widgets/profile_payer_link_dialog.dart
 
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
-class PatientPayerLinkDialog {
-  const PatientPayerLinkDialog._();
+class ProfilePayerLinkDialog {
+  const ProfilePayerLinkDialog._();
 
   static const EdgeInsets _scrollPadding = EdgeInsets.only(
     top: 14,
@@ -29,16 +29,16 @@ class PatientPayerLinkDialog {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  static Future<PatientLinkRequestCreateInput?> showRequest({
+  static Future<ProfileLinkRequestCreateInput?> showRequest({
     required BuildContext context,
-    required PatientProfile patient,
+    required Profile patient,
   }) async {
-    final relationship = ValueNotifier<PatientContactRelationship>(
-      PatientContactRelationship.insurance,
+    final relationship = ValueNotifier<ProfileContactRelationship>(
+      ProfileContactRelationship.insurance,
     );
 
-    final gender = ValueNotifier<PatientGender>(
-      patient.gender ?? PatientGender.unknown,
+    final gender = ValueNotifier<ProfileGender>(
+      patient.gender ?? ProfileGender.unknown,
     );
 
     final payerNameCtl = TextEditingController();
@@ -55,7 +55,7 @@ class PatientPayerLinkDialog {
     final formKey = GlobalKey<FormState>();
 
     try {
-      return await showDialog<PatientLinkRequestCreateInput>(
+      return await showDialog<ProfileLinkRequestCreateInput>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Request payer link'),
@@ -64,7 +64,7 @@ class PatientPayerLinkDialog {
             height: _height(context, fraction: 0.72, min: 420, max: 680),
             child: Form(
               key: formKey,
-              child: ValueListenableBuilder<PatientContactRelationship>(
+              child: ValueListenableBuilder<ProfileContactRelationship>(
                 valueListenable: relationship,
                 builder: (_, rel, __) {
                   return SingleChildScrollView(
@@ -85,14 +85,14 @@ class PatientPayerLinkDialog {
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                 ),
-                                child: SelectableText(patient.patientId),
+                                child: SelectableText(patient.profileId),
                               ),
                             ),
                             SizedBox(
                               width: 260,
                               child:
                                   DropdownButtonFormField<
-                                    PatientContactRelationship
+                                    ProfileContactRelationship
                                   >(
                                     initialValue: rel,
                                     isExpanded: true,
@@ -102,13 +102,13 @@ class PatientPayerLinkDialog {
                                       isDense: true,
                                       helperText: 'Requires staff approval.',
                                     ),
-                                    items: PatientProfilesLabels
+                                    items: ProfilesLabels
                                         .payerRequestRelationships
                                         .map(
                                           (value) => DropdownMenuItem(
                                             value: value,
                                             child: Text(
-                                              PatientProfilesLabels.relationship(
+                                              ProfilesLabels.relationship(
                                                 value,
                                               ),
                                               overflow: TextOverflow.ellipsis,
@@ -117,11 +117,11 @@ class PatientPayerLinkDialog {
                                         )
                                         .toList(growable: false),
                                     selectedItemBuilder: (context) {
-                                      return PatientProfilesLabels
+                                      return ProfilesLabels
                                           .payerRequestRelationships
                                           .map(
                                             (value) => Text(
-                                              PatientProfilesLabels.relationship(
+                                              ProfilesLabels.relationship(
                                                 value,
                                               ),
                                               overflow: TextOverflow.ellipsis,
@@ -234,10 +234,10 @@ class PatientPayerLinkDialog {
                             ),
                             SizedBox(
                               width: 220,
-                              child: ValueListenableBuilder<PatientGender>(
+                              child: ValueListenableBuilder<ProfileGender>(
                                 valueListenable: gender,
                                 builder: (_, value, __) {
-                                  return DropdownButtonFormField<PatientGender>(
+                                  return DropdownButtonFormField<ProfileGender>(
                                     initialValue: value,
                                     isExpanded: true,
                                     decoration: const InputDecoration(
@@ -245,12 +245,12 @@ class PatientPayerLinkDialog {
                                       border: OutlineInputBorder(),
                                       isDense: true,
                                     ),
-                                    items: PatientGender.values
+                                    items: ProfileGender.values
                                         .map(
                                           (g) => DropdownMenuItem(
                                             value: g,
                                             child: Text(
-                                              PatientProfilesLabels.gender(g),
+                                              ProfilesLabels.gender(g),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -324,7 +324,7 @@ class PatientPayerLinkDialog {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop(
-                  PatientLinkRequestCreateInput(
+                  ProfileLinkRequestCreateInput(
                     relationship: relationship.value,
                     targetContactDisplayName: payerNameCtl.text.trim(),
                     targetAccountNumber: accountNumberCtl.text.trim(),
@@ -363,9 +363,9 @@ class PatientPayerLinkDialog {
     }
   }
 
-  static Future<PatientLinkRequestApproveInput?> showApprove({
+  static Future<ProfileLinkRequestApproveInput?> showApprove({
     required BuildContext context,
-    required PatientLinkRequest request,
+    required ProfileLinkRequest request,
   }) async {
     final contactIdCtl = TextEditingController(
       text: request.targetContactId ?? '',
@@ -379,12 +379,12 @@ class PatientPayerLinkDialog {
       text: request.targetContactDisplayName ?? '',
     );
 
-    final relationship = ValueNotifier<PatientContactRelationship>(
+    final relationship = ValueNotifier<ProfileContactRelationship>(
       request.relationship,
     );
 
     try {
-      return await showDialog<PatientLinkRequestApproveInput>(
+      return await showDialog<ProfileLinkRequestApproveInput>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Approve patient link request'),
@@ -442,11 +442,11 @@ class PatientPayerLinkDialog {
                       SizedBox(
                         width: 260,
                         child:
-                            ValueListenableBuilder<PatientContactRelationship>(
+                            ValueListenableBuilder<ProfileContactRelationship>(
                               valueListenable: relationship,
                               builder: (_, value, __) {
                                 return DropdownButtonFormField<
-                                  PatientContactRelationship
+                                  ProfileContactRelationship
                                 >(
                                   initialValue: value,
                                   isExpanded: true,
@@ -455,28 +455,22 @@ class PatientPayerLinkDialog {
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                   ),
-                                  items: PatientProfilesLabels
-                                      .staffLinkRelationships
+                                  items: ProfilesLabels.staffLinkRelationships
                                       .map(
                                         (rel) => DropdownMenuItem(
                                           value: rel,
                                           child: Text(
-                                            PatientProfilesLabels.relationship(
-                                              rel,
-                                            ),
+                                            ProfilesLabels.relationship(rel),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                       )
                                       .toList(growable: false),
                                   selectedItemBuilder: (context) {
-                                    return PatientProfilesLabels
-                                        .staffLinkRelationships
+                                    return ProfilesLabels.staffLinkRelationships
                                         .map(
                                           (rel) => Text(
-                                            PatientProfilesLabels.relationship(
-                                              rel,
-                                            ),
+                                            ProfilesLabels.relationship(rel),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         )
@@ -511,7 +505,7 @@ class PatientPayerLinkDialog {
                 final accountNumber = _cleanNullable(accountNumberCtl.text);
 
                 Navigator.of(context).pop(
-                  PatientLinkRequestApproveInput(
+                  ProfileLinkRequestApproveInput(
                     contactId: contactId,
                     accountNumber: contactId == null ? accountNumber : null,
                     contactDisplayName: _cleanNullable(contactNameCtl.text),
@@ -532,13 +526,13 @@ class PatientPayerLinkDialog {
     }
   }
 
-  static Future<PatientLinkRequestRejectInput?> showReject({
+  static Future<ProfileLinkRequestRejectInput?> showReject({
     required BuildContext context,
   }) async {
     final reasonCtl = TextEditingController();
 
     try {
-      return await showDialog<PatientLinkRequestRejectInput>(
+      return await showDialog<ProfileLinkRequestRejectInput>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Reject patient link request'),
@@ -562,7 +556,7 @@ class PatientPayerLinkDialog {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop(
-                  PatientLinkRequestRejectInput(reason: reasonCtl.text.trim()),
+                  ProfileLinkRequestRejectInput(reason: reasonCtl.text.trim()),
                 );
               },
               child: const Text('Reject'),

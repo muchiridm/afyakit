@@ -278,7 +278,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
       return 'Select a patient or membership first.';
     }
 
-    return widget.emptyText ?? 'No invoices found for this patient.';
+    return widget.emptyText ?? 'No invoices found for this profile.';
   }
 
   @override

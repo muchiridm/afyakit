@@ -1,12 +1,12 @@
 // lib/features/retail/contacts/widgets/contact_editor_sheet.dart
 
+import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
 
 import '../models/zoho_contact.dart';
 import 'contact_sheet_models.dart';
@@ -332,12 +332,12 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     setState(() => _creatingSelfPatient = true);
 
     try {
-      final input = PatientProfileUpsertInput(
+      final input = ProfileUpsertInput(
         fullName: name,
         dob: '',
-        gender: PatientGender.unknown,
+        gender: ProfileGender.unknown,
         contactId: contactId,
-        relationship: PatientContactRelationship.self,
+        relationship: ProfileContactRelationship.self,
         phone: contact.bestPhone.trim(),
         email: contact.bestEmail.trim(),
         nationalId: '',
@@ -345,7 +345,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
         isActive: true,
       );
 
-      await ref.read(patientProfilesServiceProvider).create(input);
+      await ref.read(profilesServiceProvider).create(input);
 
       if (!mounted) return;
 
@@ -370,7 +370,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
 
   Future<void> _addLinkedPatientForContact(
     ZohoContact contact, {
-    PatientContactRelationship relationship = PatientContactRelationship.child,
+    ProfileContactRelationship relationship = ProfileContactRelationship.child,
   }) async {
     final contactId = contact.contactId.trim();
     if (contactId.isEmpty) return;
@@ -378,9 +378,9 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     setState(() => _creatingLinkedPatient = true);
 
     try {
-      final input = await showDialog<PatientProfileUpsertInput>(
+      final input = await showDialog<ProfileUpsertInput>(
         context: context,
-        builder: (_) => PatientProfileFormDialog(
+        builder: (_) => ProfileFormDialog(
           allowExplicitContactLink: true,
           initialContact: contact,
           initialRelationship: relationship,
@@ -393,7 +393,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
         return;
       }
 
-      await ref.read(patientProfilesServiceProvider).create(input);
+      await ref.read(profilesServiceProvider).create(input);
 
       if (!mounted) return;
 
@@ -427,24 +427,22 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     setState(() => _openingLinkedPatient = true);
 
     try {
-      final service = ref.read(patientProfilesServiceProvider);
+      final service = ref.read(profilesServiceProvider);
       final patient = await service.get(patientId);
 
       if (!mounted) return;
 
       setState(() => _openingLinkedPatient = false);
 
-      final input = await showDialog<PatientProfileUpsertInput>(
+      final input = await showDialog<ProfileUpsertInput>(
         context: context,
-        builder: (_) => PatientProfileFormDialog(
-          initial: patient,
-          allowExplicitContactLink: true,
-        ),
+        builder: (_) =>
+            ProfileFormDialog(initial: patient, allowExplicitContactLink: true),
       );
 
       if (input == null || !mounted) return;
 
-      await service.update(patient.patientId, input);
+      await service.update(patient.profileId, input);
 
       if (!mounted) return;
 
@@ -602,7 +600,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add),
-            label: Text(_creatingLinkedPatient ? 'Opening…' : 'Add patient'),
+            label: Text(_creatingLinkedPatient ? 'Opening…' : 'Add profile'),
           ),
         ],
       ),

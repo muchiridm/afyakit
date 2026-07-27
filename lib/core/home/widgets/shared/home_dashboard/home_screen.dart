@@ -5,8 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
+
 import 'package:afyakit/core/home/widgets/member/home_member_body.dart';
+import 'package:afyakit/core/home/widgets/member/member_home_speed_dial.dart';
+
 import 'package:afyakit/core/home/widgets/staff/home_staff_body.dart';
+import 'package:afyakit/core/home/widgets/staff/staff_home_speed_dial.dart';
+
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 
@@ -20,19 +25,12 @@ class HomeScreen extends ConsumerWidget {
 
   final EntryMode realEntry;
   final EntryMode effectiveEntry;
-
-  /// HomeShell should only build HomeScreen for authenticated users.
-  ///
-  /// Retail guests go directly to CatalogScreen.
-  /// Non-retail guests go directly to LoginScreen.
   final AuthUser? user;
 
   double get _maxWidth {
     return switch (effectiveEntry) {
       EntryMode.staff => AppLayout.dashboardMaxWidth,
       EntryMode.member => AppLayout.dashboardMaxWidth,
-
-      // Safety fallback only. HomeShell should not send guests here.
       EntryMode.guest => AppLayout.contentMaxWidth,
     };
   }
@@ -40,6 +38,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return AppPage(
+      key: ValueKey<String>('home-page-${effectiveEntry.name}'),
       scrollable: true,
       appBar: const PreferredSize(
         preferredSize: Size.fromHeight(0),
@@ -47,20 +46,55 @@ class HomeScreen extends ConsumerWidget {
       ),
       maxWidth: _maxWidth,
       padding: AppLayout.pagePadding,
-      body: switch (effectiveEntry) {
-        EntryMode.member => HomeMemberBody(user: user),
-        EntryMode.staff => HomeStaffBody(user: user),
+      fab: _buildSpeedDial(context),
+      fabAlignment: Alignment.bottomRight,
+      body: _buildBody(),
+    );
+  }
 
-        // Safety fallback only.
-        // Guests should never reach this screen after the HomeShell update.
-        EntryMode.guest => const _UnexpectedGuestHomeFallback(),
-      },
+  Widget _buildBody() {
+    return switch (effectiveEntry) {
+      EntryMode.member => HomeMemberBody(
+        key: ValueKey<String>(
+          'member-home-body-${user?.contactId ?? 'unknown'}',
+        ),
+        user: user,
+      ),
+      EntryMode.staff => HomeStaffBody(
+        key: const ValueKey<String>('staff-home-body'),
+        user: user,
+      ),
+      EntryMode.guest => const _UnexpectedGuestHomeFallback(
+        key: ValueKey<String>('guest-home-fallback'),
+      ),
+    };
+  }
+
+  Widget? _buildSpeedDial(BuildContext context) {
+    return switch (effectiveEntry) {
+      EntryMode.member => MemberHomeSpeedDial(
+        key: ValueKey<String>(
+          'member-home-speed-dial-${user?.contactId ?? 'unknown'}',
+        ),
+        user: user,
+        onChat: () => _openMemberChat(context),
+      ),
+      EntryMode.staff => const StaffHomeSpeedDial(
+        key: ValueKey<String>('staff-home-speed-dial'),
+      ),
+      EntryMode.guest => null,
+    };
+  }
+
+  void _openMemberChat(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Chat navigation is not connected yet.')),
     );
   }
 }
 
 class _UnexpectedGuestHomeFallback extends StatelessWidget {
-  const _UnexpectedGuestHomeFallback();
+  const _UnexpectedGuestHomeFallback({super.key});
 
   @override
   Widget build(BuildContext context) {

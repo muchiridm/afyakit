@@ -4,9 +4,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
 
 const Duration patientActivityRefreshInterval = Duration(seconds: 15);
 
@@ -16,8 +16,8 @@ class StaffPatientActivityBundle {
     required this.linkRequests,
   });
 
-  final List<PatientProfile> patients;
-  final List<PatientLinkRequest> linkRequests;
+  final List<Profile> patients;
+  final List<ProfileLinkRequest> linkRequests;
 }
 
 final staffPatientActivityProvider =
@@ -26,11 +26,11 @@ final staffPatientActivityProvider =
     });
 
 final memberPatientActivityProvider = StreamProvider.autoDispose
-    .family<List<PatientProfile>, String>((ref, contactId) {
+    .family<List<Profile>, String>((ref, contactId) {
       final cleanContactId = contactId.trim();
 
       if (cleanContactId.isEmpty) {
-        return Stream.value(const <PatientProfile>[]);
+        return Stream.value(const <Profile>[]);
       }
 
       return _pollMemberPatients(ref, contactId: cleanContactId);
@@ -44,7 +44,7 @@ Stream<StaffPatientActivityBundle> _pollStaffPatients(Ref ref) async* {
   });
 
   while (!cancelled) {
-    final service = await ref.read(patientProfilesServiceReadyProvider.future);
+    final service = await ref.read(profilesServiceReadyProvider.future);
 
     final results = await Future.wait<Object>([
       service.list(perPage: 50, page: 1),
@@ -54,15 +54,15 @@ Stream<StaffPatientActivityBundle> _pollStaffPatients(Ref ref) async* {
     if (cancelled) return;
 
     yield StaffPatientActivityBundle(
-      patients: results[0] as List<PatientProfile>,
-      linkRequests: results[1] as List<PatientLinkRequest>,
+      patients: results[0] as List<Profile>,
+      linkRequests: results[1] as List<ProfileLinkRequest>,
     );
 
     await Future<void>.delayed(patientActivityRefreshInterval);
   }
 }
 
-Stream<List<PatientProfile>> _pollMemberPatients(
+Stream<List<Profile>> _pollMemberPatients(
   Ref ref, {
   required String contactId,
 }) async* {
@@ -73,7 +73,7 @@ Stream<List<PatientProfile>> _pollMemberPatients(
   });
 
   while (!cancelled) {
-    final service = await ref.read(patientProfilesServiceReadyProvider.future);
+    final service = await ref.read(profilesServiceReadyProvider.future);
 
     final patients = await service.list(
       contactId: contactId,

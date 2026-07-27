@@ -1,14 +1,14 @@
-// lib/features/clinical/patients/widgets/patient_profile_form_dialog.dart
+// lib/features/clinical/profiles/widgets/profile_form_dialog.dart
 
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 
-class PatientProfileFormDialog extends StatefulWidget {
-  const PatientProfileFormDialog({
+class ProfileFormDialog extends StatefulWidget {
+  const ProfileFormDialog({
     super.key,
     this.initial,
     this.initialContact,
@@ -17,7 +17,7 @@ class PatientProfileFormDialog extends StatefulWidget {
     this.allowExplicitContactLink = false,
   });
 
-  final PatientProfile? initial;
+  final Profile? initial;
 
   /// Optional contact seed.
   ///
@@ -28,7 +28,7 @@ class PatientProfileFormDialog extends StatefulWidget {
   final ZohoContact? initialContact;
 
   /// Optional initial relationship between the patient and selected contact.
-  final PatientContactRelationship? initialRelationship;
+  final ProfileContactRelationship? initialRelationship;
 
   /// Whether to copy contact name/phone/email into patient fields.
   ///
@@ -42,11 +42,10 @@ class PatientProfileFormDialog extends StatefulWidget {
   final bool allowExplicitContactLink;
 
   @override
-  State<PatientProfileFormDialog> createState() =>
-      _PatientProfileFormDialogState();
+  State<ProfileFormDialog> createState() => _ProfileFormDialogState();
 }
 
-class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
+class _ProfileFormDialogState extends State<ProfileFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _fullNameCtl;
@@ -57,8 +56,8 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   late final TextEditingController _nationalIdCtl;
   late final TextEditingController _notesCtl;
 
-  late PatientContactRelationship _relationship;
-  late PatientGender _gender;
+  late ProfileContactRelationship _relationship;
+  late ProfileGender _gender;
   late bool _isActive;
 
   ZohoContact? _selectedContact;
@@ -82,12 +81,12 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         patient?.relationship ??
         primaryLink?.relationship ??
         widget.initialRelationship ??
-        PatientContactRelationship.self;
+        ProfileContactRelationship.self;
 
     final shouldPrefillFromContact =
         seedContact != null &&
         widget.prefillFromContact &&
-        _relationship == PatientContactRelationship.self;
+        _relationship == ProfileContactRelationship.self;
 
     final seedName = shouldPrefillFromContact
         ? _contactDisplayName(seedContact)
@@ -125,7 +124,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     _nationalIdCtl = TextEditingController(text: patient?.nationalId ?? '');
     _notesCtl = TextEditingController(text: patient?.notes ?? '');
 
-    _gender = patient?.gender ?? PatientGender.unknown;
+    _gender = patient?.gender ?? ProfileGender.unknown;
     _isActive = patient?.isActive ?? true;
   }
 
@@ -211,15 +210,15 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     return _contactIdFromLookup(_contactLookupCtl.text);
   }
 
-  String _genderLabel(PatientGender value) {
+  String _genderLabel(ProfileGender value) {
     switch (value) {
-      case PatientGender.male:
+      case ProfileGender.male:
         return 'Male';
-      case PatientGender.female:
+      case ProfileGender.female:
         return 'Female';
-      case PatientGender.other:
+      case ProfileGender.other:
         return 'Other';
-      case PatientGender.unknown:
+      case ProfileGender.unknown:
         return 'Unknown';
     }
   }
@@ -257,7 +256,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
       _selectedContact = contact;
       _contactLookupCtl.text = contact.contactId;
 
-      if (_relationship == PatientContactRelationship.self) {
+      if (_relationship == ProfileContactRelationship.self) {
         _prefillMissingPatientFieldsFromContact(contact);
       }
     });
@@ -268,7 +267,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     if (selected == null) return;
 
     setState(() {
-      _relationship = PatientContactRelationship.self;
+      _relationship = ProfileContactRelationship.self;
       _prefillMissingPatientFieldsFromContact(selected, overwrite: true);
     });
   }
@@ -284,7 +283,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
 
-    final input = PatientProfileUpsertInput(
+    final input = ProfileUpsertInput(
       fullName: _fullNameCtl.text.trim(),
       dob: _dobCtl.text.trim(),
       gender: _gender,
@@ -310,7 +309,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
     );
   }
 
-  Widget _linkedContactsPreview(PatientProfile patient) {
+  Widget _linkedContactsPreview(Profile patient) {
     if (patient.linkedContacts.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -332,7 +331,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                   link.contactDisplayName?.trim().isNotEmpty == true
                       ? link.contactDisplayName!.trim()
                       : link.contactId,
-                  PatientProfilesLabels.relationship(link.relationship),
+                  ProfilesLabels.relationship(link.relationship),
                   link.isActive ? 'active' : 'inactive',
                 ].join(' · ');
 
@@ -408,7 +407,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
         decoration: _dec(
           'Optional payer/contact link',
           helper:
-              'Staff/admin only. Pick a Zoho contact to link this patient to a payer immediately. If the contact is the patient, use relationship “Self”.',
+              'Staff/admin only. Pick a Zoho contact to link this profile to a payer immediately. If the contact is the patient, use relationship “Self”.',
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,7 +443,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
             const SizedBox(height: 12),
             _relationshipField(
               helper:
-                  'Relationship between this patient and the selected payer/contact.',
+                  'Relationship between this profile and the selected payer/contact.',
             ),
             const SizedBox(height: 12),
             _selectedContactCard(),
@@ -457,7 +456,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   Widget _relationshipField({String? helper}) {
     return SizedBox(
       width: 260,
-      child: DropdownButtonFormField<PatientContactRelationship>(
+      child: DropdownButtonFormField<ProfileContactRelationship>(
         initialValue: _relationship,
         isExpanded: true,
         decoration: _dec(
@@ -466,24 +465,24 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
               helper ??
               (widget.allowExplicitContactLink
                   ? 'Used when an explicit contact association is added.'
-                  : 'Used when auto-linking this patient to your own account.'),
+                  : 'Used when auto-linking this profile to your own account.'),
         ),
-        items: PatientProfilesLabels.staffLinkRelationships
+        items: ProfilesLabels.staffLinkRelationships
             .map(
-              (value) => DropdownMenuItem<PatientContactRelationship>(
+              (value) => DropdownMenuItem<ProfileContactRelationship>(
                 value: value,
                 child: Text(
-                  PatientProfilesLabels.relationship(value),
+                  ProfilesLabels.relationship(value),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             )
             .toList(growable: false),
         selectedItemBuilder: (context) {
-          return PatientProfilesLabels.staffLinkRelationships
+          return ProfilesLabels.staffLinkRelationships
               .map(
                 (value) => Text(
-                  PatientProfilesLabels.relationship(value),
+                  ProfilesLabels.relationship(value),
                   overflow: TextOverflow.ellipsis,
                 ),
               )
@@ -495,7 +494,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
           setState(() {
             _relationship = value;
 
-            if (value == PatientContactRelationship.self &&
+            if (value == ProfileContactRelationship.self &&
                 _selectedContact != null) {
               _prefillMissingPatientFieldsFromContact(_selectedContact!);
             }
@@ -508,7 +507,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEdit ? 'Edit patient profile' : 'Add patient profile'),
+      title: Text(_isEdit ? 'Edit patient profile' : ' profile'),
       content: SizedBox(
         width: 720,
         height: MediaQuery.of(context).size.height * 0.72,
@@ -520,20 +519,20 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
               runSpacing: 14,
               spacing: 12,
               children: [
-                if (widget.initial?.patientId.trim().isNotEmpty == true)
+                if (widget.initial?.profileId.trim().isNotEmpty == true)
                   SizedBox(
                     width: 330,
                     child: InputDecorator(
                       decoration: _dec('DawaPap patient ID'),
-                      child: SelectableText(widget.initial!.patientId),
+                      child: SelectableText(widget.initial!.profileId),
                     ),
                   ),
                 SizedBox(
                   width: 330,
                   child: TextFormField(
                     controller: _fullNameCtl,
-                    decoration: _dec('Patient name'),
-                    validator: (v) => _required(v, 'Patient name'),
+                    decoration: _dec('Profile name'),
+                    validator: (v) => _required(v, 'Profile name'),
                   ),
                 ),
                 SizedBox(
@@ -546,13 +545,13 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                 ),
                 SizedBox(
                   width: 180,
-                  child: DropdownButtonFormField<PatientGender>(
+                  child: DropdownButtonFormField<ProfileGender>(
                     initialValue: _gender,
                     isExpanded: true,
                     decoration: _dec('Gender'),
-                    items: PatientGender.values
+                    items: ProfileGender.values
                         .map(
-                          (value) => DropdownMenuItem<PatientGender>(
+                          (value) => DropdownMenuItem<ProfileGender>(
                             value: value,
                             child: Text(
                               _genderLabel(value),
@@ -608,7 +607,7 @@ class _PatientProfileFormDialogState extends State<PatientProfileFormDialog> {
                     onChanged: (v) => setState(() => _isActive = v),
                     title: const Text('Active'),
                     subtitle: const Text(
-                      'Inactive profiles are hidden from normal active patient lists.',
+                      'Inactive profiles are hidden from normal active profile lists.',
                     ),
                     contentPadding: EdgeInsets.zero,
                   ),

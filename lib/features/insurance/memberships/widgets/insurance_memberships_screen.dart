@@ -1,6 +1,6 @@
 // lib/features/insurance/memberships/widgets/insurance_memberships_screen.dart
 
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_form_dialog.dart';
@@ -114,8 +114,7 @@ class _InsuranceMembershipsScreenState
   void _openPatientProfiles() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            const PatientProfilesScreen(allowExplicitContactLink: true),
+        builder: (_) => const ProfilesScreen(allowExplicitContactLink: true),
       ),
     );
   }

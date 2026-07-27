@@ -1,29 +1,30 @@
-// lib/features/clinical/patients/widgets/patient_profiles_screen.dart
+// lib/features/clinical/profiles/widgets/profiles_screen.dart
 
+import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_payer_link_dialog.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_controller.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_details_screen.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_payer_link_dialog.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profile_form_dialog.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_details_screen.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 
-class PatientProfilesScreen extends ConsumerStatefulWidget {
-  const PatientProfilesScreen({
+class ProfilesScreen extends ConsumerStatefulWidget {
+  const ProfilesScreen({
     super.key,
     this.contactId,
     this.allowExplicitContactLink = false,
     this.selectionMode = false,
     this.selectionTitle,
+    this.createOnOpen = false,
   });
 
-  /// When provided, the screen is restricted to patient profiles linked to
+  /// When provided, the screen is restricted to profiles linked to
   /// this contact.
   ///
   /// Member flows should always provide this value.
@@ -32,24 +33,30 @@ class PatientProfilesScreen extends ConsumerStatefulWidget {
   /// Staff/admin mode only.
   final bool allowExplicitContactLink;
 
-  /// When true, tapping a patient returns that [PatientProfile] through
-  /// [Navigator.pop] instead of opening [PatientDetailsScreen].
+  /// When true, tapping a patient returns that [Profile] through
+  /// [Navigator.pop] instead of opening [ProfileDetailsScreen].
   final bool selectionMode;
 
-  /// Optional title shown while selecting a patient profile.
+  /// Optional title shown while selecting a profile.
   final String? selectionTitle;
 
+  /// Opens the existing profile form once when this screen is first shown.
+  ///
+  /// Used by home quick actions so profile creation remains centralised here.
+  final bool createOnOpen;
+
   @override
-  ConsumerState<PatientProfilesScreen> createState() {
-    return _PatientProfilesScreenState();
+  ConsumerState<ProfilesScreen> createState() {
+    return _ProfilesScreenState();
   }
 }
 
-class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
+class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   late final TextEditingController _searchCtl;
   late final TextEditingController _contactIdCtl;
 
-  PatientContactRelationship? _relationship;
+  ProfileContactRelationship? _relationship;
+  bool _createFlowOpened = false;
 
   double get _maxWidth => AppLayout.contentMaxWidth;
 
@@ -63,8 +70,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     return id;
   }
 
-  PatientProfilesScope get _scope {
-    return PatientProfilesScope(
+  ProfilesScope get _scope {
+    return ProfilesScope(
       contactId: _contactScope,
       allowExplicitContactLink: widget.allowExplicitContactLink,
     );
@@ -72,12 +79,17 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
 
   bool get _isContactScoped => _contactScope != null;
 
-  PatientProfilesController get _controller {
-    return ref.read(patientProfilesControllerProvider(_scope).notifier);
+  bool get _showMemberInfo =>
+      _isContactScoped &&
+      !widget.allowExplicitContactLink &&
+      !widget.selectionMode;
+
+  ProfilesController get _controller {
+    return ref.read(profilesControllerProvider(_scope).notifier);
   }
 
-  PatientProfilesState get _currentState {
-    return ref.read(patientProfilesControllerProvider(_scope));
+  ProfilesState get _currentState {
+    return ref.read(profilesControllerProvider(_scope));
   }
 
   @override
@@ -96,16 +108,22 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
 
       if (!mounted) return;
 
+      if (widget.createOnOpen) {
+        await _openCreateDialogOnce();
+      }
+
+      if (!mounted) return;
+
       if (widget.allowExplicitContactLink && !widget.selectionMode) {
         await controller.loadLinkRequests(
-          status: PatientLinkRequestStatus.pendingStaffApproval,
+          status: ProfileLinkRequestStatus.pendingStaffApproval,
         );
       }
     });
   }
 
   @override
-  void didUpdateWidget(covariant PatientProfilesScreen oldWidget) {
+  void didUpdateWidget(covariant ProfilesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final oldContactId = oldWidget.contactId?.trim();
@@ -113,16 +131,23 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
 
     if (oldContactId == newContactId &&
         oldWidget.allowExplicitContactLink == widget.allowExplicitContactLink &&
-        oldWidget.selectionMode == widget.selectionMode) {
+        oldWidget.selectionMode == widget.selectionMode &&
+        oldWidget.createOnOpen == widget.createOnOpen) {
       return;
     }
 
     _contactIdCtl.text = _contactScope ?? '';
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
-      _controller.refreshAll();
+      await _controller.refreshAll();
+
+      if (!mounted) return;
+
+      if (widget.createOnOpen && !oldWidget.createOnOpen) {
+        await _openCreateDialogOnce();
+      }
     });
   }
 
@@ -134,20 +159,20 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     super.dispose();
   }
 
-  void _handlePatientTap(PatientProfile patient) {
+  void _handleProfileTap(Profile patient) {
     if (widget.selectionMode) {
       Navigator.of(context).pop(patient);
       return;
     }
 
-    _openPatientDetails(patient);
+    _openProfileDetails(patient);
   }
 
-  void _openPatientDetails(PatientProfile patient) {
+  void _openProfileDetails(Profile patient) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => PatientDetailsScreen(
-          patient: patient,
+        builder: (_) => ProfileDetailsScreen(
+          profile: patient,
           contactId: _contactScope,
           allowExplicitContactLink: widget.allowExplicitContactLink,
         ),
@@ -155,10 +180,17 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     );
   }
 
+  Future<void> _openCreateDialogOnce() async {
+    if (_createFlowOpened || !mounted) return;
+
+    _createFlowOpened = true;
+    await _openCreateDialog();
+  }
+
   Future<void> _openCreateDialog() async {
-    final input = await showDialog<PatientProfileUpsertInput>(
+    final input = await showDialog<ProfileUpsertInput>(
       context: context,
-      builder: (_) => PatientProfileFormDialog(
+      builder: (_) => ProfileFormDialog(
         allowExplicitContactLink: widget.allowExplicitContactLink,
       ),
     );
@@ -166,13 +198,18 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await _controller.create(input);
+      final created = await _controller.create(input);
 
       if (!mounted) return;
 
+      if (widget.selectionMode) {
+        Navigator.of(context).pop(created);
+        return;
+      }
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Patient profile created')));
+      ).showSnackBar(const SnackBar(content: Text('Profile created')));
     } catch (_) {
       if (!mounted) return;
 
@@ -180,12 +217,12 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     }
   }
 
-  Future<void> _openApproveLinkRequestDialog(PatientLinkRequest request) async {
+  Future<void> _openApproveLinkRequestDialog(ProfileLinkRequest request) async {
     if (!widget.allowExplicitContactLink || widget.selectionMode) {
       return;
     }
 
-    final input = await PatientPayerLinkDialog.showApprove(
+    final input = await ProfilePayerLinkDialog.showApprove(
       context: context,
       request: request,
     );
@@ -213,12 +250,12 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     }
   }
 
-  Future<void> _openRejectLinkRequestDialog(PatientLinkRequest request) async {
+  Future<void> _openRejectLinkRequestDialog(ProfileLinkRequest request) async {
     if (!widget.allowExplicitContactLink || widget.selectionMode) {
       return;
     }
 
-    final input = await PatientPayerLinkDialog.showReject(context: context);
+    final input = await ProfilePayerLinkDialog.showReject(context: context);
 
     if (input == null || !mounted) return;
 
@@ -247,7 +284,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
-  void _clearFilters(PatientProfilesController controller) {
+  void _clearFilters(ProfilesController controller) {
     _searchCtl.clear();
 
     if (widget.allowExplicitContactLink && !_isContactScoped) {
@@ -271,23 +308,19 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
         return supplied;
       }
 
-      return 'Select patient profile';
+      return 'Select profile';
     }
 
-    return widget.allowExplicitContactLink
-        ? 'Patient profiles'
-        : 'My patient profiles';
+    return widget.allowExplicitContactLink ? 'Profiles' : 'My profiles';
   }
 
   @override
   Widget build(BuildContext context) {
     final scope = _scope;
 
-    final state = ref.watch(patientProfilesControllerProvider(scope));
+    final state = ref.watch(profilesControllerProvider(scope));
 
-    final controller = ref.read(
-      patientProfilesControllerProvider(scope).notifier,
-    );
+    final controller = ref.read(profilesControllerProvider(scope).notifier);
 
     return AppPage(
       title: _title,
@@ -301,15 +334,20 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
           onPressed: state.isLoading ? null : controller.refreshAll,
           icon: const Icon(Icons.refresh),
         ),
-        if (!widget.selectionMode)
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.icon(
-              onPressed: state.isSaving ? null : _openCreateDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Add patient'),
-            ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: state.isSaving ? null : _openCreateDialog,
+            icon: state.isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: const Text('Add profile'),
           ),
+        ),
       ],
       body: Column(
         children: [
@@ -317,14 +355,18 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
+                if (_showMemberInfo) ...[
+                  const _MemberProfilesInfoCard(),
+                  const SizedBox(height: 12),
+                ],
                 if (!widget.selectionMode)
-                  PatientLinkRequestsPanel(
+                  ProfileLinkRequestsPanel(
                     state: state,
                     allowExplicitContactLink: widget.allowExplicitContactLink,
                     onRefresh: () {
                       controller.loadLinkRequests(
                         status: widget.allowExplicitContactLink
-                            ? PatientLinkRequestStatus.pendingStaffApproval
+                            ? ProfileLinkRequestStatus.pendingStaffApproval
                             : null,
                         resetStatus: !widget.allowExplicitContactLink,
                       );
@@ -332,8 +374,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                     onApprove: _openApproveLinkRequestDialog,
                     onReject: _openRejectLinkRequestDialog,
                   ),
-                if (widget.selectionMode) const _PatientSelectionHint(),
-                PatientProfilesFilterBar(
+                if (widget.selectionMode) const _ProfileSelectionHint(),
+                ProfilesFilterBar(
                   searchController: _searchCtl,
                   contactIdController: _contactIdCtl,
                   relationship: _relationship,
@@ -373,7 +415,7 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                   },
                 ),
                 if (state.error != null && state.error!.trim().isNotEmpty)
-                  PatientProfilesErrorBanner(error: state.error!),
+                  ProfilesErrorBanner(error: state.error!),
                 if (state.isLoading)
                   const Padding(
                     padding: EdgeInsets.all(32),
@@ -385,8 +427,8 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                     child: Center(
                       child: Text(
                         widget.selectionMode
-                            ? 'No linked patient profiles found'
-                            : 'No patient profiles found',
+                            ? 'No linked profiles found'
+                            : 'No profiles found',
                       ),
                     ),
                   )
@@ -398,11 +440,11 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
                           .map(
                             (patient) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: _PatientProfileListTile(
+                              child: _ProfileListTile(
                                 patient: patient,
                                 selectionMode: widget.selectionMode,
                                 onTap: () {
-                                  _handlePatientTap(patient);
+                                  _handleProfileTap(patient);
                                 },
                               ),
                             ),
@@ -419,8 +461,41 @@ class _PatientProfilesScreenState extends ConsumerState<PatientProfilesScreen> {
   }
 }
 
-class _PatientSelectionHint extends StatelessWidget {
-  const _PatientSelectionHint();
+class _MemberProfilesInfoCard extends StatelessWidget {
+  const _MemberProfilesInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.family_restroom_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Create a separate profile for yourself and each dependant. '
+                'Prescriptions, health measurements, and other clinical records '
+                'remain linked to the correct person.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSelectionHint extends StatelessWidget {
+  const _ProfileSelectionHint();
 
   @override
   Widget build(BuildContext context) {
@@ -440,8 +515,8 @@ class _PatientSelectionHint extends StatelessWidget {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Choose the person whose health measurements '
-                'you want to record or review.',
+                'Choose the profile you want to use. You can also add '
+                'a new profile from this screen.',
               ),
             ),
           ],
@@ -451,14 +526,14 @@ class _PatientSelectionHint extends StatelessWidget {
   }
 }
 
-class _PatientProfileListTile extends StatelessWidget {
-  const _PatientProfileListTile({
+class _ProfileListTile extends StatelessWidget {
+  const _ProfileListTile({
     required this.patient,
     required this.selectionMode,
     required this.onTap,
   });
 
-  final PatientProfile patient;
+  final Profile patient;
   final bool selectionMode;
   final VoidCallback onTap;
 
@@ -469,9 +544,7 @@ class _PatientProfileListTile extends StatelessWidget {
     final subtitleParts = <String>[];
 
     if (patient.relationship != null) {
-      subtitleParts.add(
-        PatientProfilesLabels.relationship(patient.relationship!),
-      );
+      subtitleParts.add(ProfilesLabels.relationship(patient.relationship!));
     }
 
     final age = _patientAge(patient.dob);
@@ -514,7 +587,7 @@ class _PatientProfileListTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          subtitleParts.isEmpty ? patient.patientId : subtitleParts.join(' • '),
+          subtitleParts.isEmpty ? patient.profileId : subtitleParts.join(' • '),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),

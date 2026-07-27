@@ -18,7 +18,7 @@ class MemberLatestActivityPanel extends ConsumerWidget {
     super.key,
     required this.contactId,
     this.accountNumber,
-    this.maxItems = 5,
+    this.maxItems = 3,
     this.onTitleTap,
     this.title = 'Latest Activity',
     this.emptyText = 'No recent member activity yet.',

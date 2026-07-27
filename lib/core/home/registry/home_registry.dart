@@ -11,8 +11,7 @@ import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
-import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
@@ -148,7 +147,6 @@ final class HomeRegistry {
       featureKey: FeatureKeys.clinical,
       labelOverride: 'Prescriptions',
       iconOverride: Icons.description_outlined,
-      destination: _prescriptions,
       allowed: _requireStaff,
     ),
 
@@ -278,7 +276,6 @@ final class HomeRegistry {
       featureKey: FeatureKeys.clinical,
       labelOverride: 'My Prescriptions',
       iconOverride: Icons.description_outlined,
-      destination: _myPrescriptions,
       allowedRef: _allowMemberClinical,
     ),
 
@@ -349,11 +346,7 @@ final class HomeRegistry {
   }
 
   static Widget _patientProfiles(BuildContext _) {
-    return const PatientProfilesScreen(allowExplicitContactLink: true);
-  }
-
-  static Widget _prescriptions(BuildContext _) {
-    return const PrescriptionsScreen(forcePatientPickerMode: true);
+    return const ProfilesScreen(allowExplicitContactLink: true);
   }
 
   static Widget _insuranceMemberships(BuildContext _) {
@@ -365,11 +358,7 @@ final class HomeRegistry {
   }
 
   static Widget _myProfiles(BuildContext _) {
-    return const PatientProfilesScreen();
-  }
-
-  static Widget _myPrescriptions(BuildContext _) {
-    return const PrescriptionsScreen();
+    return const ProfilesScreen();
   }
 
   static Widget _myQuotes(BuildContext _) {
@@ -444,7 +433,7 @@ final class HomeRegistry {
 
       if (featureKey == FeatureKeys.clinical &&
           definition.destination != _myProfiles &&
-          definition.destination != _myPrescriptions) {
+          definition.label.trim().toLowerCase() != 'my prescriptions') {
         return false;
       }
     }

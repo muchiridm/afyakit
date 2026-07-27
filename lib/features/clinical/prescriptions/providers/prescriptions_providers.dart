@@ -28,7 +28,7 @@ final prescriptionsControllerProvider = StateNotifierProvider.autoDispose
 
       if (pid != null && pid.isNotEmpty) {
         Future.microtask(() {
-          controller.load(patientId: pid);
+          controller.load(profileId: pid);
         });
       }
       return controller;
@@ -49,7 +49,7 @@ final prescriptionPickerControllerProvider = StateNotifierProvider.autoDispose
 
       if (pid.isNotEmpty) {
         Future<void>.microtask(() {
-          controller.load(patientId: pid, isActive: true);
+          controller.load(profileId: pid, isActive: true);
         });
       }
 

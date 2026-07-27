@@ -1,29 +1,29 @@
-// lib/features/clinical/patients/patient_profiles_service.dart
+// lib/features/clinical/profiles/profiles_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final patientProfilesServiceProvider = Provider<PatientProfilesService>((ref) {
+final profilesServiceProvider = Provider<ProfilesService>((ref) {
   final api = ref.afyakitClient;
   final routes = ref.afyakitRoutes;
 
-  return PatientProfilesService(api: api, routes: routes);
+  return ProfilesService(api: api, routes: routes);
 });
 
-final patientProfilesServiceReadyProvider =
-    FutureProvider.autoDispose<PatientProfilesService>((ref) async {
+final profilesServiceReadyProvider =
+    FutureProvider.autoDispose<ProfilesService>((ref) async {
       final api = await ref.watch(afyakitClientFutureProvider.future);
       final routes = ref.afyakitRoutes;
 
-      return PatientProfilesService(api: api, routes: routes);
+      return ProfilesService(api: api, routes: routes);
     });
 
-class PatientProfilesService {
-  const PatientProfilesService({required this.api, required this.routes});
+class ProfilesService {
+  const ProfilesService({required this.api, required this.routes});
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
@@ -53,34 +53,32 @@ class PatientProfilesService {
         .toList(growable: false);
   }
 
-  static PatientProfile _readPatient(Object? value) {
-    return PatientProfile.fromJson(_asMap(value));
+  static Profile _readPatient(Object? value) {
+    return Profile.fromJson(_asMap(value));
   }
 
-  static List<PatientProfile> _readPatients(Object? value) {
+  static List<Profile> _readPatients(Object? value) {
+    return _asListOfMaps(value).map(Profile.fromJson).toList(growable: false);
+  }
+
+  static ProfileLinkRequest _readLinkRequest(Object? value) {
+    return ProfileLinkRequest.fromJson(_asMap(value));
+  }
+
+  static List<ProfileLinkRequest> _readLinkRequests(Object? value) {
     return _asListOfMaps(
       value,
-    ).map(PatientProfile.fromJson).toList(growable: false);
-  }
-
-  static PatientLinkRequest _readLinkRequest(Object? value) {
-    return PatientLinkRequest.fromJson(_asMap(value));
-  }
-
-  static List<PatientLinkRequest> _readLinkRequests(Object? value) {
-    return _asListOfMaps(
-      value,
-    ).map(PatientLinkRequest.fromJson).toList(growable: false);
+    ).map(ProfileLinkRequest.fromJson).toList(growable: false);
   }
 
   // ─────────────────────────────────────────────
-  // Patient profiles
+  // Profiles
   // ─────────────────────────────────────────────
 
-  Future<List<PatientProfile>> list({
+  Future<List<Profile>> list({
     String? search,
     String? contactId,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
     bool? isActive,
     int perPage = 50,
     int page = 1,
@@ -100,7 +98,7 @@ class PatientProfilesService {
     return _readPatients(body['patients']);
   }
 
-  Future<PatientProfile> get(String patientId) async {
+  Future<Profile> get(String patientId) async {
     final id = _requiredId(patientId, 'patientId');
 
     final response = await api.getUri<Object?>(routes.clinicalPatientGet(id));
@@ -109,7 +107,7 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> create(PatientProfileUpsertInput input) async {
+  Future<Profile> create(ProfileUpsertInput input) async {
     final response = await api.postUri<Object?>(
       routes.clinicalPatientCreate(),
       data: input.toJson(),
@@ -119,10 +117,7 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> update(
-    String patientId,
-    PatientProfileUpsertInput input,
-  ) async {
+  Future<Profile> update(String patientId, ProfileUpsertInput input) async {
     final id = _requiredId(patientId, 'patientId');
 
     final response = await api.putUri<Object?>(
@@ -134,9 +129,9 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> linkToSelf(
+  Future<Profile> linkToSelf(
     String patientId,
-    PatientProfileLinkToSelfInput input,
+    ProfileLinkToSelfInput input,
   ) async {
     final id = _requiredId(patientId, 'patientId');
 
@@ -149,9 +144,9 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> linkPatientToSelf(
+  Future<Profile> linkPatientToSelf(
     String patientId,
-    PatientProfileLinkToSelfInput input,
+    ProfileLinkToSelfInput input,
   ) {
     return linkToSelf(patientId, input);
   }
@@ -160,9 +155,9 @@ class PatientProfilesService {
   // Staff direct patient-contact links
   // ─────────────────────────────────────────────
 
-  Future<PatientProfile> linkContact(
+  Future<Profile> linkContact(
     String patientId,
-    PatientContactLinkInput input,
+    ProfileContactLinkInput input,
   ) async {
     final id = _requiredId(patientId, 'patientId');
 
@@ -175,14 +170,14 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> linkContactToPatient({
-    required String patientId,
-    required PatientContactLinkInput input,
+  Future<Profile> linkContactToPatient({
+    required String profileId,
+    required ProfileContactLinkInput input,
   }) {
-    return linkContact(patientId, input);
+    return linkContact(profileId, input);
   }
 
-  Future<PatientProfile> delinkContact({
+  Future<Profile> delinkContact({
     required String patientId,
     required String contactId,
   }) async {
@@ -197,11 +192,11 @@ class PatientProfilesService {
     return _readPatient(body['patient']);
   }
 
-  Future<PatientProfile> delinkContactFromPatient({
-    required String patientId,
+  Future<Profile> delinkContactFromProfile({
+    required String profileId,
     required String contactId,
   }) {
-    return delinkContact(patientId: patientId, contactId: contactId);
+    return delinkContact(patientId: profileId, contactId: contactId);
   }
 
   Future<void> delete(String patientId) async {
@@ -218,9 +213,9 @@ class PatientProfilesService {
   // Patient link requests
   // ─────────────────────────────────────────────
 
-  Future<PatientLinkRequest> createLinkRequest(
+  Future<ProfileLinkRequest> createLinkRequest(
     String patientId,
-    PatientLinkRequestCreateInput input,
+    ProfileLinkRequestCreateInput input,
   ) async {
     final id = _requiredId(patientId, 'patientId');
 
@@ -233,15 +228,15 @@ class PatientProfilesService {
     return _readLinkRequest(body['request']);
   }
 
-  Future<List<PatientLinkRequest>> listLinkRequests({
-    PatientLinkRequestStatus? status,
-    String? patientId,
+  Future<List<ProfileLinkRequest>> listLinkRequests({
+    ProfileLinkRequestStatus? status,
+    String? profileId,
     int perPage = 50,
     int page = 1,
   }) async {
     final uri = routes.clinicalPatientLinkRequestsList(
       status: status?.wire,
-      patientId: _nullable(patientId),
+      patientId: _nullable(profileId),
       perPage: perPage,
       page: page,
     );
@@ -252,9 +247,9 @@ class PatientProfilesService {
     return _readLinkRequests(body['requests']);
   }
 
-  Future<PatientLinkRequest> approveLinkRequest(
+  Future<ProfileLinkRequest> approveLinkRequest(
     String requestId,
-    PatientLinkRequestApproveInput input,
+    ProfileLinkRequestApproveInput input,
   ) async {
     final id = _requiredId(requestId, 'requestId');
 
@@ -267,9 +262,9 @@ class PatientProfilesService {
     return _readLinkRequest(body['request']);
   }
 
-  Future<PatientLinkRequest> rejectLinkRequest(
+  Future<ProfileLinkRequest> rejectLinkRequest(
     String requestId,
-    PatientLinkRequestRejectInput input,
+    ProfileLinkRequestRejectInput input,
   ) async {
     final id = _requiredId(requestId, 'requestId');
 
@@ -283,17 +278,17 @@ class PatientProfilesService {
   }
 
   // Convenience alias for member-side wording.
-  Future<PatientLinkRequest> requestPayerLink(
+  Future<ProfileLinkRequest> requestPayerLink(
     String patientId,
-    PatientLinkRequestCreateInput input,
+    ProfileLinkRequestCreateInput input,
   ) {
     return createLinkRequest(patientId, input);
   }
 
   // Convenience alias for staff-side wording.
-  Future<PatientLinkRequest> approvePayerLinkRequest(
+  Future<ProfileLinkRequest> approvePayerLinkRequest(
     String requestId,
-    PatientLinkRequestApproveInput input,
+    ProfileLinkRequestApproveInput input,
   ) {
     return approveLinkRequest(requestId, input);
   }

@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_picker.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -33,11 +33,13 @@ class HealthMetricsDashboardScreen extends ConsumerStatefulWidget {
   const HealthMetricsDashboardScreen({
     super.key,
     this.initialPatient,
-    this.patientPickerContactId,
+    this.profilePickerContactId,
+    this.memberMode = false,
   });
 
-  final PatientProfile? initialPatient;
-  final String? patientPickerContactId;
+  final Profile? initialPatient;
+  final String? profilePickerContactId;
+  final bool memberMode;
 
   @override
   ConsumerState<HealthMetricsDashboardScreen> createState() {
@@ -47,30 +49,29 @@ class HealthMetricsDashboardScreen extends ConsumerStatefulWidget {
 
 class _HealthMetricsDashboardScreenState
     extends ConsumerState<HealthMetricsDashboardScreen> {
-  PatientProfile? _selectedPatient;
-  bool _isSelectingPatient = false;
+  Profile? _selectedProfile;
 
   @override
   void initState() {
     super.initState();
-    _selectedPatient = widget.initialPatient;
+    _selectedProfile = widget.initialPatient;
   }
 
   @override
   void didUpdateWidget(covariant HealthMetricsDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldPatientId = oldWidget.initialPatient?.patientId;
-    final newPatientId = widget.initialPatient?.patientId;
+    final oldPatientId = oldWidget.initialPatient?.profileId;
+    final newPatientId = widget.initialPatient?.profileId;
 
     if (oldPatientId != newPatientId) {
-      _selectedPatient = widget.initialPatient;
+      _selectedProfile = widget.initialPatient;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedPatient = _selectedPatient;
+    final selectedProfile = _selectedProfile;
 
     return AppPage(
       title: 'Health Metrics',
@@ -78,12 +79,12 @@ class _HealthMetricsDashboardScreenState
       maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
       actions: [
-        if (selectedPatient != null)
+        if (selectedProfile != null)
           IconButton(
             tooltip: 'Refresh',
             onPressed: () {
               ref.invalidate(
-                healthMetricEntriesProvider(_metricsQueryFor(selectedPatient)),
+                healthMetricEntriesProvider(_metricsQueryFor(selectedProfile)),
               );
             },
             icon: const Icon(Icons.refresh),
@@ -92,58 +93,60 @@ class _HealthMetricsDashboardScreenState
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PatientSummaryCard(
-            patient: selectedPatient,
-            onSelectPatient: _isSelectingPatient ? null : _selectPatient,
+          if (widget.memberMode) ...[
+            const _MemberHealthMetricsInfoCard(),
+            const SizedBox(height: AppShape.gap14),
+          ],
+          ProfilePickerCard(
+            selectedProfile: selectedProfile,
+            busy: false,
+            contactId: widget.profilePickerContactId,
+            forcePickerMode: !widget.memberMode,
+            onChanged: (profile) {
+              if (profile.profileId == _selectedProfile?.profileId) {
+                return;
+              }
+
+              setState(() {
+                _selectedProfile = profile;
+              });
+            },
           ),
           const SizedBox(height: AppShape.gap14),
-          if (selectedPatient == null)
+          if (selectedProfile == null)
             const _NoPatientSelectedCard()
           else
             _PatientMetricsSection(
-              key: ValueKey(selectedPatient.patientId),
-              patient: selectedPatient,
+              key: ValueKey(selectedProfile.profileId),
+              patient: selectedProfile,
             ),
         ],
       ),
     );
   }
+}
 
-  Future<void> _selectPatient() async {
-    if (_isSelectingPatient) return;
+class _MemberHealthMetricsInfoCard extends StatelessWidget {
+  const _MemberHealthMetricsInfoCard();
 
-    setState(() {
-      _isSelectingPatient = true;
-    });
-
-    try {
-      final selected = await showDialog<PatientProfile>(
-        context: context,
-        builder: (_) => PatientPickerDialog(
-          contactId: _normalisedContactId(widget.patientPickerContactId),
-        ),
-      );
-
-      if (!mounted || selected == null) return;
-      if (selected.patientId == _selectedPatient?.patientId) return;
-
-      setState(() {
-        _selectedPatient = selected;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSelectingPatient = false;
-        });
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return const AppCard(
+      title: 'Follow health over time',
+      icon: Icons.monitor_heart_outlined,
+      child: Text(
+        'Record measurements for yourself or a dependant, then review the '
+        'latest readings and changes over time. Always select the correct '
+        'patient profile before adding a measurement.',
+      ),
+    );
   }
 }
 
 class _PatientMetricsSection extends ConsumerWidget {
   const _PatientMetricsSection({super.key, required this.patient});
 
-  final PatientProfile patient;
+  final Profile patient;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -187,7 +190,7 @@ class _PatientMetricsSection extends ConsumerWidget {
   }) async {
     final input = await HealthMetricEntryDialog.show(
       context,
-      patientId: patient.patientId,
+      patientId: patient.profileId,
       patientName: patient.fullName,
       type: type,
     );
@@ -206,7 +209,7 @@ class _PatientMetricsSection extends ConsumerWidget {
       ref.invalidate(
         healthMetricEntriesProvider(
           HealthMetricEntriesQuery(
-            patientId: patient.patientId,
+            patientId: patient.profileId,
             type: type,
             isActive: true,
             page: 1,
@@ -241,118 +244,6 @@ class _PatientMetricsSection extends ConsumerWidget {
         ),
       );
     }
-  }
-}
-
-class _PatientSummaryCard extends StatelessWidget {
-  const _PatientSummaryCard({
-    required this.patient,
-    required this.onSelectPatient,
-  });
-
-  final PatientProfile? patient;
-  final VoidCallback? onSelectPatient;
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedPatient = patient;
-    final theme = Theme.of(context);
-
-    if (selectedPatient == null) {
-      return AppCard(
-        title: 'Patient Profile',
-        icon: Icons.person_outline,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select the person whose health '
-              'measurements you want to view.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: AppShape.gap12),
-            FilledButton.icon(
-              onPressed: onSelectPatient,
-              icon: const Icon(Icons.person_search_outlined),
-              label: const Text('Select Profile'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final dobLabel = _formatDateOfBirth(selectedPatient.dob);
-
-    final age = _calculateAge(selectedPatient.dob);
-
-    final gender = _genderLabel(selectedPatient.gender);
-
-    final relationship = _relationshipLabel(selectedPatient.relationship);
-
-    return AppCard(
-      title: 'Patient Profile',
-      icon: Icons.account_circle_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  selectedPatient.fullName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppShape.gap6),
-              Tooltip(
-                message: 'Switch patient profile',
-                child: IconButton(
-                  onPressed: onSelectPatient,
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(6),
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  iconSize: 19,
-                  icon: const Icon(Icons.switch_account_outlined),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppShape.gap10),
-          Wrap(
-            spacing: AppShape.gap10,
-            runSpacing: AppShape.gap10,
-            children: [
-              _DetailChip(
-                icon: Icons.badge_outlined,
-                label: 'Patient No ${selectedPatient.patientId}',
-              ),
-              if (relationship != null)
-                _DetailChip(
-                  icon: Icons.family_restroom_outlined,
-                  label: relationship,
-                ),
-              if (age != null)
-                _DetailChip(icon: Icons.cake_outlined, label: '$age years'),
-              if (dobLabel != null)
-                _DetailChip(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'DOB $dobLabel',
-                ),
-              if (gender != null)
-                _DetailChip(icon: Icons.person_outline, label: gender),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -439,7 +330,7 @@ class _MetricsDashboard extends StatelessWidget {
     required this.onAdd,
   });
 
-  final PatientProfile patient;
+  final Profile patient;
   final List<HealthMetricEntry> metrics;
   final ValueChanged<HealthMetricType> onView;
   final ValueChanged<HealthMetricType> onAdd;
@@ -536,7 +427,7 @@ class _PatientHealthSummaryCard extends StatelessWidget {
     required this.measurementRange,
   });
 
-  final PatientProfile patient;
+  final Profile patient;
   final List<HealthMetricEntry> metrics;
   final Map<HealthMetricType, HealthMetricEntry> latestByType;
   final double? bmi;
@@ -934,7 +825,7 @@ class _BmiCard extends StatelessWidget {
 }
 
 String _buildPatientSummary({
-  required PatientProfile patient,
+  required Profile patient,
   required Map<HealthMetricType, HealthMetricEntry> latestByType,
   required double? bmi,
   required int? patientAge,
@@ -1007,19 +898,9 @@ String _joinSummaryItems(List<String> items) {
   return '${items.take(items.length - 1).join(', ')}, and ${items.last}';
 }
 
-String? _normalisedContactId(String? value) {
-  final contactId = value?.trim();
-
-  if (contactId == null || contactId.isEmpty) {
-    return null;
-  }
-
-  return contactId;
-}
-
-HealthMetricEntriesQuery _metricsQueryFor(PatientProfile patient) {
+HealthMetricEntriesQuery _metricsQueryFor(Profile patient) {
   return HealthMetricEntriesQuery(
-    patientId: patient.patientId,
+    patientId: patient.profileId,
     isActive: true,
     page: 1,
     perPage: 100,
@@ -1177,20 +1058,6 @@ int? _calculateAge(String? rawDob) {
   return age >= 0 ? age : null;
 }
 
-String? _formatDateOfBirth(String? rawDob) {
-  final dob = _parseDate(rawDob);
-
-  if (dob == null) {
-    return null;
-  }
-
-  final day = dob.day.toString().padLeft(2, '0');
-
-  final month = dob.month.toString().padLeft(2, '0');
-
-  return '$day/$month/${dob.year}';
-}
-
 DateTime? _parseDate(String? value) {
   final raw = value?.trim();
 
@@ -1201,46 +1068,18 @@ DateTime? _parseDate(String? value) {
   return DateTime.tryParse(raw);
 }
 
-String? _genderLabel(PatientGender? gender) {
+String? _genderLabel(ProfileGender? gender) {
   switch (gender) {
-    case PatientGender.male:
+    case ProfileGender.male:
       return 'Male';
 
-    case PatientGender.female:
+    case ProfileGender.female:
       return 'Female';
 
-    case PatientGender.other:
+    case ProfileGender.other:
       return 'Other';
 
-    case PatientGender.unknown:
-    case null:
-      return null;
-  }
-}
-
-String? _relationshipLabel(PatientContactRelationship? relationship) {
-  switch (relationship) {
-    case PatientContactRelationship.self:
-      return 'Self';
-
-    case PatientContactRelationship.child:
-      return 'Child';
-
-    case PatientContactRelationship.spouse:
-      return 'Spouse';
-
-    case PatientContactRelationship.parent:
-      return 'Parent';
-
-    case PatientContactRelationship.guardian:
-      return 'Guardian';
-
-    case PatientContactRelationship.insurance:
-      return 'Insurance';
-
-    case PatientContactRelationship.other:
-      return 'Other';
-
+    case ProfileGender.unknown:
     case null:
       return null;
   }

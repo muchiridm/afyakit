@@ -1,29 +1,26 @@
-// lib/features/clinical/patients/patient_profiles_controller.dart
+// lib/features/clinical/profiles/controllers/profiles_controller.dart
 
-import 'package:afyakit/features/clinical/patients/models/patient_link_request_models.dart';
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/patient_profiles_service.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
-class PatientProfilesScope {
-  const PatientProfilesScope({
-    this.contactId,
-    this.allowExplicitContactLink = false,
-  });
+class ProfilesScope {
+  const ProfilesScope({this.contactId, this.allowExplicitContactLink = false});
 
   final String? contactId;
   final bool allowExplicitContactLink;
 
-  String? get cleanContactId => PatientProfilesController.nullable(contactId);
+  String? get cleanContactId => ProfilesController.nullable(contactId);
 
   bool get isContactScoped => cleanContactId != null;
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        other is PatientProfilesScope &&
+        other is ProfilesScope &&
             other.cleanContactId == cleanContactId &&
             other.allowExplicitContactLink == allowExplicitContactLink;
   }
@@ -33,10 +30,10 @@ class PatientProfilesScope {
 }
 
 @immutable
-class PatientProfilesState {
-  const PatientProfilesState({
-    this.items = const <PatientProfile>[],
-    this.linkRequests = const <PatientLinkRequest>[],
+class ProfilesState {
+  const ProfilesState({
+    this.items = const <Profile>[],
+    this.linkRequests = const <ProfileLinkRequest>[],
     this.isLoading = false,
     this.isLoadingLinkRequests = false,
     this.isSaving = false,
@@ -48,8 +45,8 @@ class PatientProfilesState {
     this.linkRequestStatus,
   });
 
-  final List<PatientProfile> items;
-  final List<PatientLinkRequest> linkRequests;
+  final List<Profile> items;
+  final List<ProfileLinkRequest> linkRequests;
 
   final bool isLoading;
   final bool isLoadingLinkRequests;
@@ -58,10 +55,10 @@ class PatientProfilesState {
 
   final String search;
   final String? contactId;
-  final PatientContactRelationship? relationship;
+  final ProfileContactRelationship? relationship;
   final bool? isActive;
 
-  final PatientLinkRequestStatus? linkRequestStatus;
+  final ProfileLinkRequestStatus? linkRequestStatus;
 
   bool get hasFilters {
     return search.trim().isNotEmpty ||
@@ -74,9 +71,9 @@ class PatientProfilesState {
     return linkRequests.any((request) => request.isPending);
   }
 
-  PatientProfilesState copyWith({
-    List<PatientProfile>? items,
-    List<PatientLinkRequest>? linkRequests,
+  ProfilesState copyWith({
+    List<Profile>? items,
+    List<ProfileLinkRequest>? linkRequests,
     bool? isLoading,
     bool? isLoadingLinkRequests,
     bool? isSaving,
@@ -84,15 +81,15 @@ class PatientProfilesState {
     bool clearError = false,
     String? search,
     String? contactId,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
     bool? isActive,
-    PatientLinkRequestStatus? linkRequestStatus,
+    ProfileLinkRequestStatus? linkRequestStatus,
     bool clearContactId = false,
     bool clearRelationship = false,
     bool clearIsActive = false,
     bool clearLinkRequestStatus = false,
   }) {
-    return PatientProfilesState(
+    return ProfilesState(
       items: items ?? this.items,
       linkRequests: linkRequests ?? this.linkRequests,
       isLoading: isLoading ?? this.isLoading,
@@ -113,32 +110,28 @@ class PatientProfilesState {
   }
 }
 
-final patientProfilesControllerProvider = StateNotifierProvider.autoDispose
-    .family<
-      PatientProfilesController,
-      PatientProfilesState,
-      PatientProfilesScope
-    >((ref, scope) {
-      return PatientProfilesController(
-        () => ref.read(patientProfilesServiceProvider),
+final profilesControllerProvider = StateNotifierProvider.autoDispose
+    .family<ProfilesController, ProfilesState, ProfilesScope>((ref, scope) {
+      return ProfilesController(
+        () => ref.read(profilesServiceProvider),
         fixedContactId: scope.cleanContactId,
       );
     });
 
-class PatientProfilesController extends StateNotifier<PatientProfilesState> {
-  PatientProfilesController(this._readService, {String? fixedContactId})
+class ProfilesController extends StateNotifier<ProfilesState> {
+  ProfilesController(this._readService, {String? fixedContactId})
     : _fixedContactId = nullable(fixedContactId),
-      super(PatientProfilesState(contactId: nullable(fixedContactId)));
+      super(ProfilesState(contactId: nullable(fixedContactId)));
 
-  final PatientProfilesService Function() _readService;
+  final ProfilesService Function() _readService;
   final String? _fixedContactId;
 
-  PatientProfilesService get _service => _readService();
+  ProfilesService get _service => _readService();
 
   bool get isContactScoped => _fixedContactId != null;
 
   // ─────────────────────────────────────────────
-  // Patient profiles
+  // Profiles
   // ─────────────────────────────────────────────
 
   Future<void> load() async {
@@ -153,14 +146,14 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
       );
 
       state = state.copyWith(
-        items: _sortedPatients(items),
+        items: _sortedProfiles(items),
         isLoading: false,
         clearError: true,
       );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to load patient profiles: $e',
+        error: 'Failed to load profiles: $e',
       );
     }
   }
@@ -184,7 +177,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(contactId: trimmed, clearContactId: trimmed == null);
   }
 
-  void setRelationship(PatientContactRelationship? value) {
+  void setRelationship(ProfileContactRelationship? value) {
     state = state.copyWith(
       relationship: value,
       clearRelationship: value == null,
@@ -198,7 +191,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   Future<void> applyFilters({
     String? search,
     String? contactId,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
     bool? isActive,
     bool resetContactId = false,
     bool resetRelationship = false,
@@ -241,7 +234,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     await load();
   }
 
-  Future<PatientProfile> create(PatientProfileUpsertInput input) async {
+  Future<Profile> create(ProfileUpsertInput input) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -255,15 +248,15 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to create patient profile: $e',
+        error: 'Failed to create profile: $e',
       );
       rethrow;
     }
   }
 
-  Future<PatientProfile> linkToSelf(
+  Future<Profile> linkToSelf(
     String patientId,
-    PatientProfileLinkToSelfInput input,
+    ProfileLinkToSelfInput input,
   ) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
@@ -283,10 +276,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     }
   }
 
-  Future<PatientProfile> update(
-    String patientId,
-    PatientProfileUpsertInput input,
-  ) async {
+  Future<Profile> update(String patientId, ProfileUpsertInput input) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -300,7 +290,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to update patient profile: $e',
+        error: 'Failed to update profile: $e',
       );
       rethrow;
     }
@@ -313,36 +303,36 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
       await _service.remove(patientId);
 
       final items = state.items
-          .where((p) => p.patientId != patientId)
+          .where((p) => p.profileId != patientId)
           .toList(growable: false);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to delete patient profile: $e',
+        error: 'Failed to delete profile: $e',
       );
       rethrow;
     }
   }
 
   // ─────────────────────────────────────────────
-  // Staff direct patient-contact links
+  // Staff direct profile-contact links
   // ─────────────────────────────────────────────
 
-  Future<PatientProfile> linkContactToPatient({
-    required String patientId,
-    required PatientContactLinkInput input,
+  Future<Profile> linkContactToPatient({
+    required String profileId,
+    required ProfileContactLinkInput input,
   }) async {
     if (isContactScoped) {
-      throw StateError('Scoped member views cannot link arbitrary contacts.');
+      throw StateError('Scoped members cannot link arbitrary contacts.');
     }
 
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final linked = await _service.linkContactToPatient(
-        patientId: patientId,
+        profileId: profileId,
         input: input,
       );
 
@@ -354,14 +344,14 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to link contact to patient: $e',
+        error: 'Failed to link contact to profile: $e',
       );
       rethrow;
     }
   }
 
-  Future<PatientProfile> delinkContactFromPatient({
-    required String patientId,
+  Future<Profile> delinkContactFromProfile({
+    required String profileId,
     required String contactId,
   }) async {
     if (isContactScoped) {
@@ -371,8 +361,8 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final updated = await _service.delinkContactFromPatient(
-        patientId: patientId,
+      final updated = await _service.delinkContactFromProfile(
+        profileId: profileId,
         contactId: contactId,
       );
 
@@ -384,19 +374,19 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to delink contact from patient: $e',
+        error: 'Failed to delink contact from profile: $e',
       );
       rethrow;
     }
   }
 
   // ─────────────────────────────────────────────
-  // Patient link requests
+  // Profile link requests
   // ─────────────────────────────────────────────
 
   Future<void> loadLinkRequests({
-    PatientLinkRequestStatus? status,
-    String? patientId,
+    ProfileLinkRequestStatus? status,
+    String? profileId,
     bool resetStatus = false,
   }) async {
     final effectiveStatus = resetStatus
@@ -413,7 +403,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     try {
       final requests = await _service.listLinkRequests(
         status: effectiveStatus,
-        patientId: nullable(patientId),
+        profileId: nullable(profileId),
       );
 
       state = state.copyWith(
@@ -424,19 +414,19 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isLoadingLinkRequests: false,
-        error: 'Failed to load patient link requests: $e',
+        error: 'Failed to load profile link requests: $e',
       );
     }
   }
 
-  Future<PatientLinkRequest> createLinkRequest(
-    String patientId,
-    PatientLinkRequestCreateInput input,
+  Future<ProfileLinkRequest> createLinkRequest(
+    String profileId,
+    ProfileLinkRequestCreateInput input,
   ) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final created = await _service.createLinkRequest(patientId, input);
+      final created = await _service.createLinkRequest(profileId, input);
       final requests = _upsertLinkRequest(state.linkRequests, created);
 
       state = state.copyWith(
@@ -455,16 +445,16 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     }
   }
 
-  Future<PatientLinkRequest> requestPayerLink(
-    String patientId,
-    PatientLinkRequestCreateInput input,
+  Future<ProfileLinkRequest> requestPayerLink(
+    String profileId,
+    ProfileLinkRequestCreateInput input,
   ) {
-    return createLinkRequest(patientId, input);
+    return createLinkRequest(profileId, input);
   }
 
-  Future<PatientLinkRequest> approveLinkRequest(
+  Future<ProfileLinkRequest> approveLinkRequest(
     String requestId,
-    PatientLinkRequestApproveInput input,
+    ProfileLinkRequestApproveInput input,
   ) async {
     if (isContactScoped) {
       throw StateError('Scoped member views cannot approve link requests.');
@@ -494,12 +484,12 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     }
   }
 
-  Future<PatientLinkRequest> approvePayerLinkRequest(
-    PatientLinkRequest request, {
+  Future<ProfileLinkRequest> approvePayerLinkRequest(
+    ProfileLinkRequest request, {
     String? contactId,
     String? accountNumber,
     String? contactDisplayName,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
   }) {
     final resolvedContactId = nullable(contactId) ?? request.targetContactId;
     final resolvedAccountNumber =
@@ -509,7 +499,7 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
     return approveLinkRequest(
       request.requestId,
-      PatientLinkRequestApproveInput(
+      ProfileLinkRequestApproveInput(
         contactId: nullable(resolvedContactId),
         accountNumber: nullable(resolvedContactId) == null
             ? nullable(resolvedAccountNumber)
@@ -520,9 +510,9 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
     );
   }
 
-  Future<PatientLinkRequest> rejectLinkRequest(
+  Future<ProfileLinkRequest> rejectLinkRequest(
     String requestId,
-    PatientLinkRequestRejectInput input,
+    ProfileLinkRequestRejectInput input,
   ) async {
     if (isContactScoped) {
       throw StateError('Scoped member views cannot reject link requests.');
@@ -554,10 +544,10 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   // Input scope helpers
   // ─────────────────────────────────────────────
 
-  PatientProfileUpsertInput _withFixedContact(PatientProfileUpsertInput input) {
+  ProfileUpsertInput _withFixedContact(ProfileUpsertInput input) {
     if (_fixedContactId == null) return input;
 
-    return PatientProfileUpsertInput(
+    return ProfileUpsertInput(
       fullName: input.fullName,
       dob: input.dob,
       gender: input.gender,
@@ -575,24 +565,21 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
   // Sorting / local state helpers
   // ─────────────────────────────────────────────
 
-  static List<PatientProfile> _upsertPatient(
-    List<PatientProfile> current,
-    PatientProfile patient,
-  ) {
-    final exists = current.any((p) => p.patientId == patient.patientId);
+  static List<Profile> _upsertPatient(List<Profile> current, Profile patient) {
+    final exists = current.any((p) => p.profileId == patient.profileId);
 
     final items = exists
         ? current
-              .map((p) => p.patientId == patient.patientId ? patient : p)
+              .map((p) => p.profileId == patient.profileId ? patient : p)
               .toList(growable: false)
-        : <PatientProfile>[patient, ...current];
+        : <Profile>[patient, ...current];
 
-    return _sortedPatients(items);
+    return _sortedProfiles(items);
   }
 
-  static List<PatientLinkRequest> _upsertLinkRequest(
-    List<PatientLinkRequest> current,
-    PatientLinkRequest request,
+  static List<ProfileLinkRequest> _upsertLinkRequest(
+    List<ProfileLinkRequest> current,
+    ProfileLinkRequest request,
   ) {
     final exists = current.any((r) => r.requestId == request.requestId);
 
@@ -600,12 +587,12 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
         ? current
               .map((r) => r.requestId == request.requestId ? request : r)
               .toList(growable: false)
-        : <PatientLinkRequest>[request, ...current];
+        : <ProfileLinkRequest>[request, ...current];
 
     return _sortedLinkRequests(items);
   }
 
-  static List<PatientProfile> _sortedPatients(List<PatientProfile> items) {
+  static List<Profile> _sortedProfiles(List<Profile> items) {
     final sorted = [...items];
 
     sorted.sort((a, b) {
@@ -615,14 +602,14 @@ class PatientProfilesController extends StateNotifier<PatientProfilesState> {
 
       if (byName != 0) return byName;
 
-      return a.patientId.compareTo(b.patientId);
+      return a.profileId.compareTo(b.profileId);
     });
 
     return sorted;
   }
 
-  static List<PatientLinkRequest> _sortedLinkRequests(
-    List<PatientLinkRequest> items,
+  static List<ProfileLinkRequest> _sortedLinkRequests(
+    List<ProfileLinkRequest> items,
   ) {
     final sorted = [...items];
 

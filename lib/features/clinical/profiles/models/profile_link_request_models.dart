@@ -1,22 +1,24 @@
+// lib/features/clinical/profiles/models/profile_link_request_models.dart
+
 import 'package:flutter/foundation.dart';
 
-import 'patient_profile_models.dart';
+import 'profile_models.dart';
 
-enum PatientLinkApprovalMode {
+enum ProfileLinkApprovalMode {
   owner,
   staff;
 
-  static PatientLinkApprovalMode fromJson(Object? value) {
+  static ProfileLinkApprovalMode fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
-    return PatientLinkApprovalMode.values.firstWhere(
+    return ProfileLinkApprovalMode.values.firstWhere(
       (v) => v.name == raw,
-      orElse: () => PatientLinkApprovalMode.staff,
+      orElse: () => ProfileLinkApprovalMode.staff,
     );
   }
 }
 
-enum PatientLinkRequestStatus {
+enum ProfileLinkRequestStatus {
   pendingOwnerApproval,
   pendingStaffApproval,
   approved,
@@ -25,55 +27,55 @@ enum PatientLinkRequestStatus {
 
   String get wire {
     switch (this) {
-      case PatientLinkRequestStatus.pendingOwnerApproval:
+      case ProfileLinkRequestStatus.pendingOwnerApproval:
         return 'pending_owner_approval';
-      case PatientLinkRequestStatus.pendingStaffApproval:
+      case ProfileLinkRequestStatus.pendingStaffApproval:
         return 'pending_staff_approval';
-      case PatientLinkRequestStatus.approved:
+      case ProfileLinkRequestStatus.approved:
         return 'approved';
-      case PatientLinkRequestStatus.rejected:
+      case ProfileLinkRequestStatus.rejected:
         return 'rejected';
-      case PatientLinkRequestStatus.cancelled:
+      case ProfileLinkRequestStatus.cancelled:
         return 'cancelled';
     }
   }
 
-  static PatientLinkRequestStatus fromJson(Object? value) {
+  static ProfileLinkRequestStatus fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
     switch (raw) {
       case 'pending_owner_approval':
       case 'pendingownerapproval':
-        return PatientLinkRequestStatus.pendingOwnerApproval;
+        return ProfileLinkRequestStatus.pendingOwnerApproval;
       case 'pending_staff_approval':
       case 'pendingstaffapproval':
-        return PatientLinkRequestStatus.pendingStaffApproval;
+        return ProfileLinkRequestStatus.pendingStaffApproval;
       case 'approved':
-        return PatientLinkRequestStatus.approved;
+        return ProfileLinkRequestStatus.approved;
       case 'rejected':
-        return PatientLinkRequestStatus.rejected;
+        return ProfileLinkRequestStatus.rejected;
       case 'cancelled':
       case 'canceled':
-        return PatientLinkRequestStatus.cancelled;
+        return ProfileLinkRequestStatus.cancelled;
       default:
-        return PatientLinkRequestStatus.pendingStaffApproval;
+        return ProfileLinkRequestStatus.pendingStaffApproval;
     }
   }
 }
 
-enum PatientLinkApprovedByRole {
+enum ProfileLinkApprovedByRole {
   ownerContact,
   staff;
 
-  static PatientLinkApprovedByRole? fromJson(Object? value) {
+  static ProfileLinkApprovedByRole? fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
     switch (raw) {
       case 'owner_contact':
       case 'ownercontact':
-        return PatientLinkApprovedByRole.ownerContact;
+        return ProfileLinkApprovedByRole.ownerContact;
       case 'staff':
-        return PatientLinkApprovedByRole.staff;
+        return ProfileLinkApprovedByRole.staff;
       default:
         return null;
     }
@@ -81,11 +83,11 @@ enum PatientLinkApprovedByRole {
 }
 
 @immutable
-class PatientLinkRequest {
-  const PatientLinkRequest({
+class ProfileLinkRequest {
+  const ProfileLinkRequest({
     required this.requestId,
-    required this.patientId,
-    required this.patientDisplayName,
+    required this.profileId,
+    required this.profileDisplayName,
     required this.requestedByUid,
     required this.relationship,
     required this.approvalMode,
@@ -119,8 +121,8 @@ class PatientLinkRequest {
 
   final String requestId;
 
-  final String patientId;
-  final String patientDisplayName;
+  final String profileId;
+  final String profileDisplayName;
 
   final String requestedByUid;
   final String? requestedByContactId;
@@ -133,14 +135,14 @@ class PatientLinkRequest {
   final String? targetPhone;
   final String? targetEmail;
 
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final String? reason;
 
-  final PatientLinkApprovalMode approvalMode;
-  final PatientLinkRequestStatus status;
+  final ProfileLinkApprovalMode approvalMode;
+  final ProfileLinkRequestStatus status;
 
   final String? confirmFullName;
-  final PatientGender? confirmGender;
+  final ProfileGender? confirmGender;
   final String? confirmDob;
   final String? confirmPhone;
   final String? confirmEmail;
@@ -150,7 +152,7 @@ class PatientLinkRequest {
 
   final String? approvedByUid;
   final String? approvedByContactId;
-  final PatientLinkApprovedByRole? approvedByRole;
+  final ProfileLinkApprovedByRole? approvedByRole;
   final DateTime? approvedAt;
 
   final String? rejectedByUid;
@@ -161,18 +163,18 @@ class PatientLinkRequest {
   final DateTime? updatedAt;
 
   bool get isPending {
-    return status == PatientLinkRequestStatus.pendingOwnerApproval ||
-        status == PatientLinkRequestStatus.pendingStaffApproval;
+    return status == ProfileLinkRequestStatus.pendingOwnerApproval ||
+        status == ProfileLinkRequestStatus.pendingStaffApproval;
   }
 
   bool get needsStaffApproval {
-    return status == PatientLinkRequestStatus.pendingStaffApproval ||
-        approvalMode == PatientLinkApprovalMode.staff;
+    return status == ProfileLinkRequestStatus.pendingStaffApproval ||
+        approvalMode == ProfileLinkApprovalMode.staff;
   }
 
   bool get needsOwnerApproval {
-    return status == PatientLinkRequestStatus.pendingOwnerApproval ||
-        approvalMode == PatientLinkApprovalMode.owner;
+    return status == ProfileLinkRequestStatus.pendingOwnerApproval ||
+        approvalMode == ProfileLinkApprovalMode.owner;
   }
 
   String get bestTargetLabel {
@@ -237,14 +239,14 @@ class PatientLinkRequest {
     return DateTime.tryParse(raw);
   }
 
-  factory PatientLinkRequest.fromJson(Map<String, Object?> json) {
+  factory ProfileLinkRequest.fromJson(Map<String, Object?> json) {
     final confirmGenderRaw = _readNullableString(json, 'confirm_gender');
     final approvedByRoleRaw = _readNullableString(json, 'approved_by_role');
 
-    return PatientLinkRequest(
+    return ProfileLinkRequest(
       requestId: _readRequiredString(json, 'request_id'),
-      patientId: _readRequiredString(json, 'patient_id'),
-      patientDisplayName: _readRequiredString(json, 'patient_display_name'),
+      profileId: _readRequiredString(json, 'patient_id'),
+      profileDisplayName: _readRequiredString(json, 'patient_display_name'),
       requestedByUid: _readRequiredString(json, 'requested_by_uid'),
       requestedByContactId: _readNullableString(
         json,
@@ -266,14 +268,14 @@ class PatientLinkRequest {
       ),
       targetPhone: _readNullableString(json, 'target_phone'),
       targetEmail: _readNullableString(json, 'target_email'),
-      relationship: PatientContactRelationship.fromJson(json['relationship']),
+      relationship: ProfileContactRelationship.fromJson(json['relationship']),
       reason: _readNullableString(json, 'reason'),
-      approvalMode: PatientLinkApprovalMode.fromJson(json['approval_mode']),
-      status: PatientLinkRequestStatus.fromJson(json['status']),
+      approvalMode: ProfileLinkApprovalMode.fromJson(json['approval_mode']),
+      status: ProfileLinkRequestStatus.fromJson(json['status']),
       confirmFullName: _readNullableString(json, 'confirm_full_name'),
       confirmGender: confirmGenderRaw == null
           ? null
-          : PatientGender.fromJson(confirmGenderRaw),
+          : ProfileGender.fromJson(confirmGenderRaw),
       confirmDob: _readNullableString(json, 'confirm_dob'),
       confirmPhone: _readNullableString(json, 'confirm_phone'),
       confirmEmail: _readNullableString(json, 'confirm_email'),
@@ -281,7 +283,7 @@ class PatientLinkRequest {
       matchesCount: _readInt(json, 'matches_count'),
       approvedByUid: _readNullableString(json, 'approved_by_uid'),
       approvedByContactId: _readNullableString(json, 'approved_by_contact_id'),
-      approvedByRole: PatientLinkApprovedByRole.fromJson(approvedByRoleRaw),
+      approvedByRole: ProfileLinkApprovedByRole.fromJson(approvedByRoleRaw),
       approvedAt: _readDateTime(json, 'approved_at'),
       rejectedByUid: _readNullableString(json, 'rejected_by_uid'),
       rejectedReason: _readNullableString(json, 'rejected_reason'),
@@ -293,9 +295,9 @@ class PatientLinkRequest {
 }
 
 @immutable
-class PatientLinkRequestCreateInput {
-  const PatientLinkRequestCreateInput({
-    this.relationship = PatientContactRelationship.other,
+class ProfileLinkRequestCreateInput {
+  const ProfileLinkRequestCreateInput({
+    this.relationship = ProfileContactRelationship.other,
     this.targetContactId,
     this.targetAccountNumber,
     this.targetContactDisplayName,
@@ -310,7 +312,7 @@ class PatientLinkRequestCreateInput {
     this.confirmNationalId,
   });
 
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final String? targetContactId;
   final String? targetAccountNumber;
   final String? targetContactDisplayName;
@@ -319,7 +321,7 @@ class PatientLinkRequestCreateInput {
   final String? reason;
 
   final String? confirmFullName;
-  final PatientGender? confirmGender;
+  final ProfileGender? confirmGender;
   final String? confirmDob;
   final String? confirmPhone;
   final String? confirmEmail;
@@ -351,8 +353,8 @@ class PatientLinkRequestCreateInput {
 }
 
 @immutable
-class PatientLinkRequestApproveInput {
-  const PatientLinkRequestApproveInput({
+class ProfileLinkRequestApproveInput {
+  const ProfileLinkRequestApproveInput({
     this.contactId,
     this.accountNumber,
     this.contactDisplayName,
@@ -362,7 +364,7 @@ class PatientLinkRequestApproveInput {
   final String? contactId;
   final String? accountNumber;
   final String? contactDisplayName;
-  final PatientContactRelationship? relationship;
+  final ProfileContactRelationship? relationship;
 
   static String? _nullable(String? value) {
     final trimmed = value?.trim();
@@ -381,8 +383,8 @@ class PatientLinkRequestApproveInput {
 }
 
 @immutable
-class PatientLinkRequestRejectInput {
-  const PatientLinkRequestRejectInput({this.reason});
+class ProfileLinkRequestRejectInput {
+  const ProfileLinkRequestRejectInput({this.reason});
 
   final String? reason;
 

@@ -1,8 +1,8 @@
-// lib/features/clinical/patients/models/patient_profile_models.dart
+// lib/features/clinical/profiles/models/profile_models.dart
 
 import 'package:flutter/foundation.dart';
 
-enum PatientContactRelationship {
+enum ProfileContactRelationship {
   self,
   child,
   spouse,
@@ -11,35 +11,35 @@ enum PatientContactRelationship {
   insurance,
   other;
 
-  static PatientContactRelationship fromJson(Object? value) {
+  static ProfileContactRelationship fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
-    return PatientContactRelationship.values.firstWhere(
+    return ProfileContactRelationship.values.firstWhere(
       (v) => v.name == raw,
-      orElse: () => PatientContactRelationship.other,
+      orElse: () => ProfileContactRelationship.other,
     );
   }
 }
 
-enum PatientGender {
+enum ProfileGender {
   male,
   female,
   other,
   unknown;
 
-  static PatientGender fromJson(Object? value) {
+  static ProfileGender fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
-    return PatientGender.values.firstWhere(
+    return ProfileGender.values.firstWhere(
       (v) => v.name == raw,
-      orElse: () => PatientGender.unknown,
+      orElse: () => ProfileGender.unknown,
     );
   }
 }
 
 @immutable
-class PatientLinkedContact {
-  const PatientLinkedContact({
+class ProfileLinkedContact {
+  const ProfileLinkedContact({
     required this.contactId,
     required this.relationship,
     required this.isActive,
@@ -48,7 +48,7 @@ class PatientLinkedContact {
 
   final String contactId;
   final String? contactDisplayName;
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final bool isActive;
 
   static String? _readNullableString(Map<String, Object?> json, String key) {
@@ -92,11 +92,11 @@ class PatientLinkedContact {
     return fallback;
   }
 
-  factory PatientLinkedContact.fromJson(Map<String, Object?> json) {
-    return PatientLinkedContact(
+  factory ProfileLinkedContact.fromJson(Map<String, Object?> json) {
+    return ProfileLinkedContact(
       contactId: _readRequiredString(json, 'contact_id'),
       contactDisplayName: _readNullableString(json, 'contact_display_name'),
-      relationship: PatientContactRelationship.fromJson(json['relationship']),
+      relationship: ProfileContactRelationship.fromJson(json['relationship']),
       isActive: _readBool(json, 'is_active', fallback: true),
     );
   }
@@ -110,13 +110,13 @@ class PatientLinkedContact {
     };
   }
 
-  PatientLinkedContact copyWith({
+  ProfileLinkedContact copyWith({
     String? contactId,
     String? contactDisplayName,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
     bool? isActive,
   }) {
-    return PatientLinkedContact(
+    return ProfileLinkedContact(
       contactId: contactId ?? this.contactId,
       contactDisplayName: contactDisplayName ?? this.contactDisplayName,
       relationship: relationship ?? this.relationship,
@@ -126,9 +126,9 @@ class PatientLinkedContact {
 }
 
 @immutable
-class PatientProfile {
-  const PatientProfile({
-    required this.patientId,
+class Profile {
+  const Profile({
+    required this.profileId,
     required this.fullName,
     required this.isActive,
     this.dob,
@@ -137,7 +137,7 @@ class PatientProfile {
     this.email,
     this.nationalId,
     this.notes,
-    this.linkedContacts = const <PatientLinkedContact>[],
+    this.linkedContacts = const <ProfileLinkedContact>[],
     this.linkId,
     this.contactId,
     this.contactDisplayName,
@@ -146,10 +146,10 @@ class PatientProfile {
     this.updatedAt,
   });
 
-  final String patientId;
+  final String profileId;
   final String fullName;
   final String? dob;
-  final PatientGender? gender;
+  final ProfileGender? gender;
 
   final String? phone;
   final String? email;
@@ -158,29 +158,29 @@ class PatientProfile {
 
   final bool isActive;
 
-  final List<PatientLinkedContact> linkedContacts;
+  final List<ProfileLinkedContact> linkedContacts;
 
   final String? linkId;
   final String? contactId;
   final String? contactDisplayName;
-  final PatientContactRelationship? relationship;
+  final ProfileContactRelationship? relationship;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  List<PatientLinkedContact> get activeLinkedContacts {
+  List<ProfileLinkedContact> get activeLinkedContacts {
     return linkedContacts
         .where((contact) => contact.isActive)
         .toList(growable: false);
   }
 
-  PatientLinkedContact? get primaryLinkedContact {
+  ProfileLinkedContact? get primaryLinkedContact {
     if (linkedContacts.isEmpty) return null;
 
     final activeSelf = linkedContacts.where(
       (contact) =>
           contact.isActive &&
-          contact.relationship == PatientContactRelationship.self,
+          contact.relationship == ProfileContactRelationship.self,
     );
 
     if (activeSelf.isNotEmpty) return activeSelf.first;
@@ -240,29 +240,29 @@ class PatientProfile {
     return value;
   }
 
-  static List<PatientLinkedContact> _readLinkedContacts(
+  static List<ProfileLinkedContact> _readLinkedContacts(
     Map<String, Object?> json,
   ) {
     final raw = json['linked_contacts'];
 
-    if (raw is! List) return const <PatientLinkedContact>[];
+    if (raw is! List) return const <ProfileLinkedContact>[];
 
     return raw
         .whereType<Map>()
         .map((item) => item.cast<String, Object?>())
-        .map(PatientLinkedContact.fromJson)
+        .map(ProfileLinkedContact.fromJson)
         .toList(growable: false);
   }
 
-  factory PatientProfile.fromJson(Map<String, Object?> json) {
+  factory Profile.fromJson(Map<String, Object?> json) {
     final relationshipRaw = _readNullableString(json, 'relationship');
     final genderRaw = _readNullableString(json, 'gender');
 
-    return PatientProfile(
-      patientId: _readRequiredString(json, 'patient_id'),
+    return Profile(
+      profileId: _readRequiredString(json, 'patient_id'),
       fullName: _readRequiredString(json, 'full_name'),
       dob: _readNullableString(json, 'dob'),
-      gender: genderRaw == null ? null : PatientGender.fromJson(genderRaw),
+      gender: genderRaw == null ? null : ProfileGender.fromJson(genderRaw),
       phone: _readNullableString(json, 'phone'),
       email: _readNullableString(json, 'email'),
       nationalId: _readNullableString(json, 'national_id'),
@@ -274,32 +274,32 @@ class PatientProfile {
       contactDisplayName: _readNullableString(json, 'contact_display_name'),
       relationship: relationshipRaw == null
           ? null
-          : PatientContactRelationship.fromJson(relationshipRaw),
+          : ProfileContactRelationship.fromJson(relationshipRaw),
       createdAt: _readDateTime(json, 'created_at'),
       updatedAt: _readDateTime(json, 'updated_at'),
     );
   }
 
-  PatientProfile copyWith({
-    String? patientId,
+  Profile copyWith({
+    String? profileId,
     String? fullName,
     String? dob,
-    PatientGender? gender,
+    ProfileGender? gender,
     String? phone,
     String? email,
     String? nationalId,
     String? notes,
     bool? isActive,
-    List<PatientLinkedContact>? linkedContacts,
+    List<ProfileLinkedContact>? linkedContacts,
     String? linkId,
     String? contactId,
     String? contactDisplayName,
-    PatientContactRelationship? relationship,
+    ProfileContactRelationship? relationship,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
-    return PatientProfile(
-      patientId: patientId ?? this.patientId,
+    return Profile(
+      profileId: profileId ?? this.profileId,
       fullName: fullName ?? this.fullName,
       dob: dob ?? this.dob,
       gender: gender ?? this.gender,
@@ -320,13 +320,13 @@ class PatientProfile {
 }
 
 @immutable
-class PatientProfileUpsertInput {
-  const PatientProfileUpsertInput({
+class ProfileUpsertInput {
+  const ProfileUpsertInput({
     required this.fullName,
     this.dob,
-    this.gender = PatientGender.unknown,
+    this.gender = ProfileGender.unknown,
     this.contactId,
-    this.relationship = PatientContactRelationship.self,
+    this.relationship = ProfileContactRelationship.self,
     this.phone,
     this.email,
     this.nationalId,
@@ -336,9 +336,9 @@ class PatientProfileUpsertInput {
 
   final String fullName;
   final String? dob;
-  final PatientGender gender;
+  final ProfileGender gender;
   final String? contactId;
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final String? phone;
   final String? email;
   final String? nationalId;
@@ -366,18 +366,18 @@ class PatientProfileUpsertInput {
     };
   }
 
-  factory PatientProfileUpsertInput.fromProfile(PatientProfile profile) {
+  factory ProfileUpsertInput.fromProfile(Profile profile) {
     final linkedContact = profile.primaryLinkedContact;
 
-    return PatientProfileUpsertInput(
+    return ProfileUpsertInput(
       fullName: profile.fullName,
       dob: profile.dob,
-      gender: profile.gender ?? PatientGender.unknown,
+      gender: profile.gender ?? ProfileGender.unknown,
       contactId: profile.contactId ?? linkedContact?.contactId,
       relationship:
           profile.relationship ??
           linkedContact?.relationship ??
-          PatientContactRelationship.self,
+          ProfileContactRelationship.self,
       phone: profile.phone,
       email: profile.email,
       nationalId: profile.nationalId,
@@ -388,9 +388,9 @@ class PatientProfileUpsertInput {
 }
 
 @immutable
-class PatientProfileLinkToSelfInput {
-  const PatientProfileLinkToSelfInput({
-    this.relationship = PatientContactRelationship.self,
+class ProfileLinkToSelfInput {
+  const ProfileLinkToSelfInput({
+    this.relationship = ProfileContactRelationship.self,
     this.confirmFullName,
     this.confirmGender,
     this.confirmDob,
@@ -399,9 +399,9 @@ class PatientProfileLinkToSelfInput {
     this.confirmNationalId,
   });
 
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final String? confirmFullName;
-  final PatientGender? confirmGender;
+  final ProfileGender? confirmGender;
   final String? confirmDob;
   final String? confirmPhone;
   final String? confirmEmail;
@@ -427,19 +427,19 @@ class PatientProfileLinkToSelfInput {
 }
 
 @immutable
-class PatientContactLinkInput {
-  const PatientContactLinkInput({
+class ProfileContactLinkInput {
+  const ProfileContactLinkInput({
     this.contactId,
     this.accountNumber,
     this.contactDisplayName,
-    this.relationship = PatientContactRelationship.other,
+    this.relationship = ProfileContactRelationship.other,
     this.isActive = true,
   });
 
   final String? contactId;
   final String? accountNumber;
   final String? contactDisplayName;
-  final PatientContactRelationship relationship;
+  final ProfileContactRelationship relationship;
   final bool isActive;
 
   static String? _nullable(String? value) {

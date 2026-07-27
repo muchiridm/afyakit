@@ -1,11 +1,11 @@
-// lib/features/clinical/patients/widgets/patient_link_self_dialog.dart
+// lib/features/clinical/profiles/widgets/profile_payer_self_link_dialog.dart
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
-class PatientLinkSelfDialog {
-  const PatientLinkSelfDialog._();
+class ProfileLinkSelfDialog {
+  const ProfileLinkSelfDialog._();
 
   static const EdgeInsets _scrollPadding = EdgeInsets.only(
     top: 14,
@@ -23,16 +23,16 @@ class PatientLinkSelfDialog {
     return value.clamp(min, max).toDouble();
   }
 
-  static Future<PatientProfileLinkToSelfInput?> show({
+  static Future<ProfileLinkToSelfInput?> show({
     required BuildContext context,
-    required PatientProfile patient,
+    required Profile patient,
   }) async {
-    final relationship = ValueNotifier<PatientContactRelationship>(
-      PatientContactRelationship.self,
+    final relationship = ValueNotifier<ProfileContactRelationship>(
+      ProfileContactRelationship.self,
     );
 
-    final gender = ValueNotifier<PatientGender>(
-      patient.gender ?? PatientGender.unknown,
+    final gender = ValueNotifier<ProfileGender>(
+      patient.gender ?? ProfileGender.unknown,
     );
 
     final fullNameCtl = TextEditingController(text: patient.fullName);
@@ -43,7 +43,7 @@ class PatientLinkSelfDialog {
     final formKey = GlobalKey<FormState>();
 
     try {
-      return await showDialog<PatientProfileLinkToSelfInput>(
+      return await showDialog<ProfileLinkToSelfInput>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Link existing patient'),
@@ -52,7 +52,7 @@ class PatientLinkSelfDialog {
             height: _height(context, fraction: 0.62, min: 360, max: 640),
             child: Form(
               key: formKey,
-              child: ValueListenableBuilder<PatientContactRelationship>(
+              child: ValueListenableBuilder<ProfileContactRelationship>(
                 valueListenable: relationship,
                 builder: (_, rel, __) {
                   return SingleChildScrollView(
@@ -73,14 +73,14 @@ class PatientLinkSelfDialog {
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                 ),
-                                child: SelectableText(patient.patientId),
+                                child: SelectableText(patient.profileId),
                               ),
                             ),
                             SizedBox(
                               width: 260,
                               child:
                                   DropdownButtonFormField<
-                                    PatientContactRelationship
+                                    ProfileContactRelationship
                                   >(
                                     initialValue: rel,
                                     isExpanded: true,
@@ -90,13 +90,12 @@ class PatientLinkSelfDialog {
                                       isDense: true,
                                       helperText: 'Self/dependent links only.',
                                     ),
-                                    items: PatientProfilesLabels
-                                        .selfLinkRelationships
+                                    items: ProfilesLabels.selfLinkRelationships
                                         .map(
                                           (value) => DropdownMenuItem(
                                             value: value,
                                             child: Text(
-                                              PatientProfilesLabels.relationship(
+                                              ProfilesLabels.relationship(
                                                 value,
                                               ),
                                               overflow: TextOverflow.ellipsis,
@@ -105,11 +104,11 @@ class PatientLinkSelfDialog {
                                         )
                                         .toList(growable: false),
                                     selectedItemBuilder: (context) {
-                                      return PatientProfilesLabels
+                                      return ProfilesLabels
                                           .selfLinkRelationships
                                           .map(
                                             (value) => Text(
-                                              PatientProfilesLabels.relationship(
+                                              ProfilesLabels.relationship(
                                                 value,
                                               ),
                                               overflow: TextOverflow.ellipsis,
@@ -128,7 +127,7 @@ class PatientLinkSelfDialog {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Confirm at least 3 patient identifiers before linking this patient to your account.',
+                          'Confirm at least 3 patient identifiers before linking this profile to your account.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 16),
@@ -149,10 +148,10 @@ class PatientLinkSelfDialog {
                             ),
                             SizedBox(
                               width: 180,
-                              child: ValueListenableBuilder<PatientGender>(
+                              child: ValueListenableBuilder<ProfileGender>(
                                 valueListenable: gender,
                                 builder: (_, value, __) {
-                                  return DropdownButtonFormField<PatientGender>(
+                                  return DropdownButtonFormField<ProfileGender>(
                                     initialValue: value,
                                     isExpanded: true,
                                     decoration: const InputDecoration(
@@ -160,12 +159,12 @@ class PatientLinkSelfDialog {
                                       border: OutlineInputBorder(),
                                       isDense: true,
                                     ),
-                                    items: PatientGender.values
+                                    items: ProfileGender.values
                                         .map(
                                           (g) => DropdownMenuItem(
                                             value: g,
                                             child: Text(
-                                              PatientProfilesLabels.gender(g),
+                                              ProfilesLabels.gender(g),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -239,7 +238,7 @@ class PatientLinkSelfDialog {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop(
-                  PatientProfileLinkToSelfInput(
+                  ProfileLinkToSelfInput(
                     relationship: relationship.value,
                     confirmFullName: fullNameCtl.text.trim(),
                     confirmGender: gender.value,

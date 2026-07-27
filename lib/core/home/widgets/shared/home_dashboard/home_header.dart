@@ -22,21 +22,9 @@ class HomeHeader extends ConsumerWidget {
     this.greetingName,
     this.memberId,
     this.showDeliveryBanner = false,
-
-    /// Use this on catalog pages.
-    ///
-    /// When logged in:
-    /// - true  => show Home button above Logout
-    /// - false => show UserBadge above Logout
-    ///
-    /// When logged out:
-    /// - Home/UserBadge is suppressed
-    /// - AuthButton shows Login
     this.showHomeButton = false,
-
-    /// Use false on the LoginScreen so the page can reuse the shared
-    /// brand/contact/logo header without showing a duplicate Login button.
     this.showIdentityActions = true,
+    this.centerContent = false,
   });
 
   final EntryMode entry;
@@ -45,6 +33,7 @@ class HomeHeader extends ConsumerWidget {
   final bool showDeliveryBanner;
   final bool showHomeButton;
   final bool showIdentityActions;
+  final bool centerContent;
 
   bool get _isMemberUx => entry != EntryMode.staff;
 
@@ -67,7 +56,11 @@ class HomeHeader extends ConsumerWidget {
         ),
         if (_isMemberUx) ...[
           const SizedBox(height: AppShape.gap10),
-          _MemberGreeting(name: greetingName, memberId: memberId),
+          _MemberGreeting(
+            name: greetingName,
+            memberId: memberId,
+            centered: centerContent,
+          ),
         ],
         if (showDeliveryBanner) ...[
           const SizedBox(height: AppShape.gap8),
@@ -358,10 +351,15 @@ class _HeaderIdentityActions extends ConsumerWidget {
 }
 
 class _MemberGreeting extends StatelessWidget {
-  const _MemberGreeting({required this.name, required this.memberId});
+  const _MemberGreeting({
+    required this.name,
+    required this.memberId,
+    required this.centered,
+  });
 
   final String? name;
   final String? memberId;
+  final bool centered;
 
   @override
   Widget build(BuildContext context) {
@@ -373,10 +371,13 @@ class _MemberGreeting extends StatelessWidget {
     final id = (memberId ?? '').trim();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: centered
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Text(
           'Hi, $n 👋',
+          textAlign: centered ? TextAlign.center : TextAlign.start,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -385,6 +386,7 @@ class _MemberGreeting extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Member ID: $id',
+            textAlign: centered ? TextAlign.center : TextAlign.start,
             style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           ),
         ],

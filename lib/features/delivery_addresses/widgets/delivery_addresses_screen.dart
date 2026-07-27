@@ -17,10 +17,12 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     super.key,
     required this.scope,
     this.pickerMode = false,
+    this.memberMode = false,
   });
 
   final DeliveryAddressScope scope;
   final bool pickerMode;
+  final bool memberMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,89 +63,114 @@ class DeliveryAddressesScreen extends ConsumerWidget {
             : null,
         child: const Icon(Icons.add),
       ),
-      body: Builder(
-        builder: (_) {
-          if (!scope.isUsable) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Select a customer before managing delivery addresses.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (memberMode && !pickerMode) ...[
+            const _MemberDeliveryInfoCard(),
+            const SizedBox(height: 12),
+          ],
+          Expanded(
+            child: Builder(
+              builder: (_) {
+                if (!scope.isUsable) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Select a customer before managing delivery addresses.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
 
-          if (state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+                if (state.isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (!state.hasActiveItems) {
-            return _EmptyState(
-              pickerMode: pickerMode,
-              onAddPressed: () =>
-                  _showAddressSheet(context, scope: scope, existing: null),
-            );
-          }
+                if (!state.hasActiveItems) {
+                  return _EmptyState(
+                    pickerMode: pickerMode,
+                    onAddPressed: () => _showAddressSheet(
+                      context,
+                      scope: scope,
+                      existing: null,
+                    ),
+                  );
+                }
 
-          return ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: state.activeItems.length,
-            itemBuilder: (context, index) {
-              final address = state.activeItems[index];
+                return ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: state.activeItems.length,
+                  itemBuilder: (context, index) {
+                    final address = state.activeItems[index];
 
-              return _AddressCard(
-                address: address,
-                pickerMode: pickerMode,
-                onSelect: pickerMode
-                    ? () => Navigator.of(context).pop<DeliveryAddress>(address)
-                    : null,
-                onEdit: () =>
-                    _showAddressSheet(context, scope: scope, existing: address),
-                onNavigate: address.pinLocation == null
-                    ? null
-                    : () async {
-                        try {
-                          await launcher.navigateTo(address);
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    return _AddressCard(
+                      address: address,
+                      pickerMode: pickerMode,
+                      onSelect: pickerMode
+                          ? () => Navigator.of(
+                              context,
+                            ).pop<DeliveryAddress>(address)
+                          : null,
+                      onEdit: () => _showAddressSheet(
+                        context,
+                        scope: scope,
+                        existing: address,
+                      ),
+                      onNavigate: address.pinLocation == null
+                          ? null
+                          : () async {
+                              try {
+                                await launcher.navigateTo(address);
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString())),
+                                );
+                              }
+                            },
+                      onSetDefault: () async {
+                        await controller.setDefault(address.id);
+
+                        if (!context.mounted) return;
+
+                        final error = ref.read(
+                          deliveryAddressErrorProvider(scope),
+                        );
+                        if (error == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Default address updated'),
+                            ),
+                          );
                         }
                       },
-                onSetDefault: () async {
-                  await controller.setDefault(address.id);
+                      onArchive: () => _confirmArchive(
+                        context,
+                        onConfirm: () async {
+                          await controller.archive(address.id);
 
-                  if (!context.mounted) return;
+                          if (!context.mounted) return;
 
-                  final error = ref.read(deliveryAddressErrorProvider(scope));
-                  if (error == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Default address updated')),
+                          final error = ref.read(
+                            deliveryAddressErrorProvider(scope),
+                          );
+                          if (error == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Address removed')),
+                            );
+                          }
+                        },
+                      ),
                     );
-                  }
-                },
-                onArchive: () => _confirmArchive(
-                  context,
-                  onConfirm: () async {
-                    await controller.archive(address.id);
-
-                    if (!context.mounted) return;
-
-                    final error = ref.read(deliveryAddressErrorProvider(scope));
-                    if (error == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Address removed')),
-                      );
-                    }
                   },
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -188,6 +215,36 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     if (confirmed == true) {
       await onConfirm();
     }
+  }
+}
+
+class _MemberDeliveryInfoCard extends StatelessWidget {
+  const _MemberDeliveryInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.location_on_outlined, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Save home, work, and family delivery locations so they are '
+                'ready during checkout. Set the address you use most often as '
+                'the default, and add a map pin when precise navigation helps.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

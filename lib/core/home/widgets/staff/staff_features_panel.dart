@@ -9,8 +9,9 @@ import 'package:afyakit/core/home/models/staff_feature_def.dart';
 import 'package:afyakit/core/home/registry/home_registry.dart';
 import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 
-import 'package:afyakit/features/clinical/patients/models/patient_profile_models.dart';
-import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -359,7 +360,8 @@ class _FeatureTile extends ConsumerWidget {
                 spacing: AppShape.gap10,
                 runSpacing: AppShape.gap10,
                 children: [
-                  for (final action in actions) _ActionChip(action: action),
+                  for (final action in actions)
+                    _ActionChip(action: action, scope: scope),
                 ],
               ),
             ],
@@ -424,9 +426,10 @@ class _FeatureDescription extends StatelessWidget {
 }
 
 class _ActionChip extends StatelessWidget {
-  const _ActionChip({required this.action});
+  const _ActionChip({required this.action, required this.scope});
 
   final StaffFeatureDef action;
+  final HomeScope scope;
 
   @override
   Widget build(BuildContext context) {
@@ -446,6 +449,14 @@ class _ActionChip extends StatelessWidget {
       return;
     }
 
+    if (_isPrescriptionsAction) {
+      await PrescriptionsScreen.open(
+        context: context,
+        forceProfilePickerMode: scope == HomeScope.staff,
+      );
+      return;
+    }
+
     final destination = action.destination;
 
     if (destination == null) {
@@ -455,13 +466,18 @@ class _ActionChip extends StatelessWidget {
 
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: destination));
+    ).push<void>(MaterialPageRoute<void>(builder: destination));
+  }
+
+  bool get _isPrescriptionsAction {
+    return action.featureKey == FeatureKeys.clinical &&
+        action.label.trim().toLowerCase().contains('prescription');
   }
 
   Future<void> _openHealthMetrics(BuildContext context) async {
-    final patient = await Navigator.of(context).push<PatientProfile>(
-      MaterialPageRoute<PatientProfile>(
-        builder: (_) => const PatientProfilesScreen(
+    final patient = await Navigator.of(context).push<Profile>(
+      MaterialPageRoute<Profile>(
+        builder: (_) => const ProfilesScreen(
           allowExplicitContactLink: true,
           selectionMode: true,
           selectionTitle: 'Select patient for health metrics',

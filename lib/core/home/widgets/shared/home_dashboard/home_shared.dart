@@ -228,11 +228,13 @@ class HomeSection extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.child,
+    this.centerHeader = false,
   });
 
   final String title;
   final IconData icon;
   final Widget child;
+  final bool centerHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -240,14 +242,18 @@ class HomeSection extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          mainAxisAlignment: centerHeader
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
           children: [
             Icon(icon, size: 18, color: scheme.primary),
             const SizedBox(width: AppShape.gap8),
             Text(
               title,
+              textAlign: centerHeader ? TextAlign.center : TextAlign.start,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w900,
               ),
