@@ -85,7 +85,6 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     final quoteAsync = ref.watch(zohoQuoteProvider(quoteId));
     final me = ref.watch(currentUserProvider).valueOrNull;
 
-    // ✅ New style: gate by capability-derived helper on AuthUserX.
     final canManage = me?.canManageQuotes ?? false;
 
     final actionsCtl = ref.read(quoteActionControllerProvider);
@@ -198,6 +197,10 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           showStatus: false,
           trailing: _HeaderStatusPill(status: meta.status),
         ),
+        if (q.deliveryAddress != null && q.deliveryAddress!.isUsable) ...[
+          const Divider(height: 1),
+          _DeliveryAddressCard(q: q),
+        ],
         const Divider(height: 1),
         SizedBox(
           height: MediaQuery.of(context).size.height * 0.55,
@@ -219,8 +222,6 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
   static SalesDocMetaVm _buildMeta(ZohoQuote q) {
     final party = q.customerName.trim().isEmpty ? 'Customer' : q.customerName;
 
-    // ✅ ZohoQuote has no quoteNumber (per your compile error).
-    // Use what exists: accountNumber (if you use it as doc display) else quoteId.
     final docNo = _bestDocNumber(q);
 
     final currency = (q.currencyCode ?? '').trim();
@@ -279,6 +280,76 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
     if (t.isEmpty) return null;
     if (t.toLowerCase() == 'item') return null;
     return t;
+  }
+}
+
+class _DeliveryAddressCard extends StatelessWidget {
+  const _DeliveryAddressCard({required this.q});
+
+  final ZohoQuote q;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = q.deliveryAddress!;
+    final theme = Theme.of(context);
+
+    final recipient = a.recipientDisplay.trim();
+    final singleLine = a.singleLine.trim();
+    final label = (a.label ?? '').trim();
+    final placeName = (a.placeName ?? '').trim();
+
+    final helperParts = <String>[
+      if (label.isNotEmpty) label,
+      if (placeName.isNotEmpty && placeName != label) placeName,
+    ];
+
+    final helper = helperParts.join(' • ').trim();
+
+    final showCoordsOnly = singleLine.isEmpty && a.hasCoordinates;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Delivery address',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (recipient.isNotEmpty)
+            Text(
+              recipient,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (recipient.isNotEmpty && singleLine.isNotEmpty)
+            const SizedBox(height: 6),
+          if (singleLine.isNotEmpty)
+            Text(singleLine, style: theme.textTheme.bodyMedium),
+          if (helper.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(helper, style: theme.textTheme.bodySmall),
+          ],
+          if (showCoordsOnly) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Pinned map location available',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

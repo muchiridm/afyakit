@@ -23,9 +23,17 @@ class CatalogTile {
   final String? concentrationSig;
   final String? supplierManufacturer;
 
+  final String? whoPath;
+  final String? whoPrimaryInn;
+  final String? whoAtcCode;
+  final String? whoAtcName;
+
+  final List<String>? whoMappedInns;
+  final List<String>? whoAtcCodes;
+  final List<String>? whoAtcLabels;
+
   final bool? hasMergeOverride;
 
-  // NEW
   final String? uiKey;
   final String? groupKey;
   final bool priceRequestRequired;
@@ -45,6 +53,13 @@ class CatalogTile {
     this.volumeSig,
     this.concentrationSig,
     this.supplierManufacturer,
+    this.whoPath,
+    this.whoPrimaryInn,
+    this.whoAtcCode,
+    this.whoAtcName,
+    this.whoMappedInns,
+    this.whoAtcCodes,
+    this.whoAtcLabels,
     this.hasMergeOverride,
     this.uiKey,
     this.groupKey,
@@ -56,12 +71,67 @@ class CatalogTile {
   bool get hasSupplierManufacturer =>
       supplierManufacturer != null && supplierManufacturer!.trim().isNotEmpty;
 
+  bool get hasComboWhoMappings =>
+      (whoMappedInns != null && whoMappedInns!.length > 1) ||
+      (whoAtcCodes != null && whoAtcCodes!.length > 1);
+
   String get groupingKey {
     final ui = uiKey?.trim();
     if (ui != null && ui.isNotEmpty) return ui;
     return '${brand.trim().toLowerCase()}|'
         '${strengthSig.trim().toLowerCase()}|'
         '${form.trim().toLowerCase()}';
+  }
+
+  String? get whoPathPreview {
+    final raw = whoPath?.trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    final parts = raw
+        .split('>')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return raw;
+    if (parts.length <= 3) return parts.join(' > ');
+    return parts.sublist(parts.length - 3).join(' > ');
+  }
+
+  String? get comboWhoSummary {
+    final labels = whoAtcLabels ?? const <String>[];
+    final inns = whoMappedInns ?? const <String>[];
+
+    if (labels.isEmpty && inns.isEmpty) return null;
+
+    final parts = <String>[
+      if (labels.isNotEmpty) labels.join(', '),
+      if (inns.isNotEmpty) 'Ingredients: ${inns.join(', ')}',
+    ];
+
+    return parts.join(' • ');
+  }
+
+  String? get tileDescWithWhoPath {
+    final desc = tileDesc?.trim() ?? '';
+    final who = whoPathPreview?.trim() ?? '';
+    final atc = whoAtcCode?.trim() ?? '';
+    final combo = comboWhoSummary?.trim() ?? '';
+
+    if (desc.isEmpty && who.isEmpty && atc.isEmpty && combo.isEmpty) {
+      return null;
+    }
+
+    final extras = [
+      if (atc.isNotEmpty) 'ATC $atc',
+      if (who.isNotEmpty) who,
+      if (combo.isNotEmpty && combo != who) combo,
+    ].join(' • ');
+
+    if (desc.isEmpty) return extras.isEmpty ? null : extras;
+    if (extras.isEmpty) return desc;
+
+    return '$desc • $extras';
   }
 
   static String _asString(Object? v) {
@@ -98,6 +168,15 @@ class CatalogTile {
     return null;
   }
 
+  static List<String>? _asStringList(Object? v) {
+    if (v is! List) return null;
+    final out = v
+        .map((e) => _asString(e).trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return out.isEmpty ? null : out;
+  }
+
   static String _fingerprint({
     required String brand,
     required String strengthSig,
@@ -131,6 +210,14 @@ class CatalogTile {
 
     final title = _asString(j['tile_title']).trim();
     final desc = _asString(j['tile_desc']).trim();
+    final whoPath = _asString(j['who_path']).trim();
+    final whoPrimaryInn = _asString(j['who_primary_inn']).trim();
+    final whoAtcCode = _asString(j['who_atc_code']).trim();
+    final whoAtcName = _asString(j['who_atc_name']).trim();
+
+    final whoMappedInns = _asStringList(j['who_mapped_inns']);
+    final whoAtcCodes = _asStringList(j['who_atc_codes']);
+    final whoAtcLabels = _asStringList(j['who_atc_labels']);
 
     final price = _asNum(j['best_sell_price']);
     final hasMergeOverride = _asBool(j['has_merge_override']);
@@ -196,6 +283,13 @@ class CatalogTile {
       volumeSig: volumeSig.isEmpty ? null : volumeSig,
       concentrationSig: concentrationSig.isEmpty ? null : concentrationSig,
       supplierManufacturer: supplierMfg.isEmpty ? null : supplierMfg,
+      whoPath: whoPath.isEmpty ? null : whoPath,
+      whoPrimaryInn: whoPrimaryInn.isEmpty ? null : whoPrimaryInn,
+      whoAtcCode: whoAtcCode.isEmpty ? null : whoAtcCode,
+      whoAtcName: whoAtcName.isEmpty ? null : whoAtcName,
+      whoMappedInns: whoMappedInns,
+      whoAtcCodes: whoAtcCodes,
+      whoAtcLabels: whoAtcLabels,
       hasMergeOverride: hasMergeOverride,
       uiKey: uiKey.isEmpty ? null : uiKey,
       groupKey: groupKey.isEmpty ? null : groupKey,

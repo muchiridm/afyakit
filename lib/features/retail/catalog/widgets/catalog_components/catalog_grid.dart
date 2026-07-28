@@ -1,5 +1,3 @@
-// lib/core/catalog/widgets/catalog_components/catalog_grid.dart
-
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:flutter/material.dart';
 
@@ -103,10 +101,13 @@ class _CatalogCard extends StatelessWidget {
     final safeTitle = title.isEmpty ? 'Item' : title;
 
     final manufacturer = _clean(tile.supplierManufacturer);
-    final desc = _clean(tile.tileDesc);
+
+    // Use the WHO-aware description first.
+    final desc = _clean(tile.tileDescWithWhoPath ?? tile.tileDesc);
+
     final metaLine = _joinMeta(
       _clamp(manufacturer, max: 18),
-      _clamp(desc, max: 34),
+      _clamp(desc, max: 48),
     );
 
     final titleStyle = theme.textTheme.titleSmall?.copyWith(
@@ -118,7 +119,7 @@ class _CatalogCard extends StatelessWidget {
     final metaStyle = theme.textTheme.bodySmall?.copyWith(
       height: 1.15,
       fontWeight: FontWeight.w500,
-      color: theme.colorScheme.onSurface.withOpacity(0.66),
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.66),
     );
 
     return Material(
@@ -148,7 +149,7 @@ class _CatalogCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         metaLine,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: metaStyle,
                       ),
@@ -179,7 +180,9 @@ class _CatalogCard extends StatelessWidget {
                     Text(
                       'KES',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.56),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.56,
+                        ),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -203,6 +206,11 @@ class _ChipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = <Widget>[];
 
+    final atc = tile.whoAtcCode?.trim() ?? '';
+    if (atc.isNotEmpty) {
+      chips.add(_PillChip(label: 'ATC $atc', emphasize: true));
+    }
+
     final form = tile.form.trim();
     if (form.isNotEmpty) {
       chips.add(_PillChip(label: form));
@@ -219,25 +227,34 @@ class _ChipRow extends StatelessWidget {
 }
 
 class _PillChip extends StatelessWidget {
-  const _PillChip({required this.label});
+  const _PillChip({required this.label, this.emphasize = false});
 
   final String label;
+  final bool emphasize;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final background = emphasize
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.7)
+        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.42);
+
+    final foreground = emphasize
+        ? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSurface.withValues(alpha: 0.76);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.42),
+        color: background,
       ),
       child: Text(
         label,
         style: theme.textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w600,
-          color: theme.colorScheme.onSurface.withOpacity(0.76),
+          color: foreground,
         ),
       ),
     );

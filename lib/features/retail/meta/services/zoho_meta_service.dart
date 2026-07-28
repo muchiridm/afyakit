@@ -26,7 +26,7 @@ class ZohoMetaService {
     String? type,
     bool? active,
   }) async {
-    final uri = routes.zohoMetaAccounts(
+    final uri = routes.retailMetaAccounts(
       search: search,
       type: type,
       active: active,
@@ -51,7 +51,7 @@ class ZohoMetaService {
     final id = accountId.trim();
     if (id.isEmpty) throw ArgumentError('accountId is empty');
 
-    final uri = routes.zohoMetaAccountById(id);
+    final uri = routes.retailMetaAccountById(id);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);

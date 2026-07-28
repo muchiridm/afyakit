@@ -5,8 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/config.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_session_guard_provider.dart';
+
+/// Tenant-scoped API routes helper.
+final afyakitRoutesProvider = Provider<AfyaKitRoutes>((ref) {
+  final tenantId = ref.watch(tenantIdProvider).trim().toLowerCase();
+  return AfyaKitRoutes(tenantId);
+});
 
 /// Builds the shared AfyaKit API client.
 ///
@@ -58,5 +65,9 @@ extension AfyaKitClientRefX on Ref {
       throw StateError('AfyaKitClient is not ready');
     }
     return client;
+  }
+
+  AfyaKitRoutes get afyakitRoutes {
+    return read(afyakitRoutesProvider);
   }
 }

@@ -1,5 +1,3 @@
-// lib/core/catalog/widgets/catalog_components/catalog_ui_bits.dart
-
 import 'dart:math' as math;
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
@@ -8,7 +6,6 @@ import 'package:flutter/material.dart';
 /// Shared, lightweight UI pieces used across the Catalog screen and sheets:
 /// - Search bar
 /// - Loading skeletons
-/// - Error pane
 /// - Bottom-sheet header
 ///
 /// Keep these dumb and reusable (no Riverpod, no service calls).
@@ -182,52 +179,6 @@ class _SkeletonCardState extends State<_SkeletonCard>
           ),
         );
       },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Error state
-// ─────────────────────────────────────────────────────────────
-
-class ErrorPane extends StatelessWidget {
-  final String error;
-  final VoidCallback onRetry;
-
-  const ErrorPane({super.key, required this.error, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 36,
-              color: theme.colorScheme.onSurface.withOpacity(0.68),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.76),
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

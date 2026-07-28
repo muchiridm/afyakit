@@ -20,7 +20,7 @@ final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   return ZohoContactsService(api: api, routes: routes);
 });
 
-/// ✅ One-liner provider for UI: "give me contact by id"
+/// One-liner provider for UI: "give me contact by id"
 final zohoContactByIdProvider = FutureProvider.family
     .autoDispose<ZohoContact, String>((ref, contactId) {
       final id = contactId.trim();
@@ -39,6 +39,9 @@ class ZohoContactsService {
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
+
+  /// Account-number keyed cache for member-scoped customer resolution.
+  final Map<String, ZohoContact> _accountCache = <String, ZohoContact>{};
 
   /// Flip this to true temporarily when debugging.
   static const bool _debug = false;
@@ -89,37 +92,63 @@ class ZohoContactsService {
     return uri.replace(queryParameters: qp);
   }
 
-  // lib/features/retail/contacts/services/zoho_contacts_service.dart
+  String _acctKey(String? accountNumber) => (accountNumber ?? '').trim();
+
+  void _cacheByAccount(ZohoContact contact) {
+    final acct = _acctKey(contact.accountNumber);
+    if (acct.isEmpty) return;
+    _accountCache[acct] = contact;
+  }
+
+  void _evictAccount(String? accountNumber) {
+    final acct = _acctKey(accountNumber);
+    if (acct.isEmpty) return;
+    _accountCache.remove(acct);
+  }
+
+  ZohoContact _pickBestAccountMatch(
+    List<ZohoContact> items, {
+    required String accountNumber,
+  }) {
+    final acct = _acctKey(accountNumber);
+    if (acct.isEmpty) {
+      throw StateError('accountNumber is empty');
+    }
+    if (items.isEmpty) {
+      throw StateError('No contacts found for account number');
+    }
+
+    final exact = items
+        .where((c) => _acctKey(c.accountNumber) == acct)
+        .toList(growable: false);
+
+    final pool = exact.isNotEmpty ? exact : items;
+    return pool.first;
+  }
 
   Future<List<ZohoContact>> list({
     String? search,
     int perPage = 50,
     int page = 1,
     ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
-
-    /// ✅ If present, backend will return ONLY matching contact(s)
-    /// (member hard-scope)
     String? accountNumber,
   }) async {
     final cleanSearch = (search ?? '').trim();
+    final cleanAcct = _acctKey(accountNumber);
 
-    final uri0 = routes.zohoListContacts(
+    final uri0 = routes.retailListContacts(
       search: cleanSearch.isEmpty ? null : cleanSearch,
       perPage: perPage,
       page: page,
       type: _toZohoType(type),
-
-      // ✅ pass through to BE as account_number
-      accountNumber: accountNumber,
+      accountNumber: cleanAcct.isEmpty ? null : cleanAcct,
     );
 
-    // Your routes already emit search_text, so this is mostly harmless.
-    // Keeping it preserves backward compat if any caller ever used `search`.
     final uri = _withSearchText(uri0, cleanSearch);
 
     if (_debug) {
       debugPrint(
-        '[ZohoContactsService.list] q="$cleanSearch" account="$accountNumber" uri=$uri',
+        '[ZohoContactsService.list] q="$cleanSearch" account="$cleanAcct" uri=$uri',
       );
     }
 
@@ -134,23 +163,61 @@ class ZohoContactsService {
         .map((m) => ZohoContact.fromJson(m.cast<String, dynamic>()))
         .toList(growable: false);
 
-    if (type == ZohoContactTypeFilter.any) return items;
-    return items.where((c) => _matchesFilter(c, type)).toList(growable: false);
+    final filtered = type == ZohoContactTypeFilter.any
+        ? items
+        : items.where((c) => _matchesFilter(c, type)).toList(growable: false);
+
+    if (cleanAcct.isNotEmpty && filtered.isNotEmpty) {
+      final best = _pickBestAccountMatch(filtered, accountNumber: cleanAcct);
+      _cacheByAccount(best);
+    }
+
+    return filtered;
+  }
+
+  Future<ZohoContact?> getByAccountNumber(
+    String accountNumber, {
+    ZohoContactTypeFilter type = ZohoContactTypeFilter.customerOnly,
+    bool forceRefresh = false,
+  }) async {
+    final acct = _acctKey(accountNumber);
+    if (acct.isEmpty) return null;
+
+    if (!forceRefresh) {
+      final cached = _accountCache[acct];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
+    final items = await list(
+      accountNumber: acct,
+      type: type,
+      perPage: 50,
+      page: 1,
+    );
+
+    if (items.isEmpty) return null;
+
+    final best = _pickBestAccountMatch(items, accountNumber: acct);
+    _cacheByAccount(best);
+    return best;
   }
 
   Future<ZohoContact> get(String contactId) async {
-    final uri = routes.zohoGetContact(contactId);
+    final uri = routes.retailGetContact(contactId);
     final res = await api.getUri(uri);
 
     final data = _asJsonMap(res.data);
     final raw = data['contact'];
     if (raw is Map) {
-      return ZohoContact.fromJson(raw.cast<String, dynamic>());
+      final contact = ZohoContact.fromJson(raw.cast<String, dynamic>());
+      _cacheByAccount(contact);
+      return contact;
     }
     throw StateError('Unexpected response shape: missing "contact"');
   }
 
-  /// ✅ UI-friendly helper: best-effort fetch.
   Future<ZohoContact?> getOrNull(String contactId) async {
     final id = contactId.trim();
     if (id.isEmpty) return null;
@@ -162,13 +229,15 @@ class ZohoContactsService {
   }
 
   Future<ZohoContact> create(ZohoContact input) async {
-    final uri = routes.zohoCreateContact();
+    final uri = routes.retailCreateContact();
     final res = await api.postUri(uri, data: input.toCreateJson());
 
     final data = _asJsonMap(res.data);
     final raw = data['contact'];
     if (raw is Map) {
-      return ZohoContact.fromJson(raw.cast<String, dynamic>());
+      final contact = ZohoContact.fromJson(raw.cast<String, dynamic>());
+      _cacheByAccount(contact);
+      return contact;
     }
     throw StateError('Unexpected response shape: missing "contact"');
   }
@@ -177,7 +246,7 @@ class ZohoContactsService {
     String contactId,
     ContactUpdatePatch patch,
   ) async {
-    final uri = routes.zohoUpdateContact(contactId);
+    final uri = routes.retailUpdateContact(contactId);
 
     final body = patch.toJson();
 
@@ -190,7 +259,9 @@ class ZohoContactsService {
     final data = _asJsonMap(res.data);
     final raw = data['contact'];
     if (raw is Map) {
-      return ZohoContact.fromJson(raw.cast<String, dynamic>());
+      final contact = ZohoContact.fromJson(raw.cast<String, dynamic>());
+      _cacheByAccount(contact);
+      return contact;
     }
     throw StateError('Unexpected response shape: missing "contact"');
   }
@@ -199,13 +270,12 @@ class ZohoContactsService {
     String contactId,
     ZohoContact input,
   ) async {
+    final oldAcct = _acctKey(input.accountNumber);
+
     final patch = ContactUpdatePatch(
       displayName: input.displayName,
       companyName: input.companyName,
-
-      // ✅ NEW: account number (custom field cf_account_number)
       accountNumber: input.accountNumber,
-
       personContact: input.personContact == null
           ? const PersonContactPatch(delete: true)
           : PersonContactPatch(
@@ -216,12 +286,27 @@ class ZohoContactsService {
             ),
     );
 
-    return updatePatch(contactId, patch);
+    final updated = await updatePatch(contactId, patch);
+
+    final newAcct = _acctKey(updated.accountNumber);
+    if (oldAcct.isNotEmpty && oldAcct != newAcct) {
+      _evictAccount(oldAcct);
+    }
+    _cacheByAccount(updated);
+
+    return updated;
   }
 
   Future<void> delete(String contactId) async {
-    final uri = routes.zohoDeleteContact(contactId);
+    final existing = await getOrNull(contactId);
+    final existingAcct = _acctKey(existing?.accountNumber);
+
+    final uri = routes.retailDeleteContact(contactId);
     await api.deleteUri(uri);
+
+    if (existingAcct.isNotEmpty) {
+      _evictAccount(existingAcct);
+    }
   }
 
   JsonMap _asJsonMap(Object? v) {

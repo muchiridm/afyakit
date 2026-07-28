@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
 import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
@@ -11,6 +10,7 @@ import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controlle
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,7 +30,6 @@ class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
 
-    // ✅ If account scope changes while member-scoped, rebind the contact.
     _ref.listen<String?>(zohoContactsAccountScopeProvider, (prev, next) {
       final p = (prev ?? '').trim();
       final n = (next ?? '').trim();
@@ -38,16 +37,13 @@ class QuoteController extends StateNotifier<QuoteState> {
 
       if (_policy != QuoteContactPolicy.memberScoped) return;
 
-      // Fire-and-forget; do not block UI.
       unawaited(_ensureMemberContactBound(showError: false));
     });
 
-    // ✅ If policy flips (picker <-> memberScoped), enforce invariants.
     _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (prev, next) {
       if (prev == next) return;
 
       if (next == QuoteContactPolicy.memberScoped) {
-        // Now locked: ensure correct member contact is bound ASAP.
         unawaited(_ensureMemberContactBound(showError: false));
       }
     });
@@ -67,6 +63,9 @@ class QuoteController extends StateNotifier<QuoteState> {
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
 
   QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
+
+  Future<void>? _memberContactBindFuture;
+  String? _memberContactBindAcct;
 
   // ───────────────────────── Public API ─────────────────────────
 
@@ -90,6 +89,16 @@ class QuoteController extends StateNotifier<QuoteState> {
     SnackService.showSuccess('Edits cancelled');
   }
 
+  void setDeliveryAddress(SalesDocumentAddress? address) {
+    if (_busy) return;
+    _metaCtl.setDeliveryAddress(address);
+  }
+
+  void clearDeliveryAddress() {
+    if (_busy) return;
+    _metaCtl.clearDeliveryAddress();
+  }
+
   Future<void> ensureReady({
     String? editingQuoteId,
     required bool requirePrices,
@@ -106,12 +115,10 @@ class QuoteController extends StateNotifier<QuoteState> {
       nextEditingId: nextId,
     );
 
-    // ───────────────────────── NEW MODE ─────────────────────────
     if (nextId.isEmpty) {
       _metaCtl.beginNew();
       state = const QuoteState();
 
-      // ✅ Member-scoped: block UI until contact is bound (prevents stale name).
       if (_policy == QuoteContactPolicy.memberScoped) {
         state = state.copyWith(loadingEdit: true, clearError: true);
         await _ensureMemberContactBound(showError: false);
@@ -122,7 +129,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       return;
     }
 
-    // ───────────────────────── EDIT MODE ─────────────────────────
     final switchingTarget = prevEditingId != nextId || prevLoadedId != nextId;
 
     if (switchingTarget) {
@@ -130,12 +136,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       _metaCtl.clearAll();
       _metaCtl.beginEdit(nextId);
       state = const QuoteState().copyWith(editingQuoteId: nextId);
-
-      // Optional rule: if you want edit screens in memberScoped mode
-      // to also force binding, you can enable this:
-      // if (_policy == QuoteContactPolicy.memberScoped) {
-      //   await _ensureMemberContactBound(showError: false);
-      // }
     } else {
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
@@ -148,126 +148,77 @@ class QuoteController extends StateNotifier<QuoteState> {
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
-  // inside QuoteController
-
-  // inside QuoteController (quote_controller.dart)
-
   Future<void> _ensureMemberContactBound({bool showError = false}) async {
-    // Use your policy provider
-    final policy = _ref.read(quoteContactPolicyProvider);
-    final isMemberScoped = policy == QuoteContactPolicy.memberScoped;
+    final QuoteContactPolicy policy = _ref.read(quoteContactPolicyProvider);
+    final bool isMemberScoped = policy == QuoteContactPolicy.memberScoped;
     if (!isMemberScoped) return;
 
-    final acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '').trim();
+    final String acct = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
+        .trim();
+
     if (acct.isEmpty) {
-      if (showError) SnackService.showError('Missing account scope.');
+      if (showError) {
+        SnackService.showError('Missing account scope.');
+      }
       return;
     }
 
-    // Already bound correctly => nothing to do.
-    final current = _meta.contact;
-    final currentAcct = (current?.accountNumber ?? '').trim();
+    final ZohoContact? current = _meta.contact;
+    final String currentAcct = (current?.accountNumber ?? '').trim();
+
     if (current != null && currentAcct == acct) return;
 
-    try {
-      final svc = await _ref.read(zohoContactsServiceProvider.future);
-
-      // Pull enough results to resolve duplicates deterministically
-      final items = await svc.list(
-        accountNumber: acct,
-        type: ZohoContactTypeFilter.customerOnly,
-        perPage: 50,
-        page: 1,
-      );
-
-      if (items.isEmpty) {
-        if (showError) {
-          SnackService.showError('Your customer profile is missing.');
-        }
-        return;
-      }
-
-      // Use current user signals (phone/email/displayName) to choose best match.
-      final u = _ref.read(currentUserValueProvider);
-
-      final userPhone = (u?.phoneNumber ?? '').trim();
-      final userEmail = (u?.email ?? '').trim(); // if your AuthUser has email
-      final userName = (u?.displayName ?? u?.computedDisplayName ?? '').trim();
-
-      int score(ZohoContact c) {
-        int s = 0;
-
-        // Safety: if Zoho payload includes accountNumber and it doesn't match, discard.
-        final cAcct = (c.accountNumber ?? '').trim();
-        if (cAcct.isNotEmpty && cAcct != acct) return -9999;
-
-        // Strong signals
-        final cPhone = c.bestPhone.trim();
-        if (userPhone.isNotEmpty && cPhone.isNotEmpty) {
-          if (_phoneLooseEqual(userPhone, cPhone)) s += 50;
-        }
-
-        final cEmail = c.bestEmail.trim().toLowerCase();
-        if (userEmail.isNotEmpty && cEmail.isNotEmpty) {
-          if (cEmail == userEmail.toLowerCase()) s += 30;
-        }
-
-        // Soft signal: name contains
-        final cName = c.title.trim().toLowerCase();
-        final uName = userName.toLowerCase();
-        if (uName.isNotEmpty && cName.isNotEmpty && cName.contains(uName)) {
-          s += 10;
-        }
-
-        // Prefer active contacts
-        if (c.isActive) s += 2;
-
-        return s;
-      }
-
-      ZohoContact best = items.first;
-      int bestScore = score(best);
-
-      for (final c in items.skip(1)) {
-        final sc = score(c);
-        if (sc > bestScore) {
-          best = c;
-          bestScore = sc;
-          continue;
-        }
-
-        // Tie-breaker: stable deterministic ordering by contactId
-        if (sc == bestScore) {
-          final a = best.contactId.trim();
-          final b = c.contactId.trim();
-          if (b.compareTo(a) < 0) best = c;
-        }
-      }
-
-      // HARD LOCK
-      _metaCtl.setContact(best);
-    } catch (_) {
-      if (showError) {
-        SnackService.showError('Failed to resolve customer profile.');
-      }
+    final Future<void>? inFlight = _memberContactBindFuture;
+    if (inFlight != null && _memberContactBindAcct == acct) {
+      await inFlight;
+      return;
     }
-  }
 
-  bool _phoneLooseEqual(String a, String b) {
-    String norm(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
-    final aa = norm(a);
-    final bb = norm(b);
-    if (aa.isEmpty || bb.isEmpty) return false;
+    late final Future<void> bindFuture;
+    bindFuture = () async {
+      try {
+        final ZohoContactsService svc = await _ref.read(
+          zohoContactsServiceProvider.future,
+        );
 
-    // compare last 9 digits (works well for KE numbers across formats)
-    String tail9(String s) => s.length <= 9 ? s : s.substring(s.length - 9);
-    return tail9(aa) == tail9(bb);
+        final ZohoContact? best = await svc.getByAccountNumber(
+          acct,
+          type: ZohoContactTypeFilter.customerOnly,
+        );
+
+        if (best == null) {
+          if (showError) {
+            SnackService.showError('Your customer profile is missing.');
+          }
+          return;
+        }
+
+        final ZohoContact? latest = _meta.contact;
+        final String latestAcct = (latest?.accountNumber ?? '').trim();
+        if (latest != null && latestAcct == acct) return;
+
+        _metaCtl.setContact(best);
+      } catch (_) {
+        if (showError) {
+          SnackService.showError('Failed to resolve customer profile.');
+        }
+      } finally {
+        if (identical(_memberContactBindFuture, bindFuture)) {
+          _memberContactBindFuture = null;
+          _memberContactBindAcct = null;
+        }
+      }
+    }();
+
+    _memberContactBindAcct = acct;
+    _memberContactBindFuture = bindFuture;
+
+    await bindFuture;
   }
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
 
-    // ✅ Member-scoped hard rule: must resolve contact automatically.
     if (_policy == QuoteContactPolicy.memberScoped) {
       await _ensureMemberContactBound(showError: true);
       if (_meta.contact == null) {
@@ -360,13 +311,13 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  // Legacy compatibility
   void patchDraft({
     dynamic contact,
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
     DateTime? expiryDate,
+    SalesDocumentAddress? deliveryAddress,
   }) {
     if (_busy) return;
 
@@ -378,9 +329,10 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
     if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
     if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
+    if (deliveryAddress != null) {
+      _metaCtl.setDeliveryAddress(deliveryAddress);
+    }
   }
-
-  // ───────────────────────── Cache invalidation helpers ─────────────────────────
 
   void _invalidateQuotesList() {
     for (final s in RetailDocScope.values) {
@@ -391,12 +343,8 @@ class QuoteController extends StateNotifier<QuoteState> {
   void _invalidateQuoteCaches(String quoteId) {
     final id = quoteId.trim();
     if (id.isEmpty) return;
-
-    // _ref.invalidate(zohoQuoteProvider(id)); // if you have it
     _invalidateQuotesList();
   }
-
-  // ───────────────────────── Delete ─────────────────────────
 
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
@@ -427,8 +375,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       return false;
     }
   }
-
-  // ───────────────────────── PDF / Email / Convert ─────────────────────────
 
   Future<Uint8List?> getPdfBytes(String quoteId) async {
     if (_busy) return null;
@@ -520,8 +466,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     }
   }
 
-  // ───────────────────────── Draft helpers ─────────────────────────
-
   Future<void> ensureDraftFromLines({required bool requirePrices}) async {
     if (_busy) return;
     if (!requirePrices) return;
@@ -562,6 +506,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         customerNotes: meta.customerNotes,
         quoteDate: meta.quoteDate,
         expiryDate: meta.expiryDate,
+        deliveryAddress: meta.deliveryAddress,
       );
 
       state = state.copyWith(loadingEdit: false, loadedEditId: id);

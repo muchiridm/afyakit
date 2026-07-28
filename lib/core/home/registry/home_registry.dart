@@ -13,6 +13,7 @@ import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.d
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 
+import 'package:afyakit/features/clinical/patients/widgets/patient_profiles_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -23,9 +24,6 @@ import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Home surface context:
-/// - staff: show staff dashboards + staff quick-actions
-/// - member: show member-safe modules (retail catalog, own docs, etc.)
 enum HomeScope { staff, member }
 
 final class HomeRegistry {
@@ -78,11 +76,7 @@ final class HomeRegistry {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Staff-only quick actions
-  // ─────────────────────────────────────────────────────────────
   static const List<StaffFeatureDef> _staffQuickActions = [
-    // Inventory
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock In',
@@ -111,8 +105,20 @@ final class HomeRegistry {
       destination: _stockReport,
       allowed: _requireStaff,
     ),
-
-    // Retail (staff)
+    StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'Patient Profiles',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _patientProfiles,
+      allowed: _requireStaff,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'Prescriptions',
+      iconOverride: Icons.description_outlined,
+      destination: _prescriptions,
+      allowed: _requireStaff,
+    ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
@@ -125,31 +131,29 @@ final class HomeRegistry {
       labelOverride: 'Contacts',
       iconOverride: Icons.people_alt,
       destination: _contacts,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _quotes,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Invoices',
       iconOverride: Icons.receipt_outlined,
       destination: _invoices,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Payments',
       iconOverride: Icons.payments_outlined,
       destination: _payments,
-      allowedRef: _allowRetailDocsForStaffRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
-
-    // Admin (HQ)
     StaffFeatureDef(
       featureKey: FeatureKeys.hq,
       labelOverride: 'Admin',
@@ -160,11 +164,6 @@ final class HomeRegistry {
     ),
   ];
 
-  // ─────────────────────────────────────────────────────────────
-  // Member quick actions (safe)
-  // Only applies to retail-enabled tenants.
-  // These MUST be "my account" only.
-  // ─────────────────────────────────────────────────────────────
   static const List<StaffFeatureDef> _memberQuickActions = [
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
@@ -174,31 +173,34 @@ final class HomeRegistry {
       allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
+      featureKey: FeatureKeys.clinical,
+      labelOverride: 'My Profiles',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _myProfiles,
+      allowedRef: _allowMemberUx,
+    ),
+    StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _myQuotes,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Invoices',
       iconOverride: Icons.receipt_outlined,
       destination: _myInvoices,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Payments',
       iconOverride: Icons.payments_outlined,
       destination: _myPayments,
-      allowedRef: _allowRetailDocsForRealMemberRetailTenant,
+      allowedRef: _allowRetailForTenant,
     ),
   ];
-
-  // ─────────────────────────────────────────────────────────────
-  // Destinations
-  // ─────────────────────────────────────────────────────────────
 
   static Widget _stockIn(BuildContext _) =>
       const StockScreen(mode: InventoryMode.stockIn);
@@ -222,8 +224,14 @@ final class HomeRegistry {
 
   static Widget _payments(BuildContext _) => const PaymentsListScreen();
 
-  // Member scoped destinations
-  // NOTE: these require you to add "scope" to the retail list screens (see below).
+  static Widget _patientProfiles(BuildContext _) =>
+      const PatientProfilesScreen();
+
+  static Widget _prescriptions(BuildContext _) =>
+      const _ComingSoonScreen(title: 'Prescriptions');
+
+  static Widget _myProfiles(BuildContext _) => const PatientProfilesScreen();
+
   static Widget _myQuotes(BuildContext _) =>
       const QuotesListScreen(scope: RetailDocScope.mine);
 
@@ -232,10 +240,6 @@ final class HomeRegistry {
 
   static Widget _myPayments(BuildContext _) =>
       const PaymentsListScreen(scope: RetailDocScope.mine);
-
-  // ─────────────────────────────────────────────────────────────
-  // Gates
-  // ─────────────────────────────────────────────────────────────
 
   static bool _requireStaff(AuthUser u) => u.isStaff;
 
@@ -247,26 +251,18 @@ final class HomeRegistry {
     return profile.features.enabled(FeatureKeys.retail);
   }
 
-  static bool _allowRetailDocsForStaffRetailTenant(WidgetRef ref, AuthUser u) {
-    if (!u.isStaff) return false;
-    return _allowRetailForTenant(ref, u);
-  }
-
-  /// Real member = not staff-resolved, has an accountNumber.
-  /// This blocks "staff view as member" from seeing private member docs.
-  static bool _allowRetailDocsForRealMemberRetailTenant(
-    WidgetRef ref,
-    AuthUser u,
-  ) {
+  static bool _allowMemberUx(WidgetRef ref, AuthUser u) {
     if (u.isStaffResolved) return false;
     final acct = (u.accountNumber ?? '').trim();
     if (acct.isEmpty) return false;
-    return _allowRetailForTenant(ref, u);
-  }
 
-  // ─────────────────────────────────────────────────────────────
-  // Scope filter
-  // ─────────────────────────────────────────────────────────────
+    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    if (profile == null) return false;
+
+    final retail = profile.features.enabled(FeatureKeys.retail);
+    final clinical = profile.features.enabled(FeatureKeys.clinical);
+    return retail || clinical;
+  }
 
   static bool _isAllowedForScope(
     WidgetRef ref,
@@ -279,6 +275,9 @@ final class HomeRegistry {
       if (k == FeatureKeys.inventory) return false;
       if (k == FeatureKeys.reporting) return false;
       if (k == FeatureKeys.hq) return false;
+      if (k == FeatureKeys.clinical && d.destination != _myProfiles) {
+        return false;
+      }
     }
 
     final allowedFn = d.allowed;
@@ -301,5 +300,27 @@ final class HomeRegistry {
     if (key.isEmpty) return false;
 
     return profile.features.enabled(key);
+  }
+}
+
+class _ComingSoonScreen extends StatelessWidget {
+  const _ComingSoonScreen({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '$title screen coming next.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
   }
 }

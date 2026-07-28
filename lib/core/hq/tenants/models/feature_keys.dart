@@ -4,32 +4,16 @@ abstract class FeatureKeys {
   const FeatureKeys._();
 
   // ───────── Platform / admin ─────────
-
-  /// Core app foundation (usually assumed ON; optional to store in Firestore)
   static const String core = 'core';
-
-  /// HQ admin module / HQ access
   static const String hq = 'hq';
 
-  // ───────── Business modules ─────────
-
+  // ───────── Main module groups ─────────
   static const String inventory = 'inventory';
   static const String retail = 'retail';
-
-  /// ✅ External integration (tenant-scoped)
-  /// Keep separate from retail:
-  /// - Some tenants use retail without Zoho
-  /// - Some tenants should never touch Zoho (e.g. danabtmc)
-  static const String zoho = 'zoho';
-
-  static const String dispensing = 'dispensing';
-  static const String labs = 'labs';
-  static const String consultation = 'consultation';
-
+  static const String clinical = 'clinical';
   static const String rider = 'rider';
 
-  // ───────── Optional / future ─────────
-
+  // ───────── Optional / future groups ─────────
   static const String reporting = 'reporting';
   static const String messaging = 'messaging';
   static const String backup = 'backup';

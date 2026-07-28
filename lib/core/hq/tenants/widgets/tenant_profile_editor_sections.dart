@@ -1,3 +1,5 @@
+// lib/core/hq/tenants/widgets/tenant_profile_editor_sections.dart
+
 import 'package:afyakit/core/hq/tenants/extensions/tenant_status_x.dart';
 import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
 import 'package:afyakit/core/hq/tenants/models/tenant_profile.dart';
@@ -134,17 +136,12 @@ class TenantProfileMobileMoneySection extends StatelessWidget {
   }
 }
 
-/// ✅ New model: single format string (default yymm_seq4 => 26020001)
 class TenantProfileAccountNumberingSection extends StatelessWidget {
   const TenantProfileAccountNumberingSection({
     super.key,
     required this.accountFormat,
   });
 
-  /// Examples:
-  /// - yymm_seq4 -> 26020001 (YYMM + 4-digit seq)
-  /// - yymm_seq5 -> 260200001
-  /// - yymm_seq6 -> 2602000001
   final TextEditingController accountFormat;
 
   static const _allowed = <String>{'yymm_seq4', 'yymm_seq5', 'yymm_seq6'};
@@ -158,7 +155,6 @@ class TenantProfileAccountNumberingSection extends StatelessWidget {
       children: [
         Text('Account numbering', style: t.textTheme.titleSmall),
         const SizedBox(height: 8),
-
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: TextFormField(
@@ -170,7 +166,7 @@ class TenantProfileAccountNumberingSection extends StatelessWidget {
             ),
             validator: (v) {
               final s = (v ?? '').trim();
-              if (s.isEmpty) return null; // allow empty => backend default
+              if (s.isEmpty) return null;
               if (!_allowed.contains(s)) {
                 return 'Use: yymm_seq4 / yymm_seq5 / yymm_seq6';
               }
@@ -178,7 +174,6 @@ class TenantProfileAccountNumberingSection extends StatelessWidget {
             },
           ),
         ),
-
         Text(
           'Example: yymm_seq4 → 26020001',
           style: t.textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -203,7 +198,15 @@ class FeatureTogglesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Module groups',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
         for (final m in modules)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -213,45 +216,6 @@ class FeatureTogglesSection extends StatelessWidget {
                 : Text(m.description!.trim()),
             value: values[m.key] == true,
             onChanged: (v) => onChanged(m.key, v),
-          ),
-      ],
-    );
-  }
-}
-
-class LegacyKeysSection extends StatelessWidget {
-  const LegacyKeysSection({
-    super.key,
-    required this.keys,
-    required this.values,
-    required this.onChanged,
-  });
-
-  final List<String> keys;
-  final Map<String, bool> values;
-  final void Function(String key, bool value) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Legacy / unknown',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        for (final k in keys)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(k),
-            subtitle: const Text(
-              'Key exists in tenant doc but not in registry.',
-            ),
-            value: values[k] == true,
-            onChanged: (v) => onChanged(k, v),
           ),
       ],
     );
@@ -314,10 +278,6 @@ class TenantProfileDeleteBar extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────
-// shared form field helper
-// ─────────────────────────────────────────────
 
 Widget _text(
   String label,

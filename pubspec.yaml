@@ -35,7 +35,7 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.20.2
   dio: ^5.8.0+1
-  http: ^1.4.0
+  http: ^1.6.0
   mime: ^2.0.0
   collection: ^1.19.1
 
@@ -63,6 +63,9 @@ dependencies:
   firebase_storage: ^12.4.10
   url_launcher: ^6.3.2
   syncfusion_flutter_pdfviewer: ^29.2.11
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

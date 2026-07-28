@@ -1,5 +1,6 @@
 // lib/features/retail/shared/models/zoho_invoice.dart
 
+import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 
 import 'zoho_invoice_payment.dart';
@@ -54,7 +55,7 @@ class ZohoInvoice {
     required this.date,
     required this.total,
     this.invoiceNumber,
-    this.accountNumber, // ✅ NEW (replaces referenceNumber)
+    this.accountNumber,
     this.currencyCode,
     this.customerId,
     this.customerEmail,
@@ -63,6 +64,7 @@ class ZohoInvoice {
     this.terms,
     this.dueDate,
     this.balance,
+    this.deliveryAddress,
     this.lineItems = const <ZohoInvoiceLineItem>[],
     this.payments = const <ZohoInvoicePayment>[],
   });
@@ -75,12 +77,10 @@ class ZohoInvoice {
 
   final String? invoiceNumber;
 
-  /// ✅ Your app identity key. Used for "mine" filtering & display.
-  /// Comes from BE as `account_number` (preferred).
+  /// Your app identity key.
   final String? accountNumber;
 
   final String? currencyCode;
-
   final String? customerId;
 
   /// Convenience only; Zoho email endpoint prefers contact_person_ids.
@@ -94,11 +94,16 @@ class ZohoInvoice {
   final DateTime? dueDate;
   final num? balance;
 
+  /// Snapshot of chosen delivery address at document time.
+  final SalesDocumentAddress? deliveryAddress;
+
   final List<ZohoInvoiceLineItem> lineItems;
   final List<ZohoInvoicePayment> payments;
 
   bool get hasRecipients =>
       contactPersonIds.isNotEmpty || (customerEmail ?? '').trim().isNotEmpty;
+
+  bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
 
   factory ZohoInvoice.fromJson(JsonMap json) {
     final j = json.cast<String, Object?>();
@@ -115,11 +120,9 @@ class ZohoInvoice {
     final total = readNum(j['total']);
     final balance = j.containsKey('balance') ? readNum(j['balance']) : null;
 
-    // ✅ NEW: prefer BE-provided account_number, fallback to older keys
     final account = _cleanStringOrNull(
       j['account_number'] ??
           j['accountNumber'] ??
-          // fallback for older payloads (not preferred)
           j['reference_number'] ??
           j['reference'],
     );
@@ -130,13 +133,13 @@ class ZohoInvoice {
     final notes = _cleanStringOrNull(j['notes']);
     final terms = _cleanStringOrNull(j['terms']);
 
-    // ───────────────────────── Line items ─────────────────────────
-    final lines = _parseLineItems(j['line_items']);
+    final deliveryAddress = _parseDeliveryAddress(
+      j['delivery_address'] ?? j['deliveryAddress'] ?? j['shipping_address'],
+    );
 
-    // ───────────────────────── Payments (best-effort) ─────────────────────────
+    final lines = _parseLineItems(j['line_items']);
     final pays = _parsePayments(j['payments'] ?? j['payment_details']);
 
-    // ───────────────────────── Recipients (best-effort) ─────────────────────────
     final cpIds = <String>[
       ..._extractContactPersonIds(j['contact_persons']),
       ..._extractContactPersonIds(
@@ -158,23 +161,73 @@ class ZohoInvoice {
       dueDate: dueDate,
       total: total,
       balance: balance,
-      accountNumber: account, // ✅ NEW
+      accountNumber: account,
       currencyCode: currency,
       customerId: customerId,
       customerEmail: email,
       contactPersonIds: dedupedCpIds,
       notes: notes,
       terms: terms,
+      deliveryAddress: deliveryAddress,
       lineItems: lines,
       payments: pays,
     );
   }
+
+  ZohoInvoice copyWith({
+    String? invoiceId,
+    String? customerName,
+    String? status,
+    DateTime? date,
+    num? total,
+    String? invoiceNumber,
+    String? accountNumber,
+    String? currencyCode,
+    String? customerId,
+    String? customerEmail,
+    List<String>? contactPersonIds,
+    String? notes,
+    String? terms,
+    DateTime? dueDate,
+    num? balance,
+    SalesDocumentAddress? deliveryAddress,
+    List<ZohoInvoiceLineItem>? lineItems,
+    List<ZohoInvoicePayment>? payments,
+  }) {
+    return ZohoInvoice(
+      invoiceId: invoiceId ?? this.invoiceId,
+      customerName: customerName ?? this.customerName,
+      status: status ?? this.status,
+      date: date ?? this.date,
+      total: total ?? this.total,
+      invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      accountNumber: accountNumber ?? this.accountNumber,
+      currencyCode: currencyCode ?? this.currencyCode,
+      customerId: customerId ?? this.customerId,
+      customerEmail: customerEmail ?? this.customerEmail,
+      contactPersonIds: contactPersonIds ?? this.contactPersonIds,
+      notes: notes ?? this.notes,
+      terms: terms ?? this.terms,
+      dueDate: dueDate ?? this.dueDate,
+      balance: balance ?? this.balance,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      lineItems: lineItems ?? this.lineItems,
+      payments: payments ?? this.payments,
+    );
+  }
 }
 
-// ─────────────────────────────────────────────
-// Helpers (small + strict)
-// Keep here unless you add them to utils.dart.
-// ─────────────────────────────────────────────
+SalesDocumentAddress? _parseDeliveryAddress(Object? raw) {
+  if (raw is Map<String, dynamic>) {
+    final parsed = SalesDocumentAddress.fromJson(raw);
+    return parsed.isUsable ? parsed : null;
+  }
+  if (raw is Map) {
+    final parsed = SalesDocumentAddress.fromJson(raw.cast<String, dynamic>());
+    return parsed.isUsable ? parsed : null;
+  }
+  return null;
+}
 
 String? _cleanStringOrNull(Object? v) {
   final s = readStringOrNull(v)?.trim();
@@ -220,14 +273,12 @@ List<String> _extractContactPersonIds(Object? cps) {
   if (cps is! List) return out;
 
   for (final e in cps) {
-    // 1) "id"
     final id1 = readStringOrNull(e)?.trim();
     if (id1 != null && id1.isNotEmpty) {
       out.add(id1);
       continue;
     }
 
-    // 2) {contact_person_id:"..."} or {id:"..."}
     if (!isRecord(e)) continue;
     final m = (e as Map).cast<String, Object?>();
     final id2 = readStringOrNull(m['contact_person_id'] ?? m['id'])?.trim();

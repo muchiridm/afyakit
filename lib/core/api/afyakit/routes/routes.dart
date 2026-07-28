@@ -8,8 +8,9 @@ part 'routes_auth.dart';
 part 'routes_users.dart';
 part 'routes_inventory.dart';
 part 'routes_misc.dart';
-part 'routes_zoho.dart';
-part 'routes_mpesa.dart';
+part 'routes_retail.dart';
+part 'routes_clinical.dart';
+part 'routes_claims.dart';
 
 part 'routes_domains.dart';
 part 'routes_tenants.dart';
@@ -29,7 +30,6 @@ class AfyaKitRoutes {
   String get _coreBase {
     final u = Uri.parse(_tenantBase);
 
-    // Normalize path segments (avoid surprises from trailing slashes).
     final segs = u.pathSegments.where((s) => s.trim().isNotEmpty).toList();
 
     if (segs.isNotEmpty && segs.last.toLowerCase() == tenantId) {

@@ -32,6 +32,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _displayNameCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
 
+  final _recoverAccountCtrl = TextEditingController();
+
   ProviderSubscription<LoginState>? _sub;
 
   LoginController get _ctrl => ref.read(loginControllerProvider.notifier);
@@ -49,6 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           case LoginStep.phone:
             _otpCtrl.clear();
             _emailOtpCtrl.clear();
+            _recoverAccountCtrl.clear();
             break;
           case LoginStep.otp:
             _otpCtrl.clear();
@@ -60,7 +63,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _emailOtpCtrl.clear();
             break;
           case LoginStep.nameEntry:
-            // keep user input; do not auto-mutate here (UI stays dumb)
+            break;
+          case LoginStep.recoverAccount:
+            _recoverAccountCtrl.clear();
             break;
         }
       }
@@ -90,6 +95,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _displayNameCtrl.dispose();
     _companyCtrl.dispose();
 
+    _recoverAccountCtrl.dispose();
+
     super.dispose();
   }
 
@@ -109,10 +116,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final s = v.trim();
     return s.isNotEmpty && s.contains('@') && s.contains('.');
   }
-
-  // ─────────────────────────────────────────────
-  // Small UI helpers (keep screen clean)
-  // ─────────────────────────────────────────────
 
   Widget _primaryButton({
     required bool enabled,
@@ -164,56 +167,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final state = ref.watch(loginControllerProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: widget.backgroundColor,
-      appBar: _buildAppBar(),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 420,
-                    minHeight: constraints.maxHeight - 48,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHeader(theme),
-                      const SizedBox(height: 20),
-                      _StepHint(text: state.stepHint),
-                      const SizedBox(height: 16),
-                      switch (state.step) {
-                        LoginStep.phone => _phoneStep(state),
-                        LoginStep.otp => _otpStep(state),
-                        LoginStep.emailEntry => _emailEntryStep(state),
-                        LoginStep.emailOtp => _emailOtpStep(state),
-                        LoginStep.nameEntry => _nameStep(state),
-                      },
-                      const SizedBox(height: 18),
-                      if (state.busy) ...[
-                        const SizedBox(height: 6),
-                        Center(
-                          child: Text(
-                            'Please wait…',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
-                              ),
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: widget.backgroundColor,
+          appBar: _buildAppBar(),
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: 420,
+                        minHeight: constraints.maxHeight - 48,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(theme),
+                          const SizedBox(height: 20),
+                          _StepHint(text: state.stepHint),
+                          const SizedBox(height: 16),
+                          switch (state.step) {
+                            LoginStep.phone => _phoneStep(state),
+                            LoginStep.otp => _otpStep(state),
+                            LoginStep.emailEntry => _emailEntryStep(state),
+                            LoginStep.emailOtp => _emailOtpStep(state),
+                            LoginStep.nameEntry => _nameStep(state),
+                            LoginStep.recoverAccount => _recoverAccountStep(
+                              state,
                             ),
-                          ),
-                        ),
-                      ],
-                    ],
+                          },
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
-      ),
+
+        // 👇 FULL SCREEN LOADING OVERLAY
+        if (state.savingProfile)
+          Container(
+            color: Colors.black.withOpacity(0.4),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Creating your account...',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -263,10 +278,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ],
     );
   }
-
-  // ─────────────────────────────────────────────
-  // Step UIs
-  // ─────────────────────────────────────────────
 
   Widget _phoneStep(LoginState state) {
     return Column(
@@ -411,11 +422,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             return _primaryButton(
               enabled: canSend,
               onPressed: () {
-                // optional: keep controller state consistent with UI
                 _ctrl.setPhoneNumber(_phoneCtrl.text);
                 _ctrl.startEmailVerify(email: _emailCtrl.text);
               },
-
               busy: state.sending,
               label: 'Send email code',
             );
@@ -519,8 +528,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
         const SizedBox(height: 10),
-
-        // Display name is required. We show the error when empty.
         ValueListenableBuilder<TextEditingValue>(
           valueListenable: _displayNameCtrl,
           builder: (context, value, _) {
@@ -542,7 +549,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             );
           },
         ),
-
         const SizedBox(height: 10),
         _textField(
           controller: _companyCtrl,
@@ -567,6 +573,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: () => _tryFinish(state),
               busy: state.savingProfile,
               label: 'Finish',
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _recoverAccountStep(LoginState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextButton(
+          onPressed: state.busy ? null : () => _ctrl.backToPhone(),
+          child: const Text('Back'),
+        ),
+        const SizedBox(height: 8),
+        _textField(
+          controller: _recoverAccountCtrl,
+          enabled: !state.busy,
+          autofocus: true,
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.done,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+            LengthLimitingTextInputFormatter(20),
+          ],
+          decoration: const InputDecoration(
+            labelText: 'Old account number',
+            hintText: 'e.g. 26020003',
+            border: OutlineInputBorder(),
+            isDense: true,
+            helperText: 'Enter the account number from your previous account.',
+          ),
+          onSubmitted: (_) {
+            final acc = _recoverAccountCtrl.text.trim();
+            final can = acc.isNotEmpty && !state.busy;
+            if (can) {
+              _ctrl.submitRecoveryAccountNumber(
+                accountNumber: _recoverAccountCtrl.text,
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _recoverAccountCtrl,
+          builder: (context, value, _) {
+            final acc = value.text.trim();
+            final canSubmit = acc.isNotEmpty && !state.busy;
+
+            return _primaryButton(
+              enabled: canSubmit,
+              onPressed: () {
+                _ctrl.submitRecoveryAccountNumber(
+                  accountNumber: _recoverAccountCtrl.text,
+                );
+              },
+              busy: state.verifying || state.savingProfile || state.sending,
+              label: 'Recover account',
             );
           },
         ),
