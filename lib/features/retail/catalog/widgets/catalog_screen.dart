@@ -8,8 +8,6 @@ import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.d
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/providers/catalog_providers.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -57,7 +55,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   bool get _showDiscovery {
     final CatalogState state = ref.read(catalogControllerProvider);
 
-    return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
+    return state.query.q.trim().isEmpty;
   }
 
   @override
@@ -100,7 +98,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       final CatalogState state = ref.read(catalogControllerProvider);
 
       if (q.isNotEmpty && state.query.q.trim() != q) {
-        ctrl.refresh(query: state.query.copyWith(q: q));
+        ctrl.refresh(
+          query: state.query.copyWith(q: q, form: ''),
+        );
       }
 
       if (widget.autofocusSearch) {
@@ -122,19 +122,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     if (state.hasMore && atEnd) {
       ref.read(catalogControllerProvider.notifier).loadMore();
     }
-  }
-
-  void _applySearch(String q, CatalogState state) {
-    if (!mounted) return;
-
-    final String next = q.trim();
-
-    _searchC.text = next;
-    _searchC.selection = TextSelection.collapsed(offset: _searchC.text.length);
-
-    ref
-        .read(catalogControllerProvider.notifier)
-        .refresh(query: state.query.copyWith(q: next));
   }
 
   Future<void> _openQuoteEditor(BuildContext context) async {
@@ -230,8 +217,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   ) {
     final CatalogController ctrl = ref.read(catalogControllerProvider.notifier);
 
-    final bool showDiscovery =
-        state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
+    final bool showDiscovery = state.query.q.trim().isEmpty;
 
     final int? resultCount = showDiscovery
         ? null
@@ -240,55 +226,61 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             orElse: () => null,
           );
 
-    final bool hasActiveFilters =
-        state.query.q.trim().isNotEmpty || state.query.form.trim().isNotEmpty;
+    final bool hasActiveSearch = state.query.q.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 14),
-        SearchBarField(
-          controller: _searchC,
-          focusNode: _searchFocus,
-          resultCount: resultCount,
-          showClear: hasActiveFilters,
-          onClear: () {
-            if (!mounted) return;
+        const SizedBox(height: 28),
 
-            _searchC.clear();
-            ctrl.refresh(query: const CatalogQuery());
-          },
-          onSubmit: (q) {
-            if (!mounted) return;
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SearchBarField(
+              controller: _searchC,
+              focusNode: _searchFocus,
+              resultCount: resultCount,
+              showClear: hasActiveSearch,
+              helper: const CatalogDisclaimer(),
+              onClear: () {
+                if (!mounted) return;
 
-            ctrl.refresh(query: state.query.copyWith(q: q));
-          },
-          onChanged: (q) {
-            if (!mounted) return;
+                _searchC.clear();
+                ctrl.refresh(query: const CatalogQuery());
+              },
+              onSubmit: (q) {
+                if (!mounted) return;
 
-            ctrl.refreshDebounced(query: state.query.copyWith(q: q));
-          },
+                ctrl.refresh(
+                  query: state.query.copyWith(q: q, form: ''),
+                );
+              },
+              onChanged: (q) {
+                if (!mounted) return;
+
+                ctrl.refreshDebounced(
+                  query: state.query.copyWith(q: q, form: ''),
+                );
+              },
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        const CatalogDisclaimer(),
+
         if (quoteState.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _QuoteCartBanner(
-            linesState: quoteState,
-            onTap: () => _openQuoteEditor(context),
+          const SizedBox(height: 12),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: _QuoteCartBanner(
+                linesState: quoteState,
+                onTap: () => _openQuoteEditor(context),
+              ),
+            ),
           ),
         ],
-        const SizedBox(height: 14),
-        CatalogFiltersBar(
-          selectedForm: state.query.form,
-          onSelectForm: (form) {
-            ctrl.refresh(query: state.query.copyWith(form: form));
-          },
-        ),
-        const SizedBox(height: 14),
-        if (showDiscovery)
-          CatalogDiscovery(onExampleTap: (q) => _applySearch(q, state))
-        else
+
+        if (!showDiscovery) ...[
+          const SizedBox(height: 20),
           itemsAsync.when(
             loading: () => SkeletonGrid(scrollController: _scroll),
             error: (e, _) => AppErrorPane(
@@ -298,29 +290,23 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 fallback:
                     'We could not load the catalog right now. Please try again shortly.',
               ),
-              onRetry: () {
-                ctrl.refresh();
-              },
+              onRetry: ctrl.refresh,
             ),
             data: (items) => CatalogGrid(
               items: items,
               scrollController: _scroll,
-              onTapTile: (t) => _showTileSheet(context, t),
+              onTapTile: (tile) => _showTileSheet(context, tile),
               showTailLoader: state.hasMore,
               priceFormatter: _formatPriceCeil,
               priceColor: _priceGreen,
             ),
           ),
+        ],
       ],
     );
   }
 
   Future<void> _showTileSheet(BuildContext context, CatalogTile t) async {
-    final String whoPreview = t.whoPathPreview?.trim() ?? '';
-    final String whoAtcCode = t.whoAtcCode?.trim() ?? '';
-    final List<String> atcLabels = t.whoAtcLabels ?? const <String>[];
-    final bool hasCombo = atcLabels.length > 1;
-
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: false,
@@ -343,53 +329,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     priceFormatter: _formatPriceCeil,
                     priceColor: _priceGreen,
                   ),
-                  if (whoPreview.isNotEmpty ||
-                      whoAtcCode.isNotEmpty ||
-                      atcLabels.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (whoAtcCode.isNotEmpty)
-                            Text(
-                              'ATC: $whoAtcCode',
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          if (whoPreview.isNotEmpty)
-                            Text(
-                              whoPreview,
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                            ),
-                          if (hasCombo) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              atcLabels.join(', '),
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
                   const Divider(height: 18),
                   Row(
                     children: [

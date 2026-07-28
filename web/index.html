@@ -6,59 +6,90 @@
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
 
-    <!-- Neutral defaults. Do not use AfyaKit here to avoid tenant flicker. -->
-    <meta id="app-description" name="description" content="Loading…" />
-    <meta id="app-theme-color" name="theme-color" content="#2196F3" />
+    <title>__APP_TITLE__</title>
 
-    <!-- iOS / PWA bits -->
+    <meta
+      id="app-description"
+      name="description"
+      content="__APP_DESCRIPTION__"
+    />
+
+    <meta id="app-theme-color" name="theme-color" content="__THEME_COLOR__" />
+
+    <!-- Social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="__APP_TITLE__" />
+    <meta property="og:title" content="__APP_TITLE__" />
+    <meta property="og:description" content="__APP_DESCRIPTION__" />
+    <meta property="og:url" content="__APP_URL__" />
+    <meta property="og:image" content="__APP_IMAGE__" />
+    <meta property="og:image:secure_url" content="__APP_IMAGE__" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+
+    <!-- X/Twitter and other preview consumers -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="__APP_TITLE__" />
+    <meta name="twitter:description" content="__APP_DESCRIPTION__" />
+    <meta name="twitter:image" content="__APP_IMAGE__" />
+
+    <!-- iOS / PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta
       id="apple-mobile-web-app-title"
       name="apple-mobile-web-app-title"
-      content="Loading…"
+      content="__APP_TITLE__"
     />
 
     <link id="apple-touch-icon" rel="apple-touch-icon" href="/favicon.png" />
 
-    <!-- Tenant-aware favicon served by Hosting redirect/function -->
-    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.ico" />
+    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.png" />
 
-    <!-- Neutral boot title. Flutter and branding JS patch this. -->
-    <title>Loading…</title>
-
-    <!-- Tenant-aware manifest served by Firebase Function -->
     <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
   </head>
 
   <body>
     <div id="firebase-recaptcha-container"></div>
 
-    <!-- Keep Flutter boot first and unconditional. Do not block it on branding. -->
     <script src="flutter_bootstrap.js" defer></script>
 
-    <!-- Background-only branding patch. This must never block Flutter. -->
     <script>
       (() => {
         const setMetaContent = (id, value) => {
-          const el = document.getElementById(id);
-          if (el && value) el.setAttribute("content", value);
+          const element = document.getElementById(id);
+
+          if (element && value) {
+            element.setAttribute("content", value);
+          }
         };
 
         const setHref = (id, value) => {
-          const el = document.getElementById(id);
-          if (el && value) el.setAttribute("href", value);
+          const element = document.getElementById(id);
+
+          if (element && value) {
+            element.setAttribute("href", value);
+          }
         };
 
         const pickIcon = (manifest) => {
           const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
 
           const preferred =
-            icons.find((i) => i.sizes === "192x192" && !i.purpose) ||
-            icons.find((i) => i.sizes === "512x512" && !i.purpose) ||
-            icons.find((i) => i.src);
+            icons.find(
+              (icon) =>
+                icon.sizes === "192x192" &&
+                (!icon.purpose || icon.purpose === "any"),
+            ) ||
+            icons.find(
+              (icon) =>
+                icon.sizes === "512x512" &&
+                (!icon.purpose || icon.purpose === "any"),
+            ) ||
+            icons.find((icon) => icon.src);
 
-          return preferred && preferred.src ? preferred.src : "/favicon.png";
+          return preferred?.src || "/favicon.png";
         };
 
         const applyBranding = (manifest) => {
@@ -78,17 +109,16 @@
 
         const loadBranding = async () => {
           try {
-            const res = await fetch("/manifest.webmanifest", {
+            const response = await fetch("/manifest.webmanifest", {
               cache: "no-store",
               credentials: "same-origin",
             });
 
-            if (!res.ok) return;
+            if (!response.ok) return;
 
-            const manifest = await res.json();
-            applyBranding(manifest);
+            applyBranding(await response.json());
           } catch (_) {
-            // Branding must never affect Flutter boot.
+            // Static build metadata already provides a safe fallback.
           }
         };
 

@@ -1,9 +1,9 @@
-// lib/core/home/widgets/shared/home_dashboard/home_speed_dial.dart
+// lib/core/home/widgets/shared/home_dashboard/home_quick_action_button.dart
 
 import 'package:flutter/material.dart';
 
-class HomeSpeedDialAction {
-  const HomeSpeedDialAction({
+class HomeQuickAction {
+  const HomeQuickAction({
     required this.label,
     required this.icon,
     required this.onPressed,
@@ -14,8 +14,8 @@ class HomeSpeedDialAction {
   final VoidCallback onPressed;
 }
 
-class HomeSpeedDial extends StatelessWidget {
-  const HomeSpeedDial({
+class HomeQuickActionButton extends StatelessWidget {
+  const HomeQuickActionButton({
     super.key,
     required this.actions,
     this.tooltip = 'Quick actions',
@@ -23,7 +23,7 @@ class HomeSpeedDial extends StatelessWidget {
     this.title = 'Quick actions',
   });
 
-  final List<HomeSpeedDialAction> actions;
+  final List<HomeQuickAction> actions;
   final String tooltip;
   final IconData icon;
   final String title;
@@ -42,11 +42,11 @@ class HomeSpeedDial extends StatelessWidget {
   }
 
   Future<void> _showActions(BuildContext context) async {
-    final action = await showModalBottomSheet<HomeSpeedDialAction>(
+    final HomeQuickAction? action = await showModalBottomSheet<HomeQuickAction>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (sheetContext) {
+      builder: (_) {
         return _HomeQuickActionsSheet(title: title, actions: actions);
       },
     );
@@ -63,16 +63,16 @@ class _HomeQuickActionsSheet extends StatelessWidget {
   const _HomeQuickActionsSheet({required this.title, required this.actions});
 
   final String title;
-  final List<HomeSpeedDialAction> actions;
+  final List<HomeQuickAction> actions;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -83,11 +83,12 @@ class _HomeQuickActionsSheet extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 12),
-            for (final action in actions)
+            const SizedBox(height: 10),
+            for (final HomeQuickAction action in actions)
               Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: ListTile(
+                  visualDensity: VisualDensity.compact,
                   leading: Icon(action.icon),
                   title: Text(
                     action.label,

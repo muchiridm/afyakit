@@ -69,8 +69,8 @@ class _StaffMainColumn extends StatelessWidget {
         icon: Icons.search_rounded,
         child: HomeCatalogSearchHero(
           autofocus: false,
-          hintText: 'Search medicines, brands, patients, customers…',
-          footerText: 'Search the catalog while serving a customer',
+          hintText: 'Search medicines, brands, patients or customers',
+          footerText: 'Search the catalogue',
           onSearch: onSearch,
           onBrowse: onBrowseCatalog,
         ),

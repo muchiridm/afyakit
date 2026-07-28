@@ -7,10 +7,10 @@ import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 
 import 'package:afyakit/core/home/widgets/member/home_member_body.dart';
-import 'package:afyakit/core/home/widgets/member/member_home_speed_dial.dart';
+import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
 
 import 'package:afyakit/core/home/widgets/staff/home_staff_body.dart';
-import 'package:afyakit/core/home/widgets/staff/staff_home_speed_dial.dart';
+import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -46,7 +46,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       maxWidth: _maxWidth,
       padding: AppLayout.pagePadding,
-      fab: _buildSpeedDial(context),
+      fab: _buildQuickActions(context),
       fabAlignment: Alignment.bottomRight,
       body: _buildBody(),
     );
@@ -70,23 +70,24 @@ class HomeScreen extends ConsumerWidget {
     };
   }
 
-  Widget? _buildSpeedDial(BuildContext context) {
+  Widget? _buildQuickActions(BuildContext context) {
     return switch (effectiveEntry) {
-      EntryMode.member => MemberHomeSpeedDial(
+      EntryMode.member => MemberHomeQuickActions(
         key: ValueKey<String>(
-          'member-home-speed-dial-${user?.contactId ?? 'unknown'}',
+          'member-home-quick-actions-${user?.contactId ?? 'unknown'}',
         ),
         user: user,
-        onChat: () => _openMemberChat(context),
+        onChat: () => _openChat(context),
       ),
-      EntryMode.staff => const StaffHomeSpeedDial(
-        key: ValueKey<String>('staff-home-speed-dial'),
+      EntryMode.staff => StaffHomeQuickActions(
+        key: const ValueKey<String>('staff-home-quick-actions'),
+        onChat: () => _openChat(context),
       ),
       EntryMode.guest => null,
     };
   }
 
-  void _openMemberChat(BuildContext context) {
+  void _openChat(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Chat navigation is not connected yet.')),
     );

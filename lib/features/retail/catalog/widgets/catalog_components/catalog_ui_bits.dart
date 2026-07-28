@@ -15,15 +15,6 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────
 
 class SearchBarField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode? focusNode;
-  final ValueChanged<String> onSubmit;
-  final ValueChanged<String> onChanged;
-  final int? resultCount;
-
-  final bool showClear;
-  final VoidCallback? onClear;
-
   const SearchBarField({
     super.key,
     required this.controller,
@@ -33,64 +24,117 @@ class SearchBarField extends StatelessWidget {
     this.resultCount,
     this.showClear = false,
     this.onClear,
+    this.helper,
   });
+
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final ValueChanged<String> onSubmit;
+  final ValueChanged<String> onChanged;
+  final int? resultCount;
+
+  final bool showClear;
+  final VoidCallback? onClear;
+  final Widget? helper;
+
+  void _submit(BuildContext context) {
+    FocusScope.of(context).unfocus();
+    onSubmit(controller.text.trim());
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
 
     final String? resultsLabel = resultCount == null
         ? null
-        : '${resultCount!} result${resultCount == 1 ? '' : 's'}';
+        : '$resultCount result${resultCount == 1 ? '' : 's'}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          elevation: 0.6,
-          borderRadius: BorderRadius.circular(16),
-          color: theme.colorScheme.surface,
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            textInputAction: TextInputAction.search,
-            onSubmitted: onSubmit,
-            onChanged: onChanged,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Search brand, strength, form...',
-              hintStyle: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.45),
-                fontWeight: FontWeight.w400,
-              ),
-              prefixIcon: Icon(
-                Icons.search,
-                size: 22,
-                color: theme.colorScheme.onSurface.withOpacity(0.62),
-              ),
-              suffixIcon: showClear
-                  ? IconButton(
-                      tooltip: 'Clear filters',
-                      onPressed: onClear,
-                      icon: Icon(
-                        Icons.close_rounded,
-                        size: 20,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final bool compact = constraints.maxWidth < 560;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Material(
+                  elevation: 0.6,
+                  borderRadius: BorderRadius.circular(16),
+                  color: theme.colorScheme.surface,
+                  clipBehavior: Clip.antiAlias,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _submit(context),
+                    onChanged: onChanged,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search for any medicine or health product',
+                      hintStyle: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.45),
+                        fontWeight: FontWeight.w400,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        size: 22,
                         color: theme.colorScheme.onSurface.withOpacity(0.62),
                       ),
-                    )
-                  : null,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 16,
-              ),
-            ),
-          ),
+                      suffixIcon: showClear
+                          ? IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: onClear,
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 20,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.62,
+                                ),
+                              ),
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (helper != null) ...[const SizedBox(height: 8), helper!],
+
+                const SizedBox(height: 14),
+
+                Center(
+                  child: FilledButton.icon(
+                    onPressed: () => _submit(context),
+                    icon: const Icon(Icons.search_rounded, size: 20),
+                    label: const Text('Search'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: Size(compact ? 132 : 150, 48),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
+
         if (resultsLabel != null) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: Text(

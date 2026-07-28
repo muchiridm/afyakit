@@ -38,6 +38,18 @@ HQ_HOST     ?= admin.afyakit.app
 # Production host used for post-deploy smoke checks.
 HOST ?= $(if $(filter dawapap,$(TENANT)),www.dawapap.com,$(if $(filter afyakit,$(TENANT)),www.afyakit.app,$(if $(filter danabtmc,$(TENANT)),www.danabtmc.com,$(if $(filter hq,$(TENANT)),$(HQ_HOST),))))
 
+# Static metadata embedded in index.html for crawlers that do not run JavaScript.
+APP_TITLE ?= $(if $(filter dawapap,$(TENANT)),DawaPap Pharmacy,$(if $(filter afyakit,$(TENANT)),AfyaKit,$(if $(filter danabtmc,$(TENANT)),Dana B TMC,$(if $(filter hq,$(TENANT)),AfyaKit HQ,AfyaKit))))
+
+APP_DESCRIPTION ?= $(if $(filter dawapap,$(TENANT)),Your Pharmacy. Anywhere. Anytime.,$(if $(filter afyakit,$(TENANT)),Digital healthcare management made simple.,$(if $(filter danabtmc,$(TENANT)),Healthcare services and medical support.,AfyaKit healthcare platform.)))
+
+APP_URL ?= $(if $(HOST),https://$(HOST)/,)
+
+APP_IMAGE ?= $(if $(filter dawapap,$(TENANT)),https://firebasestorage.googleapis.com/v0/b/afyakit-api.firebasestorage.app/o/public%2Fdawapap%2Fbranding%2Fweb%2Ficon-512.png?alt=media,$(APP_URL)favicon.png)
+
+HASH := \#
+THEME_COLOR ?= $(if $(filter dawapap,$(TENANT)),$(HASH)00A86B,$(HASH)2196F3)
+
 # Extras
 EXTRA         ?=
 USE_FLAVOR    ?= 1
@@ -169,6 +181,11 @@ env-check:
 	@echo "HQ_TENANT=$(HQ_TENANT)"
 	@echo "HQ_HOST=$(HQ_HOST)"
 	@echo "HQ_DEFINES=$(HQ_DEFINES)"
+	@echo "APP_TITLE=$(APP_TITLE)"
+	@echo "APP_DESCRIPTION=$(APP_DESCRIPTION)"
+	@echo "APP_URL=$(APP_URL)"
+	@echo "APP_IMAGE=$(APP_IMAGE)"
+	@echo "THEME_COLOR=$(THEME_COLOR)"
 	@echo "WEB_PORT=$(WEB_PORT)"
 	@echo "WEB_ICON_FLAGS=$(WEB_ICON_FLAGS)"
 	@echo "PWA_STRATEGY=$(PWA_STRATEGY)"
@@ -206,7 +223,19 @@ define flutter_web_build
 	  -o "$(1)" \
 	  $(EXTRA) \
 	  $(3)
-	@$(MAKE) web-strip-service-worker WEB_OUT="$(1)" PWA_STRATEGY="$(PWA_STRATEGY)" WEB_STRIP_SERVICE_WORKER="$(WEB_STRIP_SERVICE_WORKER)"
+	@$(MAKE) web-brand \
+	  TENANT="$(TENANT)" \
+	  HOST="$(HOST)" \
+	  WEB_OUT="$(1)" \
+	  APP_TITLE="$(APP_TITLE)" \
+	  APP_DESCRIPTION="$(APP_DESCRIPTION)" \
+	  APP_URL="$(APP_URL)" \
+	  APP_IMAGE="$(APP_IMAGE)" \
+	  THEME_COLOR="$(THEME_COLOR)"
+	@$(MAKE) web-strip-service-worker \
+	  WEB_OUT="$(1)" \
+	  PWA_STRATEGY="$(PWA_STRATEGY)" \
+	  WEB_STRIP_SERVICE_WORKER="$(WEB_STRIP_SERVICE_WORKER)"
 	@$(MAKE) web-verify WEB_OUT="$(1)"
 endef
 
@@ -300,11 +329,28 @@ run-android-all:
 # ─────────────────────────────────────────────────────────────────────────────
 # Web build / verify / deploy (ONE tenant)
 # ─────────────────────────────────────────────────────────────────────────────
-.PHONY: web deploy deploy-verify release-web web-strip-service-worker web-verify web-clean flutter-clean
+.PHONY: web deploy deploy-verify release-web web-brand web-strip-service-worker web-verify web-clean flutter-clean
 
 web:
 	@$(call assert_tenant)
 	$(call flutter_web_build,$(WEB_OUT),🌐 Release build: $(TENANT) → $(WEB_OUT),$(DART_DEFINES) $(TENANT_DEF))
+
+web-brand:
+	@echo "🎨 Applying static web branding for $(TENANT)…"
+	@test -f "$(WEB_OUT)/index.html" || { \
+	  echo "❌ Missing $(WEB_OUT)/index.html"; \
+	  exit 2; \
+	}
+	@APP_TITLE='$(APP_TITLE)' \
+	APP_DESCRIPTION='$(APP_DESCRIPTION)' \
+	APP_URL='$(APP_URL)' \
+	APP_IMAGE='$(APP_IMAGE)' \
+	THEME_COLOR='$(THEME_COLOR)' \
+	WEB_INDEX='$(WEB_OUT)/index.html' \
+	node -e 'const fs=require("fs"); const path=process.env.WEB_INDEX; const replacements={"__APP_TITLE__":process.env.APP_TITLE,"__APP_DESCRIPTION__":process.env.APP_DESCRIPTION,"__APP_URL__":process.env.APP_URL,"__APP_IMAGE__":process.env.APP_IMAGE,"__THEME_COLOR__":process.env.THEME_COLOR}; let html=fs.readFileSync(path,"utf8"); for(const [token,value] of Object.entries(replacements)){html=html.split(token).join(value||"");} fs.writeFileSync(path,html);'
+	@echo "   title: $(APP_TITLE)"
+	@echo "   URL:   $(APP_URL)"
+	@echo "   image: $(APP_IMAGE)"
 
 web-strip-service-worker:
 	@if [ "$(WEB_STRIP_SERVICE_WORKER)" = "1" ]; then \
@@ -339,6 +385,20 @@ web-verify:
 	  echo "   This usually means the raw web/index.html was deployed instead of build/web."; \
 	  exit 2; \
 	fi
+	@if grep -qE '__APP_|__THEME_COLOR__|Loading…|Loading\.\.\.' "$(WEB_OUT)/index.html"; then \
+	  echo "❌ Unresolved or invalid branding metadata in $(WEB_OUT)/index.html"; \
+	  grep -nE '__APP_|__THEME_COLOR__|Loading…|Loading\.\.\.' "$(WEB_OUT)/index.html" || true; \
+	  exit 2; \
+	fi
+	@grep -q '<meta property="og:title"' "$(WEB_OUT)/index.html" || { \
+	  echo "❌ Missing og:title"; \
+	  exit 2; \
+	}
+	@grep -q '<meta property="og:image"' "$(WEB_OUT)/index.html" || { \
+	  echo "❌ Missing og:image"; \
+	  exit 2; \
+	}
+	@echo "✅ Static branding metadata present"
 	@ls -lh "$(WEB_OUT)/assets/fonts" 2>/dev/null || true
 	@if [ -f "$(WEB_OUT)/assets/fonts/MaterialIcons-Regular.otf" ]; then \
 	  echo "✅ MaterialIcons-Regular.otf present:"; \
@@ -364,7 +424,13 @@ deploy:
 	if [ ! -f "$$cfg" ]; then echo "❌ Missing firebase config for $(TENANT)."; exit 2; fi; \
 	echo "   → using $$cfg"; \
 	firebase deploy --config "$$cfg" --only hosting:$(TENANT)
-	@$(MAKE) deploy-verify TENANT=$(TENANT) HOST="$(HOST)"
+	@$(MAKE) deploy-verify \
+	  TENANT="$(TENANT)" \
+	  HOST="$(HOST)" \
+	  APP_TITLE="$(APP_TITLE)" \
+	  APP_DESCRIPTION="$(APP_DESCRIPTION)" \
+	  APP_URL="$(APP_URL)" \
+	  APP_IMAGE="$(APP_IMAGE)"
 
 deploy-verify:
 	@if [ -z "$(HOST)" ]; then \
@@ -385,6 +451,17 @@ deploy-verify:
 	    *) echo "❌ Unexpected content type for $$path"; exit 2 ;; \
 	  esac; \
 	done
+	@html=$$(curl -fsSL "https://$(HOST)/"); \
+	echo "$$html" | grep -Fq "<title>$(APP_TITLE)</title>" || { \
+	  echo "❌ Live HTML has the wrong title"; \
+	  echo "$$html" | grep -o '<title>[^<]*</title>' | head -1 || true; \
+	  exit 2; \
+	}; \
+	echo "$$html" | grep -q 'property="og:image"' || { \
+	  echo "❌ Live HTML is missing og:image"; \
+	  exit 2; \
+	}; \
+	echo "✅ Live social metadata verified"
 
 release-web:
 	@$(call assert_tenant)

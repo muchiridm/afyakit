@@ -215,8 +215,8 @@ class _MemberSearchColumn extends StatelessWidget {
       icon: Icons.search_rounded,
       child: HomeCatalogSearchHero(
         autofocus: false,
-        hintText: 'Search medicines, brands, conditions…',
-        footerText: 'Search the catalog when you need medicine',
+        hintText: 'Search medicines, brands or health products',
+        footerText: 'Search the catalogue',
         onSearch: onSearch,
         onBrowse: onBrowseCatalog,
       ),

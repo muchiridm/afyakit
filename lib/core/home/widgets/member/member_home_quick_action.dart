@@ -1,15 +1,16 @@
-// lib/core/home/widgets/member/member_home_speed_dial.dart
+// lib/core/home/widgets/member/member_home_quick_actions.dart
 
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_speed_dial.dart';
+
 
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 
-class MemberHomeSpeedDial extends StatelessWidget {
-  const MemberHomeSpeedDial({
+class MemberHomeQuickActions extends StatelessWidget {
+  const MemberHomeQuickActions({
     super.key,
     required this.user,
     required this.onChat,
@@ -20,11 +21,11 @@ class MemberHomeSpeedDial extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contactId = user?.contactId;
+    final String? contactId = user?.contactId;
 
-    return HomeSpeedDial(
+    return HomeQuickActionButton(
       actions: [
-        HomeSpeedDialAction(
+        HomeQuickAction(
           label: 'Add profile',
           icon: Icons.person_add_alt_1_outlined,
           onPressed: () {
@@ -38,14 +39,17 @@ class MemberHomeSpeedDial extends StatelessWidget {
             );
           },
         ),
-        HomeSpeedDialAction(
+        HomeQuickAction(
           label: 'Upload prescription',
           icon: Icons.upload_file_outlined,
           onPressed: () {
-            PrescriptionsScreen.open(context: context, contactId: contactId);
+            PrescriptionsScreen.open(
+              context: context,
+              contactId: contactId,
+            );
           },
         ),
-        HomeSpeedDialAction(
+        HomeQuickAction(
           label: 'Chat',
           icon: Icons.chat_bubble_outline_rounded,
           onPressed: onChat,
