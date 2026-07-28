@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/widgets/catalog_components/catalog_grid.dart
+// lib/features/retail/catalog/widgets/catalog_grid.dart
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:flutter/material.dart';

@@ -2,12 +2,19 @@
 
 import 'dart:async';
 
+import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
+import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/guest/guest_home_quick_actions.dart';
+import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/providers/catalog_providers.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_disclaimer.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -17,8 +24,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'catalog_components/catalog_grid.dart';
-import 'catalog_components/catalog_ui_bits.dart';
+import 'catalog_grid.dart';
+import 'catalog_ui_bits.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
@@ -36,10 +43,14 @@ class CatalogScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialQuery,
     this.autofocusSearch = false,
+    this.entry = EntryMode.guest,
+    this.user,
   });
 
   final String? initialQuery;
   final bool autofocusSearch;
+  final EntryMode entry;
+  final AuthUser? user;
 
   @override
   ConsumerState<CatalogScreen> createState() => _CatalogScreenState();
@@ -200,10 +211,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         return AppPage(
           scrollable: true,
           maxWidth: 1100,
-          header: const HomeHeader(
-            entry: EntryMode.guest,
-            showHomeButton: true,
-          ),
+          header: HomeHeader(entry: widget.entry, showHomeButton: true),
+          fab: _buildQuickActions(context),
+          fabAlignment: Alignment.bottomRight,
           body: _buildBody(itemsAsync, state, quoteState),
         );
       },
@@ -303,6 +313,46 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context) {
+    return switch (widget.entry) {
+      EntryMode.member => MemberHomeQuickActions(
+        key: ValueKey<String>(
+          'catalog-member-quick-actions-'
+          '${widget.user?.contactId ?? 'unknown'}',
+        ),
+        user: widget.user,
+        onChat: () => _openChat(context),
+      ),
+      EntryMode.staff => StaffHomeQuickActions(
+        key: const ValueKey<String>('catalog-staff-quick-actions'),
+        onChat: () => _openChat(context),
+      ),
+      EntryMode.guest => GuestHomeQuickActions(
+        key: const ValueKey<String>('catalog-guest-quick-actions'),
+        onAuth: () => _openAuth(context),
+        onChat: () => _openChat(context),
+      ),
+    };
+  }
+
+  void _openChat(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Chat navigation is not connected yet.')),
+    );
+  }
+
+  Future<void> _openAuth(BuildContext context) async {
+    final String tenantName = ref.read(tenantDisplayNameProvider);
+
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) =>
+            LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName)),
+        fullscreenDialog: true,
+      ),
     );
   }
 

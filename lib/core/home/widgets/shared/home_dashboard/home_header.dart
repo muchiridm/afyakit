@@ -195,12 +195,15 @@ class _MediumHeaderLayout extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: showIdentityActions
-                      ? _HeaderHomeAction(showHomeButton: showHomeButton)
-                      : const SizedBox.shrink(),
-                ),
+                child: showIdentityActions
+                    ? FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: _HeaderPrimaryAction(
+                          showHomeButton: showHomeButton,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
 
               const SizedBox(width: 32),
@@ -478,8 +481,8 @@ class _HeaderIdentityActions extends ConsumerWidget {
   }
 }
 
-class _HeaderHomeAction extends ConsumerWidget {
-  const _HeaderHomeAction({required this.showHomeButton});
+class _HeaderPrimaryAction extends ConsumerWidget {
+  const _HeaderPrimaryAction({required this.showHomeButton});
 
   final bool showHomeButton;
 
@@ -493,11 +496,15 @@ class _HeaderHomeAction extends ConsumerWidget {
       orElse: () => null,
     );
 
-    if (!showHomeButton || user == null) {
+    if (user == null) {
       return const SizedBox.shrink();
     }
 
-    return const _HomeButton();
+    if (showHomeButton) {
+      return const _HomeButton();
+    }
+
+    return const UserBadge();
   }
 }
 

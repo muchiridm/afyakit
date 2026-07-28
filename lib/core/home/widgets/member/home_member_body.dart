@@ -20,13 +20,15 @@ class HomeMemberBody extends StatelessWidget {
   final AuthUser? user;
 
   void _openCatalog(BuildContext context, {String? q, bool autofocus = true}) {
-    final query = (q ?? '').trim();
+    final String query = (q ?? '').trim();
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => CatalogScreen(
           initialQuery: query.isEmpty ? null : query,
           autofocusSearch: autofocus,
+          entry: EntryMode.member,
+          user: user,
         ),
       ),
     );

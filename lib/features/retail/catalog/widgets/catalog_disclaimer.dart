@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart
+// lib/features/retail/catalog/widgets/catalog_disclaimer.dart
 
 import 'package:flutter/material.dart';
 

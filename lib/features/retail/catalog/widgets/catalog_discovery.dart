@@ -1,4 +1,4 @@
-// lib/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart
+// lib/features/retail/catalog/widgets/catalog_discovery.dart
 
 import 'package:flutter/material.dart';
 

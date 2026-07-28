@@ -1,3 +1,5 @@
+// lib/features/retail/catalog/widgets/catalog_ui_bits.dart
+
 import 'dart:math' as math;
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';

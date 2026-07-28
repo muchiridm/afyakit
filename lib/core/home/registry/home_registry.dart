@@ -30,13 +30,6 @@ enum HomeScope { staff, member }
 final class HomeRegistry {
   const HomeRegistry._();
 
-  static const StaffFeatureDef _messagingFeatureTile = StaffFeatureDef(
-    featureKey: FeatureKeys.messaging,
-    labelOverride: 'Messaging',
-    iconOverride: Icons.chat_bubble_outline_rounded,
-    enabledByTenantFeature: false,
-  );
-
   static List<StaffFeatureDef> featureTiles(
     WidgetRef ref,
     AuthUser user, {
@@ -44,7 +37,7 @@ final class HomeRegistry {
   }) {
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
-    final registryTiles = FeatureRegistry.features
+    return FeatureRegistry.features
         .map(
           (feature) => StaffFeatureDef(
             featureKey: feature.key,
@@ -53,33 +46,11 @@ final class HomeRegistry {
         )
         .where((definition) => _isVisibleForTenant(profile, definition))
         .where((definition) => _isAllowedForScope(ref, user, definition, scope))
-        .toList(growable: true);
-
-    if (scope == HomeScope.staff && _shouldShowMessagingTile(ref, user)) {
-      final alreadyHasMessaging = registryTiles.any(
-        (definition) =>
-            definition.featureKey.trim().toLowerCase() == FeatureKeys.messaging,
-      );
-
-      if (!alreadyHasMessaging) {
-        registryTiles.add(_messagingFeatureTile);
-      }
-    }
-
-    return registryTiles.toList(growable: false);
-  }
-
-  static bool _shouldShowMessagingTile(WidgetRef ref, AuthUser user) {
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
-
-    return _staffQuickActions
-        .where((definition) => definition.featureKey == FeatureKeys.messaging)
-        .where((definition) => _isVisibleForTenant(profile, definition))
         .where(
           (definition) =>
-              _isAllowedForScope(ref, user, definition, HomeScope.staff),
+              _hasVisibleFeatureContent(ref, user, definition, scope),
         )
-        .isNotEmpty;
+        .toList(growable: false);
   }
 
   static List<StaffFeatureDef> quickActions(
@@ -111,14 +82,29 @@ final class HomeRegistry {
         .toList(growable: false);
   }
 
-  static List<StaffFeatureDef> _actionsForScope(HomeScope scope) {
-    switch (scope) {
-      case HomeScope.staff:
-        return _staffQuickActions;
-
-      case HomeScope.member:
-        return _memberQuickActions;
+  static bool _hasVisibleFeatureContent(
+    WidgetRef ref,
+    AuthUser user,
+    StaffFeatureDef definition,
+    HomeScope scope,
+  ) {
+    if (definition.destination != null) {
+      return true;
     }
+
+    return actionsFor(
+      ref,
+      user,
+      definition.featureKey,
+      scope: scope,
+    ).isNotEmpty;
+  }
+
+  static List<StaffFeatureDef> _actionsForScope(HomeScope scope) {
+    return switch (scope) {
+      HomeScope.staff => _staffQuickActions,
+      HomeScope.member => _memberQuickActions,
+    };
   }
 
   static const List<StaffFeatureDef> _staffQuickActions = [
@@ -151,20 +137,15 @@ final class HomeRegistry {
     ),
 
     // ─────────────────────────────────────────────
-    // Messaging
-    // ─────────────────────────────────────────────
-    StaffFeatureDef(
-      featureKey: FeatureKeys.messaging,
-      labelOverride: 'Contacts',
-      iconOverride: Icons.people_alt,
-      destination: _contacts,
-      allowedRef: _allowRetailForTenant,
-      enabledByTenantFeature: false,
-    ),
-
-    // ─────────────────────────────────────────────
     // Retail
     // ─────────────────────────────────────────────
+    StaffFeatureDef(
+      featureKey: FeatureKeys.retail,
+      labelOverride: 'Contacts',
+      iconOverride: Icons.people_alt_outlined,
+      destination: _contacts,
+      allowedRef: _allowRetailForTenant,
+    ),
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
@@ -384,7 +365,9 @@ final class HomeRegistry {
   }
 
   static bool _allowInsuranceForTenant(WidgetRef ref, AuthUser user) {
-    if (!user.isStaff) return false;
+    if (!user.isStaff) {
+      return false;
+    }
 
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
@@ -392,7 +375,9 @@ final class HomeRegistry {
   }
 
   static bool _allowMemberHealthMetrics(WidgetRef ref, AuthUser user) {
-    if (user.isStaffResolved) return false;
+    if (user.isStaffResolved) {
+      return false;
+    }
 
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
@@ -400,10 +385,15 @@ final class HomeRegistry {
   }
 
   static bool _allowMemberClinical(WidgetRef ref, AuthUser user) {
-    if (user.isStaffResolved) return false;
+    if (user.isStaffResolved) {
+      return false;
+    }
 
     final accountNumber = (user.accountNumber ?? '').trim();
-    if (accountNumber.isEmpty) return false;
+
+    if (accountNumber.isEmpty) {
+      return false;
+    }
 
     final profile = ref.watch(tenantProfileProvider).valueOrNull;
 
@@ -422,6 +412,7 @@ final class HomeRegistry {
       if (featureKey == FeatureKeys.inventory) return false;
       if (featureKey == FeatureKeys.insurance) return false;
       if (featureKey == FeatureKeys.reporting) return false;
+      if (featureKey == FeatureKeys.messaging) return false;
       if (featureKey == FeatureKeys.hq) return false;
       if (featureKey == FeatureKeys.rider) return false;
       if (featureKey == FeatureKeys.backup) return false;
@@ -439,20 +430,34 @@ final class HomeRegistry {
     }
 
     final allowed = definition.allowed;
-    if (allowed != null && !allowed(user)) return false;
+
+    if (allowed != null && !allowed(user)) {
+      return false;
+    }
 
     final allowedRef = definition.allowedRef;
-    if (allowedRef != null && !allowedRef(ref, user)) return false;
+
+    if (allowedRef != null && !allowedRef(ref, user)) {
+      return false;
+    }
 
     return true;
   }
 
   static bool _isVisibleForTenant(dynamic profile, StaffFeatureDef definition) {
-    if (definition.enabledByTenantFeature == false) return true;
-    if (profile == null) return false;
+    if (definition.enabledByTenantFeature == false) {
+      return true;
+    }
+
+    if (profile == null) {
+      return false;
+    }
 
     final featureKey = definition.featureKey.trim();
-    if (featureKey.isEmpty) return false;
+
+    if (featureKey.isEmpty) {
+      return false;
+    }
 
     return profile.features.enabled(featureKey);
   }
