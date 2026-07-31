@@ -1,6 +1,7 @@
-// lib/core/home/widgets/member/member_home_quick_action.dart
+// lib/core/home/widgets/member/member_home_quick_actions.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
@@ -9,20 +10,23 @@ import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
 
-class MemberHomeQuickActions extends StatelessWidget {
-  const MemberHomeQuickActions({
-    super.key,
-    required this.user,
-    required this.onChat,
-  });
+class MemberHomeQuickActions extends ConsumerWidget {
+  const MemberHomeQuickActions({super.key, required this.user, this.onChat});
 
   final AuthUser? user;
-  final VoidCallback onChat;
+  final VoidCallback? onChat;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final String? contactId = user?.contactId;
+    final String memberUid = user?.uid.trim() ?? '';
+    final VoidCallback? chatAction = onChat;
+
+    final int chatUnreadCount = chatAction != null && memberUid.isNotEmpty
+        ? ref.watch(memberUnreadMessagesProvider(memberUid))
+        : 0;
 
     return HomeQuickActionButton(
       actions: [
@@ -52,11 +56,13 @@ class MemberHomeQuickActions extends StatelessWidget {
           icon: Icons.monitor_heart_outlined,
           onPressed: () => _openHealthMetrics(context, contactId: contactId),
         ),
-        HomeQuickAction(
-          label: 'Chat',
-          icon: Icons.chat_bubble_outline_rounded,
-          onPressed: onChat,
-        ),
+        if (chatAction != null)
+          HomeQuickAction(
+            label: 'Chat',
+            icon: Icons.chat_bubble_outline_rounded,
+            badgeCount: chatUnreadCount,
+            onPressed: chatAction,
+          ),
       ],
     );
   }

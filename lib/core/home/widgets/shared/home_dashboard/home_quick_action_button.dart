@@ -7,11 +7,19 @@ class HomeQuickAction {
     required this.label,
     required this.icon,
     required this.onPressed,
+    this.badgeCount = 0,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
+  final int badgeCount;
+
+  bool get hasBadge => badgeCount > 0;
+
+  String get badgeLabel {
+    return badgeCount > 99 ? '99+' : badgeCount.toString();
+  }
 }
 
 class HomeQuickActionButton extends StatelessWidget {
@@ -28,16 +36,26 @@ class HomeQuickActionButton extends StatelessWidget {
   final IconData icon;
   final String title;
 
+  int get _totalBadgeCount {
+    return actions.fold<int>(0, (total, action) => total + action.badgeCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
 
+    final int badgeCount = _totalBadgeCount;
+
     return FloatingActionButton(
       tooltip: tooltip,
       onPressed: () => _showActions(context),
-      child: Icon(icon),
+      child: Badge(
+        isLabelVisible: badgeCount > 0,
+        label: Text(badgeCount > 99 ? '99+' : badgeCount.toString()),
+        child: Icon(icon),
+      ),
     );
   }
 
@@ -89,10 +107,18 @@ class _HomeQuickActionsSheet extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: ListTile(
                   visualDensity: VisualDensity.compact,
-                  leading: Icon(action.icon),
+                  leading: Badge(
+                    isLabelVisible: action.hasBadge,
+                    label: Text(action.badgeLabel),
+                    child: Icon(action.icon),
+                  ),
                   title: Text(
                     action.label,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontWeight: action.hasBadge
+                          ? FontWeight.w800
+                          : FontWeight.w700,
+                    ),
                   ),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   shape: RoundedRectangleBorder(
