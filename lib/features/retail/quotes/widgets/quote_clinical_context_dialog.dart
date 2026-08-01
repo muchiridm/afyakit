@@ -13,7 +13,7 @@ import 'package:afyakit/features/insurance/memberships/widgets/insurance_members
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:file_picker/file_picker.dart';
@@ -51,6 +51,7 @@ class QuoteClinicalContextDialog extends ConsumerStatefulWidget {
     this.initialPrescriptionId,
     this.initialClaimPackId,
     this.initialPaymentContext = QuotePaymentContext.directPay,
+    this.openProfilePickerInitially = false,
   });
 
   final String? initialPatientId;
@@ -62,6 +63,7 @@ class QuoteClinicalContextDialog extends ConsumerStatefulWidget {
   /// Claim packs are created/linked after conversion to invoice, not at quote stage.
   final String? initialClaimPackId;
   final QuotePaymentContext initialPaymentContext;
+  final bool openProfilePickerInitially;
 
   @override
   ConsumerState<QuoteClinicalContextDialog> createState() =>
@@ -120,6 +122,13 @@ class _QuoteClinicalContextDialogState
     final String? patientId = _patientId;
     if (patientId != null) {
       Future<void>.microtask(() => _loadPrescriptions(patientId));
+    }
+
+    if (widget.openProfilePickerInitially) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openProfilePicker();
+      });
     }
   }
 
@@ -259,6 +268,20 @@ class _QuoteClinicalContextDialogState
     if (count == 2) return 320;
 
     return 420;
+  }
+
+  Future<void> _openProfilePicker() async {
+    if (_isMemberScoped && _memberContactId.isEmpty) return;
+
+    final Profile? picked = await showProfilePickerScreen(
+      context: context,
+      contactId: _isMemberScoped ? _memberContactId : null,
+      forcePickerMode: !_isMemberScoped,
+    );
+
+    if (picked == null || !mounted) return;
+
+    _setProfile(picked);
   }
 
   void _setProfile(Profile patient) {
@@ -633,7 +656,7 @@ class _QuoteClinicalContextDialogState
                     title: 'Prescription',
                     subtitle: _requiresInsurance
                         ? 'Required for insurance quotes and later claim support.'
-                        : 'Optional for direct-pay clinical quotes.',
+                        : 'Optional for direct-pay private-use quotes.',
                   ),
                   PrescriptionPickerCard(
                     patientId: patientId,

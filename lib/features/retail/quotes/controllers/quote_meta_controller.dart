@@ -3,275 +3,18 @@
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-@immutable
-class QuoteMetaState {
-  const QuoteMetaState({
-    this.editingQuoteId,
-    this.contact,
-    this.reference,
-    this.customerNotes,
-    this.saleContext = QuoteSaleContext.clinical,
-    this.paymentContext = QuotePaymentContext.directPay,
-    this.quoteDate,
-    this.expiryDate,
-    this.deliveryAddress,
-    this.patientSnapshot,
-    this.membershipId,
-    this.prescriptionId,
-    this.prescriptionLabel,
-  });
-
-  final String? editingQuoteId;
-  final ZohoContact? contact;
-  final String? reference;
-  final String? customerNotes;
-
-  /// clinical:
-  ///   Patient-linked sale. Requires patient + delivery address.
-  ///
-  /// general:
-  ///   OTC / B2B / walk-in / institutional sale. Patient and delivery optional.
-  final QuoteSaleContext saleContext;
-
-  /// directPay:
-  ///   The selected Zoho customer/contact pays directly.
-  ///   This includes patient self-pay, parent/guardian paying,
-  ///   employer/company direct-pay, OTC, and B2B.
-  ///
-  /// insurance:
-  ///   Insurance payer is billed. Requires clinical sale + membership.
-  final QuotePaymentContext paymentContext;
-
-  /// Zoho: `date` / `estimate_date`.
-  final DateTime? quoteDate;
-
-  /// Zoho: `expiry_date`.
-  final DateTime? expiryDate;
-
-  final SalesDocumentAddress? deliveryAddress;
-
-  /// Person receiving care/medicine.
-  final SalesDocumentPatientSnapshot? patientSnapshot;
-
-  /// Insurance membership used later for quote → invoice → claim.
-  final String? membershipId;
-
-  /// Patient prescription used later for quote → invoice → claim.
-  ///
-  /// Claims require this when create_insurance_claim is true.
-  final String? prescriptionId;
-
-  /// UI display label only. Source of truth remains [prescriptionId].
-  final String? prescriptionLabel;
-
-  bool get isEditing => _clean(editingQuoteId) != null;
-
-  bool get isClinical => saleContext == QuoteSaleContext.clinical;
-
-  bool get isGeneral => saleContext == QuoteSaleContext.general;
-
-  bool get isDirectPay =>
-      effectivePaymentContext == QuotePaymentContext.directPay;
-
-  bool get isInsurancePayment {
-    return effectivePaymentContext == QuotePaymentContext.insurance;
-  }
-
-  /// General sales cannot be insurance claims in the current model.
-  QuotePaymentContext get effectivePaymentContext {
-    return isGeneral ? QuotePaymentContext.directPay : paymentContext;
-  }
-
-  bool get requiresPatient => saleContext.requiresPatient;
-
-  bool get requiresDeliveryAddress => saleContext.requiresDeliveryAddress;
-
-  bool get requiresMembership {
-    return isClinical && effectivePaymentContext.requiresMembership;
-  }
-
-  bool get requiresPrescription {
-    return isClinical && isInsurancePayment;
-  }
-
-  String get customerIdResolved => (contact?.contactId ?? '').trim();
-
-  String get displayContactName {
-    final String? title = _clean(contact?.title);
-    return title ?? 'Customer';
-  }
-
-  String? get resolvedPatientId => _clean(patientSnapshot?.patientId);
-
-  String? get resolvedMembershipId {
-    return _clean(membershipId) ?? _clean(patientSnapshot?.membershipId);
-  }
-
-  String? get resolvedPrescriptionId => _clean(prescriptionId);
-
-  bool get hasPatientContext => resolvedPatientId != null;
-
-  bool get hasInsuranceContext => resolvedMembershipId != null;
-
-  bool get hasPrescriptionContext => resolvedPrescriptionId != null;
-
-  bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
-
-  bool get hasQuoteDate => quoteDate != null;
-
-  bool get canCreateInsuranceClaim {
-    return isClinical &&
-        isInsurancePayment &&
-        hasInsuranceContext &&
-        hasPrescriptionContext;
-  }
-
-  String get patientLabel {
-    return _clean(patientSnapshot?.fullName) ??
-        _clean(patientSnapshot?.patientNo) ??
-        _clean(patientSnapshot?.patientId) ??
-        'Patient';
-  }
-
-  String? get patientSubtitle {
-    final SalesDocumentPatientSnapshot? patient = patientSnapshot;
-    if (patient == null) return null;
-
-    return _joinParts(<String>[
-      if (_clean(patient.patientNo) != null) patient.patientNo!.trim(),
-      if (_clean(patient.dob) != null) 'DOB ${patient.dob!.trim()}',
-      if (_clean(patient.gender) != null) patient.gender!.trim(),
-      if (_clean(patient.relationship) != null) patient.relationship!.trim(),
-    ]);
-  }
-
-  String? get insuranceSubtitle {
-    final SalesDocumentPatientSnapshot? patient = patientSnapshot;
-    if (patient == null) return null;
-
-    return _joinParts(<String>[
-      if (_clean(patient.payerName) != null) patient.payerName!.trim(),
-      if (_clean(patient.memberNo) != null)
-        'Member ${patient.memberNo!.trim()}',
-      if (_clean(patient.scheme) != null) patient.scheme!.trim(),
-    ]);
-  }
-
-  String? get prescriptionSubtitle {
-    if (resolvedPrescriptionId == null) return null;
-
-    return _joinParts(<String>[
-      if (_clean(prescriptionLabel) != null) prescriptionLabel!.trim(),
-      if (_clean(prescriptionLabel) == null) resolvedPrescriptionId!,
-    ]);
-  }
-
-  String? get paymentSubtitle {
-    if (isGeneral) return 'Direct-pay general sale';
-
-    if (isInsurancePayment) {
-      return _joinParts(<String>[
-        'Insurance',
-        if (resolvedMembershipId != null) 'membership selected',
-        if (resolvedPrescriptionId != null) 'prescription selected',
-      ]);
-    }
-
-    return 'Direct pay';
-  }
-
-  QuoteMetaState copyWith({
-    String? editingQuoteId,
-    bool clearEditingQuoteId = false,
-    ZohoContact? contact,
-    bool clearContact = false,
-    String? reference,
-    bool clearReference = false,
-    String? customerNotes,
-    bool clearCustomerNotes = false,
-    QuoteSaleContext? saleContext,
-    QuotePaymentContext? paymentContext,
-    DateTime? quoteDate,
-    bool clearQuoteDate = false,
-    DateTime? expiryDate,
-    bool clearExpiryDate = false,
-    SalesDocumentAddress? deliveryAddress,
-    bool clearDeliveryAddress = false,
-    SalesDocumentPatientSnapshot? patientSnapshot,
-    bool clearPatientSnapshot = false,
-    String? membershipId,
-    bool clearMembershipId = false,
-    String? prescriptionId,
-    bool clearPrescriptionId = false,
-    String? prescriptionLabel,
-    bool clearPrescriptionLabel = false,
-  }) {
-    final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
-
-    final QuotePaymentContext nextPaymentContext =
-        nextSaleContext == QuoteSaleContext.general
-        ? QuotePaymentContext.directPay
-        : (paymentContext ?? this.paymentContext);
-
-    return QuoteMetaState(
-      editingQuoteId: clearEditingQuoteId
-          ? null
-          : (editingQuoteId ?? this.editingQuoteId),
-      contact: clearContact ? null : (contact ?? this.contact),
-      reference: clearReference ? null : (reference ?? this.reference),
-      customerNotes: clearCustomerNotes
-          ? null
-          : (customerNotes ?? this.customerNotes),
-      saleContext: nextSaleContext,
-      paymentContext: nextPaymentContext,
-      quoteDate: clearQuoteDate ? null : (quoteDate ?? this.quoteDate),
-      expiryDate: clearExpiryDate ? null : (expiryDate ?? this.expiryDate),
-      deliveryAddress: clearDeliveryAddress
-          ? null
-          : (deliveryAddress ?? this.deliveryAddress),
-      patientSnapshot: clearPatientSnapshot
-          ? null
-          : (patientSnapshot ?? this.patientSnapshot),
-      membershipId: clearMembershipId
-          ? null
-          : (membershipId ?? this.membershipId),
-      prescriptionId: clearPrescriptionId
-          ? null
-          : (prescriptionId ?? this.prescriptionId),
-      prescriptionLabel: clearPrescriptionLabel
-          ? null
-          : (prescriptionLabel ?? this.prescriptionLabel),
+final quoteMetaControllerProvider =
+    StateNotifierProvider<QuoteMetaController, QuoteMetaState>(
+      (Ref ref) => QuoteMetaController(ref),
     );
-  }
-
-  static DateTime? normalizeDate(DateTime? date) {
-    if (date == null) return null;
-    return DateTime(date.year, date.month, date.day);
-  }
-
-  static String? _clean(String? value) {
-    final String text = (value ?? '').trim();
-    return text.isEmpty ? null : text;
-  }
-
-  static String? _joinParts(List<String> values) {
-    final String text = values
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .join(' · ')
-        .trim();
-
-    return text.isEmpty ? null : text;
-  }
-}
 
 class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   QuoteMetaController(this._ref) : super(const QuoteMetaState());
@@ -306,7 +49,9 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       clearEditingQuoteId: true,
       quoteDate: quoteDate,
       expiryDate: expiryDate,
-      saleContext: wasEditing ? QuoteSaleContext.clinical : state.saleContext,
+      purchaseContext: wasEditing
+          ? QuotePurchaseContext.privateUse
+          : state.purchaseContext,
       paymentContext: wasEditing
           ? QuotePaymentContext.directPay
           : state.effectivePaymentContext,
@@ -328,27 +73,33 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = const QuoteMetaState();
   }
 
-  void setSaleContext(QuoteSaleContext saleContext) {
-    if (state.saleContext == saleContext) return;
+  void setPurchaseContext(QuotePurchaseContext purchaseContext) {
+    if (state.purchaseContext == purchaseContext) return;
+
+    final bool isCompany = purchaseContext.isCompany;
 
     state = state.copyWith(
-      saleContext: saleContext,
-      paymentContext: saleContext == QuoteSaleContext.general
+      purchaseContext: purchaseContext,
+      paymentContext: isCompany
           ? QuotePaymentContext.directPay
           : state.effectivePaymentContext,
-      clearPrescriptionId: saleContext == QuoteSaleContext.general,
-      clearPrescriptionLabel: saleContext == QuoteSaleContext.general,
+      clearPatientSnapshot: isCompany,
+      clearMembershipId: isCompany,
+      clearPrescriptionId: isCompany,
+      clearPrescriptionLabel: isCompany,
     );
   }
 
   void setPaymentContext(QuotePaymentContext paymentContext) {
-    if (state.isGeneral) return;
-
+    if (state.isCompany) return;
     if (state.paymentContext == paymentContext) return;
 
+    final bool isDirectPay = paymentContext.isDirectPay;
+
     state = state.copyWith(
-      saleContext: QuoteSaleContext.clinical,
+      purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: paymentContext,
+      clearMembershipId: isDirectPay,
     );
   }
 
@@ -383,6 +134,22 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(
       customerNotes: cleanValue,
       clearCustomerNotes: cleanValue == null,
+    );
+  }
+
+  void setFulfilmentMethod(QuoteFulfilmentMethod method) {
+    if (state.fulfilmentMethod == method) return;
+
+    state = state.copyWith(
+      fulfilmentMethod: method,
+      clearDeliveryAddress: method.isPickup,
+    );
+  }
+
+  void setDeliveryLocation(SalesDocumentAddress address) {
+    state = state.copyWith(
+      fulfilmentMethod: QuoteFulfilmentMethod.delivery,
+      deliveryAddress: address,
     );
   }
 
@@ -447,7 +214,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
         previousPatientId != nextPatientId;
 
     state = state.copyWith(
-      saleContext: QuoteSaleContext.clinical,
+      purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: isInsurance
           ? QuotePaymentContext.insurance
           : QuotePaymentContext.directPay,
@@ -460,7 +227,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
-  void setClinicalContext({
+  void setPrivateUseContext({
     required SalesDocumentPatientSnapshot patientSnapshot,
     required QuotePaymentContext paymentContext,
     String? membershipId,
@@ -490,7 +257,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
         : _prescriptionLabel(prescription);
 
     state = state.copyWith(
-      saleContext: QuoteSaleContext.clinical,
+      purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: isInsurance
           ? QuotePaymentContext.insurance
           : QuotePaymentContext.directPay,
@@ -501,7 +268,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       membershipId: isInsurance ? resolvedMembershipId : null,
       clearMembershipId: !isInsurance || resolvedMembershipId == null,
 
-      // Prescription is retained for all clinical quotes.
+      // Prescription is retained for all private-use quotes.
       // It is required for insurance, optional for direct-pay.
       prescriptionId: resolvedPrescriptionId,
       prescriptionLabel: resolvedPrescriptionLabel,
@@ -537,13 +304,51 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
+  void applyState(QuoteMetaState next) {
+    final ZohoContact? safeContact = _safeContactForPolicy(next.contact);
+
+    final QuotePaymentContext safePaymentContext =
+        next.purchaseContext.isCompany
+        ? QuotePaymentContext.directPay
+        : next.paymentContext;
+
+    state = QuoteMetaState(
+      editingQuoteId: next.editingQuoteId,
+      contact: safeContact,
+      reference: _clean(next.reference),
+      customerNotes: _clean(next.customerNotes),
+      purchaseContext: next.purchaseContext,
+      paymentContext: safePaymentContext,
+      fulfilmentMethod: next.fulfilmentMethod,
+      quoteDate: QuoteMetaState.normalizeDate(next.quoteDate),
+      expiryDate: QuoteMetaState.normalizeDate(next.expiryDate),
+      deliveryAddress: next.fulfilmentMethod.isDelivery
+          ? next.deliveryAddress
+          : null,
+      patientSnapshot: next.purchaseContext.isPrivateUse
+          ? next.patientSnapshot
+          : null,
+      membershipId:
+          next.purchaseContext.isPrivateUse && safePaymentContext.isInsurance
+          ? _clean(next.resolvedMembershipId)
+          : null,
+      prescriptionId: next.purchaseContext.isPrivateUse
+          ? _clean(next.resolvedPrescriptionId)
+          : null,
+      prescriptionLabel: next.purchaseContext.isPrivateUse
+          ? _clean(next.prescriptionLabel)
+          : null,
+    );
+  }
+
   void applyZohoMeta({
     required String editingQuoteId,
     ZohoContact? contact,
     String? reference,
     String? customerNotes,
-    QuoteSaleContext saleContext = QuoteSaleContext.clinical,
+    QuotePurchaseContext purchaseContext = QuotePurchaseContext.privateUse,
     QuotePaymentContext paymentContext = QuotePaymentContext.directPay,
+    QuoteFulfilmentMethod fulfilmentMethod = QuoteFulfilmentMethod.delivery,
     DateTime? quoteDate,
     DateTime? expiryDate,
     SalesDocumentAddress? deliveryAddress,
@@ -562,8 +367,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
             patientSnapshot: patientSnapshot,
           );
 
-    final QuotePaymentContext safePaymentContext =
-        saleContext == QuoteSaleContext.general
+    final QuotePaymentContext safePaymentContext = purchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : paymentContext;
 
@@ -572,8 +376,9 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       contact: safeContact,
       reference: _clean(reference),
       customerNotes: _clean(customerNotes),
-      saleContext: saleContext,
+      purchaseContext: purchaseContext,
       paymentContext: safePaymentContext,
+      fulfilmentMethod: fulfilmentMethod,
       quoteDate: QuoteMetaState.normalizeDate(quoteDate),
       expiryDate: QuoteMetaState.normalizeDate(expiryDate),
       deliveryAddress: deliveryAddress,
@@ -653,8 +458,3 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     return text.isEmpty ? null : text;
   }
 }
-
-final quoteMetaControllerProvider =
-    StateNotifierProvider<QuoteMetaController, QuoteMetaState>(
-      (Ref ref) => QuoteMetaController(ref),
-    );

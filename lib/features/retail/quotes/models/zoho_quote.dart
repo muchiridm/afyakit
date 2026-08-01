@@ -1,6 +1,6 @@
 // lib/features/retail/quotes/models/zoho_quote.dart
 
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
@@ -15,8 +15,9 @@ class ZohoQuote {
     required this.status,
     required this.date,
     required this.total,
-    this.saleContext = QuoteSaleContext.clinical,
+    this.purchaseContext = QuotePurchaseContext.privateUse,
     this.paymentContext = QuotePaymentContext.directPay,
+    this.fulfilmentMethod = QuoteFulfilmentMethod.delivery,
     this.expiryDate,
     this.accountNumber,
     this.currencyCode,
@@ -41,8 +42,9 @@ class ZohoQuote {
 
   final num total;
 
-  final QuoteSaleContext saleContext;
+  final QuotePurchaseContext purchaseContext;
   final QuotePaymentContext paymentContext;
+  final QuoteFulfilmentMethod fulfilmentMethod;
 
   final String? accountNumber;
 
@@ -53,49 +55,60 @@ class ZohoQuote {
 
   final SalesDocumentAddress? deliveryAddress;
 
-  /// Patient receiving care/medicine.
+  /// Patient receiving care or medicine.
   ///
-  /// This is separate from [customerId], which is the payer/customer.
+  /// This is separate from [customerId], which identifies the payer/customer.
   final String? patientId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
-  /// Insurance membership, only meaningful for insurance payment context.
+  /// Insurance membership, meaningful only for insurance payment.
   final String? membershipId;
 
-  /// Patient prescription linked to this quote flow.
+  /// Patient prescription linked to this quote.
   final String? prescriptionId;
 
   /// Backward-compatible only.
   ///
-  /// Claim packs are no longer created or managed at quote stage.
-  /// They are created/linked when an insurance quote is converted to invoice.
+  /// Claim packs are created or linked when an insurance quote is converted
+  /// to an invoice, not while creating the quote.
   final String? claimPackId;
 
   final List<ZohoQuoteLineItem> lineItems;
 
-  bool get isClinical => saleContext == QuoteSaleContext.clinical;
+  bool get isPrivateUse => purchaseContext.isPrivateUse;
 
-  bool get isGeneral => saleContext == QuoteSaleContext.general;
+  bool get isCompany => purchaseContext.isCompany;
 
-  bool get isDirectPay => paymentContext == QuotePaymentContext.directPay;
+  QuotePaymentContext get effectivePaymentContext {
+    return isCompany ? QuotePaymentContext.directPay : paymentContext;
+  }
 
-  bool get isInsurancePayment =>
-      paymentContext == QuotePaymentContext.insurance;
+  bool get isDirectPay => effectivePaymentContext.isDirectPay;
+
+  bool get isInsurancePayment => effectivePaymentContext.isInsurance;
+
+  bool get isDelivery => fulfilmentMethod.isDelivery;
+
+  bool get isPickup => fulfilmentMethod.isPickup;
 
   bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
 
+  bool get hasFulfilmentContext {
+    return isPickup || hasDeliveryAddress;
+  }
+
   bool get hasPatientContext {
     final String direct = (patientId ?? '').trim();
-    final String snap = (patientSnapshot?.patientId ?? '').trim();
+    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
 
-    return direct.isNotEmpty || snap.isNotEmpty;
+    return direct.isNotEmpty || snapshotId.isNotEmpty;
   }
 
   bool get hasInsuranceContext {
     final String direct = (membershipId ?? '').trim();
-    final String snap = (patientSnapshot?.membershipId ?? '').trim();
+    final String snapshotId = (patientSnapshot?.membershipId ?? '').trim();
 
-    return direct.isNotEmpty || snap.isNotEmpty;
+    return direct.isNotEmpty || snapshotId.isNotEmpty;
   }
 
   bool get hasPrescriptionContext {
@@ -108,7 +121,7 @@ class ZohoQuote {
   }
 
   bool get hasRequiredInsuranceQuoteContext {
-    return isClinical &&
+    return isPrivateUse &&
         isInsurancePayment &&
         hasPatientContext &&
         hasInsuranceContext &&
@@ -119,16 +132,16 @@ class ZohoQuote {
     final String direct = (patientId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snap = (patientSnapshot?.patientId ?? '').trim();
-    return snap.isEmpty ? null : snap;
+    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
+    return snapshotId.isEmpty ? null : snapshotId;
   }
 
   String? get resolvedMembershipId {
     final String direct = (membershipId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snap = (patientSnapshot?.membershipId ?? '').trim();
-    return snap.isEmpty ? null : snap;
+    final String snapshotId = (patientSnapshot?.membershipId ?? '').trim();
+    return snapshotId.isEmpty ? null : snapshotId;
   }
 
   String? get resolvedPrescriptionId {
@@ -154,20 +167,43 @@ class ZohoQuote {
     final String status = _asTrimmed(json['status']);
 
     final DateTime? date = parseDate(json['date'] ?? json['estimate_date']);
+
     final DateTime? expiryDate = parseDate(json['expiry_date']);
 
     final num total = asNum(json['total']);
 
-    final QuoteSaleContext saleContext = QuoteSaleContext.fromApi(
-      json['sale_context'] ?? json['saleContext'],
+    final QuotePurchaseContext purchaseContext = QuotePurchaseContext.fromApi(
+      json['sale_context'] ??
+          json['saleContext'] ??
+          json['purchase_context'] ??
+          json['purchaseContext'],
     );
 
-    final QuotePaymentContext paymentContext =
-        saleContext == QuoteSaleContext.general
+    final QuotePaymentContext paymentContext = purchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : QuotePaymentContext.fromApi(
             json['payment_context'] ?? json['paymentContext'],
           );
+
+    final SalesDocumentAddress? parsedDeliveryAddress = _parseDeliveryAddress(
+      json['delivery_address'] ??
+          json['deliveryAddress'] ??
+          json['shipping_address'],
+    );
+
+    final Object? rawFulfilment =
+        json['fulfilment_method'] ??
+        json['fulfilmentMethod'] ??
+        json['fulfillment_method'] ??
+        json['fulfillmentMethod'];
+
+    final QuoteFulfilmentMethod fulfilmentMethod = rawFulfilment == null
+        ? QuoteFulfilmentMethod.delivery
+        : QuoteFulfilmentMethod.fromApi(rawFulfilment);
+
+    final SalesDocumentAddress? deliveryAddress = fulfilmentMethod.isDelivery
+        ? parsedDeliveryAddress
+        : null;
 
     final String? accountNumber = _asCleanOrNull(
       json['account_number'] ??
@@ -175,26 +211,28 @@ class ZohoQuote {
           json['reference_number'],
     );
 
-    final String? currency = _asCleanOrNull(json['currency_code']);
-    final String? customerId = _asCleanOrNull(json['customer_id']);
+    final String? currencyCode = _asCleanOrNull(
+      json['currency_code'] ?? json['currencyCode'],
+    );
+
+    final String? customerId = _asCleanOrNull(
+      json['customer_id'] ?? json['customerId'],
+    );
+
     final String? notes = _asCleanOrNull(json['notes']);
     final String? terms = _asCleanOrNull(json['terms']);
 
-    final SalesDocumentAddress? deliveryAddress = _parseDeliveryAddress(
-      json['delivery_address'] ??
-          json['deliveryAddress'] ??
-          json['shipping_address'],
-    );
-
     final SalesDocumentPatientSnapshot? patientSnapshot = _parsePatientSnapshot(
-      json['patient_snapshot'],
+      json['patient_snapshot'] ?? json['patientSnapshot'],
     );
 
     final String? patientId =
-        _asCleanOrNull(json['patient_id']) ?? patientSnapshot?.patientId;
+        _asCleanOrNull(json['patient_id'] ?? json['patientId']) ??
+        patientSnapshot?.patientId;
 
     final String? membershipId =
-        _asCleanOrNull(json['membership_id']) ?? patientSnapshot?.membershipId;
+        _asCleanOrNull(json['membership_id'] ?? json['membershipId']) ??
+        patientSnapshot?.membershipId;
 
     final String? prescriptionId = _asCleanOrNull(
       json['prescription_id'] ?? json['prescriptionId'],
@@ -204,11 +242,17 @@ class ZohoQuote {
       json['claim_pack_id'] ?? json['claimPackId'],
     );
 
-    final Object? rawLines = json['line_items'];
+    final Object? rawLines = json['line_items'] ?? json['lineItems'];
+
     final List<ZohoQuoteLineItem> lines = <ZohoQuoteLineItem>[];
 
     if (rawLines is List) {
       for (final Object? item in rawLines) {
+        if (item is Map<String, dynamic>) {
+          lines.add(ZohoQuoteLineItem.fromJson(item));
+          continue;
+        }
+
         if (item is Map) {
           lines.add(ZohoQuoteLineItem.fromJson(item.cast<String, dynamic>()));
         }
@@ -222,10 +266,11 @@ class ZohoQuote {
       date: date,
       expiryDate: expiryDate,
       total: total,
-      saleContext: saleContext,
+      purchaseContext: purchaseContext,
       paymentContext: paymentContext,
+      fulfilmentMethod: fulfilmentMethod,
       accountNumber: accountNumber,
-      currencyCode: currency,
+      currencyCode: currencyCode,
       customerId: customerId,
       notes: notes,
       terms: terms,
@@ -240,6 +285,13 @@ class ZohoQuote {
   }
 
   JsonMap toJson() {
+    final QuotePaymentContext safePaymentContext = purchaseContext.isCompany
+        ? QuotePaymentContext.directPay
+        : paymentContext;
+
+    final SalesDocumentAddress? safeDeliveryAddress =
+        fulfilmentMethod.isDelivery ? deliveryAddress : null;
+
     return <String, dynamic>{
       'estimate_id': quoteId,
       'customer_name': customerName,
@@ -247,16 +299,22 @@ class ZohoQuote {
       'date': date?.toIso8601String(),
       'expiry_date': expiryDate?.toIso8601String(),
       'total': total,
-      'sale_context': saleContext.apiValue,
-      'payment_context': saleContext == QuoteSaleContext.general
-          ? QuotePaymentContext.directPay.apiValue
-          : paymentContext.apiValue,
+
+      // Retain the existing backend field and values.
+      'sale_context': purchaseContext.apiValue,
+      'payment_context': safePaymentContext.apiValue,
+
+      'fulfilment_method': fulfilmentMethod.apiValue,
+
       'account_number': accountNumber,
       'currency_code': currencyCode,
       'customer_id': customerId,
       'notes': notes,
       'terms': terms,
-      'delivery_address': deliveryAddress?.toJson(),
+
+      if (safeDeliveryAddress != null)
+        'delivery_address': safeDeliveryAddress.toJson(),
+
       'patient_id': patientId,
       'patient_snapshot': patientSnapshot?.toJson(),
       'membership_id': membershipId,
@@ -273,10 +331,13 @@ class ZohoQuote {
     String? customerName,
     String? status,
     DateTime? date,
+    bool clearDate = false,
     DateTime? expiryDate,
+    bool clearExpiryDate = false,
     num? total,
-    QuoteSaleContext? saleContext,
+    QuotePurchaseContext? purchaseContext,
     QuotePaymentContext? paymentContext,
+    QuoteFulfilmentMethod? fulfilmentMethod,
     String? accountNumber,
     bool clearAccountNumber = false,
     String? currencyCode,
@@ -301,22 +362,31 @@ class ZohoQuote {
     bool clearClaimPackId = false,
     List<ZohoQuoteLineItem>? lineItems,
   }) {
-    final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
+    final QuotePurchaseContext nextPurchaseContext =
+        purchaseContext ?? this.purchaseContext;
 
-    final QuotePaymentContext nextPaymentContext =
-        nextSaleContext == QuoteSaleContext.general
+    final QuotePaymentContext nextPaymentContext = nextPurchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : (paymentContext ?? this.paymentContext);
+
+    final QuoteFulfilmentMethod nextFulfilmentMethod =
+        fulfilmentMethod ?? this.fulfilmentMethod;
+
+    final SalesDocumentAddress? nextDeliveryAddress =
+        nextFulfilmentMethod.isPickup || clearDeliveryAddress
+        ? null
+        : (deliveryAddress ?? this.deliveryAddress);
 
     return ZohoQuote(
       quoteId: quoteId ?? this.quoteId,
       customerName: customerName ?? this.customerName,
       status: status ?? this.status,
-      date: date ?? this.date,
-      expiryDate: expiryDate ?? this.expiryDate,
+      date: clearDate ? null : (date ?? this.date),
+      expiryDate: clearExpiryDate ? null : (expiryDate ?? this.expiryDate),
       total: total ?? this.total,
-      saleContext: nextSaleContext,
+      purchaseContext: nextPurchaseContext,
       paymentContext: nextPaymentContext,
+      fulfilmentMethod: nextFulfilmentMethod,
       accountNumber: clearAccountNumber
           ? null
           : (accountNumber ?? this.accountNumber),
@@ -326,9 +396,7 @@ class ZohoQuote {
       customerId: clearCustomerId ? null : (customerId ?? this.customerId),
       notes: clearNotes ? null : (notes ?? this.notes),
       terms: clearTerms ? null : (terms ?? this.terms),
-      deliveryAddress: clearDeliveryAddress
-          ? null
-          : (deliveryAddress ?? this.deliveryAddress),
+      deliveryAddress: nextDeliveryAddress,
       patientId: clearPatientId ? null : (patientId ?? this.patientId),
       patientSnapshot: clearPatientSnapshot
           ? null
@@ -365,6 +433,7 @@ class ZohoQuote {
   static SalesDocumentAddress? _parseDeliveryAddress(Object? raw) {
     if (raw is Map<String, dynamic>) {
       final SalesDocumentAddress parsed = SalesDocumentAddress.fromJson(raw);
+
       return parsed.isUsable ? parsed : null;
     }
 

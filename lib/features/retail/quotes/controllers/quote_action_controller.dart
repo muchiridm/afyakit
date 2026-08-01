@@ -344,7 +344,7 @@ class QuoteActionController {
     final String? prescriptionId = _clean(quote.resolvedPrescriptionId);
 
     final bool isInsuranceQuote =
-        quote.saleContext.isClinical && quote.paymentContext.isInsurance;
+        quote.purchaseContext.isPrivateUse && quote.paymentContext.isInsurance;
 
     if (isInsuranceQuote && membershipId == null) {
       SnackService.showError('This insurance quote has no membership linked.');

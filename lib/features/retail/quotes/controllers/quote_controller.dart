@@ -8,7 +8,8 @@ import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_member_binding_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
@@ -226,7 +227,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         contact: meta.contact,
         reference: meta.reference,
         customerNotes: meta.customerNotes,
-        saleContext: meta.saleContext,
+        purchaseContext: meta.purchaseContext,
         paymentContext: meta.paymentContext,
         quoteDate: meta.quoteDate,
         expiryDate: meta.expiryDate,
@@ -279,7 +280,7 @@ class QuoteController extends StateNotifier<QuoteState> {
 
     debugPrint(
       '[QuoteSubmit] '
-      'sale=${meta.saleContext.apiValue} '
+      'sale=${meta.purchaseContext.apiValue} '
       'payment=${meta.effectivePaymentContext.apiValue} '
       'customerId=${meta.customerIdResolved} '
       'customer=${meta.contact?.title ?? ''} '

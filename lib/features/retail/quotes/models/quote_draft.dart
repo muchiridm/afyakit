@@ -1,15 +1,14 @@
 // lib/features/retail/quotes/models/quote_draft.dart
 
+import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter/foundation.dart';
-
-import '../../catalog/models/di_sales_tile.dart';
-import 'zoho_quote.dart';
 
 @immutable
 class QuoteDraft {
@@ -19,8 +18,9 @@ class QuoteDraft {
     this.contactName,
     this.customerNotes,
     this.reference,
-    this.saleContext = QuoteSaleContext.clinical,
+    this.purchaseContext = QuotePurchaseContext.privateUse,
     this.paymentContext = QuotePaymentContext.directPay,
+    this.fulfilmentMethod = QuoteFulfilmentMethod.delivery,
     this.deliveryAddress,
     this.patientId,
     this.patientSnapshot,
@@ -35,39 +35,40 @@ class QuoteDraft {
 
   /// Zoho customer/contact being billed.
   ///
-  /// For direct-pay clinical quotes, this is usually the patient/member contact.
-  /// For insurance quotes, this is usually the insurer/payer contact.
+  /// For direct-pay private-use quotes, this is usually the member/customer.
+  /// For insurance quotes, this is normally the insurer/payer contact.
   final String? contactId;
   final String? contactName;
 
   final String? customerNotes;
   final String? reference;
 
-  final QuoteSaleContext saleContext;
+  final QuotePurchaseContext purchaseContext;
   final QuotePaymentContext paymentContext;
+  final QuoteFulfilmentMethod fulfilmentMethod;
 
   final SalesDocumentAddress? deliveryAddress;
 
-  /// Person receiving care/medicine.
+  /// Person receiving care or medicine.
   ///
-  /// This is separate from [contactId], which is the payer/customer.
+  /// This remains separate from [contactId], which identifies the payer.
   final String? patientId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
   /// Insurance membership context.
   ///
-  /// Required only for clinical insurance quotes.
+  /// Required only for private-use insurance quotes.
   final String? membershipId;
 
-  /// Patient prescription selected for this quote flow.
+  /// Patient prescription selected for this quote.
   ///
-  /// Required only for clinical insurance quotes.
+  /// Required for insurance and optional for direct pay.
   final String? prescriptionId;
 
   /// Backward-compatible only.
   ///
   /// Claim packs are no longer created or managed at quote stage.
-  /// They are created/linked when an insurance quote is converted to invoice.
+  /// They are created or linked when an insurance quote becomes an invoice.
   final String? claimPackId;
 
   final String? currencyCode;
@@ -86,45 +87,48 @@ class QuoteDraft {
     return lines.any((QuoteLineDraft line) => line.safeQty > 0);
   }
 
-  bool get isClinical => saleContext == QuoteSaleContext.clinical;
+  bool get isPrivateUse => purchaseContext.isPrivateUse;
 
-  bool get isGeneral => saleContext == QuoteSaleContext.general;
+  bool get isCompany => purchaseContext.isCompany;
 
-  bool get isDirectPay => paymentContext == QuotePaymentContext.directPay;
+  QuotePaymentContext get effectivePaymentContext {
+    return isCompany ? QuotePaymentContext.directPay : paymentContext;
+  }
 
-  bool get isInsurancePayment =>
-      paymentContext == QuotePaymentContext.insurance;
+  bool get isDirectPay => effectivePaymentContext.isDirectPay;
 
-  bool get requiresPatient => saleContext.requiresPatient;
+  bool get isInsurancePayment => effectivePaymentContext.isInsurance;
 
-  bool get requiresDeliveryAddress => saleContext.requiresDeliveryAddress;
+  bool get requiresPatient => purchaseContext.requiresPatient;
+
+  bool get requiresDeliveryLocation => fulfilmentMethod.requiresLocation;
+
+  bool get hasFulfilmentContext {
+    return fulfilmentMethod.isPickup || hasDeliveryAddress;
+  }
 
   bool get requiresMembership {
-    return isClinical && paymentContext.requiresMembership;
+    return isPrivateUse && effectivePaymentContext.requiresMembership;
   }
 
   bool get requiresPrescription {
-    return isClinical && paymentContext.requiresPrescription;
-  }
-
-  QuotePaymentContext get effectivePaymentContext {
-    return isGeneral ? QuotePaymentContext.directPay : paymentContext;
+    return isPrivateUse && effectivePaymentContext.requiresPrescription;
   }
 
   String? get resolvedPatientId {
     final String direct = (patientId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snap = (patientSnapshot?.patientId ?? '').trim();
-    return snap.isEmpty ? null : snap;
+    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
+    return snapshotId.isEmpty ? null : snapshotId;
   }
 
   String? get resolvedMembershipId {
     final String direct = (membershipId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snap = (patientSnapshot?.membershipId ?? '').trim();
-    return snap.isEmpty ? null : snap;
+    final String snapshotId = (patientSnapshot?.membershipId ?? '').trim();
+    return snapshotId.isEmpty ? null : snapshotId;
   }
 
   String? get resolvedPrescriptionId {
@@ -148,7 +152,7 @@ class QuoteDraft {
   bool get hasClaimPackContext => resolvedClaimPackId != null;
 
   bool get hasRequiredInsuranceQuoteContext {
-    return isClinical &&
+    return isPrivateUse &&
         isInsurancePayment &&
         hasPatientContext &&
         hasInsuranceContext &&
@@ -160,7 +164,7 @@ class QuoteDraft {
 
     if (requiresPatient && !hasPatientContext) return false;
 
-    if (requiresDeliveryAddress && !hasDeliveryAddress) return false;
+    if (!hasFulfilmentContext) return false;
 
     if (requiresMembership && !hasInsuranceContext) return false;
 
@@ -196,8 +200,9 @@ class QuoteDraft {
     bool clearCustomerNotes = false,
     String? reference,
     bool clearReference = false,
-    QuoteSaleContext? saleContext,
+    QuotePurchaseContext? purchaseContext,
     QuotePaymentContext? paymentContext,
+    QuoteFulfilmentMethod? fulfilmentMethod,
     SalesDocumentAddress? deliveryAddress,
     bool clearDeliveryAddress = false,
     String? patientId,
@@ -215,12 +220,20 @@ class QuoteDraft {
     String? currencyCode,
     bool clearCurrencyCode = false,
   }) {
-    final QuoteSaleContext nextSaleContext = saleContext ?? this.saleContext;
+    final QuotePurchaseContext nextPurchaseContext =
+        purchaseContext ?? this.purchaseContext;
 
-    final QuotePaymentContext nextPaymentContext =
-        nextSaleContext == QuoteSaleContext.general
+    final QuotePaymentContext nextPaymentContext = nextPurchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : (paymentContext ?? this.paymentContext);
+
+    final QuoteFulfilmentMethod nextFulfilmentMethod =
+        fulfilmentMethod ?? this.fulfilmentMethod;
+
+    final SalesDocumentAddress? nextDeliveryAddress =
+        nextFulfilmentMethod.isPickup || clearDeliveryAddress
+        ? null
+        : (deliveryAddress ?? this.deliveryAddress);
 
     return QuoteDraft(
       contact: clearContact ? null : (contact ?? this.contact),
@@ -230,11 +243,10 @@ class QuoteDraft {
           ? null
           : (customerNotes ?? this.customerNotes),
       reference: clearReference ? null : (reference ?? this.reference),
-      saleContext: nextSaleContext,
+      purchaseContext: nextPurchaseContext,
       paymentContext: nextPaymentContext,
-      deliveryAddress: clearDeliveryAddress
-          ? null
-          : (deliveryAddress ?? this.deliveryAddress),
+      fulfilmentMethod: nextFulfilmentMethod,
+      deliveryAddress: nextDeliveryAddress,
       patientId: clearPatientId ? null : (patientId ?? this.patientId),
       patientSnapshot: clearPatientSnapshot
           ? null
@@ -256,46 +268,46 @@ class QuoteDraft {
   QuoteDraft upsertLine(QuoteLineDraft next) {
     final String nextKey = next.key;
 
-    final int idx = lines.indexWhere((QuoteLineDraft line) {
+    final int index = lines.indexWhere((QuoteLineDraft line) {
       return line.key == nextKey;
     });
 
     if (next.safeQty == 0) {
-      if (idx < 0) return this;
+      if (index < 0) return this;
 
-      final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
-        ..removeAt(idx);
+      final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
+        ..removeAt(index);
 
-      return copyWith(lines: copy);
+      return copyWith(lines: updated);
     }
 
-    if (idx < 0) {
-      final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
+    if (index < 0) {
+      final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
         ..add(next);
 
-      return copyWith(lines: copy);
+      return copyWith(lines: updated);
     }
 
-    final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
-      ..[idx] = next;
+    final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
+      ..[index] = next;
 
-    return copyWith(lines: copy);
+    return copyWith(lines: updated);
   }
 
   QuoteDraft removeLineByKey(String key) {
     final String cleanKey = key.trim();
     if (cleanKey.isEmpty) return this;
 
-    final int idx = lines.indexWhere((QuoteLineDraft line) {
+    final int index = lines.indexWhere((QuoteLineDraft line) {
       return line.key == cleanKey;
     });
 
-    if (idx < 0) return this;
+    if (index < 0) return this;
 
-    final List<QuoteLineDraft> copy = List<QuoteLineDraft>.from(lines)
-      ..removeAt(idx);
+    final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
+      ..removeAt(index);
 
-    return copyWith(lines: copy);
+    return copyWith(lines: updated);
   }
 
   QuoteDraft clearCustomer() {
@@ -324,8 +336,8 @@ class QuoteDraft {
       patientId: snapshot.patientId,
       patientSnapshot: snapshot,
       membershipId: snapshot.membershipId,
-      saleContext: QuoteSaleContext.clinical,
-      paymentContext: paymentContext,
+      purchaseContext: QuotePurchaseContext.privateUse,
+      paymentContext: effectivePaymentContext,
       clearPrescriptionId: patientChanged,
       clearClaimPackId: patientChanged,
     );
@@ -343,7 +355,7 @@ class QuoteDraft {
 
   /// Backward-compatible only.
   ///
-  /// New quote creation should not select/manage claim packs.
+  /// New quote creation should not select or manage claim packs.
   QuoteDraft withClaimPackId(String? claimPackId) {
     final String clean = (claimPackId ?? '').trim();
 
@@ -355,7 +367,7 @@ class QuoteDraft {
 
   QuoteDraft withInsurancePayment() {
     return copyWith(
-      saleContext: QuoteSaleContext.clinical,
+      purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: QuotePaymentContext.insurance,
     );
   }
@@ -363,7 +375,22 @@ class QuoteDraft {
   QuoteDraft withDirectPayment() {
     return copyWith(
       paymentContext: QuotePaymentContext.directPay,
+      clearMembershipId: true,
       clearClaimPackId: true,
+    );
+  }
+
+  QuoteDraft withFulfilmentMethod(QuoteFulfilmentMethod method) {
+    return copyWith(
+      fulfilmentMethod: method,
+      clearDeliveryAddress: method.isPickup,
+    );
+  }
+
+  QuoteDraft withDeliveryAddress(SalesDocumentAddress address) {
+    return copyWith(
+      fulfilmentMethod: QuoteFulfilmentMethod.delivery,
+      deliveryAddress: address,
     );
   }
 
@@ -407,9 +434,12 @@ class QuoteDraft {
           : quote.customerName.trim(),
       customerNotes: quote.notes,
       reference: quote.accountNumber,
-      saleContext: quote.saleContext,
+      purchaseContext: quote.purchaseContext,
       paymentContext: quote.paymentContext,
-      deliveryAddress: quote.deliveryAddress,
+      fulfilmentMethod: quote.fulfilmentMethod,
+      deliveryAddress: quote.fulfilmentMethod.isDelivery
+          ? quote.deliveryAddress
+          : null,
       patientId: quote.resolvedPatientId,
       patientSnapshot: quote.patientSnapshot,
       membershipId: quote.resolvedMembershipId,

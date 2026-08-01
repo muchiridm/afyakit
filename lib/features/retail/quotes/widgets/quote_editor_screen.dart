@@ -5,7 +5,8 @@ import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
@@ -16,9 +17,10 @@ import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'quote_details_summary.dart';
 import 'quote_editor_actions.dart';
+import 'quote_editor_details_sheet.dart';
 import 'quote_editor_lines_section.dart';
-import 'quote_editor_meta_section.dart';
 
 enum QuoteEditorResult { saved, deleted }
 
@@ -39,12 +41,6 @@ class QuoteEditorScreen extends ConsumerStatefulWidget {
 class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   static const double _contentMaxW = 980;
 
-  final TextEditingController _refCtl = TextEditingController();
-  final TextEditingController _notesCtl = TextEditingController();
-
-  ProviderSubscription<QuoteMetaState>? _metaSub;
-  bool _metaExpanded = false;
-
   String get _editingId => (widget.editingQuoteId ?? '').trim();
 
   bool get _isEdit => _editingId.isNotEmpty;
@@ -52,7 +48,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _bindMetaTextControllers();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -66,32 +61,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     if (oldId == newId) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
-  }
-
-  @override
-  void dispose() {
-    _metaSub?.close();
-    _refCtl.dispose();
-    _notesCtl.dispose();
-    super.dispose();
-  }
-
-  void _bindMetaTextControllers() {
-    _metaSub = ref.listenManual<QuoteMetaState>(quoteMetaControllerProvider, (
-      QuoteMetaState? prev,
-      QuoteMetaState next,
-    ) {
-      final bool didRefChange = prev?.reference != next.reference;
-      final bool didNotesChange = prev?.customerNotes != next.customerNotes;
-
-      if (!didRefChange && !didNotesChange) return;
-
-      final String nextRef = next.reference ?? '';
-      final String nextNotes = next.customerNotes ?? '';
-
-      if (_refCtl.text != nextRef) _refCtl.text = nextRef;
-      if (_notesCtl.text != nextNotes) _notesCtl.text = nextNotes;
-    });
   }
 
   Future<void> _bootstrap() async {
@@ -217,6 +186,29 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     Navigator.of(context).pop(QuoteEditorResult.saved);
   }
 
+  Future<void> _openQuoteDetails(
+    BuildContext context, {
+    required QuoteMetaState meta,
+    required QuoteMetaController metaCtl,
+    required String tenantId,
+  }) async {
+    final QuoteContactPolicy policy = ref.read(quoteContactPolicyProvider);
+
+    final bool isStaffMode = policy == QuoteContactPolicy.picker;
+
+    final QuoteMetaState? result = await QuoteEditorDetailsSheet.open(
+      context,
+      initial: meta,
+      tenantId: tenantId,
+      isStaffMode: isStaffMode,
+      onEnsureAuthed: () => _ensureAuthed(context),
+    );
+
+    if (result == null || !context.mounted) return;
+
+    metaCtl.applyState(result);
+  }
+
   bool _editIsHydrating(QuoteState state) {
     final String id = _editingId;
     if (id.isEmpty) return false;
@@ -294,18 +286,13 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       onEnsureAuthed: () => _ensureAuthed(context),
                     ),
                   ),
-                  _CollapsibleMetaSection(
-                    expanded: _metaExpanded,
-                    onChanged: (bool value) {
-                      setState(() => _metaExpanded = value);
-                    },
-                    child: QuoteEditorMetaSection(
-                      busy: state.busy,
+                  QuoteDetailsSummary(
+                    meta: meta,
+                    busy: state.busy,
+                    onTap: () => _openQuoteDetails(
+                      context,
                       meta: meta,
                       metaCtl: metaCtl,
-                      refController: _refCtl,
-                      notesController: _notesCtl,
-                      onEnsureAuthed: () => _ensureAuthed(context),
                       tenantId: tenantId,
                     ),
                   ),
@@ -336,70 +323,6 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                   ),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class _CollapsibleMetaSection extends StatelessWidget {
-  const _CollapsibleMetaSection({
-    required this.expanded,
-    required this.onChanged,
-    required this.child,
-  });
-
-  final bool expanded;
-  final ValueChanged<bool> onChanged;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colors = theme.colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          InkWell(
-            onTap: () => onChanged(!expanded),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      'Quote details',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    child: const Icon(Icons.keyboard_arrow_down),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: child,
-            crossFadeState: expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 180),
-            sizeCurve: Curves.easeOut,
-          ),
-        ],
       ),
     );
   }
@@ -485,4 +408,44 @@ class _QuoteEditLoadingState extends StatelessWidget {
       ],
     );
   }
+}
+
+String quoteCurrencyCode() => 'KES';
+
+SalesDocMetaVm buildQuoteMetaVm({
+  required QuoteMetaState meta,
+  required QuoteLinesState linesState,
+  required bool isEdit,
+  required bool requirePrices,
+  required String fallbackPartyName,
+}) {
+  final String contactTitle = _clean(meta.contact?.title) ?? '';
+  final String fallback = _clean(fallbackPartyName) ?? '';
+
+  final String partyName = contactTitle.isNotEmpty
+      ? contactTitle
+      : fallback.isNotEmpty
+      ? fallback
+      : 'Customer';
+
+  final String editingId = _clean(meta.editingQuoteId) ?? '';
+
+  return SalesDocMetaVm(
+    partyName: partyName,
+    docNumberOrId: isEdit
+        ? editingId.isEmpty
+              ? '-'
+              : editingId
+        : '',
+    status: isEdit ? 'editing' : 'draft',
+    currencyCode: quoteCurrencyCode(),
+    total: requirePrices ? linesState.estimatedTotal : 0,
+    date: meta.quoteDate,
+    expiryDate: meta.expiryDate,
+  );
+}
+
+String? _clean(String? value) {
+  final String text = (value ?? '').trim();
+  return text.isEmpty ? null : text;
 }

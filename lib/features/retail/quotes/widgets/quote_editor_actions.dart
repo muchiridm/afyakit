@@ -1,9 +1,9 @@
 // lib/features/retail/quotes/widgets/quote_editor_actions.dart
 
-import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
@@ -178,19 +178,25 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     }
 
     if (meta.requiresPatient && !meta.hasPatientContext) {
-      return 'Select a patient profile';
-    }
-
-    if (meta.requiresDeliveryAddress && !meta.hasDeliveryAddress) {
-      return 'Select a delivery address';
+      return 'Select who the quote is for';
     }
 
     if (meta.requiresMembership && !meta.hasInsuranceContext) {
       return 'Select an insurance membership';
     }
 
-    if (meta.isGeneral && meta.isInsurancePayment) {
-      return 'Insurance payment requires a clinical quote';
+    if (meta.requiresPrescription && !meta.hasPrescriptionContext) {
+      return 'Select or upload a prescription';
+    }
+
+    if (meta.isCompany && meta.isInsurancePayment) {
+      return 'Insurance is only available for private-use quotes';
+    }
+
+    if (!meta.hasFulfilmentContext) {
+      return meta.fulfilmentMethod.isDelivery
+          ? 'Select a delivery location'
+          : 'Select delivery or pickup';
     }
 
     return null;
@@ -202,7 +208,10 @@ class QuoteEditorFooterBar extends ConsumerWidget {
   }
 
   num _safeRate(num value) {
-    if (value.isNaN || value.isInfinite || value < 0) return 0;
+    if (value.isNaN || value.isInfinite || value < 0) {
+      return 0;
+    }
+
     return value;
   }
 
@@ -301,7 +310,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     final Widget addCustomItemButton = OutlinedButton.icon(
       icon: const Icon(Icons.add_circle_outline),
       label: _buttonText('Custom item'),
-      onPressed: (busy || isMemberScoped)
+      onPressed: busy || isMemberScoped
           ? null
           : () => _addCustomItem(context, ref),
       style: compactStyle,
@@ -310,7 +319,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
     final Widget addDeliveryChargeButton = OutlinedButton.icon(
       icon: const Icon(Icons.local_shipping_outlined),
       label: _buttonText('Delivery charge'),
-      onPressed: (busy || isMemberScoped)
+      onPressed: busy || isMemberScoped || meta.fulfilmentMethod.isPickup
           ? null
           : () => _addDeliveryCharge(context, ref),
       style: compactStyle,
@@ -327,7 +336,11 @@ class QuoteEditorFooterBar extends ConsumerWidget {
               )
             : Icon(isEdit ? Icons.save : Icons.send),
         label: _buttonText(
-          busy ? 'Submitting…' : (isEdit ? 'Save' : 'Request quote'),
+          busy
+              ? 'Submitting…'
+              : isEdit
+              ? 'Save'
+              : 'Request quote',
         ),
         onPressed: canSubmit ? onSubmit : null,
         style: compactStyle,
@@ -342,6 +355,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
         addDeliveryChargeButton,
       ],
     ];
+
     final bool hasActionButtons = actionButtons.isNotEmpty;
 
     return DecoratedBox(

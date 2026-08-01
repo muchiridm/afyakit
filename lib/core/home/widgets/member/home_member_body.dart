@@ -61,7 +61,8 @@ class HomeMemberBody extends StatelessWidget {
       _MemberMainSections(
         search: _MemberSearchColumn(
           onSearch: (query) => _openCatalog(context, q: query),
-          onBrowseCatalog: () => _openCatalog(context, autofocus: true),
+          onBrowseCatalog: (query) =>
+              _openCatalog(context, q: query, autofocus: query.trim().isEmpty),
         ),
         activity: _MemberActivityColumn(
           user: currentUser,
@@ -208,7 +209,7 @@ class _MemberSearchColumn extends StatelessWidget {
   });
 
   final void Function(String query) onSearch;
-  final VoidCallback onBrowseCatalog;
+  final void Function(String query) onBrowseCatalog;
 
   @override
   Widget build(BuildContext context) {
