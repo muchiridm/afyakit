@@ -36,10 +36,6 @@ class QuoteActionController {
     return forceStaffWorkspace ?? _ref.read(isStaffWorkspaceActiveProvider);
   }
 
-  bool _canViewQuotePdf({bool? forceStaffWorkspace}) {
-    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
-  }
-
   bool _canSendDraftQuote({bool? forceStaffWorkspace}) {
     return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
   }
@@ -54,15 +50,6 @@ class QuoteActionController {
 
   bool _canConvertQuoteToInvoice({bool? forceStaffWorkspace}) {
     return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
-  }
-
-  bool _requireCanViewQuotePdf({bool? forceStaffWorkspace}) {
-    if (_canViewQuotePdf(forceStaffWorkspace: forceStaffWorkspace)) {
-      return true;
-    }
-
-    _showPermissionError();
-    return false;
   }
 
   bool _requireCanSendDraftQuote({bool? forceStaffWorkspace}) {
@@ -149,17 +136,9 @@ class QuoteActionController {
   // Public actions
   // ─────────────────────────────────────────────
 
-  Future<void> viewPdf(
-    BuildContext context, {
-    required String quoteId,
-    bool? forceStaffWorkspace,
-  }) async {
+  Future<void> viewPdf(BuildContext context, {required String quoteId}) async {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
-
-    if (!_requireCanViewQuotePdf(forceStaffWorkspace: forceStaffWorkspace)) {
-      return;
-    }
 
     try {
       final ZohoQuotesService svc = await _svc;

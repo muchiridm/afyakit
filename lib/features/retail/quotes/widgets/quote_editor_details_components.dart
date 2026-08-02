@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 class QuoteDetailsQuestionSection extends StatelessWidget {
   const QuoteDetailsQuestionSection({
+    super.key,
     required this.number,
     required this.complete,
     required this.title,
@@ -113,7 +114,7 @@ class QuoteDetailsQuestionSection extends StatelessWidget {
 }
 
 class QuoteDetailsCompanyTile extends StatelessWidget {
-  const QuoteDetailsCompanyTile();
+  const QuoteDetailsCompanyTile({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +128,7 @@ class QuoteDetailsCompanyTile extends StatelessWidget {
 }
 
 class QuoteDetailsPickupTile extends StatelessWidget {
-  const QuoteDetailsPickupTile();
+  const QuoteDetailsPickupTile({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +142,7 @@ class QuoteDetailsPickupTile extends StatelessWidget {
 
 class QuoteDetailsDeliveryLocationTile extends StatelessWidget {
   const QuoteDetailsDeliveryLocationTile({
+    super.key,
     required this.address,
     required this.onTap,
     required this.onClear,
@@ -287,6 +289,7 @@ class _TileContent extends StatelessWidget {
 
 class QuoteDetailsDateFields extends StatelessWidget {
   const QuoteDetailsDateFields({
+    super.key,
     required this.quoteDate,
     required this.expiryDate,
     required this.onPickQuoteDate,
@@ -337,6 +340,7 @@ class QuoteDetailsDateFields extends StatelessWidget {
 
 class QuoteDetailsSheetFooter extends StatelessWidget {
   const QuoteDetailsSheetFooter({
+    super.key,
     required this.canSubmit,
     required this.onCancel,
     required this.onSubmit,

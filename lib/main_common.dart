@@ -6,9 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'firebase_options.dart';
 
@@ -21,8 +22,20 @@ import 'package:afyakit/shared/debug/riverpod_logger.dart';
 final authEmulatorEnabledProvider = Provider<bool>((_) => false);
 
 final class BootLog {
-  static void d(String msg) => debugPrint('🚀 $msg');
-  static void e(String msg) => debugPrint('💥 $msg');
+  static void d(String message) => debugPrint('🚀 $message');
+
+  static void e(String message) => debugPrint('💥 $message');
+}
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  BootLog.d(
+    'Background notification '
+    'messageId=${message.messageId ?? '-'} '
+    'type=${message.data['type'] ?? '-'}',
+  );
 }
 
 Future<void> bootstrapAndRun({
@@ -35,24 +48,34 @@ Future<void> bootstrapAndRun({
       _installGlobalErrorHandlers();
 
       BootLog.d('Initializing Firebase…');
+
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
-      final usingAuthEmulator = await _configureAuthForDev();
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+      final bool usingAuthEmulator = await _configureAuthForDev();
+
       _logFirebaseAppInfo(usingAuthEmulator);
 
       await _configureFirestoreForPlatform();
 
-      // ── Decide FINAL tenant ID exactly once ──────────────────────────
-      final String resolvedId;
+      final String resolvedTenantId;
+
       if (appMode == AppMode.tenant) {
-        resolvedId = await resolveTenantIdAsync(defaultId: defaultTenantId);
-        BootLog.d('Using tenant: $resolvedId');
+        resolvedTenantId = await resolveTenantIdAsync(
+          defaultId: defaultTenantId,
+        );
+
+        BootLog.d('Using tenant: $resolvedTenantId');
       } else {
-        // HQ must never resolve by domain — it is explicit.
-        resolvedId = defaultTenantId;
-        BootLog.d('Running in HQ mode (tenantId=$resolvedId)');
+        resolvedTenantId = defaultTenantId;
+
+        BootLog.d(
+          'Running in HQ mode '
+          '(tenantId=$resolvedTenantId)',
+        );
       }
 
       runApp(
@@ -60,31 +83,36 @@ Future<void> bootstrapAndRun({
           observers: const [RiverpodLogger()],
           overrides: [
             authEmulatorEnabledProvider.overrideWithValue(usingAuthEmulator),
-            tenantIdProvider.overrideWithValue(resolvedId),
+            tenantIdProvider.overrideWithValue(resolvedTenantId),
           ],
           child: AppRoot(mode: appMode),
         ),
       );
     },
-    (error, stack) {
+    (Object error, StackTrace stackTrace) {
       BootLog.e('ZoneError: $error');
-      debugPrintStack(stackTrace: stack);
+      debugPrintStack(stackTrace: stackTrace);
     },
   );
 }
 
 void _installGlobalErrorHandlers() {
-  FlutterError.onError = (details) {
+  FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
+
     BootLog.e('FlutterError: ${details.exceptionAsString()}');
-    if (details.stack != null) {
-      debugPrintStack(stackTrace: details.stack!);
+
+    final StackTrace? stackTrace = details.stack;
+
+    if (stackTrace != null) {
+      debugPrintStack(stackTrace: stackTrace);
     }
   };
 
-  PlatformDispatcher.instance.onError = (error, stack) {
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stackTrace) {
     BootLog.e('PlatformDispatcherError: $error');
-    debugPrintStack(stackTrace: stack);
+    debugPrintStack(stackTrace: stackTrace);
+
     return true;
   };
 }
@@ -92,26 +120,32 @@ void _installGlobalErrorHandlers() {
 Future<bool> _configureAuthForDev() async {
   if (!kDebugMode) return false;
 
-  const useEmulator = bool.fromEnvironment(
+  const bool useEmulator = bool.fromEnvironment(
     'USE_AUTH_EMULATOR',
     defaultValue: false,
   );
 
   if (!useEmulator) {
     BootLog.d('Firebase Auth emulator DISABLED');
+
     try {
       await fb.FirebaseAuth.instance.setSettings(
         appVerificationDisabledForTesting: false,
       );
     } catch (_) {}
+
     return false;
   }
 
-  const host = String.fromEnvironment(
+  const String host = String.fromEnvironment(
     'AUTH_EMULATOR_HOST',
     defaultValue: '127.0.0.1',
   );
-  const port = int.fromEnvironment('AUTH_EMULATOR_PORT', defaultValue: 9099);
+
+  const int port = int.fromEnvironment(
+    'AUTH_EMULATOR_PORT',
+    defaultValue: 9099,
+  );
 
   await fb.FirebaseAuth.instance.useAuthEmulator(host, port);
 
@@ -121,51 +155,66 @@ Future<bool> _configureAuthForDev() async {
     );
   } catch (_) {}
 
-  BootLog.d('Firebase Auth emulator ENABLED at http://$host:$port');
+  BootLog.d(
+    'Firebase Auth emulator ENABLED '
+    'at http://$host:$port',
+  );
+
   return true;
 }
 
 Future<void> _configureFirestoreForPlatform() async {
-  final fs = FirebaseFirestore.instance;
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-  var enablePersistence = true;
+  bool enablePersistence = true;
 
   if (kIsWeb) {
-    final uri = Uri.base;
-    final host = uri.host.toLowerCase();
-    final insecure = uri.scheme != 'https';
+    final Uri uri = Uri.base;
+    final String host = uri.host.toLowerCase();
 
-    final isLocalDev =
+    final bool insecure = uri.scheme != 'https';
+
+    final bool isLocalDevelopment =
         host == 'localhost' || host == '127.0.0.1' || host.endsWith('.local');
 
-    if (isLocalDev || insecure) enablePersistence = false;
+    if (isLocalDevelopment || insecure) {
+      enablePersistence = false;
+    }
   }
 
   try {
-    fs.settings = Settings(persistenceEnabled: enablePersistence);
+    firestore.settings = Settings(persistenceEnabled: enablePersistence);
 
     BootLog.d(
-      'Firestore persistence: ${enablePersistence ? 'ON' : 'OFF'} '
-      '(platform=${kIsWeb ? 'web' : 'mobile'} origin=${kIsWeb ? Uri.base.origin : '-'})',
+      'Firestore persistence: '
+      '${enablePersistence ? 'ON' : 'OFF'} '
+      '(platform=${kIsWeb ? 'web' : 'mobile'} '
+      'origin=${kIsWeb ? Uri.base.origin : '-'})',
     );
-  } catch (e) {
-    BootLog.e('Firestore settings skipped: $e');
+  } catch (error) {
+    BootLog.e('Firestore settings skipped: $error');
   }
 }
 
 void _logFirebaseAppInfo(bool emulatorEnabled) {
-  final o = Firebase.app().options;
+  final FirebaseOptions options = Firebase.app().options;
 
-  String mask(String? v) =>
-      (v == null || v.length < 8) ? '-' : '${v.substring(0, 6)}…';
+  String mask(String? value) {
+    if (value == null || value.length < 8) {
+      return '-';
+    }
 
-  final origin = kIsWeb ? Uri.base.origin : 'app';
+    return '${value.substring(0, 6)}…';
+  }
+
+  final String origin = kIsWeb ? Uri.base.origin : 'app';
 
   BootLog.d(
-    '[AuthCFG] projectId=${o.projectId} '
-    'appId=${o.appId} '
-    'apiKey=${mask(o.apiKey)} '
-    'authDomain=${o.authDomain ?? '-'} '
+    '[AuthCFG] '
+    'projectId=${options.projectId} '
+    'appId=${options.appId} '
+    'apiKey=${mask(options.apiKey)} '
+    'authDomain=${options.authDomain ?? '-'} '
     'origin=$origin '
     'authEmulator=${emulatorEnabled ? 'ON' : 'OFF'}',
   );

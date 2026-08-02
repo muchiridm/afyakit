@@ -137,7 +137,7 @@ class _MemberIntroSection extends StatelessWidget {
         final accountSection = HomeSection(
           title: 'My account',
           icon: Icons.account_circle_outlined,
-          centerHeader: !useTwoColumns,
+          centerHeader: false,
           child: MemberFeaturesPanel(user: user, centered: !useTwoColumns),
         );
 

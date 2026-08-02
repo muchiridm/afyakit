@@ -8,9 +8,9 @@ import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_shared.dart
 import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
-import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
@@ -27,89 +27,123 @@ class MemberFeaturesPanel extends ConsumerWidget {
     this.centered = false,
   });
 
+  static const double _gridBreakpoint = 600;
+
   final AuthUser? user;
   final bool centered;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final contactId = user?.contactId;
+    final String? contactId = user?.contactId;
+
     final tenantProfile = ref.watch(tenantProfileProvider).valueOrNull;
 
-    final healthMetricsEnabled =
+    final bool healthMetricsEnabled =
         tenantProfile?.has(FeatureKeys.healthMetrics) == true;
 
-    return Wrap(
-      alignment: centered ? WrapAlignment.center : WrapAlignment.start,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppShape.gap10,
-      runSpacing: AppShape.gap10,
-      children: [
-        if (healthMetricsEnabled)
-          HomeActionChip(
-            icon: Icons.monitor_heart_outlined,
-            label: 'My Health Metrics',
-            onTap: () => _openHealthMetrics(context, contactId: contactId),
-          ),
+    final List<Widget> actions = <Widget>[
+      if (healthMetricsEnabled)
         HomeActionChip(
-          icon: Icons.people_alt_outlined,
-          label: 'My Profiles',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => ProfilesScreen(
-                  contactId: contactId,
-                  allowExplicitContactLink: false,
-                ),
+          icon: Icons.monitor_heart_outlined,
+          label: 'My Health Metrics',
+          onTap: () => _openHealthMetrics(context, contactId: contactId),
+        ),
+      HomeActionChip(
+        icon: Icons.people_alt_outlined,
+        label: 'My Profiles',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ProfilesScreen(
+                contactId: contactId,
+                allowExplicitContactLink: false,
               ),
-            );
-          },
-        ),
-        HomeActionChip(
-          icon: Icons.description_outlined,
-          label: 'My Prescriptions',
-          onTap: () {
-            PrescriptionsScreen.open(context: context, contactId: contactId);
-          },
-        ),
-        HomeActionChip(
-          icon: Icons.location_on_outlined,
-          label: 'Delivery Addresses',
-          onTap: () {
-            final scope = ref.read(currentUserDeliveryAddressScopeProvider);
+            ),
+          );
+        },
+      ),
+      HomeActionChip(
+        icon: Icons.description_outlined,
+        label: 'My Prescriptions',
+        onTap: () {
+          PrescriptionsScreen.open(context: context, contactId: contactId);
+        },
+      ),
+      HomeActionChip(
+        icon: Icons.location_on_outlined,
+        label: 'Delivery Addresses',
+        onTap: () {
+          final scope = ref.read(currentUserDeliveryAddressScopeProvider);
 
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    DeliveryAddressesScreen(scope: scope, memberMode: true),
-              ),
-            );
-          },
-        ),
-        HomeActionChip(
-          icon: Icons.receipt_long_outlined,
-          label: 'My Quotes',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    const QuotesListScreen(scope: RetailDocScope.mine),
-              ),
-            );
-          },
-        ),
-        HomeActionChip(
-          icon: Icons.receipt_outlined,
-          label: 'My Invoices',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    const InvoicesListScreen(scope: RetailDocScope.mine),
-              ),
-            );
-          },
-        ),
-      ],
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  DeliveryAddressesScreen(scope: scope, memberMode: true),
+            ),
+          );
+        },
+      ),
+      HomeActionChip(
+        icon: Icons.receipt_long_outlined,
+        label: 'My Quotes',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  const QuotesListScreen(scope: RetailDocScope.mine),
+            ),
+          );
+        },
+      ),
+      HomeActionChip(
+        icon: Icons.receipt_outlined,
+        label: 'My Invoices',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  const InvoicesListScreen(scope: RetailDocScope.mine),
+            ),
+          );
+        },
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool useTwoColumns =
+            constraints.maxWidth > 0 && constraints.maxWidth < _gridBreakpoint;
+
+        if (useTwoColumns) {
+          final double itemWidth = (constraints.maxWidth - AppShape.gap8) / 2;
+
+          return Wrap(
+            spacing: AppShape.gap8,
+            runSpacing: AppShape.gap8,
+            alignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: actions
+                .map(
+                  (Widget action) => SizedBox(
+                    width: itemWidth,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: action,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        }
+
+        return Wrap(
+          alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppShape.gap10,
+          runSpacing: AppShape.gap10,
+          children: actions,
+        );
+      },
     );
   }
 
@@ -117,9 +151,9 @@ class MemberFeaturesPanel extends ConsumerWidget {
     BuildContext context, {
     required String? contactId,
   }) async {
-    final normalizedContactId = contactId?.trim();
+    final String normalizedContactId = (contactId ?? '').trim();
 
-    if (normalizedContactId == null || normalizedContactId.isEmpty) {
+    if (normalizedContactId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Your account is not linked to a contact.'),
@@ -128,7 +162,7 @@ class MemberFeaturesPanel extends ConsumerWidget {
       return;
     }
 
-    final profile = await Navigator.of(context).push<Profile>(
+    final Profile? profile = await Navigator.of(context).push<Profile>(
       MaterialPageRoute<Profile>(
         builder: (_) => ProfilesScreen(
           contactId: normalizedContactId,

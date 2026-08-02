@@ -25,7 +25,7 @@ import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart'
 class StaffLatestActivityPanel extends ConsumerWidget {
   const StaffLatestActivityPanel({
     super.key,
-    this.maxItems = 10,
+    this.maxItems = 5,
     this.onTitleTap,
     this.title = 'Latest Activity',
     this.emptyText = 'No recent staff activity yet.',

@@ -267,13 +267,7 @@ class _QuoteDetailScreenState extends ConsumerState<QuoteDetailScreen> {
           icon: const Icon(Icons.picture_as_pdf_outlined),
           onPressed: _acting
               ? null
-              : () => _run(
-                  () => actionsCtl.viewPdf(
-                    context,
-                    quoteId: quoteId,
-                    forceStaffWorkspace: forceStaffWorkspace,
-                  ),
-                ),
+              : () => _run(() => actionsCtl.viewPdf(context, quoteId: quoteId)),
         ),
       );
     }

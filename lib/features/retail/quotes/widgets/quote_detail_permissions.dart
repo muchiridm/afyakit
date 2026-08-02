@@ -33,6 +33,7 @@ QuoteUiPermissions buildQuoteUiPermissions(
   bool? forceStaffWorkspace,
 }) {
   final bool providerSaysStaff = ref.watch(isStaffWorkspaceActiveProvider);
+
   final bool isStaffWorkspaceActive = forceStaffWorkspace ?? providerSaysStaff;
 
   final String status = quote.status.trim().toLowerCase();
@@ -48,12 +49,18 @@ QuoteUiPermissions buildQuoteUiPermissions(
       status == 'invoiced';
 
   /*
-   * Staff workspace:
-   * Staff can operate Zoho quotes.
+   * PDF:
+   * Both staff and members may view the PDF for a quote already visible
+   * in their workspace.
    *
-   * Member workspace:
-   * Members can edit/delete their own draft quote requests,
-   * but cannot send, mark sent, convert, or view Zoho PDF actions.
+   * Quote ownership and tenant/member scope must still be enforced by
+   * the backend PDF endpoint.
+   */
+  const bool canViewPdf = true;
+
+  /*
+   * Staff workspace:
+   * Staff can perform Zoho quote operations.
    */
   final bool staffCanEdit = isStaffWorkspaceActive && isDraft;
   final bool staffCanDelete = isStaffWorkspaceActive && isDraft;
@@ -63,11 +70,16 @@ QuoteUiPermissions buildQuoteUiPermissions(
   final bool staffCanConvertToInvoice =
       isStaffWorkspaceActive && !isDraft && !isClosed && (isSent || isAccepted);
 
+  /*
+   * Member workspace:
+   * Members may edit or delete their own draft quote requests.
+   * They cannot send, mark sent, or convert quotes.
+   */
   final bool memberCanEdit = !isStaffWorkspaceActive && isDraft;
   final bool memberCanDelete = !isStaffWorkspaceActive && isDraft;
 
   return QuoteUiPermissions(
-    canViewPdf: isStaffWorkspaceActive,
+    canViewPdf: canViewPdf,
     canEdit: staffCanEdit || memberCanEdit,
     canDelete: staffCanDelete || memberCanDelete,
     canSend: staffCanSend,

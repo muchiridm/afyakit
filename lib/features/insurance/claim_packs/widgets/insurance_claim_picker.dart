@@ -1,5 +1,6 @@
 import 'package:afyakit/features/insurance/claim_packs/controllers/insurance_claim_packs_controller.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
+import 'package:afyakit/shared/widgets/entity_picker_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -220,47 +221,45 @@ class _InsuranceClaimPickerCardState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _Header(
+            PickerHeader(
+              icon: Icons.assignment_outlined,
               title: widget.title,
               count: claimPacks.length,
+              singularLabel: 'claim pack',
+              pluralLabel: 'claim packs',
               isLoading: state.isLoading,
               onRefresh: _load,
             ),
             const SizedBox(height: 12),
-            _SearchBox(
+            PickerSearchField(
               controller: _searchCtl,
+              labelText: 'Search claim packs',
+              hintText: 'Patient, invoice, member no, claim no, auth...',
               onChanged: (_) => setState(() {}),
-              onRefresh: _load,
+              onAction: _load,
             ),
             if (state.error != null) ...<Widget>[
               const SizedBox(height: 8),
-              _ErrorText(state.error!),
+              PickerErrorText(state.error!),
             ],
             const SizedBox(height: 8),
             Expanded(
-              child: state.isLoading && claimPacks.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : claimPacks.isEmpty
-                  ? _EmptyText(
-                      text: widget.emptyText ?? 'No active claim packs found.',
-                    )
-                  : ListView.separated(
-                      itemCount: claimPacks.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (BuildContext context, int index) {
-                        final InsuranceClaimPack pack = claimPacks[index];
+              child: PickerBody<InsuranceClaimPack>(
+                items: claimPacks,
+                isLoading: state.isLoading,
+                emptyText: widget.emptyText ?? 'No active claim packs found.',
+                emptyIcon: Icons.assignment_outlined,
+                itemBuilder: (BuildContext context, InsuranceClaimPack pack) {
+                  final bool selected =
+                      pack.claimPackId.trim() == _clean(_selectedClaimPackId);
 
-                        final bool selected =
-                            pack.claimPackId.trim() ==
-                            _clean(_selectedClaimPackId);
-
-                        return _ClaimPackTile(
-                          pack: pack,
-                          selected: selected,
-                          onTap: () => _select(pack),
-                        );
-                      },
-                    ),
+                  return _ClaimPackTile(
+                    pack: pack,
+                    selected: selected,
+                    onTap: () => _select(pack),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -315,84 +314,6 @@ class InsuranceClaimPickerDialog extends StatelessWidget {
           label: const Text('Cancel'),
         ),
       ],
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.title,
-    required this.count,
-    required this.isLoading,
-    required this.onRefresh,
-  });
-
-  final String title;
-  final int count;
-  final bool isLoading;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Row(
-      children: <Widget>[
-        const CircleAvatar(child: Icon(Icons.assignment_outlined)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(
-                count == 1
-                    ? '1 claim pack available.'
-                    : '$count claim packs available.',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          tooltip: 'Refresh claim packs',
-          onPressed: isLoading ? null : onRefresh,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    );
-  }
-}
-
-class _SearchBox extends StatelessWidget {
-  const _SearchBox({
-    required this.controller,
-    required this.onChanged,
-    required this.onRefresh,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        isDense: true,
-        labelText: 'Search claim packs',
-        hintText: 'Patient, invoice, member no, claim no, auth...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: IconButton(
-          tooltip: 'Refresh',
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-        ),
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: onChanged,
     );
   }
 }
@@ -464,39 +385,5 @@ class _ClaimPackTile extends StatelessWidget {
   static String? _clean(String? value) {
     final String s = (value ?? '').trim();
     return s.isEmpty ? null : s;
-  }
-}
-
-class _ErrorText extends StatelessWidget {
-  const _ErrorText(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      message,
-      style: TextStyle(color: Theme.of(context).colorScheme.error),
-    );
-  }
-}
-
-class _EmptyText extends StatelessWidget {
-  const _EmptyText({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(Icons.assignment_outlined, size: 42),
-          const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center),
-        ],
-      ),
-    );
   }
 }

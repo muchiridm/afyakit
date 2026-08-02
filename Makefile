@@ -273,12 +273,15 @@ run: run-android
 run-web:
 	@$(call assert_tenant)
 	@echo "🌐 Running (web) $(TENANT) on Chrome :$(WEB_PORT) …"
-	flutter run -d chrome --web-port=$(WEB_PORT) \
-	  $(WEB_RENDERER_RUN_FLAG) \
-	  -t $(ENTRY) \
-	  $(EXTRA) \
-	  $(DART_DEFINES) \
-	  $(TENANT_DEF)
+	./scripts/run_web_tenant.sh "$(TENANT)" -- \
+	  flutter run \
+	    -d chrome \
+	    --web-port="$(WEB_PORT)" \
+	    $(WEB_RENDERER_RUN_FLAG) \
+	    -t "$(ENTRY)" \
+	    $(EXTRA) \
+	    $(DART_DEFINES) \
+	    $(TENANT_DEF)
 
 run-android:
 	@$(call assert_tenant)
