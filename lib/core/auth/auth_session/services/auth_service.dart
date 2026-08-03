@@ -619,7 +619,11 @@ class AuthService {
   Future<SubmitRecoveryResult> submitRecoveryAccountNumber({
     required String accountNumber,
   }) async {
-    final acc = _requireTrimmed(accountNumber, 'Account number is required');
+    final acc = _requireTrimmed(
+      accountNumber,
+      'Account number is required',
+    ).toUpperCase();
+
     final authed = await _authHeaderFresh();
 
     final uri = routes.sessionRecoverAccount();

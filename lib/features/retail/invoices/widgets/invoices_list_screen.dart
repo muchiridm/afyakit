@@ -1,44 +1,79 @@
 // lib/features/retail/invoices/widgets/invoices_list_screen.dart
 
-import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
-import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'dart:async';
 
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoices_list_controller.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
-
-import 'package:afyakit/core/home/widgets/home_shell.dart';
+import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
+import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
+import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
-import 'package:afyakit/features/retail/shared/sales_doc/list_card.dart';
-
-class InvoicesListScreen extends ConsumerWidget {
+class InvoicesListScreen extends ConsumerStatefulWidget {
   const InvoicesListScreen({super.key, this.scope = RetailDocScope.all});
 
   final RetailDocScope scope;
 
-  static const double _loadMoreThresholdPx = 240;
+  @override
+  ConsumerState<InvoicesListScreen> createState() {
+    return _InvoicesListScreenState();
+  }
+}
 
-  /// Keep consistent with Quotes list.
+class _InvoicesListScreenState extends ConsumerState<InvoicesListScreen> {
+  static const double _loadMoreThresholdPx = 240;
   static const double _contentMaxW = 720;
 
-  bool get _isMine => scope == RetailDocScope.mine;
+  final TextEditingController _searchCtl = TextEditingController();
+
+  Timer? _searchDebounce;
+
+  bool get _isMine => widget.scope == RetailDocScope.mine;
+
+  bool get _showSearch => !_isMine;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final prov = invoicesListControllerProvider(scope);
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtl.dispose();
+    super.dispose();
+  }
 
-    final state = ref.watch(prov);
-    final ctl = ref.read(prov.notifier);
+  @override
+  Widget build(BuildContext context) {
+    final provider = invoicesListControllerProvider(widget.scope);
 
-    final title = _isMine ? 'My Invoices' : 'Invoices';
+    final PagedQueryState<ZohoInvoice> state = ref.watch(provider);
+    final InvoicesListController controller = ref.read(provider.notifier);
+
+    final me = ref.watch(currentUserProvider).valueOrNull;
+
+    // This screen’s scope is more reliable than workspaceModeProvider.
+    // RetailDocScope.mine = member-facing.
+    // Any other scope = staff/admin-facing.
+    final bool openAsStaff = !_isMine;
+
+    final bool canManagePayments =
+        openAsStaff && (me?.canManageInvoices ?? true);
+
+    final String title = _isMine
+        ? 'My Invoices and Payments'
+        : 'Invoices and Payments';
 
     return AppPage(
       scrollable: false,
@@ -47,36 +82,57 @@ class InvoicesListScreen extends ConsumerWidget {
       showBack: true,
       onBack: () {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeShell()),
+          MaterialPageRoute<void>(builder: (_) => const HomeShell()),
           (_) => false,
         );
       },
-      actions: [
+      actions: <Widget>[
         IconButton(
           tooltip: 'Refresh',
-          onPressed: state.loading ? null : () => ctl.refresh(reset: true),
+          onPressed: state.loading
+              ? null
+              : () => controller.refresh(reset: true),
           icon: const Icon(Icons.refresh),
         ),
       ],
-      fab: FloatingActionButton.extended(
-        onPressed: () => _openCatalogToStartNewInvoice(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New invoice'),
-      ),
+      fab: _isMine
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openCatalogToStartNewInvoice(context),
+              icon: const Icon(Icons.add),
+              label: const Text('New invoice'),
+            ),
       body: Stack(
-        children: [
+        children: <Widget>[
           Column(
-            children: [
-              if (state.error != null) ...[
+            children: <Widget>[
+              if (_showSearch) ...<Widget>[
+                _InvoicesSearchBar(
+                  controller: _searchCtl,
+                  loading: state.loading,
+                  onChanged: _onSearchChanged,
+                  onSubmitted: _submitSearch,
+                  onClear: _clearSearch,
+                ),
+                const SizedBox(height: AppShape.gap12),
+              ],
+              if (state.error != null) ...<Widget>[
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppShape.gap12),
                   child: _ErrorBanner(
                     message: state.error!,
-                    onRetry: () => ctl.refresh(reset: true),
+                    onRetry: () => controller.refresh(reset: true),
                   ),
                 ),
               ],
-              Expanded(child: _buildBody(context, state, ctl)),
+              Expanded(
+                child: _buildBody(
+                  context: context,
+                  state: state,
+                  controller: controller,
+                  canManagePayments: canManagePayments,
+                ),
+              ),
               if (state.loadingMore)
                 const Padding(
                   padding: EdgeInsets.only(top: AppShape.gap8),
@@ -91,37 +147,43 @@ class InvoicesListScreen extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Navigation
-  // ─────────────────────────────────────────────
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
 
-  void _openCatalogToStartNewInvoice(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const CatalogScreen()));
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+
+      ref
+          .read(invoicesListControllerProvider(widget.scope).notifier)
+          .applySearch(value);
+    });
   }
 
-  void _openExistingInvoice(BuildContext context, ZohoInvoice inv) {
-    final id = inv.invoiceId.trim();
-    if (id.isEmpty) {
-      _toast(context, 'Missing invoice id');
-      return;
-    }
+  void _submitSearch(String value) {
+    _searchDebounce?.cancel();
 
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: id)),
-    );
+    ref
+        .read(invoicesListControllerProvider(widget.scope).notifier)
+        .applySearch(value);
   }
 
-  // ─────────────────────────────────────────────
-  // Body
-  // ─────────────────────────────────────────────
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchCtl.clear();
 
-  Widget _buildBody(
-    BuildContext context,
-    PagedQueryState<ZohoInvoice> state,
-    InvoicesListController ctl,
-  ) {
+    ref
+        .read(invoicesListControllerProvider(widget.scope).notifier)
+        .clearSearch();
+  }
+
+  Widget _buildBody({
+    required BuildContext context,
+    required PagedQueryState<ZohoInvoice> state,
+    required InvoicesListController controller,
+    required bool canManagePayments,
+  }) {
+    final bool hasSearch = _searchCtl.text.trim().isNotEmpty;
+
     if (state.loading && state.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -129,42 +191,56 @@ class InvoicesListScreen extends ConsumerWidget {
     if (state.items.isEmpty) {
       return _EmptyState(
         icon: Icons.receipt_outlined,
-        title: 'No invoices yet',
+        title: hasSearch ? 'No matching invoices' : 'No invoices yet',
         subtitle: _isMine
-            ? 'Your invoices will appear here once they are issued.'
+            ? 'Your invoices and payments will appear here once invoices are issued.'
+            : hasSearch
+            ? 'Try searching by customer, invoice number, patient, member, claim or prescription.'
             : 'Tap “New invoice” to build one from the catalog.',
-        actionLabel: _isMine ? 'Refresh' : 'New invoice',
-        onAction: _isMine
-            ? () => ctl.refresh(reset: true)
+        actionLabel: hasSearch
+            ? 'Clear search'
+            : (_isMine ? 'Refresh' : 'New invoice'),
+        onAction: hasSearch
+            ? _clearSearch
+            : _isMine
+            ? () => controller.refresh(reset: true)
             : () => _openCatalogToStartNewInvoice(context),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () => ctl.refresh(reset: true),
+      onRefresh: () => controller.refresh(reset: true),
       child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.maxScrollExtent <= 0) return false;
+        onNotification: (ScrollNotification notification) {
+          if (notification.metrics.maxScrollExtent <= 0) return false;
           if (!state.hasMore) return false;
           if (state.loadingMore || state.loading) return false;
 
-          if (n.metrics.pixels >=
-              n.metrics.maxScrollExtent - _loadMoreThresholdPx) {
-            ctl.loadMore();
+          final double triggerPoint =
+              notification.metrics.maxScrollExtent - _loadMoreThresholdPx;
+
+          if (notification.metrics.pixels >= triggerPoint) {
+            controller.loadMore();
           }
+
           return false;
         },
         child: ListView(
           padding: const EdgeInsets.only(top: 0, bottom: 96),
-          children: [
+          children: <Widget>[
             SalesListCard(
-              title: _isMine ? 'Your recent invoices' : 'Recent invoices',
+              title: hasSearch
+                  ? 'Search results'
+                  : _isMine
+                  ? 'Your recent invoices and payments'
+                  : 'Recent invoices and payments',
               icon: Icons.receipt_outlined,
-              children: [
-                for (final inv in state.items)
-                  _InvoiceRow(
-                    inv: inv,
-                    onOpen: () => _openExistingInvoice(context, inv),
+              children: <Widget>[
+                for (final ZohoInvoice invoice in state.items)
+                  _InvoicePaymentRow(
+                    invoice: invoice,
+                    canManagePayments: canManagePayments,
+                    onOpenInvoice: () => _openExistingInvoice(context, invoice),
                   ),
               ],
             ),
@@ -174,121 +250,556 @@ class InvoicesListScreen extends ConsumerWidget {
     );
   }
 
-  void _toast(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _openCatalogToStartNewInvoice(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const CatalogScreen()));
+  }
+
+  void _openExistingInvoice(BuildContext context, ZohoInvoice invoice) {
+    final String id = invoice.invoiceId.trim();
+
+    if (id.isEmpty) {
+      _toast(context, 'Missing invoice id');
+      return;
+    }
+
+    final bool openAsStaff = !_isMine;
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => InvoiceDetailScreen(
+          invoiceId: id,
+          forceStaffWorkspace: openAsStaff,
+        ),
+      ),
+    );
+  }
+
+  void _toast(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
-class _InvoiceRow extends StatelessWidget {
-  const _InvoiceRow({required this.inv, required this.onOpen});
+class _InvoicePaymentRow extends ConsumerStatefulWidget {
+  const _InvoicePaymentRow({
+    required this.invoice,
+    required this.canManagePayments,
+    required this.onOpenInvoice,
+  });
 
-  final ZohoInvoice inv;
-  final VoidCallback onOpen;
+  final ZohoInvoice invoice;
+  final bool canManagePayments;
+  final VoidCallback onOpenInvoice;
+
+  @override
+  ConsumerState<_InvoicePaymentRow> createState() {
+    return _InvoicePaymentRowState();
+  }
+}
+
+class _InvoicePaymentRowState extends ConsumerState<_InvoicePaymentRow> {
+  bool _expanded = false;
+
+  ZohoInvoice get invoice => widget.invoice;
+
+  String get _invoiceId => invoice.invoiceId.trim();
+
+  void _toggleExpanded() {
+    if (_invoiceId.isEmpty) return;
+
+    setState(() {
+      _expanded = !_expanded;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
+    final bool hasInvoiceId = _invoiceId.isNotEmpty;
 
-    final customer = inv.customerName.trim().isEmpty
-        ? 'Customer'
-        : inv.customerName.trim();
+    PaymentState? paymentState;
+    PaymentController? paymentController;
 
-    final dateText = _formatDate(inv.date);
-    final ref = (inv.accountNumber ?? '').trim();
+    if (_expanded && hasInvoiceId) {
+      final provider = paymentControllerProvider(_invoiceId);
+      paymentState = ref.watch(provider);
+      paymentController = ref.read(provider.notifier);
+    }
 
-    final currency = (inv.currencyCode ?? '').trim();
-    final amount = _formatMoney(inv.total, currencyCode: currency);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _InvoiceRowHeader(
+            invoice: invoice,
+            expanded: _expanded,
+            onToggleExpanded: hasInvoiceId ? _toggleExpanded : null,
+            onOpenInvoice: widget.onOpenInvoice,
+          ),
+          if (_expanded && hasInvoiceId) ...<Widget>[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 34),
+              child: PaymentHistorySection(
+                title: 'Payments',
+                leadingIcon: Icons.payments_outlined,
+                currencyCode: _currency(invoice.currencyCode),
+                payments:
+                    paymentState?.payments ?? const <ZohoInvoicePayment>[],
+                loading: paymentState?.loadingPayments ?? false,
+                busy: paymentState?.busy ?? false,
+                error: paymentState?.error,
+                canManage: widget.canManagePayments,
+                showHeader: true,
+                showEmptyCard: true,
+                compact: true,
+                maxRows: null,
+                onRefresh: paymentController == null
+                    ? () async {}
+                    : paymentController.refresh,
+                onRecord: null,
+                onOpenReceipt: (ZohoInvoicePayment payment) {
+                  _openPaymentDetail(context, payment);
+                },
+                onEdit: null,
+                onDelete: null,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
-    return InkWell(
-      onTap: onOpen,
+  void _openPaymentDetail(BuildContext context, ZohoInvoicePayment payment) {
+    final String paymentId = payment.paymentId.trim();
+
+    if (paymentId.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Missing payment id')));
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PaymentDetailScreen(
+          invoiceId: _invoiceId,
+          paymentId: paymentId,
+          currencyCode: _currency(invoice.currencyCode),
+          customerName: invoice.customerName,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.date,
+          invoiceTotal: invoice.total,
+          canManagePayments: widget.canManagePayments,
+        ),
+      ),
+    );
+  }
+
+  static String _currency(String? value) {
+    final String text = (value ?? '').trim();
+    return text.isEmpty ? 'KES' : text;
+  }
+}
+
+class _InvoiceRowHeader extends StatelessWidget {
+  const _InvoiceRowHeader({
+    required this.invoice,
+    required this.expanded,
+    required this.onToggleExpanded,
+    required this.onOpenInvoice,
+  });
+
+  static const double _wideLayoutMinWidth = 560;
+
+  final ZohoInvoice invoice;
+  final bool expanded;
+  final VoidCallback? onToggleExpanded;
+  final VoidCallback onOpenInvoice;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool wide = constraints.maxWidth >= _wideLayoutMinWidth;
+
+        return wide ? _buildWide(context) : _buildCompactPhone(context);
+      },
+    );
+  }
+
+  Widget _buildWide(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    final String customer = _customerName(invoice);
+    final String invoiceLabel = _invoiceLabel(invoice);
+    final String dateText = _formatDate(invoice.date);
+    final String accountRef = (invoice.accountNumber ?? '').trim();
+
+    final String currency = (invoice.currencyCode ?? '').trim();
+    final String amount = _formatMoney(invoice.total, currencyCode: currency);
+
+    final String expandTooltip = expanded ? 'Hide payments' : 'Show payments';
+
+    return Material(
+      color: Colors.transparent,
       borderRadius: AppShape.tileRadius,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SalesDocLeadingIcon(status: inv.status),
-            const SizedBox(width: AppShape.gap12),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          customer,
-                          style: t.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+      child: InkWell(
+        onTap: onToggleExpanded,
+        borderRadius: AppShape.tileRadius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              SalesDocLeadingIcon(status: invoice.status),
+              const SizedBox(width: AppShape.gap12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Flexible(
+                          flex: 5,
+                          child: Text(
+                            customer,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: AppShape.gap10),
-                      SalesDocStatusChip(status: inv.status),
-                    ],
+                        const SizedBox(width: AppShape.gap10),
+                        Flexible(
+                          flex: 4,
+                          child: _InvoiceLink(
+                            label: invoiceLabel,
+                            onTap: onOpenInvoice,
+                          ),
+                        ),
+                        const SizedBox(width: AppShape.gap10),
+                        SalesDocStatusChip(status: invoice.status),
+                      ],
+                    ),
+                    const SizedBox(height: AppShape.gap6),
+                    Wrap(
+                      spacing: AppShape.gap10,
+                      runSpacing: AppShape.gap4,
+                      children: <Widget>[
+                        _MetaPill(
+                          icon: Icons.calendar_today_outlined,
+                          text: dateText,
+                        ),
+                        if (accountRef.isNotEmpty)
+                          _MetaPill(icon: Icons.tag_outlined, text: accountRef),
+                        if (invoice.isInsurancePayment)
+                          const _MetaPill(
+                            icon: Icons.health_and_safety_outlined,
+                            text: 'Insurance',
+                          ),
+                        if (invoice.hasClaimPack)
+                          const _MetaPill(
+                            icon: Icons.assignment_outlined,
+                            text: 'Claim pack linked',
+                          ),
+                        if (invoice.resolvedPatientNo != null)
+                          _MetaPill(
+                            icon: Icons.person_outline,
+                            text: 'Patient ${invoice.resolvedPatientNo}',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppShape.gap12),
+              Text(
+                amount,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: AppShape.gap6),
+              IconButton(
+                tooltip: expandTooltip,
+                onPressed: onToggleExpanded,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  expanded
+                      ? Icons.expand_less_outlined
+                      : Icons.expand_more_outlined,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactPhone(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    final String customer = _customerName(invoice);
+    final String invoiceLabel = _invoiceLabel(invoice);
+    final String dateText = _formatDate(invoice.date);
+    final String accountRef = (invoice.accountNumber ?? '').trim();
+
+    final String currency = (invoice.currencyCode ?? '').trim();
+    final String amount = _formatMoney(invoice.total, currencyCode: currency);
+
+    final String expandTooltip = expanded ? 'Hide payments' : 'Show payments';
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: AppShape.tileRadius,
+      child: InkWell(
+        onTap: onToggleExpanded,
+        borderRadius: AppShape.tileRadius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SalesDocLeadingIcon(status: invoice.status),
+              const SizedBox(width: AppShape.gap12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            customer,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: AppShape.gap10),
+                        SalesDocStatusChip(status: invoice.status),
+                      ],
+                    ),
+                    const SizedBox(height: AppShape.gap6),
+                    _InvoiceLink(label: invoiceLabel, onTap: onOpenInvoice),
+                    const SizedBox(height: AppShape.gap6),
+                    Wrap(
+                      spacing: AppShape.gap10,
+                      runSpacing: AppShape.gap6,
+                      children: <Widget>[
+                        _MetaPill(
+                          icon: Icons.calendar_today_outlined,
+                          text: dateText,
+                        ),
+                        if (accountRef.isNotEmpty)
+                          _MetaPill(icon: Icons.tag_outlined, text: accountRef),
+                        if (invoice.isInsurancePayment)
+                          const _MetaPill(
+                            icon: Icons.health_and_safety_outlined,
+                            text: 'Insurance',
+                          ),
+                        if (invoice.hasClaimPack)
+                          const _MetaPill(
+                            icon: Icons.assignment_outlined,
+                            text: 'Claim pack linked',
+                          ),
+                        if (invoice.resolvedPatientNo != null)
+                          _MetaPill(
+                            icon: Icons.person_outline,
+                            text: 'Patient ${invoice.resolvedPatientNo}',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppShape.gap12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    amount,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                  const SizedBox(height: AppShape.gap6),
-                  Wrap(
-                    spacing: AppShape.gap10,
-                    runSpacing: AppShape.gap6,
-                    children: [
-                      _MetaPill(
-                        icon: Icons.calendar_today_outlined,
-                        text: dateText,
-                      ),
-                      if (ref.isNotEmpty)
-                        _MetaPill(icon: Icons.tag_outlined, text: ref),
-                    ],
+                  const SizedBox(height: 4),
+                  IconButton(
+                    tooltip: expandTooltip,
+                    onPressed: onToggleExpanded,
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      expanded
+                          ? Icons.expand_less_outlined
+                          : Icons.expand_more_outlined,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: AppShape.gap12),
-            Text(
-              amount,
-              style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _customerName(ZohoInvoice invoice) {
+    final String customer = invoice.customerName.trim();
+
+    return customer.isEmpty ? 'Customer' : customer;
+  }
+
+  static String _invoiceLabel(ZohoInvoice invoice) {
+    final String number = (invoice.invoiceNumber ?? '').trim();
+
+    if (number.isNotEmpty) return 'Invoice $number';
+
+    final String id = invoice.invoiceId.trim();
+
+    return id.isEmpty ? 'Open invoice' : 'Invoice $id';
+  }
+
+  static String _formatDate(DateTime? date) {
+    if (date == null) return '—';
+
+    final String year = date.year.toString().padLeft(4, '0');
+    final String month = date.month.toString().padLeft(2, '0');
+    final String day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
+  }
+
+  static String _formatMoney(num value, {required String currencyCode}) {
+    final NumberFormat formatter = NumberFormat.decimalPattern();
+    final String code = currencyCode.trim().isEmpty ? 'Total' : currencyCode;
+
+    return '$code ${formatter.format(value)}';
+  }
+}
+
+class _InvoiceLink extends StatelessWidget {
+  const _InvoiceLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.open_in_new_outlined, size: 15, color: scheme.primary),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w800,
+                  decoration: TextDecoration.underline,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  static String _formatDate(DateTime? d) {
-    if (d == null) return '—';
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '$y-$m-$day';
-  }
+class _InvoicesSearchBar extends StatelessWidget {
+  const _InvoicesSearchBar({
+    required this.controller,
+    required this.loading,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClear,
+  });
 
-  static String _formatMoney(num v, {required String currencyCode}) {
-    final nf = NumberFormat.decimalPattern();
-    final code = currencyCode.isEmpty ? 'Total' : currencyCode;
-    return '$code ${nf.format(v)}';
+  final TextEditingController controller;
+  final bool loading;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return AppTile(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (BuildContext context, TextEditingValue value, _) {
+          final bool hasQuery = value.text.trim().isNotEmpty;
+
+          return TextField(
+            controller: controller,
+            enabled: !loading,
+            textInputAction: TextInputAction.search,
+            onChanged: onChanged,
+            onSubmitted: onSubmitted,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              prefixIcon: const Icon(Icons.search),
+              hintText: 'Search invoices, customers, patients, claims, Rx…',
+              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.hintColor,
+              ),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      tooltip: 'Clear search',
+                      onPressed: onClear,
+                      icon: const Icon(Icons.close),
+                    )
+                  : null,
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 
 class _MetaPill extends StatelessWidget {
   const _MetaPill({required this.icon, required this.text});
+
   final IconData icon;
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      children: <Widget>[
         Icon(icon, size: 16),
         const SizedBox(width: AppShape.gap6),
         Text(
           text,
-          style: t.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+          style: textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).hintColor,
+          ),
         ),
       ],
     );
@@ -303,12 +814,12 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
 
     return AppTile(
       child: Row(
-        children: [
+        children: <Widget>[
           Icon(Icons.error_outline, color: scheme.error, size: 20),
           const SizedBox(width: AppShape.gap10),
           Expanded(
@@ -348,7 +859,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Center(
       child: Padding(
@@ -357,12 +868,20 @@ class _EmptyState extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: <Widget>[
               Icon(icon, size: 44),
               const SizedBox(height: AppShape.gap12),
-              Text(title, style: t.titleLarge, textAlign: TextAlign.center),
+              Text(
+                title,
+                style: textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: AppShape.gap6),
-              Text(subtitle, style: t.bodyMedium, textAlign: TextAlign.center),
+              Text(
+                subtitle,
+                style: textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: AppShape.gap16),
               FilledButton.icon(
                 onPressed: onAction,

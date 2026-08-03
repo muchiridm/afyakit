@@ -2,12 +2,19 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/catalog/catalog_controller.dart';
-import 'package:afyakit/features/retail/catalog/catalog_providers.dart';
+import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
+import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/core/home/widgets/guest/guest_home_quick_actions.dart';
+import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
+import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_disclaimer.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_discovery.dart';
-import 'package:afyakit/features/retail/catalog/widgets/catalog_components/catalog_filter_bar.dart';
+import 'package:afyakit/features/retail/catalog/providers/catalog_providers.dart';
+import 'package:afyakit/features/retail/catalog/widgets/catalog_disclaimer.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -17,16 +24,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'catalog_components/catalog_grid.dart';
-import 'catalog_components/catalog_header.dart';
-import 'catalog_components/catalog_ui_bits.dart';
+import 'catalog_grid.dart';
+import 'catalog_ui_bits.dart';
 
 const _priceGreen = Color(0xFF2E7D32);
 
 String _formatPriceCeil(num? v) {
   if (v == null) return '';
+
   final int rounded = v.ceil();
   final NumberFormat nf = NumberFormat.decimalPattern();
+
   return nf.format(rounded);
 }
 
@@ -35,10 +43,14 @@ class CatalogScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialQuery,
     this.autofocusSearch = false,
+    this.entry = EntryMode.guest,
+    this.user,
   });
 
   final String? initialQuery;
   final bool autofocusSearch;
+  final EntryMode entry;
+  final AuthUser? user;
 
   @override
   ConsumerState<CatalogScreen> createState() => _CatalogScreenState();
@@ -53,12 +65,14 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   bool get _showDiscovery {
     final CatalogState state = ref.read(catalogControllerProvider);
-    return state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
+
+    return state.query.q.trim().isEmpty;
   }
 
   @override
   void initState() {
     super.initState();
+
     _scroll.addListener(_onScroll);
 
     final String seed = (widget.initialQuery ?? '').trim();
@@ -73,6 +87,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     _scroll.dispose();
     _searchC.dispose();
     _searchFocus.dispose();
+
     super.dispose();
   }
 
@@ -86,13 +101,17 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       if (!mounted) return;
 
       final String q = (widget.initialQuery ?? '').trim();
+
       final CatalogController ctrl = ref.read(
         catalogControllerProvider.notifier,
       );
+
       final CatalogState state = ref.read(catalogControllerProvider);
 
       if (q.isNotEmpty && state.query.q.trim() != q) {
-        ctrl.refresh(query: state.query.copyWith(q: q));
+        ctrl.refresh(
+          query: state.query.copyWith(q: q, form: ''),
+        );
       }
 
       if (widget.autofocusSearch) {
@@ -107,6 +126,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     if (!_scroll.hasClients) return;
 
     final CatalogState state = ref.read(catalogControllerProvider);
+
     final bool atEnd =
         _scroll.position.pixels >= _scroll.position.maxScrollExtent - 240;
 
@@ -115,16 +135,41 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     }
   }
 
-  void _applySearch(String q, CatalogState state) {
+  Future<void> _openQuoteEditor(BuildContext context) async {
     if (!mounted) return;
 
-    final String next = q.trim();
-    _searchC.text = next;
-    _searchC.selection = TextSelection.collapsed(offset: _searchC.text.length);
+    await Navigator.of(context).push<QuoteEditorResult>(
+      MaterialPageRoute<QuoteEditorResult>(
+        builder: (_) => const QuoteEditorScreen(),
+      ),
+    );
+  }
 
-    ref
-        .read(catalogControllerProvider.notifier)
-        .refresh(query: state.query.copyWith(q: next));
+  void _addToQuote(
+    BuildContext context,
+    CatalogTile tile, {
+    BuildContext? closeContext,
+  }) {
+    if (!mounted) return;
+
+    ref.read(quoteLinesControllerProvider.notifier).addOrIncrement(tile);
+
+    if (closeContext != null) {
+      Navigator.of(closeContext).maybePop();
+    }
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Added to quote'),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'VIEW',
+          onPressed: () => _openQuoteEditor(context),
+        ),
+      ),
+    );
   }
 
   @override
@@ -157,50 +202,19 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         final AsyncValue<List<CatalogTile>> itemsAsync = ref.watch(
           catalogItemsProvider,
         );
+
         final CatalogState state = ref.watch(catalogControllerProvider);
-        final CatalogController ctrl = ref.read(
-          catalogControllerProvider.notifier,
+        final QuoteLinesState quoteState = ref.watch(
+          quoteLinesControllerProvider,
         );
-
-        final quoteLinesState = ref.watch(quoteLinesControllerProvider);
-        final int quoteLineCount = quoteLinesState.lines.length;
-
-        final String? quoteTotalLabel = quoteLineCount == 0
-            ? null
-            : 'KES ${_formatPriceCeil(quoteLinesState.estimatedTotal)}';
 
         return AppPage(
           scrollable: true,
           maxWidth: 1100,
-          header: CatalogHeader(
-            selectedForm: state.query.form,
-            onFormChanged: (form) {
-              ctrl.refreshDebounced(query: state.query.copyWith(form: form));
-            },
-            quoteItemCount: quoteLineCount,
-            quoteTotalLabel: quoteTotalLabel,
-            onClearQuote: quoteLineCount == 0
-                ? null
-                : () {
-                    ref.read(quoteLinesControllerProvider.notifier).clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Quote cleared'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-            onViewQuote: quoteLineCount == 0
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const QuoteEditorScreen(),
-                      ),
-                    );
-                  },
-          ),
-          body: _buildBody(itemsAsync, state),
+          header: HomeHeader(entry: widget.entry, showHomeButton: true),
+          fab: _buildQuickActions(context),
+          fabAlignment: Alignment.bottomRight,
+          body: _buildBody(itemsAsync, state, quoteState),
         );
       },
     );
@@ -209,10 +223,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   Widget _buildBody(
     AsyncValue<List<CatalogTile>> itemsAsync,
     CatalogState state,
+    QuoteLinesState quoteState,
   ) {
     final CatalogController ctrl = ref.read(catalogControllerProvider.notifier);
-    final bool showDiscovery =
-        state.query.q.trim().isEmpty && state.query.form.trim().isEmpty;
+
+    final bool showDiscovery = state.query.q.trim().isEmpty;
 
     final int? resultCount = showDiscovery
         ? null
@@ -221,45 +236,61 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             orElse: () => null,
           );
 
-    final bool hasActiveFilters =
-        state.query.q.trim().isNotEmpty || state.query.form.trim().isNotEmpty;
+    final bool hasActiveSearch = state.query.q.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 14),
-        SearchBarField(
-          controller: _searchC,
-          focusNode: _searchFocus,
-          resultCount: resultCount,
-          showClear: hasActiveFilters,
-          onClear: () {
-            if (!mounted) return;
-            _searchC.clear();
-            ctrl.refresh(query: const CatalogQuery());
-          },
-          onSubmit: (q) {
-            if (!mounted) return;
-            ctrl.refresh(query: state.query.copyWith(q: q));
-          },
-          onChanged: (q) {
-            if (!mounted) return;
-            ctrl.refreshDebounced(query: state.query.copyWith(q: q));
-          },
+        const SizedBox(height: 28),
+
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SearchBarField(
+              controller: _searchC,
+              focusNode: _searchFocus,
+              resultCount: resultCount,
+              showClear: hasActiveSearch,
+              helper: const CatalogDisclaimer(),
+              onClear: () {
+                if (!mounted) return;
+
+                _searchC.clear();
+                ctrl.refresh(query: const CatalogQuery());
+              },
+              onSubmit: (q) {
+                if (!mounted) return;
+
+                ctrl.refresh(
+                  query: state.query.copyWith(q: q, form: ''),
+                );
+              },
+              onChanged: (q) {
+                if (!mounted) return;
+
+                ctrl.refreshDebounced(
+                  query: state.query.copyWith(q: q, form: ''),
+                );
+              },
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        const CatalogDisclaimer(),
-        const SizedBox(height: 14),
-        CatalogFiltersBar(
-          selectedForm: state.query.form,
-          onSelectForm: (form) {
-            ctrl.refresh(query: state.query.copyWith(form: form));
-          },
-        ),
-        const SizedBox(height: 14),
-        if (showDiscovery)
-          CatalogDiscovery(onExampleTap: (q) => _applySearch(q, state))
-        else
+
+        if (quoteState.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: _QuoteCartBanner(
+                linesState: quoteState,
+                onTap: () => _openQuoteEditor(context),
+              ),
+            ),
+          ),
+        ],
+
+        if (!showDiscovery) ...[
+          const SizedBox(height: 20),
           itemsAsync.when(
             loading: () => SkeletonGrid(scrollController: _scroll),
             error: (e, _) => AppErrorPane(
@@ -269,29 +300,63 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 fallback:
                     'We could not load the catalog right now. Please try again shortly.',
               ),
-              onRetry: () {
-                ctrl.refresh();
-              },
+              onRetry: ctrl.refresh,
             ),
             data: (items) => CatalogGrid(
               items: items,
               scrollController: _scroll,
-              onTapTile: (t) => _showTileSheet(context, t),
+              onTapTile: (tile) => _showTileSheet(context, tile),
               showTailLoader: state.hasMore,
               priceFormatter: _formatPriceCeil,
               priceColor: _priceGreen,
             ),
           ),
+        ],
       ],
     );
   }
 
-  Future<void> _showTileSheet(BuildContext context, CatalogTile t) async {
-    final String whoPreview = t.whoPathPreview?.trim() ?? '';
-    final String whoAtcCode = t.whoAtcCode?.trim() ?? '';
-    final List<String> atcLabels = t.whoAtcLabels ?? const <String>[];
-    final bool hasCombo = atcLabels.length > 1;
+  Widget _buildQuickActions(BuildContext context) {
+    return switch (widget.entry) {
+      EntryMode.member => MemberHomeQuickActions(
+        key: ValueKey<String>(
+          'catalog-member-quick-actions-'
+          '${widget.user?.contactId ?? 'unknown'}',
+        ),
+        user: widget.user,
+        onChat: () => _openChat(context),
+      ),
+      EntryMode.staff => StaffHomeQuickActions(
+        key: const ValueKey<String>('catalog-staff-quick-actions'),
+        onChat: () => _openChat(context),
+      ),
+      EntryMode.guest => GuestHomeQuickActions(
+        key: const ValueKey<String>('catalog-guest-quick-actions'),
+        onAuth: () => _openAuth(context),
+        onChat: () => _openChat(context),
+      ),
+    };
+  }
 
+  void _openChat(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Chat navigation is not connected yet.')),
+    );
+  }
+
+  Future<void> _openAuth(BuildContext context) async {
+    final String tenantName = ref.read(tenantDisplayNameProvider);
+
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) =>
+            LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName)),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  Future<void> _showTileSheet(BuildContext context, CatalogTile t) async {
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: false,
@@ -314,53 +379,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     priceFormatter: _formatPriceCeil,
                     priceColor: _priceGreen,
                   ),
-                  if (whoPreview.isNotEmpty ||
-                      whoAtcCode.isNotEmpty ||
-                      atcLabels.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (whoAtcCode.isNotEmpty)
-                            Text(
-                              'ATC: $whoAtcCode',
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          if (whoPreview.isNotEmpty)
-                            Text(
-                              whoPreview,
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                            ),
-                          if (hasCombo) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              atcLabels.join(', '),
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      ctx,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
                   const Divider(height: 18),
                   Row(
                     children: [
@@ -380,16 +398,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                           icon: const Icon(Icons.add_shopping_cart),
                           label: const Text('Add to quote'),
                           onPressed: () {
-                            ref
-                                .read(quoteLinesControllerProvider.notifier)
-                                .addOrIncrement(t);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Added to quote'),
-                                duration: Duration(seconds: 1),
-                              ),
-                            );
-                            Navigator.of(ctx).maybePop();
+                            _addToQuote(context, t, closeContext: ctx);
                           },
                         ),
                       ),
@@ -461,16 +470,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                       icon: const Icon(Icons.add_shopping_cart),
                       label: const Text('Add to quote'),
                       onPressed: () {
-                        ref
-                            .read(quoteLinesControllerProvider.notifier)
-                            .addOrIncrement(t);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Added to quote'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                        Navigator.of(ctx).maybePop();
+                        _addToQuote(context, t, closeContext: ctx);
                       },
                     ),
                   ),
@@ -681,6 +681,64 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           const SizedBox(height: 2),
           Text(v, style: theme.textTheme.bodyMedium),
         ],
+      ),
+    );
+  }
+}
+
+class _QuoteCartBanner extends StatelessWidget {
+  const _QuoteCartBanner({required this.linesState, required this.onTap});
+
+  final QuoteLinesState linesState;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+
+    final String itemText = linesState.itemCount == 1
+        ? '1 item'
+        : '${linesState.itemCount} items';
+
+    final String lineText = linesState.lineCount == 1
+        ? '1 line'
+        : '${linesState.lineCount} lines';
+
+    return Material(
+      color: colors.primaryContainer,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long, color: colors.onPrimaryContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$itemText in quote · $lineText',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'View quote',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.onPrimaryContainer,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: colors.onPrimaryContainer),
+            ],
+          ),
+        ),
       ),
     );
   }

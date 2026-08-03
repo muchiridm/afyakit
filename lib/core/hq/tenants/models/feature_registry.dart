@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+
 import 'feature_keys.dart';
 
 @immutable
@@ -46,11 +48,26 @@ final class FeatureRegistry {
           'Catalog, contacts, quotes, invoices, payments, and delivery.',
     ),
     FeatureDef(
+      key: FeatureKeys.healthMetrics,
+      label: 'Health Metrics',
+      icon: Icons.monitor_heart_outlined,
+      description:
+          'Record and review vital signs, blood glucose, weight, BMI, and other health measurements.',
+      entry: _healthMetricsEntry,
+    ),
+    FeatureDef(
       key: FeatureKeys.clinical,
       label: 'Clinical',
       icon: Icons.local_hospital,
       description:
           'Patient profiles, prescriptions, encounters, and clinical records.',
+    ),
+    FeatureDef(
+      key: FeatureKeys.insurance,
+      label: 'Insurance',
+      icon: Icons.verified_user,
+      description:
+          'Insurance memberships, claim invoices, payer links, and claim tracking.',
     ),
     FeatureDef(
       key: FeatureKeys.rider,
@@ -79,12 +96,21 @@ final class FeatureRegistry {
   ];
 
   static List<String> get keys =>
-      features.map((f) => f.key).toList(growable: false);
+      features.map((feature) => feature.key).toList(growable: false);
 
   static FeatureDef? byKey(String key) {
-    for (final f in features) {
-      if (f.key == key) return f;
+    final normalizedKey = key.trim().toLowerCase();
+
+    for (final feature in features) {
+      if (feature.key.trim().toLowerCase() == normalizedKey) {
+        return feature;
+      }
     }
+
     return null;
+  }
+
+  static Widget _healthMetricsEntry(BuildContext _) {
+    return const HealthMetricsDashboardScreen();
   }
 }

@@ -7,14 +7,16 @@ class UserRowTile extends StatelessWidget {
   const UserRowTile({
     super.key,
     required this.user,
-    this.membershipsMap,
+    required this.memberships,
     this.onTap,
   });
 
   final AllUser user;
 
-  /// tenantId → { role, active, email? }
-  final Map<String, Map<String, Object?>>? membershipsMap;
+  /// Embedded memberships from `/api/users`.
+  ///
+  /// These should be joined by the backend from tenant auth_users SOT.
+  final List<AllUserMembership> memberships;
 
   final VoidCallback? onTap;
 
@@ -58,16 +60,22 @@ class UserRowTile extends StatelessWidget {
           if (!user.authExists)
             const Padding(
               padding: EdgeInsets.only(left: 6),
-              child: Icon(
-                Icons.warning_amber_rounded,
-                size: 16,
-                color: Colors.orange,
+              child: Tooltip(
+                message: 'Firebase Auth user missing',
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: Colors.orange,
+                ),
               ),
             ),
           if (user.disabled)
             const Padding(
               padding: EdgeInsets.only(left: 6),
-              child: Icon(Icons.block, size: 14, color: Colors.redAccent),
+              child: Tooltip(
+                message: 'Directory user disabled',
+                child: Icon(Icons.block, size: 14, color: Colors.redAccent),
+              ),
             ),
           const SizedBox(width: 4),
           const Icon(Icons.chevron_right, size: 20),
@@ -90,7 +98,6 @@ class UserRowTile extends StatelessWidget {
     required String primaryEmail,
     required bool hasTenants,
   }) {
-    // No tenants at all → show primary email (if any) or "No tenants"
     if (!hasTenants) {
       if (primaryEmail.isNotEmpty) {
         return Padding(
@@ -111,20 +118,25 @@ class UserRowTile extends StatelessWidget {
       );
     }
 
-    // Tenants available → one line per tenant:
-    //   "tenantId   email_for_that_tenant_or_—"
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: tenants.map((tid) {
-          final tenantMeta = membershipsMap?[tid];
+        children: tenants.map((tenantId) {
+          final membership = _membershipForTenant(tenantId);
 
-          // STRICT: use only tenant-scoped email; do NOT fall back
-          // to directory/global email here. If missing, show "—".
-          final perTenantEmail =
-              (tenantMeta?['email'] as String?)?.trim() ?? '';
+          // STRICT:
+          // Use only tenant-scoped email.
+          // Do NOT fall back to directory/global email here.
+          final perTenantEmail = membership?.email?.trim() ?? '';
           final lineEmail = perTenantEmail.isNotEmpty ? perTenantEmail : '—';
+
+          final role = membership?.role.trim() ?? '';
+          final active = membership?.active ?? true;
+
+          final rightText = role.isEmpty
+              ? lineEmail
+              : '$lineEmail · $role${active ? '' : ' · disabled'}';
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 1),
@@ -133,20 +145,30 @@ class UserRowTile extends StatelessWidget {
                 Flexible(
                   flex: 2,
                   child: Text(
-                    tid,
+                    tenantId,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade800),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: active
+                          ? Colors.grey.shade800
+                          : Colors.orange.shade800,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   flex: 3,
                   child: Text(
-                    lineEmail,
+                    rightText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: active
+                          ? Colors.grey.shade600
+                          : Colors.orange.shade700,
+                    ),
                   ),
                 ),
               ],
@@ -157,7 +179,6 @@ class UserRowTile extends StatelessWidget {
     );
   }
 
-  // Pick something sensible for the title line
   String _titleLine({required String phone, required String name}) {
     final hasPhone = phone.isNotEmpty;
     final hasName = name.isNotEmpty;
@@ -165,10 +186,13 @@ class UserRowTile extends StatelessWidget {
     if (hasPhone && hasName) return '$phone • $name';
     if (hasPhone) return phone;
     if (hasName) return name;
+
+    final email = (user.email ?? user.emailLower).trim();
+    if (email.isNotEmpty) return email;
+
     return 'Unknown user';
   }
 
-  // Avatar seed: prefer name, else phone, else primary email, else '?'
   String _avatarSource({
     required String phone,
     required String name,
@@ -183,47 +207,62 @@ class UserRowTile extends StatelessWidget {
   String _initial(String s) {
     final v = s.trim();
     if (v.isEmpty) return '?';
-    return v[0].toUpperCase();
+    return v.characters.first.toUpperCase();
   }
 
-  /// Returns tenant IDs from memberships (preferred) or from the
-  /// directory doc as a fallback.
   List<String> _tenantIds() {
-    if (membershipsMap != null && membershipsMap!.isNotEmpty) {
-      final ids = membershipsMap!.keys.toList();
-      ids.sort();
+    if (memberships.isNotEmpty) {
+      final ids =
+          memberships
+              .map((m) => m.tenantId.trim())
+              .where((id) => id.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+
       return ids;
     }
 
     if (user.tenantIds.isNotEmpty) {
-      final ids = List<String>.from(user.tenantIds);
-      ids.sort();
+      final ids =
+          user.tenantIds
+              .map((id) => id.trim())
+              .where((id) => id.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+
       return ids;
     }
 
     return const <String>[];
   }
 
-  /// Primary email used only for:
-  ///  - avatar seed (if no name/phone)
-  ///  - "no tenants" subtitle
-  ///
-  /// Prefers the first non-empty tenant email; falls back to
-  /// directory/global email if nothing is set anywhere.
-  String _firstTenantEmailOrDirectory() {
-    // Prefer membership emails, in sorted tenant order
-    if (membershipsMap != null && membershipsMap!.isNotEmpty) {
-      final ids = _tenantIds();
-      for (final tid in ids) {
-        final email = (membershipsMap![tid]?['email'] as String?)?.trim() ?? '';
-        if (email.isNotEmpty) {
-          return email;
-        }
+  AllUserMembership? _membershipForTenant(String tenantId) {
+    final target = tenantId.trim();
+
+    if (target.isEmpty) return null;
+
+    for (final membership in memberships) {
+      if (membership.tenantId.trim() == target) {
+        return membership;
       }
     }
 
-    // Last-resort fallback: directory/global email (if present)
-    final directoryEmail = ((user.email ?? user.emailLower)).trim();
-    return directoryEmail;
+    return null;
+  }
+
+  String _firstTenantEmailOrDirectory() {
+    if (memberships.isNotEmpty) {
+      final sorted = List<AllUserMembership>.from(memberships)
+        ..sort((a, b) => a.tenantId.compareTo(b.tenantId));
+
+      for (final membership in sorted) {
+        final email = membership.email?.trim() ?? '';
+        if (email.isNotEmpty) return email;
+      }
+    }
+
+    return (user.email ?? user.emailLower).trim();
   }
 }

@@ -2,78 +2,176 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-
+import 'package:afyakit/core/workspace/providers/workspace_mode_provider.dart';
+import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
 import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
-
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/widgets/pdf/pdf_open.dart';
 import 'package:afyakit/shared/widgets/pdf/pdf_preview_screen.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// UI-facing controller:
-/// - Enforces capability gate for staff-only actions
-/// - Runs confirm dialogs
-/// - Calls Zoho service
-/// - Invalidates quote provider after mutations
-///
-/// ✅ Keeps screens dumb: screen just calls controller methods.
 final quoteActionControllerProvider =
-    Provider.autoDispose<QuoteActionController>((ref) {
-      return QuoteActionController(ref);
-    });
+    Provider.autoDispose<QuoteActionController>(
+      (Ref ref) => QuoteActionController(ref),
+    );
 
 class QuoteActionController {
   QuoteActionController(this._ref);
 
   final Ref _ref;
 
-  bool get _canManageQuotes {
-    final me = _ref.read(currentUserProvider).valueOrNull;
-    return me?.canManageQuotes ?? false;
-  }
-
-  bool _requireCanManageQuotes() {
-    if (_canManageQuotes) return true;
-    SnackService.showError('You don’t have permission to perform this action.');
-    return false;
-  }
-
-  void _refreshQuote(String quoteId) {
-    _ref.invalidate(zohoQuoteProvider(quoteId));
-  }
-
-  Future<ZohoQuotesService> _svc() async {
+  Future<ZohoQuotesService> get _svc {
     return _ref.read(zohoQuotesServiceProvider.future);
   }
 
   // ─────────────────────────────────────────────
-  // Public actions (call from UI)
+  // Permissions
   // ─────────────────────────────────────────────
 
-  Future<void> viewPdf(BuildContext context, {required String quoteId}) async {
-    final id = quoteId.trim();
+  bool _isStaffWorkspace({bool? forceStaffWorkspace}) {
+    return forceStaffWorkspace ?? _ref.read(isStaffWorkspaceActiveProvider);
+  }
+
+  bool _canViewQuotePdf({bool? forceStaffWorkspace}) {
+    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
+  }
+
+  bool _canSendDraftQuote({bool? forceStaffWorkspace}) {
+    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
+  }
+
+  bool _canDeleteDraftQuote({bool? forceStaffWorkspace}) {
+    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
+  }
+
+  bool _canMarkQuoteSent({bool? forceStaffWorkspace}) {
+    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
+  }
+
+  bool _canConvertQuoteToInvoice({bool? forceStaffWorkspace}) {
+    return _isStaffWorkspace(forceStaffWorkspace: forceStaffWorkspace);
+  }
+
+  bool _requireCanViewQuotePdf({bool? forceStaffWorkspace}) {
+    if (_canViewQuotePdf(forceStaffWorkspace: forceStaffWorkspace)) {
+      return true;
+    }
+
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanSendDraftQuote({bool? forceStaffWorkspace}) {
+    if (_canSendDraftQuote(forceStaffWorkspace: forceStaffWorkspace)) {
+      return true;
+    }
+
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanDeleteDraftQuote({bool? forceStaffWorkspace}) {
+    if (_canDeleteDraftQuote(forceStaffWorkspace: forceStaffWorkspace)) {
+      return true;
+    }
+
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanMarkQuoteSent({bool? forceStaffWorkspace}) {
+    if (_canMarkQuoteSent(forceStaffWorkspace: forceStaffWorkspace)) {
+      return true;
+    }
+
+    _showPermissionError();
+    return false;
+  }
+
+  bool _requireCanConvertQuoteToInvoice({bool? forceStaffWorkspace}) {
+    if (_canConvertQuoteToInvoice(forceStaffWorkspace: forceStaffWorkspace)) {
+      return true;
+    }
+
+    _showPermissionError();
+    return false;
+  }
+
+  void _showPermissionError() {
+    SnackService.showError('You don’t have permission to perform this action.');
+  }
+
+  // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
+
+  void _refreshQuote(String quoteId) {
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
 
+    _ref.invalidate(zohoQuoteProvider(id));
+  }
+
+  String _friendlyError(Object error, {required String fallback}) {
+    final String raw = error.toString().trim();
+    if (raw.isEmpty) return fallback;
+
+    final String cleaned = raw
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceFirst(RegExp(r'^StateError:\s*'), '')
+        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .trim();
+
+    return cleaned.isEmpty ? fallback : cleaned;
+  }
+
+  Future<ZohoQuote?> _readQuoteOrNull(String quoteId) async {
+    final String id = quoteId.trim();
+    if (id.isEmpty) return null;
+
     try {
-      final svc = await _svc();
+      return await _ref.read(zohoQuoteProvider(id).future);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _isDraftQuote(ZohoQuote quote) {
+    final String status = quote.status.trim().toLowerCase();
+    return status.isEmpty || status == 'draft';
+  }
+
+  // ─────────────────────────────────────────────
+  // Public actions
+  // ─────────────────────────────────────────────
+
+  Future<void> viewPdf(
+    BuildContext context, {
+    required String quoteId,
+    bool? forceStaffWorkspace,
+  }) async {
+    final String id = quoteId.trim();
+    if (id.isEmpty) return;
+
+    if (!_requireCanViewQuotePdf(forceStaffWorkspace: forceStaffWorkspace)) {
+      return;
+    }
+
+    try {
+      final ZohoQuotesService svc = await _svc;
       final Uint8List bytes = await svc.getPdf(id);
 
       if (!context.mounted) return;
 
       if (kIsWeb) {
-        // ✅ Web: open immediately in new tab (no extra screen)
-        openPdfBytes(bytes);
+        openPdfBytes(bytes, fileName: 'quote_$id.pdf');
         return;
       }
 
-      // ✅ Mobile/Desktop: keep in-app preview
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => PdfPreviewScreen(
@@ -83,21 +181,35 @@ class QuoteActionController {
           ),
         ),
       );
-    } catch (_) {
-      SnackService.showError('Failed to load PDF');
+    } catch (e) {
+      SnackService.showError(_friendlyError(e, fallback: 'Failed to load PDF'));
     }
   }
 
   Future<void> sendQuote(
     BuildContext context, {
     required String quoteId,
+    bool? forceStaffWorkspace,
   }) async {
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanSendDraftQuote(forceStaffWorkspace: forceStaffWorkspace)) {
+      return;
+    }
 
-    final ok = await SalesDocDialogs.confirm(
+    final ZohoQuote? quote = await _readQuoteOrNull(id);
+    if (quote == null) {
+      SnackService.showError('Failed to load quote details.');
+      return;
+    }
+
+    if (!_isDraftQuote(quote)) {
+      SnackService.showError('Only draft quotes can be sent from here.');
+      return;
+    }
+
+    final bool ok = await SalesDocDialogs.confirm(
       context,
       title: 'Send quote?',
       message: 'This will email the quote to the customer.',
@@ -105,25 +217,85 @@ class QuoteActionController {
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
-      final svc = await _svc();
+      final ZohoQuotesService svc = await _svc;
       await svc.email(id);
+
       SnackService.showSuccess('Quote sent');
       _refreshQuote(id);
-    } catch (_) {
-      SnackService.showError('Failed to send quote');
+    } catch (e) {
+      SnackService.showError(
+        _friendlyError(e, fallback: 'Failed to send quote'),
+      );
     }
   }
 
-  Future<void> markSent(BuildContext context, {required String quoteId}) async {
-    final id = quoteId.trim();
+  Future<void> deleteQuote(
+    BuildContext context, {
+    required String quoteId,
+    bool? forceStaffWorkspace,
+  }) async {
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanDeleteDraftQuote(
+      forceStaffWorkspace: forceStaffWorkspace,
+    )) {
+      return;
+    }
 
-    final ok = await SalesDocDialogs.confirm(
+    final ZohoQuote? quote = await _readQuoteOrNull(id);
+    if (quote == null) {
+      SnackService.showError('Failed to load quote details.');
+      return;
+    }
+
+    if (!_isDraftQuote(quote)) {
+      SnackService.showError('Only draft quotes can be deleted.');
+      return;
+    }
+
+    final bool ok = await SalesDocDialogs.confirm(
+      context,
+      title: 'Delete draft quote?',
+      message:
+          'This will permanently delete the draft quote. This action cannot be undone.',
+      okLabel: 'Delete',
+      danger: true,
+      barrierDismissible: false,
+    );
+
+    if (!ok) return;
+
+    try {
+      final ZohoQuotesService svc = await _svc;
+      await svc.delete(id);
+
+      SnackService.showSuccess('Draft quote deleted');
+    } catch (e) {
+      SnackService.showError(
+        _friendlyError(e, fallback: 'Failed to delete quote'),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> markSent(
+    BuildContext context, {
+    required String quoteId,
+    bool? forceStaffWorkspace,
+  }) async {
+    final String id = quoteId.trim();
+    if (id.isEmpty) return;
+
+    if (!_requireCanMarkQuoteSent(forceStaffWorkspace: forceStaffWorkspace)) {
+      return;
+    }
+
+    final bool ok = await SalesDocDialogs.confirm(
       context,
       title: 'Mark as sent?',
       message: 'This will update the quote status in Zoho Books.',
@@ -131,66 +303,137 @@ class QuoteActionController {
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
-      final svc = await _svc();
+      final ZohoQuotesService svc = await _svc;
       await svc.markSent(id);
+
       SnackService.showSuccess('Marked as sent');
       _refreshQuote(id);
-    } catch (_) {
-      SnackService.showError('Failed to mark as sent');
+    } catch (e) {
+      SnackService.showError(
+        _friendlyError(e, fallback: 'Failed to mark as sent'),
+      );
     }
   }
 
   Future<void> convertToInvoice(
     BuildContext context, {
     required String quoteId,
+    bool? forceStaffWorkspace,
   }) async {
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
 
-    if (!_requireCanManageQuotes()) return;
+    if (!_requireCanConvertQuoteToInvoice(
+      forceStaffWorkspace: forceStaffWorkspace,
+    )) {
+      return;
+    }
 
-    final ok = await SalesDocDialogs.confirm(
+    final ZohoQuote? quote = await _readQuoteOrNull(id);
+
+    if (quote == null) {
+      SnackService.showError('Failed to load quote details.');
+      return;
+    }
+
+    final String? membershipId = _clean(quote.resolvedMembershipId);
+    final String? prescriptionId = _clean(quote.resolvedPrescriptionId);
+
+    final bool isInsuranceQuote =
+        quote.saleContext.isClinical && quote.paymentContext.isInsurance;
+
+    if (isInsuranceQuote && membershipId == null) {
+      SnackService.showError('This insurance quote has no membership linked.');
+      return;
+    }
+
+    if (isInsuranceQuote && prescriptionId == null) {
+      SnackService.showError(
+        'This insurance quote has no prescription linked.',
+      );
+      return;
+    }
+
+    final bool ok = await SalesDocDialogs.confirm(
       context,
       title: 'Convert to invoice?',
-      message: 'This will create an invoice from this quote in Zoho Books.',
+      message: isInsuranceQuote
+          ? 'This will create a Zoho invoice from this insurance quote. You can create the insurance claim pack separately after conversion.'
+          : 'This will create a Zoho invoice from this quote.',
       okLabel: 'Convert',
       danger: false,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
-      final svc = await _svc();
-      final res = await svc.convertToInvoice(id);
+      final ZohoQuotesService svc = await _svc;
 
-      final invoiceId = (res['invoice_id'] ?? res['invoiceId'] ?? '')
-          .toString();
-      final invoiceNumber =
-          (res['invoice_number'] ?? res['invoiceNumber'] ?? '').toString();
+      final QuoteConversionResult result = await svc.convertToInvoice(
+        id,
+        membershipId: membershipId,
+        prescriptionId: prescriptionId,
+        patientSnapshot: quote.patientSnapshot,
+        deliveryAddress: quote.deliveryAddress,
+      );
 
-      if (invoiceNumber.trim().isNotEmpty) {
-        SnackService.showSuccess('Converted → Invoice $invoiceNumber');
-      } else if (invoiceId.trim().isNotEmpty) {
-        SnackService.showSuccess('Converted → Invoice $invoiceId');
-      } else {
-        SnackService.showSuccess('Converted to invoice');
-      }
-
+      SnackService.showSuccess(_conversionMessage(result));
       _refreshQuote(id);
-    } catch (_) {
-      SnackService.showError('Failed to convert to invoice');
+    } catch (e) {
+      SnackService.showError(
+        _friendlyError(e, fallback: 'Failed to convert to invoice'),
+      );
     }
   }
 
-  /// Used by UI pull-to-refresh.
   Future<void> refresh(String quoteId) async {
-    final id = quoteId.trim();
+    final String id = quoteId.trim();
     if (id.isEmpty) return;
 
     _refreshQuote(id);
     await _ref.read(zohoQuoteProvider(id).future);
+  }
+
+  static String _conversionMessage(QuoteConversionResult result) {
+    final String? invoiceNumber = _readInvoiceString(
+      result.invoice,
+      'invoice_number',
+      fallbackKey: 'invoiceNumber',
+    );
+
+    final String? invoiceId = _readInvoiceString(
+      result.invoice,
+      'invoice_id',
+      fallbackKey: 'invoiceId',
+    );
+
+    final String invoiceLabel = invoiceNumber ?? invoiceId ?? '';
+
+    if (invoiceLabel.isNotEmpty) {
+      return 'Converted → Invoice $invoiceLabel';
+    }
+
+    return 'Converted to invoice';
+  }
+
+  static String? _readInvoiceString(
+    Map<String, Object?> invoice,
+    String key, {
+    required String fallbackKey,
+  }) {
+    final Object? value = invoice[key] ?? invoice[fallbackKey];
+    final String text = (value ?? '').toString().trim();
+
+    return text.isEmpty ? null : text;
+  }
+
+  static String? _clean(String? value) {
+    final String text = (value ?? '').trim();
+    return text.isEmpty ? null : text;
   }
 }

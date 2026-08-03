@@ -187,16 +187,39 @@ extension AuthUserX on AuthUser {
   bool get canManageSalesDocs =>
       isActive && hasCap(StaffCapability.manageSalesDocs);
 
-  /// ✅ Explicit doc-type helpers for clean UI gates.
-  /// Today: both map to manageSalesDocs; later you can split capabilities.
+  /// Sales document visibility.
+  ///
+  /// Members may view customer-facing sales documents where the route/service
+  /// allows it. Management actions remain staff-only.
+  bool get canViewSalesDocs => isActive;
+
+  /// Doc-type management gates.
+  ///
+  /// Today both map to manageSalesDocs.
+  /// Later, split these into separate capabilities if needed.
   bool get canManageInvoices => canManageSalesDocs;
   bool get canManageQuotes => canManageSalesDocs;
 
+  /// Invoice actions.
   bool get canEditInvoice => canManageInvoices;
   bool get canDeleteInvoice => canManageInvoices;
 
+  /// Quote actions.
   bool get canEditQuote => canManageQuotes;
   bool get canDeleteQuote => canManageQuotes;
+
+  /// Sensitive quote workflow actions.
+  ///
+  /// Members must NOT be able to:
+  /// - send quotes
+  /// - mark quotes as sent
+  /// - convert quotes to invoices
+  bool get canSendQuote => canManageQuotes;
+  bool get canMarkQuoteSent => canManageQuotes;
+  bool get canConvertQuoteToInvoice => canManageQuotes && canManageInvoices;
+
+  /// Safe quote action.
+  bool get canViewQuotePdf => canViewSalesDocs;
 
   // ────────────────────────────────────────────
   // Claims merge (kept; not a permission source)

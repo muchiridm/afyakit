@@ -233,6 +233,7 @@ class _AssetsSection extends ConsumerWidget {
     Future<void> handleUpload(TenantWebAssetType type) async {
       final bytes = await _pickImageBytes(); // TODO: implement per-platform
       if (bytes == null) return;
+
       await ctrl.uploadWebAsset(tenantId: profile.id, type: type, bytes: bytes);
     }
 
@@ -272,6 +273,30 @@ class _AssetsSection extends ConsumerWidget {
               url: _webAssetPreviewUrl(profile, TenantWebAssetType.icon512),
               onUpload: () => handleUpload(TenantWebAssetType.icon512),
               onDelete: () => handleDelete(TenantWebAssetType.icon512),
+              busy: state.uploadingAsset,
+            ),
+            const SizedBox(height: 12),
+            _assetRow(
+              context: context,
+              label: 'Maskable icon 192×192',
+              url: _webAssetPreviewUrl(
+                profile,
+                TenantWebAssetType.maskableIcon192,
+              ),
+              onUpload: () => handleUpload(TenantWebAssetType.maskableIcon192),
+              onDelete: () => handleDelete(TenantWebAssetType.maskableIcon192),
+              busy: state.uploadingAsset,
+            ),
+            const SizedBox(height: 12),
+            _assetRow(
+              context: context,
+              label: 'Maskable icon 512×512',
+              url: _webAssetPreviewUrl(
+                profile,
+                TenantWebAssetType.maskableIcon512,
+              ),
+              onUpload: () => handleUpload(TenantWebAssetType.maskableIcon512),
+              onDelete: () => handleDelete(TenantWebAssetType.maskableIcon512),
               busy: state.uploadingAsset,
             ),
           ],
@@ -338,10 +363,12 @@ String _webAssetPreviewUrl(TenantProfile profile, TenantWebAssetType type) {
     TenantWebAssetType.favicon => 'favicon.png',
     TenantWebAssetType.icon192 => 'icon-192.png',
     TenantWebAssetType.icon512 => 'icon-512.png',
+    TenantWebAssetType.maskableIcon192 => 'icon-maskable-192.png',
+    TenantWebAssetType.maskableIcon512 => 'icon-maskable-512.png',
   };
 
   final base =
-      'https://storage.googleapis.com/$bucket/public/${profile.id}/web/$fileName';
+      'https://storage.googleapis.com/$bucket/public/${profile.id}/branding/web/$fileName';
 
   return profile.assets.version > 0
       ? '$base?v=${profile.assets.version}'

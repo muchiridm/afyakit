@@ -21,7 +21,10 @@
         "source": "/manifest.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
-
+      {
+        "source": "/favicon.ico",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
       {
         "source": "/**/*.{js,css,json}",
         "headers": [
@@ -49,7 +52,6 @@
           }
         ]
       },
-
       {
         "source": "/**",
         "headers": [
@@ -82,13 +84,14 @@
         "source": "/manifest.json",
         "function": { "functionId": "manifest", "region": "europe-west1" }
       },
-
       {
-        "source": "/icons/afyakit/**",
-        "destination": "/index.html"
+        "source": "/favicon.ico",
+        "function": { "functionId": "favicon", "region": "europe-west1" }
       },
-
-      { "source": "**", "destination": "/index.html" }
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
   }
 }

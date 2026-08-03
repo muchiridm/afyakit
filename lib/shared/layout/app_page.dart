@@ -22,7 +22,7 @@ class AppPage extends StatelessWidget {
 
     // Layout
     this.scrollable = true,
-    this.maxWidth = AppLayout.pageMaxW,
+    this.maxWidth = AppLayout.contentMaxWidth,
     this.padding = AppLayout.pagePadding,
     this.backgroundColor,
   });

@@ -1,25 +1,24 @@
-// lib/features/retail/sales/invoices/services/zoho_invoices_service.dart
+// lib/features/retail/invoices/services/zoho_invoices_service.dart
 
 import 'dart:typed_data';
-
-import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
-import 'package:afyakit/shared/utils/utils.dart';
-import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
-
-import '../../shared/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
+import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
+import 'package:afyakit/shared/utils/utils.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final zohoInvoicesServiceProvider = FutureProvider<ZohoInvoicesService>((
-  ref,
+  Ref ref,
 ) async {
-  final tenantId = ref.watch(tenantIdProvider);
-  final routes = AfyaKitRoutes(tenantId);
-  final api = await ref.watch(afyakitClientFutureProvider.future);
+  final String tenantId = ref.watch(tenantIdProvider);
+  final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
+  final AfyaKitClient api = await ref.watch(afyakitClientFutureProvider.future);
+
   return ZohoInvoicesService(api: api, routes: routes);
 });
 
@@ -36,26 +35,48 @@ class ZohoInvoicesService {
     int page = 1,
     String? q,
     String? accountNumber,
-  }) async {
-    final qq = (q ?? '').trim();
-    final acct = (accountNumber ?? '').trim();
+    String? customerId,
 
-    final uri = routes.retailListInvoices(
+    String? patientId,
+    String? patientNo,
+    String? claimPackId,
+    String? membershipId,
+    String? prescriptionId,
+  }) async {
+    final String qq = (q ?? '').trim();
+    final String acct = (accountNumber ?? '').trim();
+    final String cid = (customerId ?? '').trim();
+
+    final String pid = (patientId ?? '').trim();
+    final String pno = (patientNo ?? '').trim();
+    final String claimId = (claimPackId ?? '').trim();
+    final String mid = (membershipId ?? '').trim();
+    final String rxid = (prescriptionId ?? '').trim();
+
+    final Uri uri = routes.retailListInvoices(
       limit: limit,
       page: page,
       q: qq.isEmpty ? null : qq,
       accountNumber: acct.isEmpty ? null : acct,
+      customerId: cid.isEmpty ? null : cid,
+      patientId: pid.isEmpty ? null : pid,
+      patientNo: pno.isEmpty ? null : pno,
+      claimPackId: claimId.isEmpty ? null : claimId,
+      membershipId: mid.isEmpty ? null : mid,
+      prescriptionId: rxid.isEmpty ? null : rxid,
     );
 
-    final res = await api.getUri(uri);
+    final Response<dynamic> res = await api.getUri(uri);
 
-    final data = _asJsonMap(res.data);
-    final raw = data['invoices'] ?? data['items'];
+    final JsonMap data = _asJsonMap(res.data);
+    final Object? raw = data['invoices'] ?? data['items'];
 
     if (raw is List) {
       return raw
           .whereType<Map>()
-          .map((m) => ZohoInvoice.fromJson(m.cast<String, dynamic>()))
+          .map((Map<dynamic, dynamic> m) {
+            return ZohoInvoice.fromJson(m.cast<String, dynamic>());
+          })
           .toList(growable: false);
     }
 
@@ -63,19 +84,19 @@ class ZohoInvoicesService {
   }
 
   Future<ZohoInvoice> get(String invoiceId) async {
-    final raw = await getInvoiceJson(invoiceId);
+    final JsonMap raw = await getInvoiceJson(invoiceId);
     return ZohoInvoice.fromJson(raw);
   }
 
   Future<JsonMap> getInvoiceJson(String invoiceId) async {
-    final id = invoiceId.trim();
+    final String id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.retailGetInvoice(id);
-    final res = await api.getUri(uri);
+    final Uri uri = routes.retailGetInvoice(id);
+    final Response<dynamic> res = await api.getUri(uri);
 
-    final data = _asJsonMap(res.data);
-    final raw = data['invoice'] ?? data;
+    final JsonMap data = _asJsonMap(res.data);
+    final Object? raw = data['invoice'] ?? data;
 
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) return raw.cast<String, dynamic>();
@@ -83,14 +104,13 @@ class ZohoInvoicesService {
     throw StateError('Unexpected response shape: missing invoice object');
   }
 
-  /// Backend contract is PATCH /invoices/:invoiceId (partial update).
-  /// Keep this as a thin transport call.
+  /// Backend contract is PATCH /invoices/:invoiceId.
   Future<JsonMap> patchInvoice(String invoiceId, JsonMap patch) async {
-    final id = invoiceId.trim();
+    final String id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.retailUpdateInvoice(id);
-    final res = await api.patchUri(uri, data: patch);
+    final Uri uri = routes.retailUpdateInvoice(id);
+    final Response<dynamic> res = await api.patchUri(uri, data: patch);
 
     return _asJsonMap(res.data);
   }
@@ -101,20 +121,20 @@ class ZohoInvoicesService {
     String invoiceId, {
     required ZohoEmailDraft email,
   }) async {
-    final id = invoiceId.trim();
+    final String id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.retailSendInvoice(id);
+    final Uri uri = routes.retailSendInvoice(id);
 
-    final payload = _pruneEmailJson(email.toJson());
+    final Map<String, Object?> payload = _pruneEmailJson(email.toJson());
     await api.postUri(uri, data: payload.isEmpty ? null : payload);
   }
 
   Future<void> markSent(String invoiceId) async {
-    final id = invoiceId.trim();
+    final String id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.retailMarkInvoiceSent(id);
+    final Uri uri = routes.retailMarkInvoiceSent(id);
     await api.postUri(uri);
   }
 
@@ -129,20 +149,21 @@ class ZohoInvoicesService {
   // ───────────────────────── PDF ─────────────────────────
 
   Future<Uint8List> getPdf(String invoiceId) async {
-    final id = invoiceId.trim();
+    final String id = invoiceId.trim();
     if (id.isEmpty) throw ArgumentError('invoiceId is empty');
 
-    final uri = routes.retailInvoicePdf(id);
+    final Uri uri = routes.retailInvoicePdf(id);
 
-    final res = await api.getUri(
+    final Response<dynamic> res = await api.getUri(
       uri,
       options: Options(
         responseType: ResponseType.bytes,
-        headers: const {'Accept': 'application/pdf'},
+        headers: const <String, String>{'Accept': 'application/pdf'},
       ),
     );
 
-    final data = res.data;
+    final Object? data = res.data;
+
     if (data is Uint8List) return data;
     if (data is List<int>) return Uint8List.fromList(data);
 
@@ -152,10 +173,10 @@ class ZohoInvoicesService {
   // ───────────────────────── Helpers ─────────────────────────
 
   static Map<String, Object?> _pruneEmailJson(Map<String, Object?> input) {
-    final out = <String, Object?>{...input};
+    final Map<String, Object?> out = <String, Object?>{...input};
 
     void dropEmptyList(String key) {
-      final v = out[key];
+      final Object? v = out[key];
       if (v is List && v.isEmpty) out.remove(key);
     }
 
@@ -164,24 +185,27 @@ class ZohoInvoicesService {
     dropEmptyList('bcc_mail_ids');
     dropEmptyList('contact_person_ids');
 
-    out.removeWhere((_, v) => v is String && v.trim().isEmpty);
+    out.removeWhere((_, Object? v) => v is String && v.trim().isEmpty);
 
-    for (final k in const [
+    for (final String key in const <String>[
       'to_mail_ids',
       'cc_mail_ids',
       'bcc_mail_ids',
       'contact_person_ids',
     ]) {
-      final v = out[k];
-      if (v is List) {
-        final cleaned = v
-            .map((e) => e is String ? e.trim() : e)
-            .where((e) => e != null && (e is! String || e.isNotEmpty))
+      final Object? value = out[key];
+
+      if (value is List) {
+        final List<Object> cleaned = value
+            .map((Object? e) => e is String ? e.trim() : e)
+            .whereType<Object>()
+            .where((Object e) => e is! String || e.isNotEmpty)
             .toList(growable: false);
+
         if (cleaned.isEmpty) {
-          out.remove(k);
+          out.remove(key);
         } else {
-          out[k] = cleaned;
+          out[key] = cleaned;
         }
       }
     }
@@ -189,9 +213,10 @@ class ZohoInvoicesService {
     return out;
   }
 
-  static JsonMap _asJsonMap(Object? v) {
-    if (v is Map<String, dynamic>) return v;
-    if (v is Map) return v.cast<String, dynamic>();
-    throw StateError('Expected JSON object but got ${v.runtimeType}');
+  static JsonMap _asJsonMap(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return value.cast<String, dynamic>();
+
+    throw StateError('Expected JSON object but got ${value.runtimeType}');
   }
 }

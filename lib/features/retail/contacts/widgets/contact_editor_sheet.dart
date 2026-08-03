@@ -1,36 +1,47 @@
+// lib/features/retail/contacts/widgets/contact_editor_sheet.dart
+
+import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../shared/models/zoho_contact.dart';
+import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
+
+import '../models/zoho_contact.dart';
 import 'contact_sheet_models.dart';
 
 enum _ContactKind { person, companyOnly }
 
-class ContactEditorSheet extends StatefulWidget {
+class ContactEditorSheet extends ConsumerStatefulWidget {
   const ContactEditorSheet({super.key, this.initial});
 
   final ZohoContact? initial;
 
   @override
-  State<ContactEditorSheet> createState() => _ContactEditorSheetState();
+  ConsumerState<ContactEditorSheet> createState() => _ContactEditorSheetState();
 }
 
-class _ContactEditorSheetState extends State<ContactEditorSheet> {
+class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _displayCtl;
   late final TextEditingController _companyCtl;
-
-  // ✅ NEW: Account number (Zoho Books custom field cf_account_number)
   late final TextEditingController _acctCtl;
 
-  // personContact fields
   late final TextEditingController _personCtl;
   late final TextEditingController _emailCtl;
   late final TextEditingController _phoneCtl;
   late final TextEditingController _mobileCtl;
 
   bool _editing = false;
+  bool _isInsurancePayer = false;
+  bool _creatingSelfPatient = false;
+  bool _creatingLinkedPatient = false;
+  bool _openingLinkedPatient = false;
+  bool _selfPatientCreated = false;
+  bool _linkedPatientCreated = false;
+
   late _ContactKind _kind;
 
   bool get _isExisting => widget.initial != null;
@@ -41,14 +52,17 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   @override
   void initState() {
     super.initState();
+
     final c = widget.initial;
 
-    _editing = c == null; // new contact starts in edit mode
+    _editing = c == null;
+    _isInsurancePayer = c?.isInsurancePayer ?? false;
 
     _displayCtl = TextEditingController(text: c?.displayName ?? '');
     _companyCtl = TextEditingController(text: c?.companyName ?? '');
 
-    // ✅ account number
+    // DawaPap/AfyaKit account number is system-generated.
+    // It is displayed read-only for existing contacts only.
     _acctCtl = TextEditingController(text: c?.accountNumber ?? '');
 
     final pc = c?.personContact;
@@ -57,9 +71,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     _phoneCtl = TextEditingController(text: pc?.phone ?? '');
     _mobileCtl = TextEditingController(text: pc?.mobile ?? '');
 
-    _kind = (pc == null) ? _ContactKind.companyOnly : _ContactKind.person;
+    _kind = c == null
+        ? _ContactKind.person
+        : (pc == null ? _ContactKind.companyOnly : _ContactKind.person);
 
-    // update Save enabled state
     _displayCtl.addListener(() {
       if (!mounted) return;
       setState(() {});
@@ -93,13 +108,28 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     _phoneCtl.text = pc?.phone ?? '';
     _mobileCtl.text = pc?.mobile ?? '';
 
-    _kind = (pc == null) ? _ContactKind.companyOnly : _ContactKind.person;
+    _isInsurancePayer = c?.isInsurancePayer ?? false;
+    _kind = c == null
+        ? _ContactKind.person
+        : (pc == null ? _ContactKind.companyOnly : _ContactKind.person);
   }
 
   void _setKind(_ContactKind next) {
     if (_readOnly) return;
     setState(() {
       _kind = next;
+    });
+  }
+
+  void _setInsurancePayer(bool value) {
+    if (_readOnly) return;
+
+    setState(() {
+      _isInsurancePayer = value;
+
+      if (value && _kind != _ContactKind.companyOnly) {
+        _kind = _ContactKind.companyOnly;
+      }
     });
   }
 
@@ -121,7 +151,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final display = _displayCtl.text.trim();
     final company = _companyCtl.text.trim();
 
-    final account = _acctCtl.text.trim();
+    // Account number is generated internally by DawaPap/AfyaKit.
+    // Do not allow normal staff contact creation to invent one.
+    // Preserve only an existing value already attached to the contact.
+    final account = _isExisting ? _acctCtl.text.trim() : '';
 
     final person = _personCtl.text.trim();
     final email = _emailCtl.text.trim();
@@ -146,10 +179,11 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
       companyName: company.isEmpty ? null : company,
       personContact: personContact,
       status: widget.initial?.status,
-
-      // ✅ preserve type + account number in edits
       contactType: widget.initial?.contactType,
       accountNumber: account.isEmpty ? null : account,
+      isInsurancePayer: _isInsurancePayer,
+      linkedPatients:
+          widget.initial?.linkedPatients ?? const <ContactLinkedPatient>[],
     );
   }
 
@@ -175,6 +209,516 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Text(text, style: t.labelLarge),
+    );
+  }
+
+  Widget _systemIdentitySection(BuildContext context) {
+    if (!_isExisting) return const SizedBox.shrink();
+
+    final account = _acctCtl.text.trim();
+    if (account.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'System identity'),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: _acctCtl,
+          readOnly: true,
+          decoration: const InputDecoration(
+            labelText: 'DawaPap account no.',
+            hintText: 'Auto-generated internally',
+            prefixIcon: Icon(Icons.confirmation_number_outlined),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  String _relationshipLabel(ContactPatientRelationship value) {
+    switch (value) {
+      case ContactPatientRelationship.self:
+        return 'Self';
+      case ContactPatientRelationship.child:
+        return 'Child';
+      case ContactPatientRelationship.spouse:
+        return 'Spouse';
+      case ContactPatientRelationship.parent:
+        return 'Parent';
+      case ContactPatientRelationship.guardian:
+        return 'Guardian';
+      case ContactPatientRelationship.insurance:
+        return 'Insurance';
+      case ContactPatientRelationship.other:
+        return 'Other';
+    }
+  }
+
+  bool _hasSelfPatientLink(ZohoContact contact) {
+    return contact.linkedPatients.any(
+      (p) => p.relationship == ContactPatientRelationship.self,
+    );
+  }
+
+  bool _canOfferCreateSelfPatient(ZohoContact contact) {
+    if (!_isExisting) return false;
+    if (_selfPatientCreated) return false;
+    if (_creatingSelfPatient) return true;
+
+    final contactId = contact.contactId.trim();
+    if (contactId.isEmpty) return false;
+
+    if (contact.isInsurancePayer) return false;
+    if (_isInsurancePayer) return false;
+
+    if (_kind == _ContactKind.companyOnly && contact.personContact == null) {
+      return false;
+    }
+
+    if (_hasSelfPatientLink(contact)) return false;
+
+    final name = _patientNameFromContact(contact);
+    return name.isNotEmpty;
+  }
+
+  String _patientNameFromContact(ZohoContact contact) {
+    final title = contact.title.trim();
+    if (title.isNotEmpty && title.toLowerCase() != 'contact') return title;
+
+    final display = contact.displayName.trim();
+    if (display.isNotEmpty && display.toLowerCase() != 'contact') {
+      return display;
+    }
+
+    final person = contact.personContact?.personName.trim();
+    if (person != null && person.isNotEmpty) return person;
+
+    return '';
+  }
+
+  Future<void> _createSelfPatientFromContact(ZohoContact contact) async {
+    if (!_canOfferCreateSelfPatient(contact)) return;
+
+    final contactId = contact.contactId.trim();
+    final name = _patientNameFromContact(contact);
+
+    if (contactId.isEmpty || name.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Create self patient?'),
+          content: Text(
+            'Create a patient profile for $name and link it to this contact as Self?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() => _creatingSelfPatient = true);
+
+    try {
+      final input = ProfileUpsertInput(
+        fullName: name,
+        dob: '',
+        gender: ProfileGender.unknown,
+        contactId: contactId,
+        relationship: ProfileContactRelationship.self,
+        phone: contact.bestPhone.trim(),
+        email: contact.bestEmail.trim(),
+        nationalId: '',
+        notes: '',
+        isActive: true,
+      );
+
+      await ref.read(profilesServiceProvider).create(input);
+
+      if (!mounted) return;
+
+      setState(() {
+        _creatingSelfPatient = false;
+        _selfPatientCreated = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Self patient profile created')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _creatingSelfPatient = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create self patient: $e')),
+      );
+    }
+  }
+
+  Future<void> _addLinkedPatientForContact(
+    ZohoContact contact, {
+    ProfileContactRelationship relationship = ProfileContactRelationship.child,
+  }) async {
+    final contactId = contact.contactId.trim();
+    if (contactId.isEmpty) return;
+
+    setState(() => _creatingLinkedPatient = true);
+
+    try {
+      final input = await showDialog<ProfileUpsertInput>(
+        context: context,
+        builder: (_) => ProfileFormDialog(
+          allowExplicitContactLink: true,
+          initialContact: contact,
+          initialRelationship: relationship,
+          prefillFromContact: false,
+        ),
+      );
+
+      if (input == null || !mounted) {
+        if (mounted) setState(() => _creatingLinkedPatient = false);
+        return;
+      }
+
+      await ref.read(profilesServiceProvider).create(input);
+
+      if (!mounted) return;
+
+      setState(() {
+        _creatingLinkedPatient = false;
+        _linkedPatientCreated = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Linked patient created. Refresh this contact to see it.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _creatingLinkedPatient = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create linked patient: $e')),
+      );
+    }
+  }
+
+  Future<void> _openLinkedPatientEditor(ContactLinkedPatient link) async {
+    final patientId = link.patientId.trim();
+    if (patientId.isEmpty) return;
+
+    setState(() => _openingLinkedPatient = true);
+
+    try {
+      final service = ref.read(profilesServiceProvider);
+      final patient = await service.get(patientId);
+
+      if (!mounted) return;
+
+      setState(() => _openingLinkedPatient = false);
+
+      final input = await showDialog<ProfileUpsertInput>(
+        context: context,
+        builder: (_) =>
+            ProfileFormDialog(initial: patient, allowExplicitContactLink: true),
+      );
+
+      if (input == null || !mounted) return;
+
+      await service.update(patient.profileId, input);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Patient profile updated. Refresh this contact to see changes.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _openingLinkedPatient = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open patient profile: $e')),
+      );
+    }
+  }
+
+  Widget _selfPatientActionCard(BuildContext context, ZohoContact contact) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final hasSelf = _hasSelfPatientLink(contact);
+    final canCreate = _canOfferCreateSelfPatient(contact);
+
+    if (hasSelf) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: scheme.primaryContainer.withOpacity(0.28),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: scheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Self patient profile already linked.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_selfPatientCreated) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: scheme.primaryContainer.withOpacity(0.28),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: scheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Self patient created. Refresh this contact to see the new link.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!canCreate) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Icon(Icons.personal_injury_outlined, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No self patient profile is linked to this contact yet.',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: _creatingSelfPatient
+                ? null
+                : () => _createSelfPatientFromContact(contact),
+            icon: _creatingSelfPatient
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: Text(_creatingSelfPatient ? 'Creating…' : 'Create self'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _addLinkedPatientActionCard(
+    BuildContext context,
+    ZohoContact contact,
+  ) {
+    if (!_isExisting) return const SizedBox.shrink();
+
+    final contactId = contact.contactId.trim();
+    if (contactId.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Icon(Icons.group_add_outlined, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _linkedPatientCreated
+                  ? 'Linked patient created. Refresh this contact to see it.'
+                  : 'Add a dependent or another patient linked to this contact.',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: _creatingLinkedPatient
+                ? null
+                : () => _addLinkedPatientForContact(contact),
+            icon: _creatingLinkedPatient
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: Text(_creatingLinkedPatient ? 'Opening…' : 'Add profile'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkedPatientsSection(BuildContext context, ZohoContact contact) {
+    final linked = contact.linkedPatients;
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'Linked patients'),
+        const SizedBox(height: 6),
+        if (linked.isEmpty)
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Text(
+              'No linked patients yet.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              children: [
+                for (final p in linked) ...[
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      p.relationship == ContactPatientRelationship.insurance
+                          ? Icons.verified_user_outlined
+                          : Icons.personal_injury_outlined,
+                      color: p.isActive
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                    ),
+                    title: Text(p.patientDisplayName),
+                    subtitle: Text(
+                      '${p.patientId} • ${_relationshipLabel(p.relationship)}'
+                      '${p.isActive ? '' : ' • inactive'}',
+                    ),
+                    trailing: _openingLinkedPatient
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right_rounded),
+                    onTap: _openingLinkedPatient
+                        ? null
+                        : () => _openLinkedPatientEditor(p),
+                  ),
+                  if (p != linked.last) const Divider(height: 1),
+                ],
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        _selfPatientActionCard(context, contact),
+        const SizedBox(height: 8),
+        _addLinkedPatientActionCard(context, contact),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _insurancePayerSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      children: [
+        _sectionLabel(context, 'Insurance'),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+            color: _isInsurancePayer
+                ? scheme.primaryContainer.withOpacity(0.35)
+                : null,
+          ),
+          child: SwitchListTile(
+            value: _isInsurancePayer,
+            onChanged: _readOnly ? null : _setInsurancePayer,
+            secondary: Icon(
+              Icons.verified_user_outlined,
+              color: _isInsurancePayer ? scheme.primary : null,
+            ),
+            title: const Text('Insurance payer'),
+            subtitle: Text(
+              _isInsurancePayer
+                  ? 'This contact can be selected as an insurer/payer for memberships and claims.'
+                  : 'Turn on for insurers such as Britam, CIC, AAR, Jubilee, etc.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -229,6 +773,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     final contactType = (c?.contactType ?? '').trim();
     final status = (c?.status ?? '').trim();
     final personId = (c?.personContact?.contactPersonId ?? '').trim();
+    final linkedCount = c?.activeLinkedPatientCount ?? 0;
+    final insuranceLinkedCount = c?.activeInsuranceLinkedPatientCount ?? 0;
 
     return SafeArea(
       child: Padding(
@@ -236,7 +782,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header row
             Row(
               children: [
                 Text(_title(), style: Theme.of(context).textTheme.titleLarge),
@@ -247,10 +792,7 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
-            // Body
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(bottom: 88 + bottomInset),
@@ -258,6 +800,8 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                   key: _formKey,
                   child: Column(
                     children: [
+                      if (c != null) _linkedPatientsSection(context, c),
+
                       _sectionLabel(context, 'Basics'),
                       const SizedBox(height: 6),
 
@@ -293,20 +837,12 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                         textInputAction: TextInputAction.next,
                       ),
 
-                      // ✅ Account number (cf_account_number)
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _acctCtl,
-                        readOnly: _readOnly,
-                        decoration: const InputDecoration(
-                          labelText: 'Account No. (optional)',
-                          hintText: 'e.g. DP-000123',
-                          prefixIcon: Icon(Icons.confirmation_number_outlined),
-                        ),
-                        textInputAction: TextInputAction.next,
-                      ),
+                      const SizedBox(height: 16),
 
-                      const SizedBox(height: 12),
+                      _systemIdentitySection(context),
+
+                      _insurancePayerSection(context),
+
                       _sectionLabel(context, 'Contact type'),
                       const SizedBox(height: 6),
 
@@ -402,7 +938,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
 
                       const SizedBox(height: 16),
 
-                      // ✅ Debug section (only for existing contacts)
                       if (_isExisting) ...[
                         _sectionLabel(context, 'Debug'),
                         const SizedBox(height: 6),
@@ -428,6 +963,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                                 value: accountNo,
                               ),
                               _debugRow(
+                                label: 'isInsurancePayer',
+                                value: _isInsurancePayer ? 'true' : 'false',
+                              ),
+                              _debugRow(
                                 label: 'contactPersonId',
                                 value: personId,
                               ),
@@ -436,6 +975,14 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                                 value: contactType,
                               ),
                               _debugRow(label: 'status', value: status),
+                              _debugRow(
+                                label: 'linkedPatients',
+                                value: '$linkedCount',
+                              ),
+                              _debugRow(
+                                label: 'insuranceLinks',
+                                value: '$insuranceLinkedCount',
+                              ),
                             ],
                           ),
                         ),
@@ -448,8 +995,6 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                 ),
               ),
             ),
-
-            // Sticky action bar
             _ActionBar(
               isExisting: _isExisting,
               editing: _editing,

@@ -2,11 +2,11 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../shared/models/zoho_contact.dart';
+import '../models/zoho_contact.dart';
 import '../services/zoho_contacts_service.dart';
 import '../widgets/contact_editor_sheet.dart';
 import '../widgets/contact_sheet_models.dart';
@@ -53,11 +53,9 @@ class ContactsState {
 }
 
 final contactsControllerProvider =
-    StateNotifierProvider.autoDispose<ContactsController, ContactsState>((ref) {
+    StateNotifierProvider<ContactsController, ContactsState>((ref) {
       final ctl = ContactsController(ref);
 
-      // ✅ IMPORTANT:
-      // Don't call refresh() synchronously during provider creation.
       Future.microtask(ctl.refresh);
 
       return ctl;
@@ -70,10 +68,7 @@ class ContactsController extends StateNotifier<ContactsState> {
 
   Timer? _debounce;
 
-  // invalidate in-flight async work when disposed / when newer call starts
   int _token = 0;
-
-  // list refresh ordering (ignore stale completes)
   int _refreshSeq = 0;
 
   bool get _alive => mounted;
@@ -117,9 +112,6 @@ class ContactsController extends StateNotifier<ContactsState> {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
       final q = state.search.trim();
 
-      // ✅ Single source of truth:
-      // - Staff mode => provider returns null => unscoped list
-      // - Member mode => provider returns accountNumber => scoped list
       final accountNumber = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
           .trim();
       final scopedAccount = accountNumber.isEmpty ? null : accountNumber;
@@ -148,14 +140,57 @@ class ContactsController extends StateNotifier<ContactsState> {
   // ─────────────────────────────────────────────
 
   Future<void> create(ZohoContact input) async {
-    if (!_alive) return;
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('[FE][ContactsController.create] ENTERED');
+    debugPrint('[FE][ContactsController.create] mounted=$_alive');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    if (!_alive) {
+      throw StateError('ContactsController was disposed before create() ran');
+    }
+
     final myToken = _token;
+
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('[FE][ContactsController.create] START');
+    debugPrint(
+      '[FE][ContactsController.create] displayName=${input.displayName}',
+    );
+    debugPrint(
+      '[FE][ContactsController.create] companyName=${input.companyName}',
+    );
+    debugPrint(
+      '[FE][ContactsController.create] accountNumber=${input.accountNumber}',
+    );
+    debugPrint(
+      '[FE][ContactsController.create] contactType=${input.contactType}',
+    );
+    debugPrint(
+      '[FE][ContactsController.create] isInsurancePayer=${input.isInsurancePayer}',
+    );
+    debugPrint(
+      '[FE][ContactsController.create] person=${input.personContact?.personName}',
+    );
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     state = state.copyWith(saving: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
       final created = await svc.create(input);
+
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('[FE][ContactsController.create] CREATED');
+      debugPrint(
+        '[FE][ContactsController.create] contactId=${created.contactId}',
+      );
+      debugPrint(
+        '[FE][ContactsController.create] displayName=${created.displayName}',
+      );
+      debugPrint(
+        '[FE][ContactsController.create] accountNumber=${created.accountNumber}',
+      );
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       if (!_alive) return;
       if (myToken != _token) return;
@@ -165,14 +200,24 @@ class ContactsController extends StateNotifier<ContactsState> {
         items: <ZohoContact>[created, ...state.items],
       );
 
-      if (state.search.trim().isNotEmpty) {
-        unawaited(refresh());
-      }
-    } catch (e) {
-      if (!_alive) return;
-      if (myToken != _token) return;
+      debugPrint(
+        '[FE][ContactsController.create] refreshing list after create',
+      );
 
-      state = state.copyWith(saving: false, error: e.toString());
+      await refresh();
+
+      debugPrint('[FE][ContactsController.create] refresh complete');
+    } catch (e, st) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('[FE][ContactsController.create] FAILED');
+      debugPrint('[FE][ContactsController.create] error=$e');
+      debugPrint('[FE][ContactsController.create] stack=$st');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (_alive && myToken == _token) {
+        state = state.copyWith(saving: false, error: e.toString());
+      }
+
       rethrow;
     }
   }
@@ -196,9 +241,7 @@ class ContactsController extends StateNotifier<ContactsState> {
 
       state = state.copyWith(saving: false, items: next);
 
-      if (state.search.trim().isNotEmpty) {
-        unawaited(refresh());
-      }
+      unawaited(refresh());
     } catch (e) {
       if (!_alive) return;
       if (myToken != _token) return;
@@ -244,12 +287,52 @@ class ContactsController extends StateNotifier<ContactsState> {
   // ─────────────────────────────────────────────
 
   Future<void> openCreateFlow(BuildContext context) async {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('[FE][ContactsController.openCreateFlow] CALLED');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     final res = await _openSheet(context, initial: null);
-    if (res == null) return;
+
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('[FE][ContactsController.openCreateFlow] SHEET RETURNED');
+    debugPrint('[FE][ContactsController.openCreateFlow] result=$res');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    if (res == null) {
+      debugPrint(
+        '[FE][ContactsController.openCreateFlow] cancelled/null result',
+      );
+      return;
+    }
 
     await res.when(
       saveRequested: (draft) async {
+        debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        debugPrint('[FE][ContactsController.openCreateFlow] saveRequested');
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] displayName=${draft.displayName}',
+        );
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] companyName=${draft.companyName}',
+        );
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] accountNumber=${draft.accountNumber}',
+        );
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] contactType=${draft.contactType}',
+        );
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] isInsurancePayer=${draft.isInsurancePayer}',
+        );
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] person=${draft.personContact?.personName}',
+        );
+        debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
         if (draft.displayName.trim().isEmpty) {
+          debugPrint(
+            '[FE][ContactsController.openCreateFlow] blocked: empty displayName',
+          );
           _snack(context, 'Display name is required', isError: true);
           return;
         }
@@ -257,11 +340,21 @@ class ContactsController extends StateNotifier<ContactsState> {
         try {
           await create(draft);
           _snack(context, 'Contact created');
-        } catch (_) {
-          _snack(context, 'Failed to create contact', isError: true);
+        } catch (e, st) {
+          debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          debugPrint('[FE][ContactsController.openCreateFlow] CREATE FAILED');
+          debugPrint('[FE][ContactsController.openCreateFlow] error=$e');
+          debugPrint('[FE][ContactsController.openCreateFlow] stack=$st');
+          debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+          _snack(context, 'Failed to create contact: $e', isError: true);
         }
       },
-      deleteRequested: (_) async {},
+      deleteRequested: (_) async {
+        debugPrint(
+          '[FE][ContactsController.openCreateFlow] unexpected deleteRequested from create flow',
+        );
+      },
     );
   }
 
@@ -356,6 +449,7 @@ class ContactsController extends StateNotifier<ContactsState> {
   void _snack(BuildContext context, String msg, {bool isError = false}) {
     if (!context.mounted) return;
     final bg = isError ? Theme.of(context).colorScheme.error : null;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
@@ -365,6 +459,7 @@ class ContactsController extends StateNotifier<ContactsState> {
     final label = displayName.trim().isEmpty
         ? 'this contact'
         : '"$displayName"';
+
     return showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

@@ -1,3 +1,5 @@
+// lib/features/retail/contacts/widgets/contacts_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,12 +10,11 @@ import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
 import '../controllers/contacts_controller.dart';
-import '../../shared/models/zoho_contact.dart';
+import '../models/zoho_contact.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
 
-  // Keep consistent with your other retail list screens.
   static const double _contentMaxW = 900;
 
   @override
@@ -22,28 +23,39 @@ class ContactsScreen extends ConsumerWidget {
     final ctl = ref.read(contactsControllerProvider.notifier);
 
     final loadingAny = state.loadingList || state.loadingDetail;
+    final count = state.items.length;
 
     return AppPage(
       scrollable: false,
       maxWidth: _contentMaxW,
-
-      // ✅ AppPage now builds a constrained app bar aligned with body
       title: 'Contacts',
       showBack: true,
       actions: [
+        _CountChip(
+          count: count,
+          loading: state.loadingList,
+          hasSearch: state.search.trim().isNotEmpty,
+        ),
         IconButton(
           tooltip: 'Refresh',
-          onPressed: state.saving ? null : () => ctl.refresh(),
+          onPressed: state.saving ? null : ctl.refresh,
           icon: const Icon(Icons.refresh),
         ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
+            icon: state.saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: const Text('Add customer'),
+          ),
+        ),
       ],
-
-      fab: FloatingActionButton.extended(
-        onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New'),
-      ),
-
       body: Stack(
         children: [
           RefreshIndicator(
@@ -51,7 +63,6 @@ class ContactsScreen extends ConsumerWidget {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // ── Search
                 SliverToBoxAdapter(
                   child: AppCard(
                     title: 'Search',
@@ -66,12 +77,9 @@ class ContactsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppShape.gap12),
                 ),
-
-                // ── Error banner
                 if (state.error != null)
                   SliverToBoxAdapter(
                     child: _ErrorBanner(
@@ -79,22 +87,18 @@ class ContactsScreen extends ConsumerWidget {
                       onRetry: () => ctl.refresh(),
                     ),
                   ),
-
                 if (state.error != null)
                   const SliverToBoxAdapter(
                     child: SizedBox(height: AppShape.gap12),
                   ),
-
-                // ── Main list / empty states
                 _buildSliverBody(context, state, ctl),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppShape.gap16),
+                ),
               ],
             ),
           ),
-
           if (loadingAny) const LinearProgressIndicator(minHeight: 2),
-
           if (state.saving)
             const Positioned(
               left: 0,
@@ -112,6 +116,9 @@ class ContactsScreen extends ConsumerWidget {
     ContactsState state,
     ContactsController ctl,
   ) {
+    final count = state.items.length;
+    final hasQuery = state.search.trim().isNotEmpty;
+
     if (state.items.isEmpty && state.loadingList) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -120,17 +127,15 @@ class ContactsScreen extends ConsumerWidget {
     }
 
     if (state.items.isEmpty) {
-      final hasQuery = state.search.trim().isNotEmpty;
-
       return SliverFillRemaining(
         hasScrollBody: false,
         child: AppEmptyState(
           icon: Icons.people_alt_outlined,
-          title: hasQuery ? 'No results' : 'No contacts yet',
+          title: hasQuery ? 'No results' : 'No customers yet',
           subtitle: hasQuery
               ? 'Try a different search.'
-              : 'Create your first contact to start quoting in Zoho.',
-          actionLabel: hasQuery ? 'Clear search' : 'Create contact',
+              : 'Add your first customer to start creating quotes.',
+          actionLabel: hasQuery ? 'Clear search' : 'Add customer',
           onAction: () {
             if (hasQuery) {
               ctl.setSearch('');
@@ -145,7 +150,7 @@ class ContactsScreen extends ConsumerWidget {
 
     return SliverToBoxAdapter(
       child: AppCard(
-        title: 'Contacts',
+        title: hasQuery ? 'Results ($count)' : 'Customers ($count)',
         icon: Icons.people_alt_outlined,
         child: Column(
           children: [
@@ -162,6 +167,39 @@ class ContactsScreen extends ConsumerWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({
+    required this.count,
+    required this.loading,
+    required this.hasSearch,
+  });
+
+  final int count;
+  final bool loading;
+  final bool hasSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = loading
+        ? 'Loading…'
+        : hasSearch
+        ? '$count found'
+        : '$count customers';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Chip(
+        visualDensity: VisualDensity.compact,
+        avatar: Icon(
+          hasSearch ? Icons.manage_search : Icons.people_alt_outlined,
+          size: 16,
+        ),
+        label: Text(label),
       ),
     );
   }
@@ -191,7 +229,7 @@ class _SearchBar extends StatelessWidget {
     return TextField(
       enabled: enabled,
       decoration: InputDecoration(
-        hintText: 'Search contacts…',
+        hintText: 'Search customers…',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: trimmed.isEmpty
             ? (loading
@@ -265,42 +303,57 @@ class _ContactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = contact.displayName.trim();
-    final subtitle = _subtitleFrom(contact);
+    final title = contact.title.trim().isEmpty ? 'Contact' : contact.title;
+    final subtitle = contact.subtitle.trim();
+    final linkedCount = contact.activeLinkedPatientCount;
 
     return ListTile(
       dense: true,
       enabled: enabled,
       onTap: enabled ? onTap : null,
       contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(child: Text(_initials(title))),
-      title: Text(title.isEmpty ? 'Contact' : title),
+      leading: CircleAvatar(
+        child: contact.isCompanyOnly
+            ? const Icon(Icons.apartment_outlined, size: 20)
+            : Text(_initials(title)),
+      ),
+      title: Text(title),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (contact.isVendor && !contact.isCustomer)
+            const Tooltip(
+              message: 'Vendor only',
+              child: Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.local_shipping_outlined, size: 20),
+              ),
+            ),
+          if (contact.isInsurancePayer)
+            const Tooltip(
+              message: 'Insurance payer',
+              child: Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.verified_user_outlined, size: 20),
+              ),
+            ),
+          if (linkedCount > 0)
+            Tooltip(
+              message: linkedCount == 1
+                  ? '1 linked patient'
+                  : '$linkedCount linked patients',
+              child: Chip(
+                visualDensity: VisualDensity.compact,
+                avatar: const Icon(Icons.personal_injury_outlined, size: 16),
+                label: Text('$linkedCount'),
+              ),
+            ),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
     );
-  }
-
-  String _subtitleFrom(ZohoContact c) {
-    final display = c.displayName.trim();
-
-    final person = c.personContact?.personName.trim() ?? '';
-    final company = (c.companyName ?? '').trim();
-
-    final phone = c.bestPhone.trim();
-    final email = (c.personContact?.email ?? '').trim();
-
-    final parts = <String>[];
-
-    if (person.isNotEmpty && person != display) parts.add(person);
-    if (company.isNotEmpty && company != display) parts.add(company);
-
-    if (phone.isNotEmpty) {
-      parts.add(phone);
-    } else if (email.isNotEmpty) {
-      parts.add(email);
-    }
-
-    return parts.take(2).join(' • ');
   }
 
   String _initials(String name) {
@@ -309,8 +362,10 @@ class _ContactTile extends StatelessWidget {
         .split(RegExp(r'\s+'))
         .where((s) => s.isNotEmpty)
         .toList();
+
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts[0][0].toUpperCase();
+
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

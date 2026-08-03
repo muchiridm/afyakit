@@ -10,6 +10,8 @@ import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 
 import 'package:afyakit/features/retail/invoices/controllers/invoice_controller.dart';
+import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
+import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
 
 import 'package:afyakit/shared/services/dialog_service.dart';
@@ -36,6 +38,7 @@ class InvoiceActionController {
 
   bool _requireCanManageInvoices() {
     if (_canManageInvoices) return true;
+
     SnackService.showError('You don’t have permission to perform this action.');
     return false;
   }
@@ -82,15 +85,15 @@ class InvoiceActionController {
   // Refresh
   // ─────────────────────────────────────────────
 
-  /// Pull-to-refresh / refresh icon can call this.
   Future<void> refresh(String invoiceId) async {
     final id = invoiceId.trim();
     if (id.isEmpty) return;
+
     await _ctl.load(id);
   }
 
   // ─────────────────────────────────────────────
-  // Mutations (staff/capability-gated)
+  // Mutations / staff actions
   // ─────────────────────────────────────────────
 
   Future<void> sendInvoice(
@@ -110,16 +113,11 @@ class InvoiceActionController {
       confirmColor: Colors.blue,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
-      // Ensure loaded so we can build email draft from invoice content
-      final currentId =
-          (_ref.read(invoiceControllerProvider).invoice?.invoiceId ?? '')
-              .trim();
-      if (currentId != id) {
-        await _ctl.load(id);
-      }
+      await _ensureInvoiceLoaded(id);
 
       final inv = _ref.read(invoiceControllerProvider).invoice;
       if (inv == null) {
@@ -159,6 +157,7 @@ class InvoiceActionController {
       confirmColor: Colors.blue,
       barrierDismissible: false,
     );
+
     if (!ok) return;
 
     try {
@@ -169,5 +168,76 @@ class InvoiceActionController {
     } catch (e) {
       SnackService.showError(e.toString());
     }
+  }
+
+  /// Records a normal Zoho customer payment against the invoice.
+  ///
+  /// This is the correct generic "mark as paid" flow because it supports:
+  /// - Cash
+  /// - Bank transfer
+  /// - Card
+  /// - Insurance
+  /// - M-Pesa
+  /// - Other modes
+  ///
+  /// The payment editor handles payment_mode/reference/notes/date/amount.
+  Future<void> recordPayment(
+    BuildContext context, {
+    required String invoiceId,
+  }) async {
+    final id = invoiceId.trim();
+    if (id.isEmpty) return;
+
+    if (!_requireCanManageInvoices()) return;
+
+    try {
+      await _ensureInvoiceLoaded(id);
+
+      final inv = _ref.read(invoiceControllerProvider).invoice;
+      if (inv == null) {
+        SnackService.showError('Invoice not loaded');
+        return;
+      }
+
+      final pending = _validPending(inv.balance);
+      if (pending == null) {
+        SnackService.showSuccess('Invoice has no outstanding balance.');
+        return;
+      }
+
+      final paymentCtl = _ref.read(paymentControllerProvider(id).notifier);
+
+      paymentCtl.startNewPayment();
+      paymentCtl.seedFromInvoiceContext(
+        pendingAmount: pending,
+        suggestedPhone: null,
+      );
+
+      if (!context.mounted) return;
+
+      await PaymentEditorSheet.open(context, invoiceId: id);
+
+      await _ctl.load(id);
+      await paymentCtl.refresh();
+    } catch (e) {
+      SnackService.showError(e.toString());
+    }
+  }
+
+  Future<void> _ensureInvoiceLoaded(String invoiceId) async {
+    final currentId =
+        (_ref.read(invoiceControllerProvider).invoice?.invoiceId ?? '').trim();
+
+    if (currentId == invoiceId) return;
+
+    await _ctl.load(invoiceId);
+  }
+
+  static num? _validPending(num? value) {
+    if (value == null) return null;
+    if (!value.isFinite) return null;
+    if (value <= 0) return null;
+
+    return value;
   }
 }

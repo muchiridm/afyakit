@@ -6,40 +6,130 @@
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
 
-    <!-- Neutral default; will be overwritten by tenant branding on web -->
-    <meta name="description" content="AfyaKit platform is loading…" />
-    <meta name="theme-color" content="#2196F3" />
+    <title>__APP_TITLE__</title>
 
-    <!-- iOS / PWA bits -->
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="AfyaKit" />
-
-    <!-- Fallback Apple icon; real per-tenant icon can override via DOM helper -->
-    <link
-      id="apple-touch-icon"
-      rel="apple-touch-icon"
-      href="/icons/_default/icon-192.png"
+    <meta
+      id="app-description"
+      name="description"
+      content="__APP_DESCRIPTION__"
     />
 
-    <!-- Fallback favicon; will be replaced using TenantProfile.assets.faviconUrl -->
+    <meta id="app-theme-color" name="theme-color" content="__THEME_COLOR__" />
+
+    <!-- Social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="__APP_TITLE__" />
+    <meta property="og:title" content="__APP_TITLE__" />
+    <meta property="og:description" content="__APP_DESCRIPTION__" />
+    <meta property="og:url" content="__APP_URL__" />
+    <meta property="og:image" content="__APP_IMAGE__" />
+    <meta property="og:image:secure_url" content="__APP_IMAGE__" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+
+    <!-- X/Twitter and other preview consumers -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="__APP_TITLE__" />
+    <meta name="twitter:description" content="__APP_DESCRIPTION__" />
+    <meta name="twitter:image" content="__APP_IMAGE__" />
+
+    <!-- iOS / PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta
+      id="apple-mobile-web-app-title"
+      name="apple-mobile-web-app-title"
+      content="__APP_TITLE__"
+    />
+
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/favicon.png" />
+
     <link id="app-favicon" rel="icon" type="image/png" href="/favicon.png" />
 
-    <!-- Neutral title; will be replaced by profile.webTitle -->
-    <title>AfyaKit</title>
-
-    <!-- Dynamic, tenant-aware manifest (backend can serve per-tenant JSON here) -->
     <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
   </head>
 
   <body>
-    <!--
-      Firebase Phone Auth reCAPTCHA anchor (Web)
-      Keep this element stable during Flutter bootstrap to avoid DOM race issues
-      like: "Cannot read properties of null (reading 'style')"
-    -->
     <div id="firebase-recaptcha-container"></div>
 
-    <script src="flutter_bootstrap.js" async></script>
+    <script src="flutter_bootstrap.js" defer></script>
+
+    <script>
+      (() => {
+        const setMetaContent = (id, value) => {
+          const element = document.getElementById(id);
+
+          if (element && value) {
+            element.setAttribute("content", value);
+          }
+        };
+
+        const setHref = (id, value) => {
+          const element = document.getElementById(id);
+
+          if (element && value) {
+            element.setAttribute("href", value);
+          }
+        };
+
+        const pickIcon = (manifest) => {
+          const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+
+          const preferred =
+            icons.find(
+              (icon) =>
+                icon.sizes === "192x192" &&
+                (!icon.purpose || icon.purpose === "any"),
+            ) ||
+            icons.find(
+              (icon) =>
+                icon.sizes === "512x512" &&
+                (!icon.purpose || icon.purpose === "any"),
+            ) ||
+            icons.find((icon) => icon.src);
+
+          return preferred?.src || "/favicon.png";
+        };
+
+        const applyBranding = (manifest) => {
+          if (!manifest) return;
+
+          const title = manifest.name || manifest.short_name || "";
+
+          if (title) {
+            document.title = title;
+            setMetaContent("apple-mobile-web-app-title", title);
+          }
+
+          setMetaContent("app-description", manifest.description || title);
+          setMetaContent("app-theme-color", manifest.theme_color);
+          setHref("apple-touch-icon", pickIcon(manifest));
+        };
+
+        const loadBranding = async () => {
+          try {
+            const response = await fetch("/manifest.webmanifest", {
+              cache: "no-store",
+              credentials: "same-origin",
+            });
+
+            if (!response.ok) return;
+
+            applyBranding(await response.json());
+          } catch (_) {
+            // Static build metadata already provides a safe fallback.
+          }
+        };
+
+        window.addEventListener(
+          "load",
+          () => {
+            window.setTimeout(loadBranding, 0);
+          },
+          { once: true },
+        );
+      })();
+    </script>
   </body>
 </html>

@@ -1,3 +1,6 @@
+// lib/features/delivery_addresses/widgets/delivery_addresses_screen.dart
+
+import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,105 +9,182 @@ import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart
 import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_pin_picker_screen.dart';
 
-class DeliveryAddressesScreen extends ConsumerWidget {
-  const DeliveryAddressesScreen({super.key, this.pickerMode = false});
+import 'package:afyakit/shared/layout/app_layout.dart';
+import 'package:afyakit/shared/layout/app_page.dart';
 
+class DeliveryAddressesScreen extends ConsumerWidget {
+  const DeliveryAddressesScreen({
+    super.key,
+    required this.scope,
+    this.pickerMode = false,
+    this.memberMode = false,
+  });
+
+  final DeliveryAddressScope scope;
   final bool pickerMode;
+  final bool memberMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(deliveryAddressStateProvider);
-    final controller = ref.read(deliveryAddressControllerProvider.notifier);
+    final state = ref.watch(deliveryAddressStateProvider(scope));
+    final controller = ref.read(
+      deliveryAddressControllerProvider(scope).notifier,
+    );
     final launcher = ref.read(deliveryNavigationLauncherProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          pickerMode ? 'Select Delivery Address' : 'Delivery Addresses',
+    final ownerLabel = (scope.ownerLabel ?? '').trim();
+
+    final title = pickerMode
+        ? ownerLabel.isEmpty
+              ? 'Select Delivery Address'
+              : 'Select Address · $ownerLabel'
+        : ownerLabel.isEmpty
+        ? 'Delivery Addresses'
+        : 'Delivery Addresses · $ownerLabel';
+
+    return AppPage(
+      title: title,
+      showBack: true,
+      maxWidth: AppLayout.contentMaxWidth,
+      padding: AppLayout.pagePadding,
+      scrollable: false,
+      actions: [
+        IconButton(
+          tooltip: 'Add address',
+          onPressed: scope.isUsable
+              ? () => _showAddressSheet(context, scope: scope, existing: null)
+              : null,
+          icon: const Icon(Icons.add),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddressSheet(context, existing: null),
+      ],
+      fab: FloatingActionButton(
+        onPressed: scope.isUsable
+            ? () => _showAddressSheet(context, scope: scope, existing: null)
+            : null,
         child: const Icon(Icons.add),
       ),
-      body: Builder(
-        builder: (_) {
-          if (state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (memberMode && !pickerMode) ...[
+            const _MemberDeliveryInfoCard(),
+            const SizedBox(height: 12),
+          ],
+          Expanded(
+            child: Builder(
+              builder: (_) {
+                if (!scope.isUsable) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Select a customer before managing delivery addresses.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
 
-          if (!state.hasActiveItems) {
-            return _EmptyState(
-              pickerMode: pickerMode,
-              onAddPressed: () => _showAddressSheet(context, existing: null),
-            );
-          }
+                if (state.isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: state.activeItems.length,
-            itemBuilder: (context, index) {
-              final address = state.activeItems[index];
+                if (!state.hasActiveItems) {
+                  return _EmptyState(
+                    pickerMode: pickerMode,
+                    onAddPressed: () => _showAddressSheet(
+                      context,
+                      scope: scope,
+                      existing: null,
+                    ),
+                  );
+                }
 
-              return _AddressCard(
-                address: address,
-                pickerMode: pickerMode,
-                onSelect: pickerMode
-                    ? () => Navigator.of(context).pop<DeliveryAddress>(address)
-                    : null,
-                onEdit: () => _showAddressSheet(context, existing: address),
-                onNavigate: address.pinLocation == null
-                    ? null
-                    : () async {
-                        try {
-                          await launcher.navigateTo(address);
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text(e.toString())));
+                return ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: state.activeItems.length,
+                  itemBuilder: (context, index) {
+                    final address = state.activeItems[index];
+
+                    return _AddressCard(
+                      address: address,
+                      pickerMode: pickerMode,
+                      onSelect: pickerMode
+                          ? () => Navigator.of(
+                              context,
+                            ).pop<DeliveryAddress>(address)
+                          : null,
+                      onEdit: () => _showAddressSheet(
+                        context,
+                        scope: scope,
+                        existing: address,
+                      ),
+                      onNavigate: address.pinLocation == null
+                          ? null
+                          : () async {
+                              try {
+                                await launcher.navigateTo(address);
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString())),
+                                );
+                              }
+                            },
+                      onSetDefault: () async {
+                        await controller.setDefault(address.id);
+
+                        if (!context.mounted) return;
+
+                        final error = ref.read(
+                          deliveryAddressErrorProvider(scope),
+                        );
+                        if (error == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Default address updated'),
+                            ),
+                          );
                         }
                       },
-                onSetDefault: () async {
-                  await controller.setDefault(address.id);
-                  if (context.mounted) {
-                    final error = ref.read(deliveryAddressErrorProvider);
-                    if (error == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Default address updated'),
-                        ),
-                      );
-                    }
-                  }
-                },
-                onArchive: () => _confirmArchive(
-                  context,
-                  onConfirm: () async {
-                    await controller.archive(address.id);
-                    if (context.mounted) {
-                      final error = ref.read(deliveryAddressErrorProvider);
-                      if (error == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Address removed')),
-                        );
-                      }
-                    }
+                      onArchive: () => _confirmArchive(
+                        context,
+                        onConfirm: () async {
+                          await controller.archive(address.id);
+
+                          if (!context.mounted) return;
+
+                          final error = ref.read(
+                            deliveryAddressErrorProvider(scope),
+                          );
+                          if (error == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Address removed')),
+                            );
+                          }
+                        },
+                      ),
+                    );
                   },
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _showAddressSheet(BuildContext context, {DeliveryAddress? existing}) {
+  void _showAddressSheet(
+    BuildContext context, {
+    required DeliveryAddressScope scope,
+    DeliveryAddress? existing,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _AddressFormSheet(existing: existing),
+      useSafeArea: true,
+      builder: (_) => _AddressFormSheet(scope: scope, existing: existing),
     );
   }
 
@@ -117,7 +197,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
       builder: (_) => AlertDialog(
         title: const Text('Remove address?'),
         content: const Text(
-          'This address will be archived and removed from your active list.',
+          'This address will be archived and removed from the active list.',
         ),
         actions: [
           TextButton(
@@ -135,6 +215,36 @@ class DeliveryAddressesScreen extends ConsumerWidget {
     if (confirmed == true) {
       await onConfirm();
     }
+  }
+}
+
+class _MemberDeliveryInfoCard extends StatelessWidget {
+  const _MemberDeliveryInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.location_on_outlined, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Save home, work, and family delivery locations so they are '
+                'ready during checkout. Set the address you use most often as '
+                'the default, and add a map pin when precise navigation helps.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -245,8 +355,9 @@ class _AddressCard extends StatelessWidget {
 }
 
 class _AddressFormSheet extends ConsumerStatefulWidget {
-  const _AddressFormSheet({this.existing});
+  const _AddressFormSheet({required this.scope, this.existing});
 
+  final DeliveryAddressScope scope;
   final DeliveryAddress? existing;
 
   @override
@@ -275,6 +386,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   @override
   void initState() {
     super.initState();
+
     final existing = widget.existing;
 
     _labelController = TextEditingController(text: existing?.label ?? '');
@@ -315,106 +427,115 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = ref.watch(deliveryAddressBusyProvider);
-    final controller = ref.read(deliveryAddressControllerProvider.notifier);
+    final busy = ref.watch(deliveryAddressBusyProvider(widget.scope));
+    final controller = ref.read(
+      deliveryAddressControllerProvider(widget.scope).notifier,
+    );
+
     final title = _isEdit ? 'Edit Address' : 'Add Address';
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppLayout.contentMaxWidth),
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: _labelController,
+                      label: 'Label',
+                      hint: 'Home, Office, Mum\'s place',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _recipientNameController,
+                      label: 'Recipient Name',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _recipientPhoneController,
+                      label: 'Recipient Phone',
+                      keyboardType: TextInputType.phone,
+                      required: true,
+                    ),
+                    _field(
+                      controller: _line1Controller,
+                      label: 'Address Line 1',
+                      hint: 'Building, house, road, street',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _line2Controller,
+                      label: 'Address Line 2',
+                      hint: 'Apartment, floor, unit',
+                    ),
+                    _field(
+                      controller: _areaController,
+                      label: 'Area / Estate',
+                      required: true,
+                    ),
+                    _field(
+                      controller: _cityController,
+                      label: 'City / Town',
+                      required: true,
+                    ),
+                    _field(controller: _countyController, label: 'County'),
+                    _field(controller: _landmarkController, label: 'Landmark'),
+                    _field(
+                      controller: _instructionsController,
+                      label: 'Delivery Instructions',
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 4),
+                    _PinTile(
+                      pinLocation: _pinLocation,
+                      busy: busy,
+                      onPick: () => _pickPin(context),
+                      onClear: _pinLocation == null
+                          ? null
+                          : () => setState(() => _pinLocation = null),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _isDefault,
+                      onChanged: busy
+                          ? null
+                          : (value) => setState(() => _isDefault = value),
+                      title: const Text('Set as default'),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: busy ? null : () => _submit(controller),
+                      child: busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(_isEdit ? 'Save Changes' : 'Save Address'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _field(
-                  controller: _labelController,
-                  label: 'Label',
-                  hint: 'Home, Office, Mum\'s place',
-                  required: true,
-                ),
-                _field(
-                  controller: _recipientNameController,
-                  label: 'Recipient Name',
-                  required: true,
-                ),
-                _field(
-                  controller: _recipientPhoneController,
-                  label: 'Recipient Phone',
-                  keyboardType: TextInputType.phone,
-                  required: true,
-                ),
-                _field(
-                  controller: _line1Controller,
-                  label: 'Address Line 1',
-                  hint: 'Building, house, road, street',
-                  required: true,
-                ),
-                _field(
-                  controller: _line2Controller,
-                  label: 'Address Line 2',
-                  hint: 'Apartment, floor, unit',
-                ),
-                _field(
-                  controller: _areaController,
-                  label: 'Area / Estate',
-                  required: true,
-                ),
-                _field(
-                  controller: _cityController,
-                  label: 'City / Town',
-                  required: true,
-                ),
-                _field(controller: _countyController, label: 'County'),
-                _field(controller: _landmarkController, label: 'Landmark'),
-                _field(
-                  controller: _instructionsController,
-                  label: 'Delivery Instructions',
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 4),
-                _PinTile(
-                  pinLocation: _pinLocation,
-                  busy: busy,
-                  onPick: () => _pickPin(context),
-                  onClear: _pinLocation == null
-                      ? null
-                      : () => setState(() => _pinLocation = null),
-                ),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _isDefault,
-                  onChanged: busy
-                      ? null
-                      : (value) => setState(() => _isDefault = value),
-                  title: const Text('Set as default'),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: busy ? null : () => _submit(controller),
-                  child: busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isEdit ? 'Save Changes' : 'Save Address'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -513,6 +634,7 @@ class _PinTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasPin = pinLocation != null;
+
     final subtitle = hasPin
         ? (pinLocation!.placeName?.trim().isNotEmpty == true
               ? '${pinLocation!.placeName}\n'

@@ -13,7 +13,8 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
   Uri deleteUser(String uid) => _uri('auth_users/${_seg(uid)}');
 
   // ─────────────────────────────────────────────
-  // 🧑‍💼 HQ / Global (core; superadmin-gated on server)
+  // 🧑‍💼 HQ / Global users
+  // core /api/* routes; superadmin-gated on server
   // ─────────────────────────────────────────────
 
   /// GET /api/users?tenantId=&search=&limit=
@@ -34,12 +35,23 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
   Uri fetchUserMemberships(String uid) =>
       _uriCore('users/${_seg(uid)}/memberships');
 
-  // Superadmins (global)
+  /// DELETE /api/users/:uid
+  ///
+  /// Deletes a global unassigned/orphan user.
+  /// Backend must refuse this if the user still has tenant auth_users
+  /// or membership edge records.
+  Uri deleteGlobalUser(String uid) => _uriCore('users/${_seg(uid)}');
+
+  // ─────────────────────────────────────────────
+  // ⭐ HQ / Superadmins
+  // ─────────────────────────────────────────────
+
   Uri listSuperAdmins() => _uriCore('superadmins');
   Uri setSuperAdmin(String uid) => _uriCore('superadmins/${_seg(uid)}');
 
   // ─────────────────────────────────────────────
-  // 🧑‍💼 HQ / Tenant user management (tenant auth_users)
+  // 🧑‍💼 HQ / Tenant user management
+  // tenant auth_users SOT
   // ─────────────────────────────────────────────
 
   /// GET /api/tenants/:tenantId/auth_users
@@ -55,7 +67,8 @@ extension AfyaKitUserRoutes on AfyaKitRoutes {
     },
   );
 
-  /// ✅ POST /api/tenants/:tenantId/auth_users
+  /// POST /api/tenants/:tenantId/auth_users
+  ///
   /// body: { phoneNumber, displayName? }
   Uri hqCreateTenantUser(String targetTenantId) =>
       _uriCore('tenants/${_seg(targetTenantId)}/auth_users');

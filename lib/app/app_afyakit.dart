@@ -5,15 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/app_navigator.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/hq/branding/services/web_branding.dart';
-
-import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/core/auth/shared/widgets/auth_gate.dart';
+import 'package:afyakit/core/hq/branding/services/web_branding.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/theme/app_theme_overrides.dart';
 
 class AppAfyaKit extends ConsumerWidget {
   const AppAfyaKit({super.key});
+
+  static const _bootTitle = 'Loading…';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,12 +22,14 @@ class AppAfyaKit extends ConsumerWidget {
 
     return asyncProfile.when(
       loading: () => MaterialApp(
+        title: _bootTitle,
         debugShowCheckedModeBanner: false,
         navigatorKey: appNavigatorKey,
         scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
         home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
       error: (e, _) => MaterialApp(
+        title: _bootTitle,
         debugShowCheckedModeBanner: false,
         navigatorKey: appNavigatorKey,
         scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
@@ -35,8 +38,20 @@ class AppAfyaKit extends ConsumerWidget {
         ),
       ),
       data: (profile) {
-        // Web side-effects: favicon/title/meta/theme-color
-        applyTenantBrandingToDom(profile);
+        final webTitle = profile.webTitle.trim().isNotEmpty
+            ? profile.webTitle.trim()
+            : profile.displayName.trim().isNotEmpty
+            ? profile.displayName.trim()
+            : profile.id;
+
+        // Web side-effects: favicon/title/meta/theme-color.
+        //
+        // Do this after the frame instead of directly during build.
+        if (kIsWeb) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            applyTenantBrandingToDom(profile);
+          });
+        }
 
         final baseTheme = ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: profile.primaryColor),
@@ -45,34 +60,24 @@ class AppAfyaKit extends ConsumerWidget {
         );
 
         return MaterialApp(
-          title: profile.displayName,
+          title: webTitle,
           debugShowCheckedModeBanner: false,
           navigatorKey: appNavigatorKey,
           scaffoldMessengerKey: SnackService.scaffoldMessengerKey,
-
-          // ✅ Apply “Home curves” everywhere
           theme: applyHomeLook(baseTheme),
-
-          // ✅ Auth gate
           home: const AuthGate(),
-
-          // ✅ Web stabilization layer (fixes mouse_tracker assertion triggers)
           builder: (context, child) {
             Widget w = child ?? const SizedBox.shrink();
 
+            // Force the browser tab title from the tenant profile.
+            w = Title(title: webTitle, color: profile.primaryColor, child: w);
+
             if (kIsWeb) {
-              // 1) Tooltips are implemented with overlays + mouse tracking on web.
-              //    When combined with frequent rebuilds (Riverpod) they can trigger:
-              //    mouse_tracker.dart assertion: !_debugDuringDeviceUpdate
               w = TooltipTheme(
-                data: const TooltipThemeData(
-                  waitDuration: Duration(days: 365), // effectively disables
-                ),
+                data: const TooltipThemeData(waitDuration: Duration(days: 365)),
                 child: w,
               );
 
-              // 2) Hover/splash/highlight can contribute to hover-driven churn.
-              //    This is a safe, pragmatic web-only stability tweak.
               w = Theme(
                 data: Theme.of(context).copyWith(
                   hoverColor: Colors.transparent,

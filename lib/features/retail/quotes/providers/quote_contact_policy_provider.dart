@@ -2,7 +2,7 @@
 
 import 'package:afyakit/core/home/enums/entry_mode.dart';
 import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_account_scope_provider.dart';
+import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

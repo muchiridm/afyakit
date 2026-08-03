@@ -1,10 +1,9 @@
-// lib/features/retail/sales/quotes/widgets/quote_editor_actions.dart
+// lib/features/retail/quotes/widgets/quote_editor_actions.dart
 
-import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/shared/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';
@@ -24,7 +23,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
     required this.onEnsureAuthed,
   });
 
-  static const double _kTrailH = 36;
+  static const double _trailHeight = 36;
 
   final bool isEdit;
   final bool busy;
@@ -37,17 +36,17 @@ class QuoteEditorHeaderActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
 
     final ButtonStyle pickStyle = OutlinedButton.styleFrom(
-      minimumSize: const Size(0, _kTrailH),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      minimumSize: const Size(0, _trailHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 
     final ButtonStyle iconStyle = IconButton.styleFrom(
-      minimumSize: const Size(_kTrailH, _kTrailH),
+      minimumSize: const Size(_trailHeight, _trailHeight),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -66,39 +65,69 @@ class QuoteEditorHeaderActions extends StatelessWidget {
       );
 
       if (picked == null) return;
+
       onContactPicked(picked);
     }
 
-    return SizedBox(
-      height: _kTrailH,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SalesDocStatusChip(
-            status: vmMeta.status,
-            visualDensity: VisualDensity.compact,
-            forceLabel: isEdit ? 'editing' : 'draft',
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool tight =
+            constraints.maxWidth > 0 && constraints.maxWidth < 260;
+
+        final Widget statusChip = SalesDocStatusChip(
+          status: vmMeta.status,
+          visualDensity: VisualDensity.compact,
+          forceLabel: tight ? null : (isEdit ? 'editing' : 'draft'),
+        );
+
+        final Widget? payerButton = isMemberScoped
+            ? null
+            : OutlinedButton.icon(
+                style: pickStyle,
+                icon: const Icon(Icons.person_outline, size: 18),
+                label: Text(
+                  hasContact ? 'Change payer' : 'Pick payer',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+                onPressed: busy ? null : pickContact,
+              );
+
+        final Widget? deleteButton = isEdit
+            ? IconButton(
+                tooltip: 'Delete quote',
+                style: iconStyle,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: colorScheme.error,
+                ),
+                onPressed: busy ? null : onDelete,
+              )
+            : null;
+
+        final List<Widget> actions = <Widget>[
+          statusChip,
+          if (payerButton != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: tight ? 150 : 190),
+              child: payerButton,
+            ),
+          if (deleteButton != null) deleteButton,
+        ];
+
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: actions,
           ),
-          if (!isMemberScoped) ...<Widget>[
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              style: pickStyle,
-              icon: const Icon(Icons.person_outline, size: 18),
-              label: Text(hasContact ? 'Change' : 'Pick'),
-              onPressed: busy ? null : pickContact,
-            ),
-          ],
-          if (isEdit) ...<Widget>[
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Delete quote',
-              style: iconStyle,
-              icon: Icon(Icons.delete_outline, size: 20, color: cs.error),
-              onPressed: busy ? null : onDelete,
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -127,15 +156,53 @@ class QuoteEditorFooterBar extends ConsumerWidget {
   final Future<bool> Function() onEnsureAuthed;
   final Future<void> Function() onSubmit;
 
+  String? _submitBlockReason() {
+    if (busy) return null;
+
+    if (linesState.lines.isEmpty) {
+      return 'Add at least one item';
+    }
+
+    if (requirePrices && !linesState.hasAllPrices) {
+      return 'Some items are missing prices';
+    }
+
+    if (meta.customerIdResolved.isEmpty) {
+      return isMemberScoped
+          ? 'Customer profile is still loading'
+          : 'Pick a payer/customer';
+    }
+
+    if (meta.quoteDate == null) {
+      return 'Select a quote date';
+    }
+
+    if (meta.requiresPatient && !meta.hasPatientContext) {
+      return 'Select a patient profile';
+    }
+
+    if (meta.requiresDeliveryAddress && !meta.hasDeliveryAddress) {
+      return 'Select a delivery address';
+    }
+
+    if (meta.requiresMembership && !meta.hasInsuranceContext) {
+      return 'Select an insurance membership';
+    }
+
+    if (meta.isGeneral && meta.isInsurancePayment) {
+      return 'Insurance payment requires a clinical quote';
+    }
+
+    return null;
+  }
+
   String _safeName(String value) {
     final String trimmed = value.trim();
     return trimmed.isEmpty ? 'Item' : trimmed;
   }
 
   num _safeRate(num value) {
-    if (value.isNaN || value.isInfinite || value < 0) {
-      return 0;
-    }
+    if (value.isNaN || value.isInfinite || value < 0) return 0;
     return value;
   }
 
@@ -158,7 +225,9 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
     if (result == null) return;
 
-    ref.read(quoteLinesControllerProvider.notifier).addManualLine(
+    ref
+        .read(quoteLinesControllerProvider.notifier)
+        .addManualLine(
           name: _safeName(result.name),
           description: result.description,
           qty: result.qty,
@@ -185,7 +254,9 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
     if (result == null) return;
 
-    ref.read(quoteLinesControllerProvider.notifier).addManualLine(
+    ref
+        .read(quoteLinesControllerProvider.notifier)
+        .addManualLine(
           name: _safeName(result.name),
           description: result.description,
           qty: result.qty,
@@ -194,71 +265,186 @@ class QuoteEditorFooterBar extends ConsumerWidget {
         );
   }
 
+  Widget _buttonText(String text) {
+    return Text(
+      text,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      softWrap: false,
+    );
+  }
+
+  ButtonStyle _compactButtonStyle() {
+    return ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme cs = theme.colorScheme;
+    final ColorScheme colorScheme = theme.colorScheme;
 
-    final bool canSubmit =
-        linesState.lines.isNotEmpty &&
-        (!requirePrices || linesState.hasAllPrices) &&
-        (!isMemberScoped || meta.contact != null);
-
-    Future<void> openCatalog() async {
-      final bool ok = await onEnsureAuthed();
-      if (!ok) return;
-      if (!context.mounted) return;
-
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const CatalogScreen()));
-    }
+    final String? submitBlockReason = _submitBlockReason();
+    final bool canSubmit = submitBlockReason == null && !busy;
 
     final String amountText = requirePrices
         ? '$currencyCode ${linesState.estimatedTotal.toStringAsFixed(2)}'
         : '—';
 
-    final Widget addFromCatalogButton = OutlinedButton.icon(
-      icon: const Icon(Icons.search),
-      label: const Text('Add from Catalog'),
-      onPressed: busy ? null : openCatalog,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: cs.primary,
-        side: BorderSide(color: cs.primary),
-      ),
-    );
+    final ButtonStyle compactStyle = _compactButtonStyle();
 
     final Widget addCustomItemButton = OutlinedButton.icon(
       icon: const Icon(Icons.add_circle_outline),
-      label: const Text('Add custom item'),
+      label: _buttonText('Custom item'),
       onPressed: (busy || isMemberScoped)
           ? null
           : () => _addCustomItem(context, ref),
+      style: compactStyle,
     );
 
     final Widget addDeliveryChargeButton = OutlinedButton.icon(
       icon: const Icon(Icons.local_shipping_outlined),
-      label: const Text('Add delivery charge'),
+      label: _buttonText('Delivery charge'),
       onPressed: (busy || isMemberScoped)
           ? null
           : () => _addDeliveryCharge(context, ref),
+      style: compactStyle,
     );
 
-    final Widget submitButton = FilledButton.icon(
-      icon: busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(isEdit ? Icons.save : Icons.send),
-      label: Text(
-        busy ? 'Submitting…' : (isEdit ? 'Save changes' : 'Request a quote'),
+    final Widget submitButton = Tooltip(
+      message: submitBlockReason ?? '',
+      child: FilledButton.icon(
+        icon: busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(isEdit ? Icons.save : Icons.send),
+        label: _buttonText(
+          busy ? 'Submitting…' : (isEdit ? 'Save' : 'Request quote'),
+        ),
+        onPressed: canSubmit ? onSubmit : null,
+        style: compactStyle,
       ),
-      onPressed: (!canSubmit || busy) ? null : onSubmit,
     );
 
-    final Widget totalBlock = LayoutBuilder(
+    final Widget totalBlock = _EstimatedTotalBlock(amountText: amountText);
+
+    final List<Widget> actionButtons = <Widget>[
+      if (!isMemberScoped) ...<Widget>[
+        addCustomItemButton,
+        addDeliveryChargeButton,
+      ],
+    ];
+    final bool hasActionButtons = actionButtons.isNotEmpty;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool wide = constraints.maxWidth >= 840;
+
+              if (wide) {
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.spaceBetween,
+                  children: <Widget>[
+                    if (hasActionButtons)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: actionButtons,
+                        ),
+                      ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: 150,
+                        maxWidth: 210,
+                      ),
+                      child: submitButton,
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: 170,
+                        maxWidth: 260,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: totalBlock,
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: totalBlock,
+                    ),
+                  ),
+                  if (hasActionButtons) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: actionButtons
+                          .map(
+                            (Widget button) => SizedBox(
+                              width: constraints.maxWidth >= 520
+                                  ? (constraints.maxWidth - 10) / 2
+                                  : constraints.maxWidth,
+                              child: button,
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  SizedBox(width: double.infinity, child: submitButton),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EstimatedTotalBlock extends StatelessWidget {
+  const _EstimatedTotalBlock({required this.amountText});
+
+  final String amountText;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool wideEnough = constraints.maxWidth > 220;
 
@@ -271,6 +457,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(width: 8),
               Text(
@@ -278,6 +465,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           );
@@ -285,12 +473,14 @@ class QuoteEditorFooterBar extends ConsumerWidget {
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
               'Estimated total',
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 2),
             Text(
@@ -298,80 +488,11 @@ class QuoteEditorFooterBar extends ConsumerWidget {
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         );
       },
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(
-          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final bool wide = constraints.maxWidth >= 720;
-
-              if (wide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: <Widget>[
-                        addFromCatalogButton,
-                        if (!isMemberScoped) ...<Widget>[
-                          addCustomItemButton,
-                          addDeliveryChargeButton,
-                        ],
-                      ],
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 260),
-                          child: submitButton,
-                        ),
-                      ),
-                    ),
-                    totalBlock,
-                  ],
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Row(children: <Widget>[const Spacer(), totalBlock]),
-                  const SizedBox(height: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      addFromCatalogButton,
-                      if (!isMemberScoped) ...<Widget>[
-                        const SizedBox(height: 12),
-                        addCustomItemButton,
-                        const SizedBox(height: 12),
-                        addDeliveryChargeButton,
-                      ],
-                      const SizedBox(height: 12),
-                      submitButton,
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
     );
   }
 }

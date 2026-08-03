@@ -1,6 +1,7 @@
-// lib/features/retail/sales/quotes/widgets/quote_editor_screen.dart
+// lib/features/retail/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
@@ -42,8 +43,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   final TextEditingController _notesCtl = TextEditingController();
 
   ProviderSubscription<QuoteMetaState>? _metaSub;
+  bool _metaExpanded = false;
 
-  bool get _isEdit => (widget.editingQuoteId ?? '').trim().isNotEmpty;
+  String get _editingId => (widget.editingQuoteId ?? '').trim();
+
+  bool get _isEdit => _editingId.isNotEmpty;
 
   @override
   void initState() {
@@ -57,7 +61,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     super.didUpdateWidget(oldWidget);
 
     final String oldId = (oldWidget.editingQuoteId ?? '').trim();
-    final String newId = (widget.editingQuoteId ?? '').trim();
+    final String newId = _editingId;
+
     if (oldId == newId) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
@@ -92,16 +97,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   Future<void> _bootstrap() async {
     if (!mounted) return;
 
-    final QuoteMetaController metaCtl = ref.read(
-      quoteMetaControllerProvider.notifier,
-    );
-    final String id = (widget.editingQuoteId ?? '').trim();
+    final String id = _editingId;
 
     if (id.isNotEmpty) {
-      metaCtl.beginEdit(id);
+      ref.read(quoteMetaControllerProvider.notifier).beginEdit(id);
     }
 
     final QuoteController ctl = ref.read(quoteControllerProvider.notifier);
+
     await ctl.ensureReady(
       editingQuoteId: widget.editingQuoteId,
       requirePrices: widget.requirePrices,
@@ -122,34 +125,56 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     return requireAuth(context, ref);
   }
 
-  Future<bool> _handleBack(BuildContext context, QuoteState s) async {
-    if (s.busy) return false;
-
-    final bool hasLines = ref
-        .read(quoteLinesControllerProvider)
-        .lines
-        .isNotEmpty;
-
-    final QuoteMetaState meta = ref.read(quoteMetaControllerProvider);
-
-    final bool hasMetaEdits =
-        (meta.reference ?? '').trim().isNotEmpty ||
+  bool _hasMetaEdits(QuoteMetaState meta) {
+    return (meta.reference ?? '').trim().isNotEmpty ||
         (meta.customerNotes ?? '').trim().isNotEmpty ||
         meta.contact != null ||
         meta.quoteDate != null ||
         meta.expiryDate != null ||
-        meta.deliveryAddress != null;
+        meta.deliveryAddress != null ||
+        meta.patientSnapshot != null ||
+        (meta.resolvedPatientId ?? '').trim().isNotEmpty ||
+        (meta.resolvedMembershipId ?? '').trim().isNotEmpty ||
+        (meta.resolvedPrescriptionId ?? '').trim().isNotEmpty;
+  }
 
-    if (!hasLines && !hasMetaEdits) return true;
+  bool _hasDraftEdits(QuoteLinesState linesState, QuoteMetaState meta) {
+    return linesState.isNotEmpty || _hasMetaEdits(meta);
+  }
 
-    final bool ok = _isEdit
-        ? await SalesDocDialogs.confirmDiscardChanges(context)
-        : await SalesDocDialogs.confirmDiscardCheckout(context);
+  Future<bool> _handleBack(BuildContext context, QuoteState state) async {
+    if (state.busy) return false;
 
+    if (!_isEdit) {
+      return true;
+    }
+
+    final bool ok = await SalesDocDialogs.confirmDiscardChanges(context);
     if (!ok) return false;
 
     await _clearAll();
     return true;
+  }
+
+  Future<void> _handleDiscardQuote(BuildContext context) async {
+    final QuoteLinesState linesState = ref.read(quoteLinesControllerProvider);
+    final QuoteMetaState meta = ref.read(quoteMetaControllerProvider);
+
+    if (!_hasDraftEdits(linesState, meta)) {
+      await _clearAll();
+
+      if (!context.mounted) return;
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    final bool ok = await SalesDocDialogs.confirmDiscardCheckout(context);
+    if (!ok) return;
+
+    await _clearAll();
+
+    if (!context.mounted) return;
+    Navigator.of(context).maybePop();
   }
 
   Future<void> _handleDeleteQuote(
@@ -162,6 +187,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       thing: 'quote',
       message: 'This will delete the quote in Zoho Books.',
     );
+
     if (!ok) return;
 
     final String id = (meta.editingQuoteId ?? '').trim();
@@ -191,9 +217,21 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     Navigator.of(context).pop(QuoteEditorResult.saved);
   }
 
+  bool _editIsHydrating(QuoteState state) {
+    final String id = _editingId;
+    if (id.isEmpty) return false;
+
+    final String loadedId = (state.loadedEditId ?? '').trim();
+    if (loadedId == id) return false;
+
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final QuoteState s = ref.watch(quoteControllerProvider);
+    final String tenantId = ref.watch(tenantIdProvider);
+
+    final QuoteState state = ref.watch(quoteControllerProvider);
     final QuoteController ctl = ref.read(quoteControllerProvider.notifier);
 
     final QuoteMetaState meta = ref.watch(quoteMetaControllerProvider);
@@ -206,11 +244,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final QuoteContactPolicy policy = ref.watch(quoteContactPolicyProvider);
     final bool isMemberScoped = policy == QuoteContactPolicy.memberScoped;
 
+    final bool editIsHydrating = _editIsHydrating(state);
+    final bool showDiscardDraft = !_isEdit && _hasDraftEdits(linesState, meta);
+
     final String fallbackPartyName = isMemberScoped
         ? ((meta.contact?.title ?? '').trim().isNotEmpty
               ? meta.contact!.title
               : 'Loading customer…')
-        : 'Customer';
+        : (_isEdit ? 'Loading customer…' : 'Customer');
 
     final SalesDocMetaVm vmMeta = buildQuoteMetaVm(
       meta: meta,
@@ -221,68 +262,227 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     );
 
     return WillPopScope(
-      onWillPop: () => _handleBack(context, s),
+      onWillPop: () => _handleBack(context, state),
       child: AppPage(
         title: _isEdit ? 'Edit quote' : 'Request a quote',
         showBack: true,
         maxWidth: _contentMaxW,
         scrollable: false,
         actions: const <Widget>[],
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (s.busy) const LinearProgressIndicator(minHeight: 2),
-            ErrorBanner(s.error),
-            SalesDocHeader(
-              title: 'Quote',
-              meta: vmMeta,
-              compact: true,
-              showDocNumber: _isEdit,
-              showDate: false,
-              showStatus: false,
-              trailing: QuoteEditorHeaderActions(
-                isEdit: _isEdit,
-                busy: s.busy,
-                meta: meta,
-                vmMeta: vmMeta,
-                isMemberScoped: isMemberScoped,
-                onContactPicked: metaCtl.setContact,
-                onDelete: () => _handleDeleteQuote(context, ctl, meta),
-                onEnsureAuthed: () => _ensureAuthed(context),
+        body: editIsHydrating
+            ? _QuoteEditLoadingState(error: state.error)
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  if (state.busy) const LinearProgressIndicator(minHeight: 2),
+                  ErrorBanner(state.error),
+                  SalesDocHeader(
+                    title: 'Quote',
+                    meta: vmMeta,
+                    compact: true,
+                    showDocNumber: _isEdit,
+                    showDate: false,
+                    showStatus: false,
+                    trailing: QuoteEditorHeaderActions(
+                      isEdit: _isEdit,
+                      busy: state.busy,
+                      meta: meta,
+                      vmMeta: vmMeta,
+                      isMemberScoped: isMemberScoped,
+                      onContactPicked: metaCtl.setContact,
+                      onDelete: () => _handleDeleteQuote(context, ctl, meta),
+                      onEnsureAuthed: () => _ensureAuthed(context),
+                    ),
+                  ),
+                  _CollapsibleMetaSection(
+                    expanded: _metaExpanded,
+                    onChanged: (bool value) {
+                      setState(() => _metaExpanded = value);
+                    },
+                    child: QuoteEditorMetaSection(
+                      busy: state.busy,
+                      meta: meta,
+                      metaCtl: metaCtl,
+                      refController: _refCtl,
+                      notesController: _notesCtl,
+                      onEnsureAuthed: () => _ensureAuthed(context),
+                      tenantId: tenantId,
+                    ),
+                  ),
+                  Expanded(
+                    child: QuoteEditorLinesSection(
+                      busy: state.busy,
+                      linesState: linesState,
+                      requirePrices: widget.requirePrices,
+                      isMemberScoped: isMemberScoped,
+                      currencyCode: quoteCurrencyCode(),
+                    ),
+                  ),
+                  if (showDiscardDraft)
+                    _DiscardQuoteBar(
+                      busy: state.busy,
+                      onDiscard: () => _handleDiscardQuote(context),
+                    ),
+                  QuoteEditorFooterBar(
+                    busy: state.busy,
+                    isEdit: _isEdit,
+                    meta: meta,
+                    linesState: linesState,
+                    requirePrices: widget.requirePrices,
+                    isMemberScoped: isMemberScoped,
+                    currencyCode: vmMeta.currencyCode,
+                    onEnsureAuthed: () => _ensureAuthed(context),
+                    onSubmit: () => _handleSubmit(context, ctl),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _CollapsibleMetaSection extends StatelessWidget {
+  const _CollapsibleMetaSection({
+    required this.expanded,
+    required this.onChanged,
+    required this.child,
+  });
+
+  final bool expanded;
+  final ValueChanged<bool> onChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          InkWell(
+            onTap: () => onChanged(!expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Quote details',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                ],
               ),
             ),
-            QuoteEditorMetaSection(
-              busy: s.busy,
-              meta: meta,
-              metaCtl: metaCtl,
-              refController: _refCtl,
-              notesController: _notesCtl,
-              onEnsureAuthed: () => _ensureAuthed(context),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: QuoteEditorLinesSection(
-                busy: s.busy,
-                linesState: linesState,
-                requirePrices: widget.requirePrices,
-                isMemberScoped: isMemberScoped,
-                currencyCode: quoteCurrencyCode(),
-              ),
-            ),
-            QuoteEditorFooterBar(
-              busy: s.busy,
-              isEdit: _isEdit,
-              meta: meta,
-              linesState: linesState,
-              requirePrices: widget.requirePrices,
-              isMemberScoped: isMemberScoped,
-              currencyCode: vmMeta.currencyCode,
-              onEnsureAuthed: () => _ensureAuthed(context),
-              onSubmit: () => _handleSubmit(context, ctl),
-            ),
-          ],
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: child,
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+            sizeCurve: Curves.easeOut,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscardQuoteBar extends StatelessWidget {
+  const _DiscardQuoteBar({required this.busy, required this.onDiscard});
+
+  final bool busy;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: busy ? null : onDiscard,
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Discard quote'),
+            style: TextButton.styleFrom(foregroundColor: colors.error),
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _QuoteEditLoadingState extends StatelessWidget {
+  const _QuoteEditLoadingState({this.error});
+
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const LinearProgressIndicator(minHeight: 2),
+        ErrorBanner(error),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading quote details…',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Please wait while we fetch the customer, patient, insurance membership, prescription, delivery address and quote items.',
+                      style: theme.textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
