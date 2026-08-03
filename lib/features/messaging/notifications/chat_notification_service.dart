@@ -21,8 +21,8 @@ class ChatNotificationService {
 
   Stream<String> get onTokenRefresh => _messaging.onTokenRefresh;
 
-  Future<NotificationSettings> requestPermission() {
-    return _messaging.requestPermission(
+  Future<NotificationSettings> requestPermission() async {
+    final NotificationSettings settings = await _messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -31,13 +31,36 @@ class ChatNotificationService {
       provisional: false,
       sound: true,
     );
+
+    debugPrint(
+      '🔔 Notification permission '
+      'status=${settings.authorizationStatus.name}',
+    );
+
+    return settings;
   }
 
   Future<String?> getToken() async {
-    final String? token = await _messaging.getToken();
-    final String clean = (token ?? '').trim();
+    try {
+      final String? token = await _messaging.getToken();
+      final String cleanToken = (token ?? '').trim();
 
-    return clean.isEmpty ? null : clean;
+      if (cleanToken.isEmpty) {
+        debugPrint('⚠️ FCM token unavailable');
+        return null;
+      }
+
+      debugPrint(
+        '🔑 FCM token loaded '
+        'prefix=${_tokenPrefix(cleanToken)}',
+      );
+
+      return cleanToken;
+    } catch (error, stackTrace) {
+      debugPrint('❌ Failed to load FCM token: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> registerDevice({
@@ -45,38 +68,76 @@ class ChatNotificationService {
     required String token,
   }) async {
     final String cleanToken = token.trim();
+    final String tenantId = user.tenantId.trim().toLowerCase();
+    final String uid = user.uid.trim();
 
-    if (cleanToken.isEmpty) return;
-
-    final DocumentReference<Map<String, dynamic>> deviceRef = _deviceRef(
-      tenantId: user.tenantId,
-      token: cleanToken,
-    );
-
-    final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
-        .get();
-
-    final Map<String, dynamic> values = <String, dynamic>{
-      'uid': user.uid,
-      'token': cleanToken,
-      'platform': _platform,
-      'enabled': true,
-      'isStaff': user.isStaffResolved,
-      if ((user.contactId ?? '').trim().isNotEmpty)
-        'contactId': user.contactId!.trim(),
-      if ((user.accountNumber ?? '').trim().isNotEmpty)
-        'accountNumber': user.accountNumber!.trim(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (!snapshot.exists) {
-      values['createdAt'] = FieldValue.serverTimestamp();
-
-      await deviceRef.set(values);
+    if (cleanToken.isEmpty) {
+      debugPrint('⚠️ Device registration skipped: empty FCM token');
       return;
     }
 
-    await deviceRef.set(values, SetOptions(merge: true));
+    if (tenantId.isEmpty) {
+      debugPrint('⚠️ Device registration skipped: empty tenantId');
+      return;
+    }
+
+    if (uid.isEmpty) {
+      debugPrint('⚠️ Device registration skipped: empty uid');
+      return;
+    }
+
+    final String deviceId = _deviceId(cleanToken);
+
+    final DocumentReference<Map<String, dynamic>> deviceRef = _deviceRef(
+      tenantId: tenantId,
+      deviceId: deviceId,
+    );
+
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
+          .get();
+
+      final Map<String, dynamic> values = <String, dynamic>{
+        'uid': uid,
+        'token': cleanToken,
+        'platform': _platform,
+        'enabled': true,
+        'isStaff': user.isStaffResolved,
+        if ((user.contactId ?? '').trim().isNotEmpty)
+          'contactId': user.contactId!.trim(),
+        if ((user.accountNumber ?? '').trim().isNotEmpty)
+          'accountNumber': user.accountNumber!.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (!snapshot.exists) {
+        values['createdAt'] = FieldValue.serverTimestamp();
+
+        await deviceRef.set(values);
+      } else {
+        await deviceRef.set(values, SetOptions(merge: true));
+      }
+
+      debugPrint(
+        '✅ Notification device registered '
+        'tenant=$tenantId '
+        'uid=$uid '
+        'isStaff=${user.isStaffResolved} '
+        'platform=$_platform '
+        'deviceId=$deviceId',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '❌ Notification device registration failed '
+        'tenant=$tenantId '
+        'uid=$uid '
+        'deviceId=$deviceId '
+        'error=$error',
+      );
+
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> disableDevice({
@@ -84,35 +145,94 @@ class ChatNotificationService {
     required String token,
   }) async {
     final String cleanToken = token.trim();
-    if (cleanToken.isEmpty) return;
+    final String tenantId = user.tenantId.trim().toLowerCase();
+    final String uid = user.uid.trim();
+
+    if (cleanToken.isEmpty || tenantId.isEmpty || uid.isEmpty) {
+      return;
+    }
+
+    final String deviceId = _deviceId(cleanToken);
 
     final DocumentReference<Map<String, dynamic>> deviceRef = _deviceRef(
-      tenantId: user.tenantId,
-      token: cleanToken,
+      tenantId: tenantId,
+      deviceId: deviceId,
     );
 
-    final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
-        .get();
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
+          .get();
 
-    if (!snapshot.exists) return;
+      if (!snapshot.exists) {
+        debugPrint(
+          'ℹ️ Notification device disable skipped: document missing '
+          'tenant=$tenantId '
+          'uid=$uid '
+          'deviceId=$deviceId',
+        );
 
-    await deviceRef.update(<String, dynamic>{
-      'enabled': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+        return;
+      }
+
+      final Map<String, dynamic>? values = snapshot.data();
+      final String registeredUid = (values?['uid'] as String? ?? '').trim();
+
+      if (registeredUid.isNotEmpty && registeredUid != uid) {
+        debugPrint(
+          '⚠️ Notification device disable skipped: UID mismatch '
+          'tenant=$tenantId '
+          'currentUid=$uid '
+          'registeredUid=$registeredUid '
+          'deviceId=$deviceId',
+        );
+
+        return;
+      }
+
+      await deviceRef.update(<String, dynamic>{
+        'enabled': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint(
+        '🔕 Notification device disabled '
+        'tenant=$tenantId '
+        'uid=$uid '
+        'deviceId=$deviceId',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '❌ Notification device disable failed '
+        'tenant=$tenantId '
+        'uid=$uid '
+        'deviceId=$deviceId '
+        'error=$error',
+      );
+
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   DocumentReference<Map<String, dynamic>> _deviceRef({
     required String tenantId,
-    required String token,
+    required String deviceId,
   }) {
-    final String deviceId = sha256.convert(utf8.encode(token)).toString();
-
     return _firestore
         .collection('tenants')
-        .doc(tenantId.trim())
+        .doc(tenantId)
         .collection('notification_devices')
         .doc(deviceId);
+  }
+
+  String _deviceId(String token) {
+    return sha256.convert(utf8.encode(token)).toString();
+  }
+
+  String _tokenPrefix(String token) {
+    if (token.length <= 12) return token;
+
+    return '${token.substring(0, 12)}…';
   }
 
   String get _platform {
