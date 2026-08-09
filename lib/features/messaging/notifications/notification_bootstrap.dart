@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/messaging/notifications/chat_notification_service.dart';
+import 'package:afyakit/features/messaging/notifications/foreground_notification/foreground_notification.dart';
 
 class NotificationBootstrap extends StatefulWidget {
   const NotificationBootstrap({
@@ -31,6 +32,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   String? _registeredToken;
   String? _registrationKey;
+
   bool _initialising = false;
 
   @override
@@ -69,6 +71,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   void _scheduleRegistration() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       unawaited(_initialise());
     });
   }
@@ -99,6 +102,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
       if (!allowed) {
         debugPrint('🔕 Notifications not authorised: ${status.name}');
+
         return;
       }
 
@@ -106,6 +110,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
       if (token == null) {
         debugPrint('🔕 Firebase Messaging returned no token.');
+
         return;
       }
 
@@ -132,6 +137,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
       );
     } catch (error, stack) {
       debugPrint('💥 Notification registration failed: $error');
+
       debugPrintStack(stackTrace: stack);
     } finally {
       _initialising = false;
@@ -140,7 +146,10 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   Future<void> _registerRefreshedToken(String token) async {
     final String cleanToken = token.trim();
-    if (cleanToken.isEmpty) return;
+
+    if (cleanToken.isEmpty) {
+      return;
+    }
 
     try {
       await _service.registerDevice(user: widget.user, token: cleanToken);
@@ -150,40 +159,64 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
       debugPrint('🔔 Refreshed notification token registered.');
     } catch (error, stack) {
       debugPrint('💥 Failed to register refreshed FCM token: $error');
+
       debugPrintStack(stackTrace: stack);
     }
   }
 
   void _listenForNotificationEvents() {
-    _foregroundSubscription = FirebaseMessaging.onMessage.listen((
-      RemoteMessage message,
-    ) {
-      debugPrint(
-        '🔔 Foreground notification '
-        'type=${message.data['type']} '
-        'conversationId=${message.data['conversationId']}',
-      );
+    _foregroundSubscription = FirebaseMessaging.onMessage.listen(
+      _handleForegroundMessage,
+      onError: (Object error, StackTrace stack) {
+        debugPrint('💥 Foreground FCM listener error: $error');
 
-      // The active chat UI already receives Firestore updates.
-      // A visible foreground banner can be added later using
-      // flutter_local_notifications.
-    });
+        debugPrintStack(stackTrace: stack);
+      },
+    );
 
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationTap,
+      onError: (Object error, StackTrace stack) {
+        debugPrint('💥 Notification-open listener error: $error');
+
+        debugPrintStack(stackTrace: stack);
+      },
     );
 
     unawaited(_handleInitialMessage());
+  }
+
+  void _handleForegroundMessage(RemoteMessage message) {
+    final String type = (message.data['type'] ?? '').toString().trim();
+
+    final String conversationId = (message.data['conversationId'] ?? '')
+        .toString()
+        .trim();
+
+    debugPrint(
+      '🔔 Foreground notification '
+      'type=$type '
+      'conversationId=$conversationId',
+    );
+
+    if (type != 'chat_message' || conversationId.isEmpty) {
+      return;
+    }
+
+    unawaited(showForegroundNotification(message));
   }
 
   Future<void> _handleInitialMessage() async {
     final RemoteMessage? message = await FirebaseMessaging.instance
         .getInitialMessage();
 
-    if (message == null || !mounted) return;
+    if (message == null || !mounted) {
+      return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       _handleNotificationTap(message);
     });
   }
@@ -201,10 +234,13 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
     debugPrint('💬 Open chat notification: $conversationId');
 
-    // Add navigation once the messaging conversation screen constructor
-    // and member/staff route are confirmed.
+    // Navigation remains intentionally separate from notification
+    // delivery/presentation. Once the member/staff route contract is
+    // confirmed, this can navigate directly to the conversation.
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
 }
