@@ -1,3 +1,5 @@
+// lib/features/inventory/records/issues/widgets/issue_record_tile.dart
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';

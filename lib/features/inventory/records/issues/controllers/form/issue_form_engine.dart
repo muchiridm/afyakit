@@ -1,22 +1,31 @@
-// lib/core/records/issues/controllers/form/issue_form_engine.dart
+// lib/features/inventory/records/issues/controllers/form/issue_form_engine.dart
 
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
+
+import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
-import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/features/inventory/records/issues/services/issue_submission.dart';
-import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
-import 'package:afyakit/features/inventory/records/issues/services/issue_validator.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_state.dart';
+import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
+import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
+import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
+
+import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
+import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_validator.dart';
+
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 final issueFormEngineProvider = Provider<IssueFormEngine>((ref) {
   final tenantId = ref.watch(tenantIdProvider);
-  return IssueFormEngine(IssueService(tenantId));
+  final service = ref.read(issueServiceProvider);
+
+  return IssueFormEngine(tenantId: tenantId, service: service);
 });
 
 class SubmitResult {
@@ -32,17 +41,16 @@ class SubmitResult {
 }
 
 class IssueFormEngine {
+  final String tenantId;
   final IssueService service;
 
-  IssueFormEngine(this.service);
+  const IssueFormEngine({required this.tenantId, required this.service});
 
-  /// Creates one issue per `fromStore` in the cart in an **idempotent** way.
-  /// Supply a stable `requestKeyBase` (e.g., generated when the screen opens).
+  /// Creates one issue per source store.
   ///
-  /// `requester` is the full current user so we can snapshot
-  /// uid + name + email into the IssueRecord.
+  /// [requestKeyBase] remains stable for the lifetime of the form so
+  /// retries are idempotent at the backend.
   Future<SubmitResult> submitMultiCart({
-    required AuthUser requester,
     required MultiCartState cartState,
     required List<BatchRecord> batches,
     required List<MedicationItem> meds,
@@ -51,16 +59,20 @@ class IssueFormEngine {
     required String requestKeyBase,
   }) async {
     var allSuccess = true;
+
     final errors = <String, String>{};
     final okStores = <String>[];
 
-    for (final entry in cartState.cartsByStore.entries) {
-      final storeId = entry.key;
-      final cart = entry.value;
+    for (final cartEntry in cartState.cartsByStore.entries) {
+      final storeId = cartEntry.key;
+      final cart = cartEntry.value;
 
       if (cart.isEmpty) continue;
 
-      // Basic per-store validation
+      // ─────────────────────────────────────────
+      // Basic UX validation
+      // ─────────────────────────────────────────
+
       if (cart.type != IssueType.dispose &&
           (cart.destination?.trim().isEmpty ?? true)) {
         allSuccess = false;
@@ -74,69 +86,60 @@ class IssueFormEngine {
         continue;
       }
 
-      // Build denormalised record + entries for this store
-      final submissions = buildIssueSubmissionFromCart(
+      // ─────────────────────────────────────────
+      // Build denormalised issue
+      // ─────────────────────────────────────────
+
+      final issue = _buildIssueFromCart(
         cart: cart.batchQuantities,
         fromStore: cart.fromStore!,
+        toStore: cart.destination ?? '',
+        date: cart.requestDate,
+        type: cart.type,
         batches: batches,
         medications: meds,
         consumables: cons,
         equipment: equips,
-        type: cart.type,
-        toStore: cart.destination ?? '',
-        date: cart.requestDate,
-        requester: requester, // 👈 full user, not just uid
         note: cart.note,
-        status: 'pending',
-        approvedBy: null,
-        approvedAt: null,
-        issuedBy: null,
-        issuedByName: null,
-        issuedByRole: null,
       );
 
-      if (submissions.isEmpty) {
+      if (issue.entries.isEmpty) {
         allSuccess = false;
         errors[storeId] = 'Nothing to submit for $storeId';
         continue;
       }
 
-      var storeOk = true;
+      // Client-side validation is UX only.
+      // Backend validation remains authoritative.
+      final validation = IssueFormValidator.validateSubmission(
+        record: issue,
+        entries: issue.entries,
+      );
 
-      for (var i = 0; i < submissions.length; i++) {
-        final s = submissions[i];
+      if (!validation.isValid) {
+        allSuccess = false;
 
-        // Per-issue validation
-        final validation = IssueValidator.validateSubmission(
-          record: s.record,
-          entries: s.entries,
-        );
-        if (!validation.isValid) {
-          allSuccess = false;
-          storeOk = false;
-          errors[storeId] =
-              validation.errorMessage ?? 'Invalid submission for $storeId';
-          break;
-        }
+        errors[storeId] =
+            validation.errorMessage ?? 'Invalid submission for $storeId';
 
-        try {
-          // Idempotent create with deterministic doc id per (screen, store, index)
-          final requestKey = '$requestKeyBase-$storeId-$i';
-          await service.createIssueWithEntriesIdempotent(
-            requestKey: requestKey,
-            issueDraft: s.record.copyWith(id: ''), // service assigns id
-            entries: s.entries,
-          );
-        } catch (e) {
-          allSuccess = false;
-          storeOk = false;
-          errors[storeId] = 'Submission failed for $storeId: $e';
-          break;
-        }
+        continue;
       }
 
-      if (storeOk) {
+      try {
+        final requestKey = '$requestKeyBase-$storeId';
+
+        await service.createIssueWithEntriesIdempotent(
+          tenantId: tenantId,
+          requestKey: requestKey,
+          issueDraft: issue,
+          entries: issue.entries,
+        );
+
         okStores.add(storeId);
+      } catch (e) {
+        allSuccess = false;
+
+        errors[storeId] = 'Submission failed for $storeId: $e';
       }
     }
 
@@ -144,6 +147,186 @@ class IssueFormEngine {
       allSuccess: allSuccess,
       storeErrors: errors,
       okStores: okStores,
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Cart → issue snapshot
+  // ─────────────────────────────────────────────
+
+  IssueRecord _buildIssueFromCart({
+    required Map<String, Map<String, int>> cart,
+    required String fromStore,
+    required String toStore,
+    required DateTime date,
+    required IssueType type,
+    required List<BatchRecord> batches,
+    required List<MedicationItem> medications,
+    required List<ConsumableItem> consumables,
+    required List<EquipmentItem> equipment,
+    String? note,
+  }) {
+    final uuid = const Uuid();
+    final entries = <IssueEntry>[];
+
+    for (final itemEntry in cart.entries) {
+      final itemId = itemEntry.key;
+      final batchQuantities = itemEntry.value;
+
+      for (final batchEntry in batchQuantities.entries) {
+        final batchId = batchEntry.key;
+        final quantity = batchEntry.value;
+
+        final batch = batches.firstWhereOrNull(
+          (candidate) => candidate.id == batchId,
+        );
+
+        if (batch == null) {
+          continue;
+        }
+
+        final itemType = batch.itemType;
+
+        String name = 'Unnamed Item';
+        String group = 'Unknown';
+
+        String? strength;
+        String? size;
+        String? formulation;
+        String? packSize;
+        String? brandName;
+
+        // ───────────────────────────────────────
+        // Resolve SKU snapshot
+        // ───────────────────────────────────────
+
+        switch (itemType) {
+          case ItemType.medication:
+            final item = medications.firstWhereOrNull(
+              (candidate) => candidate.id == itemId,
+            );
+
+            if (item != null) {
+              name = item.name;
+              group = item.group;
+              strength = item.strength;
+              size = item.size;
+              formulation = item.formulation;
+              packSize = item.packSize;
+
+              final brand = item.brandName?.trim();
+
+              if (brand != null && brand.isNotEmpty) {
+                brandName = brand;
+              }
+            }
+            break;
+
+          case ItemType.consumable:
+            final item = consumables.firstWhereOrNull(
+              (candidate) => candidate.id == itemId,
+            );
+
+            if (item != null) {
+              name = item.name;
+              group = item.group;
+              size = item.size;
+              packSize = item.packSize;
+
+              final brand = item.brandName?.trim();
+
+              if (brand != null && brand.isNotEmpty) {
+                brandName = brand;
+              }
+            }
+            break;
+
+          case ItemType.equipment:
+            final item = equipment.firstWhereOrNull(
+              (candidate) => candidate.id == itemId,
+            );
+
+            if (item != null) {
+              name = item.name;
+              group = item.group;
+            }
+            break;
+
+          case ItemType.unknown:
+            break;
+        }
+
+        final expiry = batch.expiryDate;
+
+        // Fallback to a brand stored directly on the batch.
+        if (brandName == null || brandName.isEmpty) {
+          final dynamic rawBatch = batch;
+
+          String? candidate;
+
+          try {
+            candidate = rawBatch.brandName as String?;
+          } catch (_) {}
+
+          if (candidate == null || candidate.trim().isEmpty) {
+            try {
+              candidate = rawBatch.brand as String?;
+            } catch (_) {}
+          }
+
+          if (candidate != null && candidate.trim().isNotEmpty) {
+            brandName = candidate.trim();
+          }
+        }
+
+        entries.add(
+          IssueEntry(
+            // Local only. Backend generates deterministic e_XXXX ids.
+            id: uuid.v4(),
+            itemId: itemId,
+            itemType: itemType,
+            itemName: name,
+            itemGroup: group,
+            strength: strength,
+            size: size,
+            formulation: formulation,
+            packSize: packSize,
+            itemTypeLabel: itemType.name,
+            batchId: batchId,
+            quantity: quantity,
+            brand: brandName,
+            expiry: expiry,
+          ),
+        );
+      }
+    }
+
+    return IssueRecord(
+      id: '',
+      fromStore: fromStore,
+      toStore: type == IssueType.dispose ? 'Disposal' : toStore,
+      type: type,
+      status: 'pending',
+      dateRequested: date,
+      dateApproved: null,
+      dateIssuedOrReceived: null,
+
+      // Backend-owned fields.
+      requestedByUid: '',
+      requestedByName: null,
+      requestedByEmail: null,
+
+      approvedByUid: null,
+      approvedByName: null,
+      approvedByEmail: null,
+
+      actionedByUid: null,
+      actionedByName: null,
+      actionedByRole: null,
+      actionedByEmail: null,
+
+      note: note,
+      entries: entries,
     );
   }
 }

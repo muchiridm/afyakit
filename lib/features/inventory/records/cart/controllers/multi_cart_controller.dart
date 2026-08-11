@@ -1,15 +1,17 @@
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/cart_engine.dart';
+// lib/features/inventory/records/cart/controllers/multi_cart_controller.dart
+
+import 'package:afyakit/features/inventory/records/cart/controllers/cart_engine.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/cart_state.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/cart_state.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_state.dart';
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
-import 'package:afyakit/features/inventory/records/issues/models/view_models/cart_item_models.dart';
-import 'package:afyakit/features/inventory/records/issues/services/cart_service.dart';
+import 'package:afyakit/features/inventory/records/cart/cart_item_models.dart';
+import 'package:afyakit/features/inventory/records/cart/cart_service.dart';
 
 final multiCartProvider =
     StateNotifierProvider<MultiCartController, MultiCartState>(

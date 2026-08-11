@@ -1,4 +1,4 @@
-// lib/core/records/issues/models/issue_record.dart
+// lib/features/inventory/records/issues/models/issue_record.dart
 
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';

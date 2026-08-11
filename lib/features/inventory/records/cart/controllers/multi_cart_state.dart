@@ -1,4 +1,6 @@
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/cart_state.dart';
+// lib/features/inventory/records/cart/controllers/multi_cart_state.dart
+
+import 'package:afyakit/features/inventory/records/cart/controllers/cart_state.dart';
 
 class MultiCartState {
   final Map<String, CartState> cartsByStore;

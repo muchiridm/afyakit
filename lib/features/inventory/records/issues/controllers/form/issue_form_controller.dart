@@ -1,34 +1,73 @@
-// lib/core/records/issues/controllers/form/issue_form_controller.dart
+// lib/features/inventory/records/issues/controllers/form/issue_form_controller.dart
 
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_engine.dart';
-import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/features/inventory/records/issues/services/inventory_snapshot.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
-import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_state.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
-import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_controller.dart';
+
+import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_engine.dart';
+
+import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_inventory_snapshot.dart';
+import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
 
 import 'package:afyakit/shared/notifiers/safe_state_notifier.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:uuid/uuid.dart';
 
 final issueFormControllerProvider =
     StateNotifierProvider.autoDispose<IssueFormController, IssueFormState>(
       (ref) => IssueFormController(ref),
     );
 
+// lib/features/inventory/records/issues/controllers/form/issue_form_state.dart
+
+class IssueFormState {
+  final IssueType type;
+  final DateTime requestDate;
+
+  final String? fromStore;
+  final String? toStore;
+  final String note;
+  final bool isSubmitting;
+
+  IssueFormState({
+    this.type = IssueType.dispense,
+    DateTime? requestDate,
+    this.fromStore,
+    this.toStore,
+    this.note = '',
+    this.isSubmitting = false,
+  }) : requestDate = requestDate ?? DateTime.now();
+
+  IssueFormState copyWith({
+    IssueType? type,
+    DateTime? requestDate,
+    String? fromStore,
+    String? toStore,
+    String? note,
+    bool? isSubmitting,
+  }) {
+    return IssueFormState(
+      type: type ?? this.type,
+      requestDate: requestDate ?? this.requestDate,
+      fromStore: fromStore ?? this.fromStore,
+      toStore: toStore ?? this.toStore,
+      note: note ?? this.note,
+      isSubmitting: isSubmitting ?? this.isSubmitting,
+    );
+  }
+}
+
 class IssueFormController extends SafeStateNotifier<IssueFormState> {
+  IssueFormController(this.ref) : super(IssueFormState());
+
   final Ref ref;
 
-  /// Single stable key per screen/session to prevent dupes on double-click.
+  /// Stable idempotency key for this form instance.
+  ///
+  /// IssueFormEngine combines this with the source store ID so each
+  /// store submission has a stable request key across retries.
   final String _requestKey = const Uuid().v4();
-
-  IssueFormController(this.ref) : super(IssueFormState());
 
   void setType(IssueType type) {
     state = state.copyWith(type: type);
@@ -50,24 +89,17 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     ref.read(multiCartProvider.notifier).setNoteForAll(note);
   }
 
-  void selectIssue(IssueRecord record) {
-    state = state.copyWith(selectedIssue: record);
-  }
-
   // ────────────────────────────────────────────
-  // Submit multi-cart → one issue per store
+  // Submit multi-cart → backend API
   // ────────────────────────────────────────────
 
   Future<void> submit(BuildContext context) async {
     final cartState = ref.read(multiCartProvider);
-    final user = ref.read(currentUserProvider).asData?.value;
 
-    if (user == null) {
-      SnackService.showError('User not loaded');
-      return;
-    }
+    final hasAnyItems = cartState.cartsByStore.values.any(
+      (cart) => cart.isNotEmpty,
+    );
 
-    final hasAnyItems = cartState.cartsByStore.values.any((c) => c.isNotEmpty);
     if (!hasAnyItems) {
       SnackService.showError('Nothing to submit');
       return;
@@ -76,58 +108,45 @@ class IssueFormController extends SafeStateNotifier<IssueFormState> {
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Snapshot of inventory at submit time
-      final snap = readInventorySnapshot(ref);
-
-      // Use shared engine (which already knows the tenant/service)
+      final snapshot = readInventorySnapshot(ref);
       final engine = ref.read(issueFormEngineProvider);
 
       final result = await engine.submitMultiCart(
-        requester: user, // 👈 full AuthUser
         cartState: cartState,
-        batches: snap.batches,
-        meds: snap.meds,
-        cons: snap.cons,
-        equips: snap.equips,
-        requestKeyBase: _requestKey, // 👈 stable, per-screen key
+        batches: snapshot.batches,
+        meds: snapshot.meds,
+        cons: snapshot.cons,
+        equips: snapshot.equips,
+        requestKeyBase: _requestKey,
       );
+
+      if (!mounted) return;
 
       if (result.allSuccess) {
         ref.read(multiCartProvider.notifier).clearAll();
+
         SnackService.showSuccess('✅ All issue requests submitted!');
+
         if (context.mounted) {
           Navigator.of(context).pop();
         }
-      } else {
-        SnackService.showError('⚠️ Some submissions failed.');
-        if (result.storeErrors.isNotEmpty) {
-          // Show the first error detail as a follow-up
-          SnackService.showError(result.storeErrors.values.first);
-        }
+
+        return;
       }
+
+      SnackService.showError('⚠️ Some submissions failed.');
+
+      if (result.storeErrors.isNotEmpty) {
+        SnackService.showError(result.storeErrors.values.first);
+      }
+    } catch (e, st) {
+      debugPrint('❌ Issue submission failed: $e\n$st');
+
+      SnackService.showError('Failed to submit issue request');
     } finally {
-      state = state.copyWith(isSubmitting: false);
-    }
-  }
-
-  // ────────────────────────────────────────────
-  // Legacy list loader (dashboard/history)
-  // ────────────────────────────────────────────
-
-  Future<void> loadIssuedRecords() async {
-    if (!mounted) return;
-
-    final tenantId = ref.read(tenantIdProvider);
-    final service = IssueService(tenantId);
-
-    try {
-      final records = await service.getAllIssues();
-      if (!mounted) return;
-      state = state.copyWith(issuedRecords: records);
-    } catch (e, stack) {
-      debugPrint('❌ Failed to load issued records: $e');
-      debugPrint('🧱 $stack');
-      SnackService.showError('Failed to load issued records');
+      if (mounted) {
+        state = state.copyWith(isSubmitting: false);
+      }
     }
   }
 }

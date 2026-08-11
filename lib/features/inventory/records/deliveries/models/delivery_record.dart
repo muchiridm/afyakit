@@ -1,18 +1,23 @@
-import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
+// lib/features/inventory/records/deliveries/models/delivery_record.dart
+
 import 'package:afyakit/shared/utils/parse/dates.dart';
 
 class DeliveryRecord {
   final String deliveryId;
   final DateTime date;
   final DateTime createdAt;
+
   final String enteredByName;
   final String enteredByEmail;
+
   final List<String> sources;
+
   final int totalQuantity;
   final int totalItems;
+
   final List<Map<String, dynamic>> batchSnapshots;
 
-  DeliveryRecord({
+  const DeliveryRecord({
     required this.deliveryId,
     required this.date,
     required this.createdAt,
@@ -25,82 +30,83 @@ class DeliveryRecord {
   });
 
   factory DeliveryRecord.fromMap(String id, Map<String, dynamic> data) {
-    return DeliveryRecord(
-      deliveryId: id,
-      date: parseDate(data['date']) ?? DateTime.now(),
-      createdAt: parseDate(data['createdAt']) ?? DateTime.now(),
-      enteredByName: data['enteredByName'] ?? 'unknown',
-      enteredByEmail: data['enteredByEmail'] ?? 'unknown',
-      sources:
-          (data['sources'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          ['unknown'],
-      totalQuantity: data['totalQuantity'] ?? 0,
-      totalItems: data['totalItems'] ?? 0,
-      batchSnapshots:
-          (data['batchSnapshots'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e))
-              .toList() ??
-          [],
-    );
-  }
+    final deliveryId = (data['deliveryId'] ?? id).toString().trim();
 
-  Map<String, dynamic> toMap() => {
-    'date': date.toIso8601String(),
-    'createdAt': createdAt.toIso8601String(),
-    'enteredByName': enteredByName,
-    'enteredByEmail': enteredByEmail,
-    'sources': sources,
-    'totalQuantity': totalQuantity,
-    'totalItems': totalItems,
-    'batchSnapshots': batchSnapshots,
-  };
+    final sources =
+        (data['sources'] as List?)
+            ?.map((value) => value.toString().trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList() ??
+        const <String>[];
 
-  /// 🏗️ Create from a list of BatchRecords and classify each as 'created' or 'edited'
-  factory DeliveryRecord.fromBatches(
-    List<BatchRecord> batches,
-    String deliveryId, {
-    required String enteredByName,
-    required String enteredByEmail,
-    required List<String> sources,
-  }) {
-    if (batches.isEmpty) {
-      throw ArgumentError(
-        'Cannot create DeliveryRecord from empty batch list.',
-      );
-    }
+    final rawSnapshots = data['batchSnapshots'];
 
-    final now = DateTime.now();
-    final totalQty = batches.fold<int>(0, (sum, b) => sum + b.quantity);
-
-    final snapshots = batches.map((batch) {
-      final map = batch.toMap();
-      map['action'] = batch.isEdited == true
-          ? 'edited'
-          : 'created'; // 👈 Add action flag
-      return map;
-    }).toList();
+    final snapshots = rawSnapshots is List
+        ? rawSnapshots
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .toList()
+        : <Map<String, dynamic>>[];
 
     return DeliveryRecord(
       deliveryId: deliveryId,
-      date: now,
-      createdAt: now,
-      enteredByName: enteredByName,
-      enteredByEmail: enteredByEmail,
+
+      date: parseDate(data['date']) ?? DateTime.now(),
+
+      createdAt:
+          parseDate(data['createdAt']) ??
+          parseDate(data['date']) ??
+          DateTime.now(),
+
+      enteredByName: _string(data['enteredByName']) ?? 'Unknown',
+
+      enteredByEmail: _string(data['enteredByEmail']) ?? '',
+
       sources: sources,
-      totalQuantity: totalQty,
-      totalItems: batches.length,
+
+      totalQuantity:
+          _int(data['totalQuantity']) ??
+          snapshots.fold<int>(
+            0,
+            (sum, batch) => sum + (_int(batch['quantity']) ?? 0),
+          ),
+
+      totalItems: _int(data['totalItems']) ?? snapshots.length,
+
       batchSnapshots: snapshots,
     );
   }
 
-  // 🧮 Distinct item count, used in UI display
+  /// Number of distinct inventory items represented
+  /// across the delivery's batch snapshots.
   int get itemCount {
-    final ids = batchSnapshots
-        .map((s) => s['itemId']?.toString())
-        .where((id) => id != null && id.isNotEmpty)
-        .toSet();
-    return ids.length;
+    return batchSnapshots
+        .map((snapshot) => _string(snapshot['itemId']))
+        .whereType<String>()
+        .toSet()
+        .length;
+  }
+
+  static String? _string(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final text = value.toString().trim();
+
+    return text.isEmpty ? null : text;
+  }
+
+  static int? _int(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(value?.toString() ?? '');
   }
 }

@@ -1,4 +1,5 @@
-// lib/features/batches/controllers/batch_engine.dart
+// lib/features/inventory/batches/controllers/batch_engine.dart
+
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

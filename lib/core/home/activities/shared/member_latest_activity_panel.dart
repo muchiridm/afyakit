@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/home/activities/feed/activity_feed_adapter.dart';
 import 'package:afyakit/core/home/activities/feed/activity_feed_providers.dart';
+import 'package:afyakit/core/home/activities/feed/activity_feed_record.dart';
 import 'package:afyakit/core/home/activities/shared/latest_activity_panel.dart';
 import 'package:afyakit/core/home/models/activity_entry.dart';
 
@@ -80,60 +81,7 @@ class MemberLatestActivityPanel extends ConsumerWidget {
 
     final entries = ActivityFeedAdapter.fromFeed(
       activityAsync.valueOrNull ?? const [],
-      onTapForActivity: (activity) {
-        final String? paymentId = activity.paymentId?.trim();
-        final String? invoiceId = activity.invoiceId?.trim();
-
-        if (_hasText(paymentId) && _hasText(invoiceId)) {
-          return () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => PaymentDetailScreen(
-                invoiceId: invoiceId!,
-                paymentId: paymentId!,
-                currencyCode: activity.currencyCode ?? 'KES',
-                customerName: activity.subtitle,
-                invoiceNumber: activity.invoiceNumber,
-                canManagePayments: false,
-              ),
-            ),
-          );
-        }
-
-        if (_hasText(invoiceId)) {
-          return () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => InvoiceDetailScreen(
-                invoiceId: invoiceId!,
-                forceStaffWorkspace: false,
-              ),
-            ),
-          );
-        }
-
-        final String? quoteId = activity.quoteId?.trim();
-
-        if (_hasText(quoteId)) {
-          return () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => QuoteDetailScreen(
-                quoteId: quoteId!,
-                forceStaffWorkspace: false,
-              ),
-            ),
-          );
-        }
-
-        final String? activityContactId = activity.contactId?.trim();
-        final bool isContactActivity = activity.type.startsWith('contact_');
-
-        if (isContactActivity && _hasText(activityContactId)) {
-          return () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
-          );
-        }
-
-        return null;
-      },
+      onTapForActivity: (activity) => _onTapForActivity(context, activity),
     )..sort((ActivityEntry a, ActivityEntry b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
@@ -147,6 +95,70 @@ class MemberLatestActivityPanel extends ConsumerWidget {
       maxItems: maxItems,
       onTitleTap: onTitleTap,
     );
+  }
+
+  VoidCallback? _onTapForActivity(
+    BuildContext context,
+    ActivityFeedRecord activity,
+  ) {
+    switch (activity.entity.type) {
+      case ActivityEntityType.payment:
+        final invoice = activity.relatedEntity(ActivityEntityType.invoice);
+        final paymentId = activity.entity.id.trim();
+
+        if (!_hasText(paymentId) || invoice == null || !_hasText(invoice.id)) {
+          return null;
+        }
+
+        return () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PaymentDetailScreen(
+              invoiceId: invoice.id,
+              paymentId: paymentId,
+              currencyCode: activity.currencyCode ?? 'KES',
+              customerName: activity.subtitle,
+              invoiceNumber: invoice.label,
+              canManagePayments: false,
+            ),
+          ),
+        );
+
+      case ActivityEntityType.invoice:
+        final invoiceId = activity.entity.id.trim();
+        if (!_hasText(invoiceId)) return null;
+
+        return () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => InvoiceDetailScreen(
+              invoiceId: invoiceId,
+              forceStaffWorkspace: false,
+            ),
+          ),
+        );
+
+      case ActivityEntityType.quote:
+        final quoteId = activity.entity.id.trim();
+        if (!_hasText(quoteId)) return null;
+
+        return () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                QuoteDetailScreen(quoteId: quoteId, forceStaffWorkspace: false),
+          ),
+        );
+
+      case ActivityEntityType.contact:
+        return () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const ContactsScreen()));
+
+      case ActivityEntityType.patient:
+      case ActivityEntityType.patientLinkRequest:
+      case ActivityEntityType.inventoryIssue:
+      case ActivityEntityType.inventoryDelivery:
+      case ActivityEntityType.unknown:
+        return null;
+    }
   }
 
   static bool _hasText(String? value) {

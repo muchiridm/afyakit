@@ -1,4 +1,5 @@
-// lib/shared/providers/batch_service.dart
+// lib/features/inventory/batches/services/batch_service.dart
+
 import 'dart:convert';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';

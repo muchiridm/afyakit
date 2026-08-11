@@ -1,3 +1,5 @@
+// lib/features/inventory/records/cart/cart_item_models.dart
+
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 
 class CartDisplayItem {

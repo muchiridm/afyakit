@@ -1,9 +1,11 @@
+// lib/features/inventory/records/cart/widgets/cart_drawer.dart
+
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-import 'package:afyakit/features/inventory/records/issues/models/view_models/cart_item_models.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/providers/grouped_cart_provider.dart';
+import 'package:afyakit/features/inventory/records/cart/cart_item_models.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_controller.dart';
+import 'package:afyakit/features/inventory/records/cart/grouped_cart_provider.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_request_screen.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 import 'package:flutter/material.dart';

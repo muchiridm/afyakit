@@ -5,22 +5,20 @@ class IssueFormState {
   final IssueType type;
   final DateTime requestDate;
 
-  final String? fromStore; // e.g. origin of the stock
-  final String? toStore; // e.g. destination for transfer or dispense
+  final String? fromStore;
+  final String? toStore;
   final String note;
   final bool isSubmitting;
 
-  final List<IssueRecord> issuedRecords;
   final IssueRecord? selectedIssue;
 
   IssueFormState({
-    this.type = IssueType.dispense, // ✅ Default now matches expected workflow
+    this.type = IssueType.dispense,
     DateTime? requestDate,
     this.fromStore,
     this.toStore,
     this.note = '',
     this.isSubmitting = false,
-    this.issuedRecords = const [],
     this.selectedIssue,
   }) : requestDate = requestDate ?? DateTime.now();
 
@@ -31,7 +29,6 @@ class IssueFormState {
     String? toStore,
     String? note,
     bool? isSubmitting,
-    List<IssueRecord>? issuedRecords,
     IssueRecord? selectedIssue,
   }) {
     return IssueFormState(
@@ -41,7 +38,6 @@ class IssueFormState {
       toStore: toStore ?? this.toStore,
       note: note ?? this.note,
       isSubmitting: isSubmitting ?? this.isSubmitting,
-      issuedRecords: issuedRecords ?? this.issuedRecords,
       selectedIssue: selectedIssue ?? this.selectedIssue,
     );
   }

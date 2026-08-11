@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/inventory/records/deliveries/screens/delivery_records_screen.dart';
+import 'package:afyakit/features/inventory/records/deliveries/widgets/screens/delivery_records_screen.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_records_screen.dart';
 import 'package:afyakit/features/inventory/records/reorder/screens/reorder_records_screen.dart';
 
