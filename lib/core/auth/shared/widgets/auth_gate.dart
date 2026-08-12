@@ -11,7 +11,7 @@ import 'package:afyakit/core/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_feature_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
-import 'package:afyakit/features/messaging/notifications/notification_bootstrap.dart';
+import 'package:afyakit/core/notifications/notification_bootstrap.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

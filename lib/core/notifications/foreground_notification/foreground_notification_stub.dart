@@ -1,4 +1,4 @@
-// lib/features/messaging/notifications/foreground_notification/foreground_notification_stub.dart
+// lib/core/notifications/foreground_notification/foreground_notification_stub.dart
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 

@@ -1,4 +1,4 @@
-// lib/features/messaging/notifications/chat_notification_service.dart
+// lib/core/notifications/notification_service.dart
 
 import 'dart:convert';
 
@@ -9,8 +9,8 @@ import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
-class ChatNotificationService {
-  ChatNotificationService({
+class NotificationService {
+  NotificationService({
     FirebaseFirestore? firestore,
     FirebaseMessaging? messaging,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
@@ -25,8 +25,12 @@ class ChatNotificationService {
 
   Stream<String> get onTokenRefresh => _messaging.onTokenRefresh;
 
+  // ─────────────────────────────────────────────
+  // Permission / token
+  // ─────────────────────────────────────────────
+
   Future<NotificationSettings> requestPermission() async {
-    final NotificationSettings settings = await _messaging.requestPermission(
+    final settings = await _messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -55,11 +59,11 @@ class ChatNotificationService {
         return null;
       }
 
-      final String? token = await _messaging.getToken(
+      final token = await _messaging.getToken(
         vapidKey: kIsWeb ? _webVapidKey : null,
       );
 
-      final String cleanToken = token?.trim() ?? '';
+      final cleanToken = token?.trim() ?? '';
 
       if (cleanToken.isEmpty) {
         debugPrint(
@@ -90,54 +94,41 @@ class ChatNotificationService {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Device registration
+  // ─────────────────────────────────────────────
+
   Future<void> registerDevice({
     required AuthUser user,
     required String token,
   }) async {
-    final String cleanToken = token.trim();
-    final String tenantId = user.tenantId.trim().toLowerCase();
-    final String uid = user.uid.trim();
-    final bool isStaff = user.isStaffResolved;
+    final identity = _resolveIdentity(user: user, token: token);
 
-    if (cleanToken.isEmpty) {
-      debugPrint('⚠️ Device registration skipped: empty FCM token');
-
+    if (identity == null) {
       return;
     }
 
-    if (tenantId.isEmpty) {
-      debugPrint('⚠️ Device registration skipped: empty tenantId');
-
-      return;
-    }
-
-    if (uid.isEmpty) {
-      debugPrint('⚠️ Device registration skipped: empty uid');
-
-      return;
-    }
-
-    final String deviceId = _deviceId(cleanToken);
-
-    final DocumentReference<Map<String, dynamic>> deviceRef = _deviceRef(
-      tenantId: tenantId,
-      deviceId: deviceId,
+    final deviceRef = _deviceRef(
+      tenantId: identity.tenantId,
+      deviceId: identity.deviceId,
     );
 
     try {
-      final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
-          .get();
+      final snapshot = await deviceRef.get();
 
-      final Map<String, dynamic> values = <String, dynamic>{
-        'uid': uid,
-        'token': cleanToken,
+      final values = <String, dynamic>{
+        'uid': identity.uid,
+        'token': identity.token,
         'platform': _platform,
         'enabled': true,
-        'isStaff': isStaff,
+        'isStaff': user.isStaffResolved,
+
         if ((user.contactId ?? '').trim().isNotEmpty)
           'contactId': user.contactId!.trim(),
+
         if ((user.accountNumber ?? '').trim().isNotEmpty)
           'accountNumber': user.accountNumber!.trim(),
+
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -147,32 +138,31 @@ class ChatNotificationService {
 
       debugPrint(
         '🔔 Registering notification device '
-        'tenant=$tenantId '
-        'uid=$uid '
-        'isStaff=$isStaff '
+        'tenant=${identity.tenantId} '
+        'uid=${identity.uid} '
+        'isStaff=${user.isStaffResolved} '
         'platform=$_platform '
         'exists=${snapshot.exists} '
-        'deviceId=$deviceId',
+        'deviceId=${identity.deviceId}',
       );
 
       await deviceRef.set(values, SetOptions(merge: true));
 
       debugPrint(
         '✅ Notification device registered '
-        'tenant=$tenantId '
-        'uid=$uid '
-        'isStaff=$isStaff '
+        'tenant=${identity.tenantId} '
+        'uid=${identity.uid} '
+        'isStaff=${user.isStaffResolved} '
         'platform=$_platform '
-        'deviceId=$deviceId',
+        'deviceId=${identity.deviceId}',
       );
     } catch (error, stackTrace) {
       debugPrint(
         '❌ Notification device registration failed '
-        'tenant=$tenantId '
-        'uid=$uid '
-        'isStaff=$isStaff '
+        'tenant=${identity.tenantId} '
+        'uid=${identity.uid} '
         'platform=$_platform '
-        'deviceId=$deviceId '
+        'deviceId=${identity.deviceId} '
         'error=$error',
       );
 
@@ -186,73 +176,70 @@ class ChatNotificationService {
     required AuthUser user,
     required String token,
   }) async {
-    final String cleanToken = token.trim();
-    final String tenantId = user.tenantId.trim().toLowerCase();
-    final String uid = user.uid.trim();
+    final identity = _resolveIdentity(
+      user: user,
+      token: token,
+      logInvalid: false,
+    );
 
-    if (cleanToken.isEmpty || tenantId.isEmpty || uid.isEmpty) {
+    if (identity == null) {
       return;
     }
 
-    final String deviceId = _deviceId(cleanToken);
-
-    final DocumentReference<Map<String, dynamic>> deviceRef = _deviceRef(
-      tenantId: tenantId,
-      deviceId: deviceId,
+    final deviceRef = _deviceRef(
+      tenantId: identity.tenantId,
+      deviceId: identity.deviceId,
     );
 
     try {
-      final DocumentSnapshot<Map<String, dynamic>> snapshot = await deviceRef
-          .get();
+      final snapshot = await deviceRef.get();
 
       if (!snapshot.exists) {
         debugPrint(
           'ℹ️ Notification device disable skipped: '
           'document missing '
-          'tenant=$tenantId '
-          'uid=$uid '
-          'deviceId=$deviceId',
+          'tenant=${identity.tenantId} '
+          'uid=${identity.uid} '
+          'deviceId=${identity.deviceId}',
         );
 
         return;
       }
 
-      final Map<String, dynamic>? values = snapshot.data();
+      final registeredUid = (snapshot.data()?['uid'] as String? ?? '').trim();
 
-      final String registeredUid = (values?['uid'] as String? ?? '').trim();
-
-      if (registeredUid.isNotEmpty && registeredUid != uid) {
+      if (registeredUid.isNotEmpty && registeredUid != identity.uid) {
         debugPrint(
           '⚠️ Notification device disable skipped: '
           'UID mismatch '
-          'tenant=$tenantId '
-          'currentUid=$uid '
+          'tenant=${identity.tenantId} '
+          'currentUid=${identity.uid} '
           'registeredUid=$registeredUid '
-          'deviceId=$deviceId',
+          'deviceId=${identity.deviceId}',
         );
 
         return;
       }
 
-      await deviceRef.update(<String, dynamic>{
+      await deviceRef.update({
         'enabled': false,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
       debugPrint(
         '🔕 Notification device disabled '
-        'tenant=$tenantId '
-        'uid=$uid '
+        'tenant=${identity.tenantId} '
+        'uid=${identity.uid} '
         'platform=$_platform '
-        'deviceId=$deviceId',
+        'deviceId=${identity.deviceId}',
       );
     } catch (error, stackTrace) {
       debugPrint(
         '❌ Notification device disable failed '
-        'tenant=$tenantId '
-        'uid=$uid '
+        'tenant=${identity.tenantId} '
+        'uid=${identity.uid} '
         'platform=$_platform '
-        'deviceId=$deviceId '
+        'deviceId=${identity.deviceId} '
         'error=$error',
       );
 
@@ -260,6 +247,60 @@ class ChatNotificationService {
 
       rethrow;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
+
+  _NotificationDeviceIdentity? _resolveIdentity({
+    required AuthUser user,
+    required String token,
+    bool logInvalid = true,
+  }) {
+    final cleanToken = token.trim();
+    final tenantId = user.tenantId.trim().toLowerCase();
+    final uid = user.uid.trim();
+
+    if (cleanToken.isEmpty) {
+      if (logInvalid) {
+        debugPrint(
+          '⚠️ Notification device operation skipped: '
+          'empty FCM token',
+        );
+      }
+
+      return null;
+    }
+
+    if (tenantId.isEmpty) {
+      if (logInvalid) {
+        debugPrint(
+          '⚠️ Notification device operation skipped: '
+          'empty tenantId',
+        );
+      }
+
+      return null;
+    }
+
+    if (uid.isEmpty) {
+      if (logInvalid) {
+        debugPrint(
+          '⚠️ Notification device operation skipped: '
+          'empty uid',
+        );
+      }
+
+      return null;
+    }
+
+    return _NotificationDeviceIdentity(
+      tenantId: tenantId,
+      uid: uid,
+      token: cleanToken,
+      deviceId: _deviceId(cleanToken),
+    );
   }
 
   DocumentReference<Map<String, dynamic>> _deviceRef({
@@ -299,4 +340,18 @@ class ChatNotificationService {
       TargetPlatform.fuchsia => 'fuchsia',
     };
   }
+}
+
+class _NotificationDeviceIdentity {
+  const _NotificationDeviceIdentity({
+    required this.tenantId,
+    required this.uid,
+    required this.token,
+    required this.deviceId,
+  });
+
+  final String tenantId;
+  final String uid;
+  final String token;
+  final String deviceId;
 }
