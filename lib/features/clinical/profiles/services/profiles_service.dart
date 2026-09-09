@@ -17,6 +17,7 @@ final profilesServiceProvider = Provider<ProfilesService>((ref) {
 final profilesServiceReadyProvider =
     FutureProvider.autoDispose<ProfilesService>((ref) async {
       final api = await ref.watch(afyakitClientFutureProvider.future);
+
       final routes = ref.afyakitRoutes;
 
       return ProfilesService(api: api, routes: routes);
@@ -27,49 +28,6 @@ class ProfilesService {
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
-
-  static Map<String, Object?> _asMap(Object? value) {
-    if (value is Map<String, Object?>) return value;
-
-    if (value is Map) {
-      return value.map(
-        (key, dynamic value) => MapEntry(key.toString(), value as Object?),
-      );
-    }
-
-    throw const FormatException('Expected object map');
-  }
-
-  static List<Map<String, Object?>> _asListOfMaps(Object? value) {
-    if (value is! List) return const <Map<String, Object?>>[];
-
-    return value
-        .whereType<Map>()
-        .map(
-          (item) => item.map(
-            (key, dynamic value) => MapEntry(key.toString(), value as Object?),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  static Profile _readPatient(Object? value) {
-    return Profile.fromJson(_asMap(value));
-  }
-
-  static List<Profile> _readPatients(Object? value) {
-    return _asListOfMaps(value).map(Profile.fromJson).toList(growable: false);
-  }
-
-  static ProfileLinkRequest _readLinkRequest(Object? value) {
-    return ProfileLinkRequest.fromJson(_asMap(value));
-  }
-
-  static List<ProfileLinkRequest> _readLinkRequests(Object? value) {
-    return _asListOfMaps(
-      value,
-    ).map(ProfileLinkRequest.fromJson).toList(growable: false);
-  }
 
   // ─────────────────────────────────────────────
   // Profiles
@@ -83,7 +41,7 @@ class ProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final uri = routes.clinicalPatientsList(
+    final uri = routes.clinicalProfilesList(
       search: _nullable(search),
       contactId: _nullable(contactId),
       relationship: relationship?.name,
@@ -93,138 +51,130 @@ class ProfilesService {
     );
 
     final response = await api.getUri<Object?>(uri);
+
     final body = _asMap(response.data);
 
-    return _readPatients(body['patients']);
+    return _readProfiles(body['profiles']);
   }
 
-  Future<Profile> get(String patientId) async {
-    final id = _requiredId(patientId, 'patientId');
+  Future<Profile> get(String profileId) async {
+    final id = _requiredId(profileId, 'profileId');
 
-    final response = await api.getUri<Object?>(routes.clinicalPatientGet(id));
+    final response = await api.getUri<Object?>(routes.clinicalProfileGet(id));
 
     final body = _asMap(response.data);
-    return _readPatient(body['patient']);
+
+    return _readProfile(body['profile']);
   }
 
   Future<Profile> create(ProfileUpsertInput input) async {
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientCreate(),
+      routes.clinicalProfileCreate(),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
-    return _readPatient(body['patient']);
+
+    return _readProfile(body['profile']);
   }
 
-  Future<Profile> update(String patientId, ProfileUpsertInput input) async {
-    final id = _requiredId(patientId, 'patientId');
+  Future<Profile> update(String profileId, ProfileUpsertInput input) async {
+    final id = _requiredId(profileId, 'profileId');
 
     final response = await api.putUri<Object?>(
-      routes.clinicalPatientUpdate(id),
+      routes.clinicalProfileUpdate(id),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
-    return _readPatient(body['patient']);
+
+    return _readProfile(body['profile']);
   }
 
-  Future<Profile> linkToSelf(
-    String patientId,
-    ProfileLinkToSelfInput input,
-  ) async {
-    final id = _requiredId(patientId, 'patientId');
+  Future<void> delete(String profileId) async {
+    final id = _requiredId(profileId, 'profileId');
 
-    final response = await api.postUri<Object?>(
-      routes.clinicalPatientLinkSelf(id),
-      data: input.toJson(),
-    );
-
-    final body = _asMap(response.data);
-    return _readPatient(body['patient']);
+    await api.deleteUri<Object?>(routes.clinicalProfileDelete(id));
   }
 
-  Future<Profile> linkPatientToSelf(
-    String patientId,
-    ProfileLinkToSelfInput input,
-  ) {
-    return linkToSelf(patientId, input);
+  Future<void> remove(String profileId) {
+    return delete(profileId);
   }
 
   // ─────────────────────────────────────────────
-  // Staff direct patient-contact links
+  // Member profile linking
+  // ─────────────────────────────────────────────
+
+  Future<Profile> linkToSelf(
+    String profileId,
+    ProfileLinkToSelfInput input,
+  ) async {
+    final id = _requiredId(profileId, 'profileId');
+
+    final response = await api.postUri<Object?>(
+      routes.clinicalProfileLinkSelf(id),
+      data: input.toJson(),
+    );
+
+    final body = _asMap(response.data);
+
+    return _readProfile(body['profile']);
+  }
+
+  // ─────────────────────────────────────────────
+  // Staff direct profile-contact links
   // ─────────────────────────────────────────────
 
   Future<Profile> linkContact(
-    String patientId,
+    String profileId,
     ProfileContactLinkInput input,
   ) async {
-    final id = _requiredId(patientId, 'patientId');
+    final id = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientLinkedContactCreate(id),
+      routes.clinicalProfileLinkedContactCreate(id),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
-    return _readPatient(body['patient']);
-  }
 
-  Future<Profile> linkContactToPatient({
-    required String profileId,
-    required ProfileContactLinkInput input,
-  }) {
-    return linkContact(profileId, input);
+    return _readProfile(body['profile']);
   }
 
   Future<Profile> delinkContact({
-    required String patientId,
+    required String profileId,
     required String contactId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
+
     final cid = _requiredId(contactId, 'contactId');
 
     final response = await api.deleteUri<Object?>(
-      routes.clinicalPatientLinkedContactDelete(patientId: pid, contactId: cid),
+      routes.clinicalProfileLinkedContactDelete(profileId: pid, contactId: cid),
     );
 
     final body = _asMap(response.data);
-    return _readPatient(body['patient']);
-  }
 
-  Future<Profile> delinkContactFromProfile({
-    required String profileId,
-    required String contactId,
-  }) {
-    return delinkContact(patientId: profileId, contactId: contactId);
-  }
-
-  Future<void> delete(String patientId) async {
-    final id = _requiredId(patientId, 'patientId');
-
-    await api.deleteUri<Object?>(routes.clinicalPatientDelete(id));
-  }
-
-  Future<void> remove(String patientId) {
-    return delete(patientId);
+    return _readProfile(body['profile']);
   }
 
   // ─────────────────────────────────────────────
-  // Patient link requests
+  // Profile link requests
   // ─────────────────────────────────────────────
 
   Future<ProfileLinkRequest> createLinkRequest(
-    String patientId,
+    String profileId,
     ProfileLinkRequestCreateInput input,
   ) async {
-    final id = _requiredId(patientId, 'patientId');
+    final id = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientLinkRequestCreate(id),
+      routes.clinicalProfileLinkRequestCreate(id),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
+
     return _readLinkRequest(body['request']);
   }
 
@@ -234,14 +184,15 @@ class ProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final uri = routes.clinicalPatientLinkRequestsList(
+    final uri = routes.clinicalProfileLinkRequestsList(
       status: status?.wire,
-      patientId: _nullable(profileId),
+      profileId: _nullable(profileId),
       perPage: perPage,
       page: page,
     );
 
     final response = await api.getUri<Object?>(uri);
+
     final body = _asMap(response.data);
 
     return _readLinkRequests(body['requests']);
@@ -254,11 +205,12 @@ class ProfilesService {
     final id = _requiredId(requestId, 'requestId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientLinkRequestApprove(id),
+      routes.clinicalProfileLinkRequestApprove(id),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
+
     return _readLinkRequest(body['request']);
   }
 
@@ -269,33 +221,65 @@ class ProfilesService {
     final id = _requiredId(requestId, 'requestId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientLinkRequestReject(id),
+      routes.clinicalProfileLinkRequestReject(id),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
+
     return _readLinkRequest(body['request']);
-  }
-
-  // Convenience alias for member-side wording.
-  Future<ProfileLinkRequest> requestPayerLink(
-    String patientId,
-    ProfileLinkRequestCreateInput input,
-  ) {
-    return createLinkRequest(patientId, input);
-  }
-
-  // Convenience alias for staff-side wording.
-  Future<ProfileLinkRequest> approvePayerLinkRequest(
-    String requestId,
-    ProfileLinkRequestApproveInput input,
-  ) {
-    return approveLinkRequest(requestId, input);
   }
 
   // ─────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────
+
+  static Profile _readProfile(Object? value) {
+    return Profile.fromJson(_asMap(value));
+  }
+
+  static List<Profile> _readProfiles(Object? value) {
+    return _asListOfMaps(value).map(Profile.fromJson).toList(growable: false);
+  }
+
+  static ProfileLinkRequest _readLinkRequest(Object? value) {
+    return ProfileLinkRequest.fromJson(_asMap(value));
+  }
+
+  static List<ProfileLinkRequest> _readLinkRequests(Object? value) {
+    return _asListOfMaps(
+      value,
+    ).map(ProfileLinkRequest.fromJson).toList(growable: false);
+  }
+
+  static Map<String, Object?> _asMap(Object? value) {
+    if (value is Map<String, Object?>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return value.map(
+        (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+      );
+    }
+
+    throw const FormatException('Expected object map');
+  }
+
+  static List<Map<String, Object?>> _asListOfMaps(Object? value) {
+    if (value is! List) {
+      return const <Map<String, Object?>>[];
+    }
+
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => item.map(
+            (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+          ),
+        )
+        .toList(growable: false);
+  }
 
   static String _requiredId(String value, String name) {
     final id = value.trim();
@@ -309,7 +293,11 @@ class ProfilesService {
 
   static String? _nullable(String? value) {
     final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
+
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
     return trimmed;
   }
 }

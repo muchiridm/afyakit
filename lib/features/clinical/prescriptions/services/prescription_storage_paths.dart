@@ -8,6 +8,7 @@ final class PrescriptionStoragePaths {
   static String newUploadId() {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     final rand = Random.secure().nextInt(0x7fffffff).toRadixString(36);
+
     return 'rx_${now.toRadixString(36)}_$rand';
   }
 
@@ -43,15 +44,15 @@ final class PrescriptionStoragePaths {
 
   static String originalPath({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required String uploadId,
     required String ext,
   }) {
     return [
       'tenants',
       _safeSegment(tenantId),
-      'clinical_patients',
-      _safeSegment(patientId),
+      'clinical_profiles',
+      _safeSegment(profileId),
       'prescriptions',
       _safeSegment(uploadId),
       'original.${cleanExt(ext)}',
@@ -60,14 +61,14 @@ final class PrescriptionStoragePaths {
 
   static String standardPath({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required String uploadId,
   }) {
     return [
       'tenants',
       _safeSegment(tenantId),
-      'clinical_patients',
-      _safeSegment(patientId),
+      'clinical_profiles',
+      _safeSegment(profileId),
       'prescriptions',
       _safeSegment(uploadId),
       'standard.jpg',
@@ -76,14 +77,14 @@ final class PrescriptionStoragePaths {
 
   static String thumbnailPath({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required String uploadId,
   }) {
     return [
       'tenants',
       _safeSegment(tenantId),
-      'clinical_patients',
-      _safeSegment(patientId),
+      'clinical_profiles',
+      _safeSegment(profileId),
       'prescriptions',
       _safeSegment(uploadId),
       'thumb.jpg',

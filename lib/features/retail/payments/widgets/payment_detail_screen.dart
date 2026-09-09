@@ -4,7 +4,6 @@ import 'package:afyakit/features/retail/payments/controllers/payment_controller.
 import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
 import 'package:afyakit/features/retail/payments/providers/payment_providers.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
-import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_receipt_summary_card.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -216,91 +215,9 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
-        const Divider(height: 1),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: PaymentHistorySection(
-            title: 'Other payments on this invoice',
-            leadingIcon: Icons.history,
-            currencyCode: code,
-            payments: paymentState.payments,
-            loading: paymentState.loadingPayments,
-            busy: busy,
-            error: paymentState.error,
-            canManage: canManage,
-            excludePaymentId: _paymentId,
-            maxRows: 8,
-            compact: true,
-            showHeader: true,
-            showEmptyCard: true,
-            selectedPaymentId: _paymentId,
-            onRefresh: () async {
-              await paymentCtl.refresh();
-              _invalidateInvoicePaymentData(_invoiceId);
-            },
-            onOpenReceipt: (ZohoInvoicePayment p) {
-              _openReceiptReplacement(context, p, code, canManage);
-            },
-            onEdit: canManage && !busy
-                ? (ZohoInvoicePayment p) async {
-                    paymentCtl.startEditPayment(p);
 
-                    await PaymentEditorSheet.open(
-                      context,
-                      invoiceId: _invoiceId,
-                    );
-
-                    final String editedPaymentId = p.paymentId.trim();
-
-                    if (editedPaymentId.isNotEmpty) {
-                      _invalidateReceipt(
-                        invoiceId: _invoiceId,
-                        paymentId: editedPaymentId,
-                      );
-                    } else {
-                      _invalidateInvoicePaymentData(_invoiceId);
-                    }
-                  }
-                : null,
-            onDelete: canManage && !busy
-                ? (ZohoInvoicePayment p) => _confirmAndDelete(
-                    context: context,
-                    ctl: paymentCtl,
-                    payment: p,
-                  )
-                : null,
-          ),
-        ),
         const SizedBox(height: 24),
       ],
-    );
-  }
-
-  void _openReceiptReplacement(
-    BuildContext context,
-    ZohoInvoicePayment payment,
-    String currencyCode,
-    bool canManage,
-  ) {
-    final String nextPaymentId = payment.paymentId.trim();
-
-    if (nextPaymentId.isEmpty) return;
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => PaymentDetailScreen(
-          invoiceId: _invoiceId,
-          paymentId: nextPaymentId,
-          currencyCode: currencyCode,
-          customerName: widget.customerName,
-          invoiceNumber: widget.invoiceNumber,
-          invoiceDate: widget.invoiceDate,
-          invoiceTotal: widget.invoiceTotal,
-          canManagePayments: canManage,
-        ),
-      ),
     );
   }
 

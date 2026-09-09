@@ -151,10 +151,10 @@ class _InsuranceClaimDetailScreenState
     final InsuranceClaimPack? pack = _pack;
     if (pack == null) return;
 
-    final String patientId = pack.patientId.trim();
+    final String profileId = pack.patientId.trim();
     final String prescriptionId = (pack.prescriptionId ?? '').trim();
 
-    if (patientId.isEmpty) {
+    if (profileId.isEmpty) {
       _snack('Patient ID is missing.');
       return;
     }
@@ -168,7 +168,7 @@ class _InsuranceClaimDetailScreenState
       final PrescriptionsService svc = ref.read(prescriptionsServiceProvider);
 
       final Prescription prescription = await svc.get(
-        patientId: patientId,
+        profileId: profileId,
         prescriptionId: prescriptionId,
       );
 

@@ -328,9 +328,9 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _uploadPrescription() async {
-    final String? patientId = _patientId;
+    final String? profileId = _patientId;
 
-    if (patientId == null) {
+    if (profileId == null) {
       _snack('Pick a patient first.');
       return;
     }
@@ -361,12 +361,12 @@ class _QuoteClinicalContextDialogState
     }
 
     final String tenantId = ref.read(tenantIdProvider).trim();
-    final provider = prescriptionsControllerProvider(patientId);
+    final provider = prescriptionsControllerProvider(profileId);
     final PrescriptionsController controller = ref.read(provider.notifier);
 
     await controller.upload(
       tenantId: tenantId,
-      patientId: patientId,
+      profileId: profileId,
       file: PickedPrescriptionFile(
         fileName: file.name,
         extension: file.extension ?? 'jpg',

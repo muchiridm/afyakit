@@ -10,7 +10,7 @@ import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_s
 class PrescriptionsState {
   const PrescriptionsState({
     this.items = const <Prescription>[],
-    this.patientId,
+    this.profileId,
     this.isLoading = false,
     this.isUploading = false,
     this.isSaving = false,
@@ -18,26 +18,29 @@ class PrescriptionsState {
   });
 
   final List<Prescription> items;
-  final String? patientId;
+  final String? profileId;
+
   final bool isLoading;
   final bool isUploading;
   final bool isSaving;
+
   final String? error;
 
   bool get busy => isLoading || isUploading || isSaving;
 
   PrescriptionsState copyWith({
     List<Prescription>? items,
-    String? patientId,
+    String? profileId,
     bool? isLoading,
     bool? isUploading,
     bool? isSaving,
     String? error,
+    bool clearProfileId = false,
     bool clearError = false,
   }) {
     return PrescriptionsState(
       items: items ?? this.items,
-      patientId: patientId ?? this.patientId,
+      profileId: clearProfileId ? null : profileId ?? this.profileId,
       isLoading: isLoading ?? this.isLoading,
       isUploading: isUploading ?? this.isUploading,
       isSaving: isSaving ?? this.isSaving,
@@ -49,9 +52,9 @@ class PrescriptionsState {
 class PrescriptionsController extends StateNotifier<PrescriptionsState> {
   PrescriptionsController({
     required PrescriptionsService service,
-    String? patientId,
+    String? profileId,
   }) : _service = service,
-       super(PrescriptionsState(patientId: patientId));
+       super(PrescriptionsState(profileId: profileId));
 
   final PrescriptionsService _service;
 
@@ -60,10 +63,10 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
     bool? isActive,
     PrescriptionStatus? status,
   }) async {
-    final pid = (profileId ?? state.patientId ?? '').trim();
+    final pid = (profileId ?? state.profileId ?? '').trim();
 
     state = state.copyWith(
-      patientId: pid.isEmpty ? null : pid,
+      profileId: pid.isEmpty ? null : pid,
       isLoading: true,
       clearError: true,
     );
@@ -72,15 +75,16 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
       if (pid.isEmpty) {
         state = state.copyWith(
           items: const <Prescription>[],
-          patientId: null,
+          clearProfileId: true,
           isLoading: false,
           clearError: true,
         );
+
         return;
       }
 
       final items = await _service.list(
-        patientId: pid,
+        profileId: pid,
         isActive: isActive,
         status: status,
       );
@@ -93,24 +97,25 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
   Future<void> upload({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required PickedPrescriptionFile file,
     String? note,
     String? prescribedOn,
   }) async {
-    final pid = patientId.trim();
+    final pid = profileId.trim();
 
     if (pid.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is required');
+      state = state.copyWith(error: 'Profile ID is required');
+
       return;
     }
 
-    state = state.copyWith(patientId: pid, isUploading: true, clearError: true);
+    state = state.copyWith(profileId: pid, isUploading: true, clearError: true);
 
     try {
       final saved = await _service.uploadAndCreate(
         tenantId: tenantId,
-        patientId: pid,
+        profileId: pid,
         file: file,
         note: note,
         prescribedOn: prescribedOn,
@@ -118,7 +123,8 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
       final next = <Prescription>[saved, ...state.items]
           .where(
-            (Prescription p) => p.patientId == pid || state.patientId == null,
+            (Prescription prescription) =>
+                prescription.profileId == pid || state.profileId == null,
           )
           .toList(growable: false);
 
@@ -129,26 +135,31 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
   }
 
   Future<Prescription?> approve(Prescription prescription) async {
-    final pid = prescription.patientId.trim();
+    final pid = prescription.profileId.trim();
+
     final rxid = prescription.prescriptionId.trim();
 
     if (pid.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is required');
+      state = state.copyWith(error: 'Profile ID is required');
+
       return null;
     }
 
     if (rxid.isEmpty) {
       state = state.copyWith(error: 'Prescription ID is required');
+
       return null;
     }
 
-    if (state.isSaving) return null;
+    if (state.isSaving) {
+      return null;
+    }
 
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final updated = await _service.approve(
-        patientId: pid,
+        profileId: pid,
         prescriptionId: rxid,
       );
 
@@ -157,6 +168,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
       return updated;
     } catch (e) {
       state = state.copyWith(isSaving: false, error: e.toString());
+
       return null;
     }
   }
@@ -165,26 +177,31 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
     required Prescription prescription,
     required PrescriptionUpdateInput input,
   }) async {
-    final pid = prescription.patientId.trim();
+    final pid = prescription.profileId.trim();
+
     final rxid = prescription.prescriptionId.trim();
 
     if (pid.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is required');
+      state = state.copyWith(error: 'Profile ID is required');
+
       return null;
     }
 
     if (rxid.isEmpty) {
       state = state.copyWith(error: 'Prescription ID is required');
+
       return null;
     }
 
-    if (state.isSaving) return null;
+    if (state.isSaving) {
+      return null;
+    }
 
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final updated = await _service.update(
-        patientId: pid,
+        profileId: pid,
         prescriptionId: rxid,
         input: input,
       );
@@ -194,24 +211,41 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
       return updated;
     } catch (e) {
       state = state.copyWith(isSaving: false, error: e.toString());
+
       return null;
     }
   }
 
   Future<void> delete(Prescription prescription) async {
-    if (state.isSaving || state.isLoading) return;
+    if (state.isSaving || state.isLoading) {
+      return;
+    }
+
+    final pid = prescription.profileId.trim();
+
+    final rxid = prescription.prescriptionId.trim();
+
+    if (pid.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is required');
+
+      return;
+    }
+
+    if (rxid.isEmpty) {
+      state = state.copyWith(error: 'Prescription ID is required');
+
+      return;
+    }
 
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      await _service.remove(
-        patientId: prescription.patientId,
-        prescriptionId: prescription.prescriptionId,
-      );
+      await _service.remove(profileId: pid, prescriptionId: rxid);
 
       final next = state.items
           .where(
-            (Prescription p) => p.prescriptionId != prescription.prescriptionId,
+            (Prescription item) =>
+                item.prescriptionId != prescription.prescriptionId,
           )
           .toList(growable: false);
 
@@ -227,16 +261,16 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
   void _patchInState(Prescription prescription) {
     final exists = state.items.any(
-      (Prescription p) => p.prescriptionId == prescription.prescriptionId,
+      (Prescription item) => item.prescriptionId == prescription.prescriptionId,
     );
 
     final next = exists
         ? state.items
               .map(
-                (Prescription p) =>
-                    p.prescriptionId == prescription.prescriptionId
+                (Prescription item) =>
+                    item.prescriptionId == prescription.prescriptionId
                     ? prescription
-                    : p,
+                    : item,
               )
               .toList(growable: false)
         : <Prescription>[prescription, ...state.items];

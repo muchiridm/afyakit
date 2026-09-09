@@ -259,7 +259,7 @@ class Profile {
     final genderRaw = _readNullableString(json, 'gender');
 
     return Profile(
-      profileId: _readRequiredString(json, 'patient_id'),
+      profileId: _readRequiredString(json, 'profile_id'),
       fullName: _readRequiredString(json, 'full_name'),
       dob: _readNullableString(json, 'dob'),
       gender: genderRaw == null ? null : ProfileGender.fromJson(genderRaw),

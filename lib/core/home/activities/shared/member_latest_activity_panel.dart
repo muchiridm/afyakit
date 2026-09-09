@@ -9,6 +9,8 @@ import 'package:afyakit/core/home/activities/feed/activity_feed_record.dart';
 import 'package:afyakit/core/home/activities/shared/latest_activity_panel.dart';
 import 'package:afyakit/core/home/models/activity_entry.dart';
 
+import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
+
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
@@ -39,23 +41,29 @@ class MemberLatestActivityPanel extends ConsumerWidget {
   static const int _fallbackMaxItems = 5;
 
   String? get _cleanContactId {
-    final String? id = contactId?.trim();
-    if (id == null || id.isEmpty) return null;
+    final id = contactId?.trim();
+
+    if (id == null || id.isEmpty) {
+      return null;
+    }
 
     return id;
   }
 
   String? get _cleanAccountNumber {
-    final String? id = accountNumber?.trim();
-    if (id == null || id.isEmpty) return null;
+    final id = accountNumber?.trim();
+
+    if (id == null || id.isEmpty) {
+      return null;
+    }
 
     return id;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final String? scopedContactId = _cleanContactId;
-    final String? scopedAccountNumber = _cleanAccountNumber;
+    final scopedContactId = _cleanContactId;
+    final scopedAccountNumber = _cleanAccountNumber;
 
     if (scopedContactId == null && scopedAccountNumber == null) {
       return const LatestActivityPanel(
@@ -82,7 +90,7 @@ class MemberLatestActivityPanel extends ConsumerWidget {
     final entries = ActivityFeedAdapter.fromFeed(
       activityAsync.valueOrNull ?? const [],
       onTapForActivity: (activity) => _onTapForActivity(context, activity),
-    )..sort((ActivityEntry a, ActivityEntry b) => b.date.compareTo(a.date));
+    )..sort((a, b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,
@@ -97,6 +105,10 @@ class MemberLatestActivityPanel extends ConsumerWidget {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Navigation
+  // ─────────────────────────────────────────────
+
   VoidCallback? _onTapForActivity(
     BuildContext context,
     ActivityFeedRecord activity,
@@ -104,6 +116,7 @@ class MemberLatestActivityPanel extends ConsumerWidget {
     switch (activity.entity.type) {
       case ActivityEntityType.payment:
         final invoice = activity.relatedEntity(ActivityEntityType.invoice);
+
         final paymentId = activity.entity.id.trim();
 
         if (!_hasText(paymentId) || invoice == null || !_hasText(invoice.id)) {
@@ -125,7 +138,10 @@ class MemberLatestActivityPanel extends ConsumerWidget {
 
       case ActivityEntityType.invoice:
         final invoiceId = activity.entity.id.trim();
-        if (!_hasText(invoiceId)) return null;
+
+        if (!_hasText(invoiceId)) {
+          return null;
+        }
 
         return () => Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -138,7 +154,10 @@ class MemberLatestActivityPanel extends ConsumerWidget {
 
       case ActivityEntityType.quote:
         final quoteId = activity.entity.id.trim();
-        if (!_hasText(quoteId)) return null;
+
+        if (!_hasText(quoteId)) {
+          return null;
+        }
 
         return () => Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -154,6 +173,12 @@ class MemberLatestActivityPanel extends ConsumerWidget {
 
       case ActivityEntityType.patient:
       case ActivityEntityType.patientLinkRequest:
+        return () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const ProfilesScreen()));
+
+      // Inventory is intentionally unavailable
+      // in member mode.
       case ActivityEntityType.inventoryIssue:
       case ActivityEntityType.inventoryDelivery:
       case ActivityEntityType.unknown:

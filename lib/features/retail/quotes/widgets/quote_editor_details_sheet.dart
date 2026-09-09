@@ -355,9 +355,9 @@ class _QuoteEditorDetailsSheetState
   }
 
   Future<void> _uploadPrescription() async {
-    final String? patientId = _patientId;
+    final String? profileId = _patientId;
 
-    if (patientId == null) {
+    if (profileId == null) {
       _snack('Select a profile first.');
       return;
     }
@@ -385,12 +385,12 @@ class _QuoteEditorDetailsSheetState
     setState(() => _uploadingPrescription = true);
 
     try {
-      final provider = prescriptionsControllerProvider(patientId);
+      final provider = prescriptionsControllerProvider(profileId);
       final PrescriptionsController controller = ref.read(provider.notifier);
 
       await controller.upload(
         tenantId: widget.tenantId.trim(),
-        patientId: patientId,
+        profileId: profileId,
         file: PickedPrescriptionFile(
           fileName: file.name,
           extension: file.extension ?? 'jpg',

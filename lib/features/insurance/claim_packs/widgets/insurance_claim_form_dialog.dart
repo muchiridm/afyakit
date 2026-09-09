@@ -256,9 +256,9 @@ class _InsuranceClaimFormDialogState
   }
 
   Future<void> _uploadPrescription() async {
-    final String patientId = _selectedPatientId;
+    final String profileId = _selectedPatientId;
 
-    if (patientId.isEmpty) {
+    if (profileId.isEmpty) {
       _snack('Select a membership first.');
       return;
     }
@@ -291,12 +291,12 @@ class _InsuranceClaimFormDialogState
     final String tenantId = ref.read(tenantIdProvider).trim();
 
     final PrescriptionsController controller = ref.read(
-      prescriptionsControllerProvider(patientId).notifier,
+      prescriptionsControllerProvider(profileId).notifier,
     );
 
     await controller.upload(
       tenantId: tenantId,
-      patientId: patientId,
+      profileId: profileId,
       file: PickedPrescriptionFile(
         fileName: file.name,
         extension: file.extension ?? 'jpg',
@@ -309,7 +309,7 @@ class _InsuranceClaimFormDialogState
     if (!mounted) return;
 
     final PrescriptionsState state = ref.read(
-      prescriptionsControllerProvider(patientId),
+      prescriptionsControllerProvider(profileId),
     );
 
     if (state.error != null) {

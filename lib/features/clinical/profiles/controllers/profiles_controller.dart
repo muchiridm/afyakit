@@ -240,7 +240,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     try {
       final effectiveInput = _withFixedContact(input);
       final created = await _service.create(effectiveInput);
-      final items = _upsertPatient(state.items, created);
+      final items = _upsertProfile(state.items, created);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -262,7 +262,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
 
     try {
       final linked = await _service.linkToSelf(patientId, input);
-      final items = _upsertPatient(state.items, linked);
+      final items = _upsertProfile(state.items, linked);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -282,7 +282,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     try {
       final effectiveInput = _withFixedContact(input);
       final updated = await _service.update(patientId, effectiveInput);
-      final items = _upsertPatient(state.items, updated);
+      final items = _upsertProfile(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -320,7 +320,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   // Staff direct profile-contact links
   // ─────────────────────────────────────────────
 
-  Future<Profile> linkContactToPatient({
+  Future<Profile> linkContactToProfile({
     required String profileId,
     required ProfileContactLinkInput input,
   }) async {
@@ -331,12 +331,9 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final linked = await _service.linkContactToPatient(
-        profileId: profileId,
-        input: input,
-      );
+      final linked = await _service.linkContact(profileId, input);
 
-      final items = _upsertPatient(state.items, linked);
+      final items = _upsertProfile(state.items, linked);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -346,11 +343,12 @@ class ProfilesController extends StateNotifier<ProfilesState> {
         isSaving: false,
         error: 'Failed to link contact to profile: $e',
       );
+
       rethrow;
     }
   }
 
-  Future<Profile> delinkContactFromProfile({
+  Future<Profile> delinkContact({
     required String profileId,
     required String contactId,
   }) async {
@@ -361,12 +359,12 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final updated = await _service.delinkContactFromProfile(
+      final updated = await _service.delinkContact(
         profileId: profileId,
         contactId: contactId,
       );
 
-      final items = _upsertPatient(state.items, updated);
+      final items = _upsertProfile(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
 
@@ -376,6 +374,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
         isSaving: false,
         error: 'Failed to delink contact from profile: $e',
       );
+
       rethrow;
     }
   }
@@ -565,14 +564,16 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   // Sorting / local state helpers
   // ─────────────────────────────────────────────
 
-  static List<Profile> _upsertPatient(List<Profile> current, Profile patient) {
-    final exists = current.any((p) => p.profileId == patient.profileId);
+  static List<Profile> _upsertProfile(List<Profile> current, Profile profile) {
+    final exists = current.any((item) => item.profileId == profile.profileId);
 
     final items = exists
         ? current
-              .map((p) => p.profileId == patient.profileId ? patient : p)
+              .map(
+                (item) => item.profileId == profile.profileId ? profile : item,
+              )
               .toList(growable: false)
-        : <Profile>[patient, ...current];
+        : <Profile>[profile, ...current];
 
     return _sortedProfiles(items);
   }

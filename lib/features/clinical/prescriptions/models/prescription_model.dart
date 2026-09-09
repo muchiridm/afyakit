@@ -68,7 +68,7 @@ enum PrescriptionStatus {
 class Prescription {
   const Prescription({
     required this.prescriptionId,
-    required this.patientId,
+    required this.profileId,
     required this.fileName,
     required this.storagePath,
     this.originalStoragePath,
@@ -88,11 +88,15 @@ class Prescription {
   });
 
   final String prescriptionId;
-  final String patientId;
+
+  /// Health profile this prescription belongs to.
+  final String profileId;
 
   final String fileName;
 
-  /// Main display path. For MVP this may equal [originalStoragePath].
+  /// Main display path.
+  ///
+  /// For MVP this may equal [originalStoragePath].
   final String storagePath;
 
   final String? originalStoragePath;
@@ -121,28 +125,43 @@ class Prescription {
     String key, {
     String fallback = '',
   }) {
-    final v = json[key];
-    if (v == null) return fallback;
-    return v.toString();
+    final value = json[key];
+
+    if (value == null) {
+      return fallback;
+    }
+
+    return value.toString();
   }
 
   static String? _readNullableString(Map<String, Object?> json, String key) {
-    final v = json[key];
-    if (v == null) return null;
+    final value = json[key];
 
-    final s = v.toString().trim();
+    if (value == null) {
+      return null;
+    }
+
+    final s = value.toString().trim();
+
     return s.isEmpty ? null : s;
   }
 
   static int? _readNullableInt(Map<String, Object?> json, String key) {
-    final v = json[key];
-    if (v == null) return null;
+    final value = json[key];
 
-    if (v is int) return v;
-    if (v is num) return v.toInt();
+    if (value == null) {
+      return null;
+    }
 
-    final parsed = int.tryParse(v.toString());
-    return parsed;
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(value.toString());
   }
 
   static bool _readBool(
@@ -150,27 +169,39 @@ class Prescription {
     String key, {
     bool fallback = false,
   }) {
-    final v = json[key];
+    final value = json[key];
 
-    if (v is bool) return v;
+    if (value is bool) {
+      return value;
+    }
 
-    final s = (v ?? '').toString().trim().toLowerCase();
-    if (s == 'true' || s == '1' || s == 'yes') return true;
-    if (s == 'false' || s == '0' || s == 'no') return false;
+    final s = (value ?? '').toString().trim().toLowerCase();
+
+    if (s == 'true' || s == '1' || s == 'yes') {
+      return true;
+    }
+
+    if (s == 'false' || s == '0' || s == 'no') {
+      return false;
+    }
 
     return fallback;
   }
 
   static DateTime? _readDateTime(Map<String, Object?> json, String key) {
     final s = _readNullableString(json, key);
-    if (s == null) return null;
+
+    if (s == null) {
+      return null;
+    }
+
     return DateTime.tryParse(s);
   }
 
   factory Prescription.fromJson(Map<String, Object?> json) {
     return Prescription(
       prescriptionId: _readString(json, 'prescription_id'),
-      patientId: _readString(json, 'patient_id'),
+      profileId: _readString(json, 'profile_id'),
       fileName: _readString(json, 'file_name'),
       storagePath: _readString(json, 'storage_path'),
       originalStoragePath: _readNullableString(json, 'original_storage_path'),
@@ -193,7 +224,7 @@ class Prescription {
 
 class PrescriptionCreateInput {
   const PrescriptionCreateInput({
-    required this.patientId,
+    required this.profileId,
     required this.fileName,
     required this.storagePath,
     this.originalStoragePath,
@@ -209,7 +240,8 @@ class PrescriptionCreateInput {
     this.isActive = true,
   });
 
-  final String patientId;
+  final String profileId;
+
   final String fileName;
   final String storagePath;
 
@@ -232,20 +264,30 @@ class PrescriptionCreateInput {
 
   Map<String, Object?> toJson() {
     return {
-      'patient_id': patientId,
+      'profile_id': profileId,
       'file_name': fileName,
       'storage_path': storagePath,
+
       if (originalStoragePath != null)
         'original_storage_path': originalStoragePath,
+
       if (thumbnailStoragePath != null)
         'thumbnail_storage_path': thumbnailStoragePath,
+
       if (downloadUrl != null) 'download_url': downloadUrl,
+
       if (contentType != null) 'content_type': contentType,
+
       if (sizeBytes != null) 'size_bytes': sizeBytes,
+
       if (width != null) 'width': width,
+
       if (height != null) 'height': height,
+
       if (note != null) 'note': note,
+
       if (prescribedOn != null) 'prescribed_on': prescribedOn,
+
       'status': status.wireName,
       'is_active': isActive,
     };
@@ -292,19 +334,31 @@ class PrescriptionUpdateInput {
   Map<String, Object?> toJson() {
     return {
       if (fileName != null) 'file_name': fileName,
+
       if (storagePath != null) 'storage_path': storagePath,
+
       if (originalStoragePath != null)
         'original_storage_path': originalStoragePath,
+
       if (thumbnailStoragePath != null)
         'thumbnail_storage_path': thumbnailStoragePath,
+
       if (downloadUrl != null) 'download_url': downloadUrl,
+
       if (contentType != null) 'content_type': contentType,
+
       if (sizeBytes != null) 'size_bytes': sizeBytes,
+
       if (width != null) 'width': width,
+
       if (height != null) 'height': height,
+
       if (note != null) 'note': note,
+
       if (prescribedOn != null) 'prescribed_on': prescribedOn,
+
       if (status != null) 'status': status!.wireName,
+
       if (isActive != null) 'is_active': isActive,
     };
   }
