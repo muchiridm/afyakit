@@ -2,8 +2,6 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
-
 import 'feature_keys.dart';
 
 @immutable
@@ -48,19 +46,11 @@ final class FeatureRegistry {
           'Catalog, contacts, quotes, invoices, payments, and delivery.',
     ),
     FeatureDef(
-      key: FeatureKeys.healthMetrics,
-      label: 'Health Metrics',
-      icon: Icons.monitor_heart_outlined,
-      description:
-          'Record and review vital signs, blood glucose, weight, BMI, and other health measurements.',
-      entry: _healthMetricsEntry,
-    ),
-    FeatureDef(
       key: FeatureKeys.clinical,
       label: 'Clinical',
       icon: Icons.local_hospital,
       description:
-          'Patient profiles, prescriptions, encounters, and clinical records.',
+          'Health profiles, health metrics, prescriptions, encounters, and clinical records.',
     ),
     FeatureDef(
       key: FeatureKeys.insurance,
@@ -108,9 +98,5 @@ final class FeatureRegistry {
     }
 
     return null;
-  }
-
-  static Widget _healthMetricsEntry(BuildContext _) {
-    return const HealthMetricsDashboardScreen();
   }
 }

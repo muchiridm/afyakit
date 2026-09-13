@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class PrescriptionPickerCard extends StatelessWidget {
   const PrescriptionPickerCard({
     super.key,
-    required this.patientId,
+    required this.profileId,
     required this.prescriptions,
     required this.selectedPrescriptionId,
     required this.busy,
@@ -17,7 +17,7 @@ class PrescriptionPickerCard extends StatelessWidget {
     this.onUpload,
   });
 
-  final String? patientId;
+  final String? profileId;
   final List<Prescription> prescriptions;
   final String? selectedPrescriptionId;
   final bool busy;
@@ -27,7 +27,7 @@ class PrescriptionPickerCard extends StatelessWidget {
   final VoidCallback? onRefresh;
   final VoidCallback? onUpload;
 
-  bool get _hasPatient => (patientId ?? '').trim().isNotEmpty;
+  bool get _hasPatient => (profileId ?? '').trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {

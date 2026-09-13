@@ -7,16 +7,16 @@ class InsuranceMembershipFormDialog extends StatefulWidget {
   const InsuranceMembershipFormDialog({
     super.key,
     this.initial,
-    required this.patientId,
-    this.patientDisplayName,
+    required this.profileId,
+    this.profileDisplayName,
     this.payerContactId,
     this.payerDisplayName,
   });
 
   final InsuranceMembership? initial;
 
-  final String patientId;
-  final String? patientDisplayName;
+  final String profileId;
+  final String? profileDisplayName;
 
   final String? payerContactId;
   final String? payerDisplayName;
@@ -156,9 +156,9 @@ class _InsuranceMembershipFormDialogState
   }
 
   Widget _summary(BuildContext context) {
-    final patientLabel = [
-      widget.patientDisplayName,
-      widget.patientId,
+    final profileLabel = [
+      widget.profileDisplayName,
+      widget.profileId,
     ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' · ');
 
     return SizedBox(
@@ -169,7 +169,7 @@ class _InsuranceMembershipFormDialogState
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Text(
-            'Patient: ${patientLabel.isEmpty ? widget.patientId : patientLabel}',
+            'Patient: ${profileLabel.isEmpty ? widget.profileId : profileLabel}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
@@ -182,7 +182,7 @@ class _InsuranceMembershipFormDialogState
     if (!valid) return;
 
     final input = InsuranceMembershipUpsertInput(
-      patientId: widget.patientId,
+      profileId: widget.profileId,
       payerContactId: _payerContactIdCtl.text.trim(),
       payerDisplayName: _nullable(_payerDisplayNameCtl),
       memberNo: _memberNoCtl.text.trim(),

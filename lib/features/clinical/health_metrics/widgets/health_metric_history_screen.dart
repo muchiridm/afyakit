@@ -1,4 +1,4 @@
-// lib/features/health_metrics/widgets/health_metric_history_screen.dart
+// lib/features/clinical/health_metrics/widgets/health_metric_history_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,11 +20,11 @@ import 'health_metric_ui.dart';
 class HealthMetricHistoryScreen extends ConsumerWidget {
   const HealthMetricHistoryScreen({
     super.key,
-    required this.patient,
+    required this.profile,
     required this.type,
   });
 
-  final Profile patient;
+  final Profile profile;
   final HealthMetricType type;
 
   @override
@@ -65,7 +65,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _HistoryHeader(
-                patient: patient,
+                profile: profile,
                 type: type,
                 latest: latest,
                 readingCount: newestFirst.length,
@@ -84,7 +84,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
 
   HealthMetricEntriesQuery _historyQuery() {
     return HealthMetricEntriesQuery(
-      patientId: patient.profileId,
+      profileId: profile.profileId,
       type: type,
       isActive: true,
       page: 1,
@@ -99,8 +99,8 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
   }) async {
     final input = await HealthMetricEntryDialog.show(
       context,
-      patientId: patient.profileId,
-      patientName: patient.fullName,
+      profileId: profile.profileId,
+      patientName: profile.fullName,
       type: type,
     );
 
@@ -121,7 +121,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
         SnackBar(
           content: Text(
             '${type.label} recorded for '
-            '${patient.fullName}.',
+            '${profile.fullName}.',
           ),
         ),
       );
@@ -148,7 +148,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
     ref.invalidate(
       healthMetricEntriesProvider(
         HealthMetricEntriesQuery(
-          patientId: patient.profileId,
+          profileId: profile.profileId,
           isActive: true,
           page: 1,
           perPage: 100,
@@ -160,14 +160,14 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
 
 class _HistoryHeader extends StatelessWidget {
   const _HistoryHeader({
-    required this.patient,
+    required this.profile,
     required this.type,
     required this.latest,
     required this.readingCount,
     required this.onRecord,
   });
 
-  final Profile patient;
+  final Profile profile;
   final HealthMetricType type;
   final HealthMetricEntry? latest;
   final int readingCount;
@@ -179,7 +179,7 @@ class _HistoryHeader extends StatelessWidget {
     final current = latest;
 
     return AppCard(
-      title: patient.fullName,
+      title: profile.fullName,
       icon: healthMetricIcon(type),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,3 +1,5 @@
+// lib/features/insurance/claim_packs/services/insurance_claim_packs_service.dart
+
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
@@ -25,7 +27,7 @@ class InsuranceClaimPacksService {
   Future<List<InsuranceClaimPack>> list({
     String? search,
     String? membershipId,
-    String? patientId,
+    String? profileId,
     String? payerContactId,
     String? invoiceId,
     String? memberNo,
@@ -41,7 +43,7 @@ class InsuranceClaimPacksService {
     final Uri uri = routes.insuranceClaimPacksList(
       search: _nullable(search),
       membershipId: _nullable(membershipId),
-      patientId: _nullable(patientId),
+      profileId: _nullable(profileId),
       payerContactId: _nullable(payerContactId),
       invoiceId: _nullable(invoiceId),
       memberNo: _nullable(memberNo),
@@ -61,8 +63,8 @@ class InsuranceClaimPacksService {
     return _readClaimPacks(body['claim_packs']);
   }
 
-  Future<List<InsuranceClaimPack>> listForPatient({
-    required String patientId,
+  Future<List<InsuranceClaimPack>> listForProfile({
+    required String profileId,
     String? search,
     String? membershipId,
     String? payerContactId,
@@ -77,10 +79,10 @@ class InsuranceClaimPacksService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
 
-    final Uri uri = routes.insuranceClaimPacksListForPatient(
-      patientId: cleanPatientId,
+    final Uri uri = routes.insuranceClaimPacksListForProfile(
+      profileId: cleanProfileId,
       search: _nullable(search),
       membershipId: _nullable(membershipId),
       payerContactId: _nullable(payerContactId),
@@ -103,15 +105,15 @@ class InsuranceClaimPacksService {
   }
 
   Future<InsuranceClaimPack> get({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanClaimPackId = _requiredId(claimPackId, 'claimPackId');
 
     final response = await api.getUri<Object?>(
       routes.insuranceClaimPackGet(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
       ),
     );
@@ -121,13 +123,13 @@ class InsuranceClaimPacksService {
   }
 
   Future<InsuranceClaimPack> create({
-    required String patientId,
+    required String profileId,
     required InsuranceClaimPackCreateInput input,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.insuranceClaimPackCreate(patientId: cleanPatientId),
+      routes.insuranceClaimPackCreate(profileId: cleanProfileId),
       data: input.toJson(),
     );
 
@@ -136,16 +138,16 @@ class InsuranceClaimPacksService {
   }
 
   Future<InsuranceClaimPack> update({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
     required InsuranceClaimPackUpdateInput input,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanClaimPackId = _requiredId(claimPackId, 'claimPackId');
 
     final response = await api.putUri<Object?>(
       routes.insuranceClaimPackUpdate(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
       ),
       data: input.toJson(),
@@ -156,15 +158,15 @@ class InsuranceClaimPacksService {
   }
 
   Future<void> delete({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanClaimPackId = _requiredId(claimPackId, 'claimPackId');
 
     await api.deleteUri<Object?>(
       routes.insuranceClaimPackDelete(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
       ),
     );

@@ -45,12 +45,12 @@ class QuotePatientContextSelection {
 class QuotePatientMembershipPickerDialog extends ConsumerStatefulWidget {
   const QuotePatientMembershipPickerDialog({
     super.key,
-    this.initialPatientId,
+    this.initialProfileId,
     this.initialMembershipId,
     this.initialPaymentContext = QuotePaymentContext.directPay,
   });
 
-  final String? initialPatientId;
+  final String? initialProfileId;
   final String? initialMembershipId;
   final QuotePaymentContext initialPaymentContext;
 
@@ -76,7 +76,7 @@ class _QuotePatientMembershipPickerDialogState
     return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
   }
 
-  ProfilesScope get _memberPatientScope {
+  ProfilesScope get _memberProfileScope {
     final String contactId = _memberContactId;
 
     return ProfilesScope(
@@ -97,8 +97,17 @@ class _QuotePatientMembershipPickerDialogState
 
     if (openInsurance) _tabCtl.index = 1;
 
+    final String initialProfileId = _clean(widget.initialProfileId);
+    if (initialProfileId.isNotEmpty) {
+      _selectedPatient = Profile(
+        profileId: initialProfileId,
+        fullName: initialProfileId,
+        isActive: true,
+      );
+    }
+
     if (_isMemberScoped) {
-      Future<void>.microtask(_loadLinkedPatientsForMembershipGuard);
+      Future<void>.microtask(_loadLinkedProfilesForMembershipGuard);
     }
   }
 
@@ -108,9 +117,9 @@ class _QuotePatientMembershipPickerDialogState
     super.dispose();
   }
 
-  Future<void> _loadLinkedPatientsForMembershipGuard() async {
+  Future<void> _loadLinkedProfilesForMembershipGuard() async {
     final controller = ref.read(
-      profilesControllerProvider(_memberPatientScope).notifier,
+      profilesControllerProvider(_memberProfileScope).notifier,
     );
 
     controller.setIsActive(true);
@@ -119,10 +128,10 @@ class _QuotePatientMembershipPickerDialogState
 
   String _clean(String? value) => (value ?? '').trim();
 
-  Set<String>? _allowedPatientIdsForMemberships() {
+  Set<String>? _allowedProfileIdsForMemberships() {
     if (!_isMemberScoped) return null;
 
-    final state = ref.watch(profilesControllerProvider(_memberPatientScope));
+    final state = ref.watch(profilesControllerProvider(_memberProfileScope));
 
     return state.items
         .where((Profile p) => p.isActive)
@@ -138,8 +147,8 @@ class _QuotePatientMembershipPickerDialogState
     return QuotePatientContextSelection(
       paymentContext: QuotePaymentContext.directPay,
       patientSnapshot: SalesDocumentPatientSnapshot(
-        patientId: patient.profileId,
-        patientNo: patient.profileId,
+        profileId: patient.profileId,
+        patientNo: null,
         fullName: patient.fullName,
         dob: patient.dob,
         gender: gender,
@@ -151,9 +160,9 @@ class _QuotePatientMembershipPickerDialogState
   QuotePatientContextSelection _selectionFromMembership(
     InsuranceMembership membership,
   ) {
-    final String patientName = _clean(membership.patientDisplayName).isNotEmpty
-        ? membership.patientDisplayName!.trim()
-        : membership.patientId.trim();
+    final String patientName = _clean(membership.profileDisplayName).isNotEmpty
+        ? membership.profileDisplayName!.trim()
+        : membership.profileId.trim();
 
     final String payerDisplayName =
         _clean(membership.payerDisplayName).isNotEmpty
@@ -175,8 +184,8 @@ class _QuotePatientMembershipPickerDialogState
       membershipId: membership.membershipId,
       payerContact: payerContact,
       patientSnapshot: SalesDocumentPatientSnapshot(
-        patientId: membership.patientId,
-        patientNo: membership.patientNo ?? membership.patientId,
+        profileId: membership.profileId,
+        patientNo: membership.patientNo,
         fullName: patientName,
         membershipId: membership.membershipId,
         memberNo: membership.memberNo,
@@ -196,7 +205,7 @@ class _QuotePatientMembershipPickerDialogState
 
   @override
   Widget build(BuildContext context) {
-    final Set<String>? allowedPatientIds = _allowedPatientIdsForMemberships();
+    final Set<String>? allowedProfileIds = _allowedProfileIdsForMemberships();
 
     final bool memberContactMissing =
         _isMemberScoped && _memberContactId.isEmpty;
@@ -246,7 +255,7 @@ class _QuotePatientMembershipPickerDialogState
                   _InsuranceMembershipTab(
                     memberScoped: _isMemberScoped,
                     initialMembershipId: widget.initialMembershipId,
-                    allowedPatientIds: allowedPatientIds,
+                    allowedProfileIds: allowedProfileIds,
                     onSelected: _selectMembership,
                   ),
                 ],
@@ -307,13 +316,13 @@ class _InsuranceMembershipTab extends StatelessWidget {
   const _InsuranceMembershipTab({
     required this.memberScoped,
     required this.initialMembershipId,
-    required this.allowedPatientIds,
+    required this.allowedProfileIds,
     required this.onSelected,
   });
 
   final bool memberScoped;
   final String? initialMembershipId;
-  final Set<String>? allowedPatientIds;
+  final Set<String>? allowedProfileIds;
   final ValueChanged<InsuranceMembership> onSelected;
 
   @override
@@ -330,7 +339,7 @@ class _InsuranceMembershipTab extends StatelessWidget {
         Expanded(
           child: InsuranceMembershipPickerCard(
             initialMembershipId: initialMembershipId,
-            allowedPatientIds: allowedPatientIds,
+            allowedProfileIds: allowedProfileIds,
             title: memberScoped
                 ? 'Your insurance memberships'
                 : 'Insurance memberships',

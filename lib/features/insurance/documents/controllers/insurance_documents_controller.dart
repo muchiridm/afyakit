@@ -71,7 +71,7 @@ class InsuranceDocumentsController
 
   Future<void> load({
     String? search,
-    String? patientId,
+    String? profileId,
     String? claimPackId,
     InsuranceDocumentType? documentType,
     String? membershipId,
@@ -90,7 +90,7 @@ class InsuranceDocumentsController
 
       final List<InsuranceDocument> items = await svc.list(
         search: search,
-        patientId: patientId,
+        profileId: profileId,
         claimPackId: claimPackId,
         documentType: documentType,
         membershipId: membershipId,
@@ -107,8 +107,8 @@ class InsuranceDocumentsController
     }
   }
 
-  Future<void> loadForPatient({
-    required String patientId,
+  Future<void> loadForProfile({
+    required String profileId,
     String? search,
     String? claimPackId,
     InsuranceDocumentType? documentType,
@@ -119,10 +119,10 @@ class InsuranceDocumentsController
     int perPage = 50,
     int page = 1,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return;
     }
 
@@ -133,8 +133,8 @@ class InsuranceDocumentsController
     try {
       final InsuranceDocumentsService svc = await _service;
 
-      final List<InsuranceDocument> items = await svc.listForPatient(
-        patientId: cleanPatientId,
+      final List<InsuranceDocument> items = await svc.listForProfile(
+        profileId: cleanProfileId,
         search: search,
         claimPackId: claimPackId,
         documentType: documentType,
@@ -153,13 +153,13 @@ class InsuranceDocumentsController
   }
 
   Future<void> loadForClaimPack({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
     int perPage = 100,
     int page = 1,
   }) {
-    return loadForPatient(
-      patientId: patientId,
+    return loadForProfile(
+      profileId: profileId,
       claimPackId: claimPackId,
       isActive: true,
       perPage: perPage,
@@ -168,14 +168,14 @@ class InsuranceDocumentsController
   }
 
   Future<InsuranceDocument?> get({
-    required String patientId,
+    required String profileId,
     required String documentId,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanDocumentId = documentId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -190,7 +190,7 @@ class InsuranceDocumentsController
       final InsuranceDocumentsService svc = await _service;
 
       final InsuranceDocument document = await svc.get(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         documentId: cleanDocumentId,
       );
 
@@ -208,13 +208,13 @@ class InsuranceDocumentsController
   }
 
   Future<InsuranceDocument?> create({
-    required String patientId,
+    required String profileId,
     required InsuranceDocumentCreateInput input,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -226,7 +226,7 @@ class InsuranceDocumentsController
       final InsuranceDocumentsService svc = await _service;
 
       final InsuranceDocument document = await svc.create(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         input: input,
       );
 
@@ -240,15 +240,15 @@ class InsuranceDocumentsController
   }
 
   Future<InsuranceDocument?> update({
-    required String patientId,
+    required String profileId,
     required String documentId,
     required InsuranceDocumentUpdateInput input,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanDocumentId = documentId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -265,7 +265,7 @@ class InsuranceDocumentsController
       final InsuranceDocumentsService svc = await _service;
 
       final InsuranceDocument document = await svc.update(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         documentId: cleanDocumentId,
         input: input,
       );
@@ -280,14 +280,14 @@ class InsuranceDocumentsController
   }
 
   Future<bool> delete({
-    required String patientId,
+    required String profileId,
     required String documentId,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanDocumentId = documentId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return false;
     }
 
@@ -303,7 +303,7 @@ class InsuranceDocumentsController
     try {
       final InsuranceDocumentsService svc = await _service;
 
-      await svc.delete(patientId: cleanPatientId, documentId: cleanDocumentId);
+      await svc.delete(profileId: cleanProfileId, documentId: cleanDocumentId);
 
       final List<InsuranceDocument> updatedItems = state.items
           .where((InsuranceDocument item) => item.documentId != cleanDocumentId)
@@ -324,7 +324,7 @@ class InsuranceDocumentsController
   }
 
   Future<InsuranceDocument?> uploadDocumentFileAndCreate({
-    required String patientId,
+    required String profileId,
     required PickedInsuranceDocumentFile file,
     required InsuranceDocumentType documentType,
     String? claimPackId,
@@ -336,10 +336,10 @@ class InsuranceDocumentsController
     InsuranceDocumentStatus? status,
     bool? isActive,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -351,7 +351,7 @@ class InsuranceDocumentsController
       final InsuranceDocumentsService svc = await _service;
 
       final InsuranceDocument document = await svc.uploadDocumentFileAndCreate(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         file: file,
         documentType: documentType,
         claimPackId: claimPackId,

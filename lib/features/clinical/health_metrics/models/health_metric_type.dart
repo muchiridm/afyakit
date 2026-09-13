@@ -1,4 +1,4 @@
-// lib/features/health_metrics/models/health_metric_type.dart
+// lib/features/clinical/health_metrics/models/health_metric_type.dart
 
 enum HealthMetricType {
   bloodPressure,

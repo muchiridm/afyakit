@@ -44,15 +44,15 @@ final class InsuranceDocumentStoragePaths {
 
   static String originalPath({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required String uploadId,
     required String ext,
   }) {
     return [
       'tenants',
       _safeSegment(tenantId),
-      'clinical_patients',
-      _safeSegment(patientId),
+      'clinical_profiles',
+      _safeSegment(profileId),
       'insurance_documents',
       _safeSegment(uploadId),
       'original.${cleanExt(ext)}',
@@ -61,14 +61,14 @@ final class InsuranceDocumentStoragePaths {
 
   static String thumbnailPath({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required String uploadId,
   }) {
     return [
       'tenants',
       _safeSegment(tenantId),
-      'clinical_patients',
-      _safeSegment(patientId),
+      'clinical_profiles',
+      _safeSegment(profileId),
       'insurance_documents',
       _safeSegment(uploadId),
       'thumb.jpg',

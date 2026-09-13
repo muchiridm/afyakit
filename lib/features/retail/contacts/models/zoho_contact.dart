@@ -3,7 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 
-enum ContactPatientRelationship {
+enum ContactProfileRelationship {
   self,
   child,
   spouse,
@@ -12,99 +12,97 @@ enum ContactPatientRelationship {
   insurance,
   other;
 
-  static ContactPatientRelationship fromJson(Object? value) {
+  static ContactProfileRelationship fromJson(Object? value) {
     final raw = value?.toString().trim().toLowerCase();
 
-    return ContactPatientRelationship.values.firstWhere(
+    return ContactProfileRelationship.values.firstWhere(
       (v) => v.name == raw,
-      orElse: () => ContactPatientRelationship.other,
+      orElse: () => ContactProfileRelationship.other,
     );
   }
 
   String get label {
     switch (this) {
-      case ContactPatientRelationship.self:
+      case ContactProfileRelationship.self:
         return 'Self';
-      case ContactPatientRelationship.child:
+      case ContactProfileRelationship.child:
         return 'Child';
-      case ContactPatientRelationship.spouse:
+      case ContactProfileRelationship.spouse:
         return 'Spouse';
-      case ContactPatientRelationship.parent:
+      case ContactProfileRelationship.parent:
         return 'Parent';
-      case ContactPatientRelationship.guardian:
+      case ContactProfileRelationship.guardian:
         return 'Guardian';
-      case ContactPatientRelationship.insurance:
+      case ContactProfileRelationship.insurance:
         return 'Insurance';
-      case ContactPatientRelationship.other:
+      case ContactProfileRelationship.other:
         return 'Other';
     }
   }
 }
 
 @immutable
-class ContactLinkedPatient {
-  const ContactLinkedPatient({
+class ContactLinkedProfile {
+  const ContactLinkedProfile({
     required this.linkId,
-    required this.patientId,
-    required this.patientDisplayName,
+    required this.profileId,
+    required this.profileDisplayName,
     required this.relationship,
     required this.isActive,
   });
 
   final String linkId;
-  final String patientId;
-  final String patientDisplayName;
-  final ContactPatientRelationship relationship;
+  final String profileId;
+  final String profileDisplayName;
+  final ContactProfileRelationship relationship;
   final bool isActive;
 
   bool get isInsuranceLink =>
-      relationship == ContactPatientRelationship.insurance;
+      relationship == ContactProfileRelationship.insurance;
 
-  factory ContactLinkedPatient.fromJson(Object? raw) {
+  factory ContactLinkedProfile.fromJson(Object? raw) {
     if (!isRecord(raw)) {
-      throw StateError('linked_patients item must be a JSON object');
+      throw StateError('linked_profiles item must be a JSON object');
     }
 
     final j = (raw as Map).cast<String, Object?>();
 
     final linkId = readStringOrNull(j['link_id'] ?? j['linkId']);
-    final patientId = readStringOrNull(j['patient_id'] ?? j['patientId']);
-    final patientDisplayName = readStringOrNull(
-      j['patient_display_name'] ?? j['patientDisplayName'],
-    );
+    final profileId = readStringOrNull(j['profile_id']);
+    final profileDisplayName = readStringOrNull(j['profile_display_name']);
 
     if (linkId == null) {
-      throw StateError('linked_patients.link_id is required');
+      throw StateError('linked_profiles.link_id is required');
     }
 
-    if (patientId == null) {
-      throw StateError('linked_patients.patient_id is required');
+    if (profileId == null) {
+      throw StateError('linked_profiles.profile_id is required');
     }
 
-    if (patientDisplayName == null) {
-      throw StateError('linked_patients.patient_display_name is required');
+    if (profileDisplayName == null) {
+      throw StateError('linked_profiles.profile_display_name is required');
     }
 
-    return ContactLinkedPatient(
+    return ContactLinkedProfile(
       linkId: linkId,
-      patientId: patientId,
-      patientDisplayName: patientDisplayName,
-      relationship: ContactPatientRelationship.fromJson(j['relationship']),
+      profileId: profileId,
+      profileDisplayName: profileDisplayName,
+      relationship: ContactProfileRelationship.fromJson(j['relationship']),
       isActive: readBool(j['is_active'] ?? j['isActive']) ?? true,
     );
   }
 
-  ContactLinkedPatient copyWith({
+  ContactLinkedProfile copyWith({
     String? linkId,
-    String? patientId,
-    String? patientDisplayName,
-    ContactPatientRelationship? relationship,
+    String? profileId,
+    String? profileDisplayName,
+    ContactProfileRelationship? relationship,
     bool? isActive,
   }) {
-    return ContactLinkedPatient(
+    return ContactLinkedProfile(
       linkId: linkId ?? this.linkId,
-      patientId: patientId ?? this.patientId,
-      patientDisplayName: patientDisplayName ?? this.patientDisplayName,
+      profileId: profileId ?? this.profileId,
+      profileDisplayName: profileDisplayName ?? this.profileDisplayName,
       relationship: relationship ?? this.relationship,
       isActive: isActive ?? this.isActive,
     );
@@ -183,7 +181,7 @@ class ZohoContact {
     this.createdTime,
     this.lastModifiedTime,
     this.isInsurancePayer = false,
-    this.linkedPatients = const <ContactLinkedPatient>[],
+    this.linkedProfiles = const <ContactLinkedProfile>[],
   });
 
   final String contactId;
@@ -218,11 +216,11 @@ class ZohoContact {
   /// Wire name from BE: is_insurance_payer
   final bool isInsurancePayer;
 
-  /// Clinical patients linked to this contact/payer.
+  /// Health Profiles linked to this contact/payer.
   ///
-  /// Wire name from BE: linked_patients
-  /// Source of truth is Firestore clinical_contact_patients, not Zoho.
-  final List<ContactLinkedPatient> linkedPatients;
+  /// Wire name from BE: linked_profiles
+  /// Source of truth is Firestore health_profile_links, not Zoho.
+  final List<ContactLinkedProfile> linkedProfiles;
 
   bool get isActive => (status ?? '').toLowerCase() != 'inactive';
 
@@ -256,32 +254,32 @@ class ZohoContact {
     return false;
   }
 
-  bool get hasLinkedPatients => linkedPatients.isNotEmpty;
+  bool get hasLinkedProfiles => linkedProfiles.isNotEmpty;
 
-  List<ContactLinkedPatient> get activeLinkedPatients {
-    return linkedPatients.where((p) => p.isActive).toList(growable: false);
+  List<ContactLinkedProfile> get activeLinkedProfiles {
+    return linkedProfiles.where((p) => p.isActive).toList(growable: false);
   }
 
-  List<ContactLinkedPatient> get activeInsuranceLinkedPatients {
-    return activeLinkedPatients
-        .where((p) => p.relationship == ContactPatientRelationship.insurance)
+  List<ContactLinkedProfile> get activeInsuranceLinkedProfiles {
+    return activeLinkedProfiles
+        .where((p) => p.relationship == ContactProfileRelationship.insurance)
         .toList(growable: false);
   }
 
-  int get activeLinkedPatientCount => activeLinkedPatients.length;
+  int get activeLinkedProfileCount => activeLinkedProfiles.length;
 
-  int get activeInsuranceLinkedPatientCount =>
-      activeInsuranceLinkedPatients.length;
+  int get activeInsuranceLinkedProfileCount =>
+      activeInsuranceLinkedProfiles.length;
 
-  String get linkedPatientsSummary {
-    final active = activeLinkedPatients;
+  String get linkedProfilesSummary {
+    final active = activeLinkedProfiles;
     if (active.isEmpty) return '';
 
     if (active.length == 1) {
-      return active.first.patientDisplayName;
+      return active.first.profileDisplayName;
     }
 
-    return '${active.length} linked patients';
+    return '${active.length} linked profiles';
   }
 
   String get bestPhone {
@@ -375,7 +373,7 @@ class ZohoContact {
       parts.add(person);
     }
 
-    final linked = linkedPatientsSummary.trim();
+    final linked = linkedProfilesSummary.trim();
     if (linked.isNotEmpty) parts.add(linked);
 
     final p = bestPhone.trim();
@@ -480,7 +478,7 @@ class ZohoContact {
       createdTime: createdTime,
       lastModifiedTime: lastModifiedTime,
       isInsurancePayer: isInsurancePayer,
-      linkedPatients: _readLinkedPatients(j),
+      linkedProfiles: _readLinkedProfiles(j),
     );
   }
 
@@ -504,16 +502,16 @@ class ZohoContact {
     return parsed;
   }
 
-  static List<ContactLinkedPatient> _readLinkedPatients(
+  static List<ContactLinkedProfile> _readLinkedProfiles(
     Map<String, Object?> j,
   ) {
-    final raw = j['linked_patients'] ?? j['linkedPatients'];
+    final raw = j['linked_profiles'];
 
-    if (raw is! List) return const <ContactLinkedPatient>[];
+    if (raw is! List) return const <ContactLinkedProfile>[];
 
     return raw
         .whereType<Map>()
-        .map((item) => ContactLinkedPatient.fromJson(item))
+        .map((item) => ContactLinkedProfile.fromJson(item))
         .toList(growable: false);
   }
 
@@ -612,7 +610,7 @@ class ZohoContact {
     DateTime? createdTime,
     DateTime? lastModifiedTime,
     bool? isInsurancePayer,
-    List<ContactLinkedPatient>? linkedPatients,
+    List<ContactLinkedProfile>? linkedProfiles,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
@@ -628,7 +626,7 @@ class ZohoContact {
       createdTime: createdTime ?? this.createdTime,
       lastModifiedTime: lastModifiedTime ?? this.lastModifiedTime,
       isInsurancePayer: isInsurancePayer ?? this.isInsurancePayer,
-      linkedPatients: linkedPatients ?? this.linkedPatients,
+      linkedProfiles: linkedProfiles ?? this.linkedProfiles,
     );
   }
 }

@@ -1,11 +1,11 @@
-// lib/features/health_metrics/models/health_metric_entry.dart
+// lib/features/clinical/health_metrics/models/health_metric_entry.dart
 
 import 'health_metric_type.dart';
 
 class HealthMetricEntry {
   const HealthMetricEntry({
     required this.metricId,
-    required this.patientId,
+    required this.profileId,
     required this.type,
     required this.recordedAt,
     required this.primaryValue,
@@ -18,7 +18,7 @@ class HealthMetricEntry {
   });
 
   final String metricId;
-  final String patientId;
+  final String profileId;
 
   final HealthMetricType type;
   final DateTime recordedAt;
@@ -65,7 +65,7 @@ class HealthMetricEntry {
 
     return HealthMetricEntry(
       metricId: _readString(json, 'metric_id'),
-      patientId: _readString(json, 'patient_id'),
+      profileId: _readString(json, 'profile_id'),
       type: type,
       recordedAt: _readRequiredDateTime(json, 'recorded_at'),
       primaryValue: _readRequiredDouble(json, 'primary_value'),
@@ -80,7 +80,7 @@ class HealthMetricEntry {
 
   HealthMetricEntry copyWith({
     String? metricId,
-    String? patientId,
+    String? profileId,
     HealthMetricType? type,
     DateTime? recordedAt,
     double? primaryValue,
@@ -96,7 +96,7 @@ class HealthMetricEntry {
   }) {
     return HealthMetricEntry(
       metricId: metricId ?? this.metricId,
-      patientId: patientId ?? this.patientId,
+      profileId: profileId ?? this.profileId,
       type: type ?? this.type,
       recordedAt: recordedAt ?? this.recordedAt,
       primaryValue: primaryValue ?? this.primaryValue,
@@ -190,7 +190,7 @@ class HealthMetricEntry {
 
 class HealthMetricCreateInput {
   const HealthMetricCreateInput({
-    required this.patientId,
+    required this.profileId,
     required this.type,
     required this.recordedAt,
     required this.primaryValue,
@@ -199,7 +199,7 @@ class HealthMetricCreateInput {
     this.notes,
   });
 
-  final String patientId;
+  final String profileId;
   final HealthMetricType type;
   final DateTime recordedAt;
 
@@ -211,7 +211,7 @@ class HealthMetricCreateInput {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'patient_id': patientId,
+      'profile_id': profileId,
       'type': type.key,
       'recorded_at': recordedAt.toUtc().toIso8601String(),
       'primary_value': primaryValue,

@@ -33,7 +33,7 @@ class ProfilesScreen extends ConsumerStatefulWidget {
   /// Staff/admin mode only.
   final bool allowExplicitContactLink;
 
-  /// When true, tapping a patient returns that [Profile] through
+  /// When true, tapping a profile returns that [Profile] through
   /// [Navigator.pop] instead of opening [ProfileDetailsScreen].
   final bool selectionMode;
 
@@ -159,20 +159,20 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     super.dispose();
   }
 
-  void _handleProfileTap(Profile patient) {
+  void _handleProfileTap(Profile profile) {
     if (widget.selectionMode) {
-      Navigator.of(context).pop(patient);
+      Navigator.of(context).pop(profile);
       return;
     }
 
-    _openProfileDetails(patient);
+    _openProfileDetails(profile);
   }
 
-  void _openProfileDetails(Profile patient) {
+  void _openProfileDetails(Profile profile) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProfileDetailsScreen(
-          profile: patient,
+          profile: profile,
           contactId: _contactScope,
           allowExplicitContactLink: widget.allowExplicitContactLink,
         ),
@@ -184,6 +184,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     if (_createFlowOpened || !mounted) return;
 
     _createFlowOpened = true;
+
     await _openCreateDialog();
   }
 
@@ -438,13 +439,13 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                     child: Column(
                       children: state.items
                           .map(
-                            (patient) => Padding(
+                            (profile) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: _ProfileListTile(
-                                patient: patient,
+                                profile: profile,
                                 selectionMode: widget.selectionMode,
                                 onTap: () {
-                                  _handleProfileTap(patient);
+                                  _handleProfileTap(profile);
                                 },
                               ),
                             ),
@@ -528,12 +529,12 @@ class _ProfileSelectionHint extends StatelessWidget {
 
 class _ProfileListTile extends StatelessWidget {
   const _ProfileListTile({
-    required this.patient,
+    required this.profile,
     required this.selectionMode,
     required this.onTap,
   });
 
-  final Profile patient;
+  final Profile profile;
   final bool selectionMode;
   final VoidCallback onTap;
 
@@ -543,35 +544,35 @@ class _ProfileListTile extends StatelessWidget {
 
     final subtitleParts = <String>[];
 
-    if (patient.relationship != null) {
-      subtitleParts.add(ProfilesLabels.relationship(patient.relationship!));
+    if (profile.relationship != null) {
+      subtitleParts.add(ProfilesLabels.relationship(profile.relationship!));
     }
 
-    final age = _patientAge(patient.dob);
+    final age = _profileAge(profile.dob);
 
     if (age != null) {
       subtitleParts.add('$age years');
     }
 
-    final dob = _formatDob(patient.dob);
+    final dob = _formatDob(profile.dob);
 
     if (dob != null) {
       subtitleParts.add('DOB $dob');
     }
 
-    final contactName = (patient.contactDisplayName ?? '').trim();
+    final contactName = (profile.contactDisplayName ?? '').trim();
 
     if (contactName.isNotEmpty) {
       subtitleParts.add(contactName);
     }
 
-    final phone = (patient.phone ?? '').trim();
+    final phone = (profile.phone ?? '').trim();
 
     if (phone.isNotEmpty) {
       subtitleParts.add(phone);
     }
 
-    if (!patient.isActive) {
+    if (!profile.isActive) {
       subtitleParts.add('Inactive');
     }
 
@@ -579,15 +580,15 @@ class _ProfileListTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: ListTile(
         onTap: onTap,
-        leading: CircleAvatar(child: Text(_initials(patient.fullName))),
+        leading: CircleAvatar(child: Text(_initials(profile.fullName))),
         title: Text(
-          patient.fullName,
+          profile.fullName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          subtitleParts.isEmpty ? patient.profileId : subtitleParts.join(' • '),
+          subtitleParts.isEmpty ? profile.profileId : subtitleParts.join(' • '),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -608,7 +609,9 @@ class _ProfileListTile extends StatelessWidget {
         .where((part) => part.isNotEmpty)
         .toList();
 
-    if (parts.isEmpty) return '?';
+    if (parts.isEmpty) {
+      return '?';
+    }
 
     if (parts.length == 1) {
       return parts.first[0].toUpperCase();
@@ -618,10 +621,12 @@ class _ProfileListTile extends StatelessWidget {
   }
 }
 
-int? _patientAge(String? rawDob) {
+int? _profileAge(String? rawDob) {
   final dob = _parseDob(rawDob);
 
-  if (dob == null) return null;
+  if (dob == null) {
+    return null;
+  }
 
   final today = DateTime.now();
 
@@ -641,9 +646,12 @@ int? _patientAge(String? rawDob) {
 String? _formatDob(String? rawDob) {
   final dob = _parseDob(rawDob);
 
-  if (dob == null) return null;
+  if (dob == null) {
+    return null;
+  }
 
   final day = dob.day.toString().padLeft(2, '0');
+
   final month = dob.month.toString().padLeft(2, '0');
 
   return '$day/$month/${dob.year}';

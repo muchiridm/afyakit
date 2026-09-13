@@ -1,3 +1,5 @@
+// lib/features/retail/quotes/widgets/quote_clinical_context_dialog.dart
+
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
@@ -46,22 +48,17 @@ class QuoteClinicalContextSelection {
 class QuoteClinicalContextDialog extends ConsumerStatefulWidget {
   const QuoteClinicalContextDialog({
     super.key,
-    this.initialPatientId,
+    this.initialProfileId,
     this.initialMembershipId,
     this.initialPrescriptionId,
-    this.initialClaimPackId,
     this.initialPaymentContext = QuotePaymentContext.directPay,
     this.openProfilePickerInitially = false,
   });
 
-  final String? initialPatientId;
+  final String? initialProfileId;
   final String? initialMembershipId;
   final String? initialPrescriptionId;
 
-  /// Backward-compatible only. Ignored by the quote context dialog.
-  ///
-  /// Claim packs are created/linked after conversion to invoice, not at quote stage.
-  final String? initialClaimPackId;
   final QuotePaymentContext initialPaymentContext;
   final bool openProfilePickerInitially;
 
@@ -89,8 +86,8 @@ class _QuoteClinicalContextDialogState
     return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
   }
 
-  String? get _patientId {
-    final String id = (_profile?.profileId ?? widget.initialPatientId ?? '')
+  String? get _profileId {
+    final String id = (_profile?.profileId ?? widget.initialProfileId ?? '')
         .trim();
 
     return id.isEmpty ? null : id;
@@ -100,7 +97,7 @@ class _QuoteClinicalContextDialogState
     return _paymentContext == QuotePaymentContext.insurance;
   }
 
-  ProfilesScope get _memberPatientScope {
+  ProfilesScope get _memberProfileScope {
     final String contactId = _memberContactId;
 
     return ProfilesScope(
@@ -116,12 +113,12 @@ class _QuoteClinicalContextDialogState
     _paymentContext = widget.initialPaymentContext;
 
     if (_isMemberScoped) {
-      Future<void>.microtask(_loadLinkedPatientsForMembershipGuard);
+      Future<void>.microtask(_loadLinkedProfilesForMembershipGuard);
     }
 
-    final String? patientId = _patientId;
-    if (patientId != null) {
-      Future<void>.microtask(() => _loadPrescriptions(patientId));
+    final String? profileId = _profileId;
+    if (profileId != null) {
+      Future<void>.microtask(() => _loadPrescriptions(profileId));
     }
 
     if (widget.openProfilePickerInitially) {
@@ -132,19 +129,19 @@ class _QuoteClinicalContextDialogState
     }
   }
 
-  Future<void> _loadLinkedPatientsForMembershipGuard() async {
+  Future<void> _loadLinkedProfilesForMembershipGuard() async {
     final ProfilesController controller = ref.read(
-      profilesControllerProvider(_memberPatientScope).notifier,
+      profilesControllerProvider(_memberProfileScope).notifier,
     );
 
     controller.setIsActive(true);
     await controller.load();
   }
 
-  Future<void> _loadPrescriptions(String patientId) {
+  Future<void> _loadPrescriptions(String profileId) {
     return ref
-        .read(prescriptionsControllerProvider(patientId).notifier)
-        .load(profileId: patientId, isActive: true);
+        .read(prescriptionsControllerProvider(profileId).notifier)
+        .load(profileId: profileId, isActive: true);
   }
 
   void _hydrateInitialSelections({
@@ -153,7 +150,7 @@ class _QuoteClinicalContextDialogState
   }) {
     if (_initialHydrationAttempted) return;
 
-    final String? initialPatientId = _clean(widget.initialPatientId);
+    final String? initialProfileId = _clean(widget.initialProfileId);
     final String? initialMembershipId = _clean(widget.initialMembershipId);
     final String? initialPrescriptionId = _clean(widget.initialPrescriptionId);
 
@@ -170,8 +167,8 @@ class _QuoteClinicalContextDialogState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _initialHydrationAttempted) return;
 
-      final String? resolvedPatientId =
-          _clean(membership?.patientId) ?? initialPatientId;
+      final String? resolvedProfileId =
+          _clean(membership?.profileId) ?? initialProfileId;
 
       setState(() {
         _initialHydrationAttempted = true;
@@ -179,15 +176,15 @@ class _QuoteClinicalContextDialogState
         if (_profile == null) {
           if (membership != null) {
             _profile = Profile(
-              profileId: membership.patientId,
+              profileId: membership.profileId,
               fullName:
-                  _clean(membership.patientDisplayName) ?? membership.patientId,
+                  _clean(membership.profileDisplayName) ?? membership.profileId,
               isActive: true,
             );
-          } else if (initialPatientId != null) {
+          } else if (initialProfileId != null) {
             _profile = Profile(
-              profileId: initialPatientId,
-              fullName: initialPatientId,
+              profileId: initialProfileId,
+              fullName: initialProfileId,
               isActive: true,
             );
           }
@@ -197,8 +194,8 @@ class _QuoteClinicalContextDialogState
         _prescription ??= prescription;
       });
 
-      if (resolvedPatientId != null && prescriptions.isEmpty) {
-        Future<void>.microtask(() => _loadPrescriptions(resolvedPatientId));
+      if (resolvedProfileId != null && prescriptions.isEmpty) {
+        Future<void>.microtask(() => _loadPrescriptions(resolvedProfileId));
       }
     });
   }
@@ -217,14 +214,14 @@ class _QuoteClinicalContextDialogState
     return null;
   }
 
-  Profile? _findLoadedPatientById(String? patientId) {
-    final String? id = _clean(patientId);
+  Profile? _findLoadedProfileById(String? profileId) {
+    final String? id = _clean(profileId);
     if (id == null) return null;
 
     if (!_isMemberScoped) return null;
 
     final ProfilesState state = ref.read(
-      profilesControllerProvider(_memberPatientScope),
+      profilesControllerProvider(_memberProfileScope),
     );
 
     for (final Profile patient in state.items) {
@@ -248,11 +245,11 @@ class _QuoteClinicalContextDialogState
     return null;
   }
 
-  Set<String>? _allowedPatientIdsForMemberships() {
+  Set<String>? _allowedProfileIdsForMemberships() {
     if (!_isMemberScoped) return null;
 
     final ProfilesState state = ref.watch(
-      profilesControllerProvider(_memberPatientScope),
+      profilesControllerProvider(_memberProfileScope),
     );
 
     return state.items
@@ -284,41 +281,41 @@ class _QuoteClinicalContextDialogState
     _setProfile(picked);
   }
 
-  void _setProfile(Profile patient) {
+  void _setProfile(Profile profile) {
     setState(() {
-      final String? previousPatientId = _profile?.profileId.trim();
-      final String nextPatientId = patient.profileId.trim();
+      final String? previousProfileId = _profile?.profileId.trim();
+      final String nextProfileId = profile.profileId.trim();
 
-      _profile = patient;
+      _profile = profile;
 
-      if (previousPatientId != null &&
-          previousPatientId.isNotEmpty &&
-          previousPatientId != nextPatientId) {
+      if (previousProfileId != null &&
+          previousProfileId.isNotEmpty &&
+          previousProfileId != nextProfileId) {
         _membership = null;
         _prescription = null;
       }
     });
 
-    _loadPrescriptions(patient.profileId);
+    _loadPrescriptions(profile.profileId);
   }
 
   void _setMembership(InsuranceMembership membership) {
-    final Profile? loadedPatient = _findLoadedPatientById(membership.patientId);
+    final Profile? loadedProfile = _findLoadedProfileById(membership.profileId);
 
     setState(() {
       _paymentContext = QuotePaymentContext.insurance;
       _membership = membership;
       _profile ??=
-          loadedPatient ??
+          loadedProfile ??
           Profile(
-            profileId: membership.patientId,
+            profileId: membership.profileId,
             fullName:
-                _clean(membership.patientDisplayName) ?? membership.patientId,
+                _clean(membership.profileDisplayName) ?? membership.profileId,
             isActive: true,
           );
     });
 
-    _loadPrescriptions(membership.patientId);
+    _loadPrescriptions(membership.profileId);
   }
 
   void _setPrescription(Prescription? prescription) {
@@ -328,7 +325,7 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _uploadPrescription() async {
-    final String? profileId = _patientId;
+    final String? profileId = _profileId;
 
     if (profileId == null) {
       _snack('Pick a patient first.');
@@ -401,14 +398,14 @@ class _QuoteClinicalContextDialogState
     final InsuranceMembership? membership = _membership;
     final Prescription? prescription = _prescription;
 
-    final String? initialPatientId = _clean(widget.initialPatientId);
+    final String? initialProfileId = _clean(widget.initialProfileId);
     final String? initialMembershipId = _clean(widget.initialMembershipId);
     final String? initialPrescriptionId = _clean(widget.initialPrescriptionId);
 
-    final String? resolvedPatientId =
+    final String? resolvedProfileId =
         _clean(patient?.profileId) ??
-        _clean(membership?.patientId) ??
-        initialPatientId;
+        _clean(membership?.profileId) ??
+        initialProfileId;
 
     final String? resolvedMembershipId =
         _clean(membership?.membershipId) ?? initialMembershipId;
@@ -416,7 +413,7 @@ class _QuoteClinicalContextDialogState
     final String? resolvedPrescriptionId =
         _clean(prescription?.prescriptionId) ?? initialPrescriptionId;
 
-    if (resolvedPatientId == null) {
+    if (resolvedProfileId == null) {
       _snack('Pick a patient first.');
       return;
     }
@@ -433,10 +430,10 @@ class _QuoteClinicalContextDialogState
 
     final Profile resolvedPatient =
         patient ??
-        _findLoadedPatientById(resolvedPatientId) ??
+        _findLoadedProfileById(resolvedProfileId) ??
         Profile(
-          profileId: resolvedPatientId,
-          fullName: _clean(membership?.patientDisplayName) ?? resolvedPatientId,
+          profileId: resolvedProfileId,
+          fullName: _clean(membership?.profileDisplayName) ?? resolvedProfileId,
           isActive: true,
         );
 
@@ -463,8 +460,8 @@ class _QuoteClinicalContextDialogState
 
   SalesDocumentPatientSnapshot _snapshotFromPatient(Profile patient) {
     return SalesDocumentPatientSnapshot(
-      patientId: patient.profileId,
-      patientNo: patient.profileId,
+      profileId: patient.profileId,
+      patientNo: null,
       fullName: patient.fullName,
       dob: patient.dob,
       gender: patient.gender?.name,
@@ -476,19 +473,19 @@ class _QuoteClinicalContextDialogState
     InsuranceMembership membership, {
     Profile? patient,
   }) {
-    final String patientId = membership.patientId.trim();
+    final String profileId = membership.profileId.trim();
 
     final String patientName =
         _clean(patient?.fullName) ??
-        _clean(membership.patientDisplayName) ??
-        patientId;
+        _clean(membership.profileDisplayName) ??
+        profileId;
 
     final String payerName =
         _clean(membership.payerDisplayName) ?? membership.payerContactId;
 
     return SalesDocumentPatientSnapshot(
-      patientId: patientId,
-      patientNo: _clean(membership.patientNo) ?? patientId,
+      profileId: profileId,
+      patientNo: _clean(membership.patientNo),
       fullName: patientName,
       dob: patient?.dob,
       gender: patient?.gender?.name,
@@ -526,13 +523,13 @@ class _QuoteClinicalContextDialogState
 
   @override
   Widget build(BuildContext context) {
-    final String? patientId = _patientId;
+    final String? profileId = _profileId;
 
-    final PrescriptionsState rxState = patientId == null
+    final PrescriptionsState rxState = profileId == null
         ? const PrescriptionsState()
-        : ref.watch(prescriptionsControllerProvider(patientId));
+        : ref.watch(prescriptionsControllerProvider(profileId));
 
-    final Set<String>? allowedPatientIds = _allowedPatientIdsForMemberships();
+    final Set<String>? allowedProfileIds = _allowedProfileIdsForMemberships();
 
     final InsuranceMembershipsState membershipsState = ref.watch(
       insuranceMembershipsControllerProvider,
@@ -544,8 +541,8 @@ class _QuoteClinicalContextDialogState
     );
 
     final int visibleMembershipCount = membershipsState.visibleActiveCount(
-      patientId: patientId,
-      allowedPatientIds: allowedPatientIds,
+      profileId: profileId,
+      allowedProfileIds: allowedProfileIds,
     );
 
     final double membershipPickerHeight = _membershipPickerHeight(
@@ -637,8 +634,8 @@ class _QuoteClinicalContextDialogState
                           initialMembershipId:
                               _membership?.membershipId ??
                               widget.initialMembershipId,
-                          patientId: patientId,
-                          allowedPatientIds: allowedPatientIds,
+                          profileId: profileId,
+                          allowedProfileIds: allowedProfileIds,
                           title: _isMemberScoped
                               ? 'Your insurance memberships'
                               : 'Insurance memberships',
@@ -659,7 +656,7 @@ class _QuoteClinicalContextDialogState
                         : 'Optional for direct-pay private-use quotes.',
                   ),
                   PrescriptionPickerCard(
-                    patientId: patientId,
+                    profileId: profileId,
                     prescriptions: rxState.items,
                     selectedPrescriptionId:
                         _prescription?.prescriptionId ??
@@ -667,10 +664,10 @@ class _QuoteClinicalContextDialogState
                     busy: rxState.busy,
                     error: rxState.error,
                     requiredForClaim: _requiresInsurance,
-                    onRefresh: patientId == null
+                    onRefresh: profileId == null
                         ? null
-                        : () => _loadPrescriptions(patientId),
-                    onUpload: patientId == null ? null : _uploadPrescription,
+                        : () => _loadPrescriptions(profileId),
+                    onUpload: profileId == null ? null : _uploadPrescription,
                     onChanged: _setPrescription,
                   ),
                 ],

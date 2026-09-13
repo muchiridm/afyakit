@@ -24,7 +24,7 @@ class InsuranceMembershipsService {
 
   Future<List<InsuranceMembership>> list({
     String? search,
-    String? patientId,
+    String? profileId,
     String? patientNo,
     String? payerContactId,
     String? memberNo,
@@ -35,7 +35,7 @@ class InsuranceMembershipsService {
   }) async {
     final uri = routes.insuranceMembershipsList(
       search: _nullable(search),
-      patientId: _nullable(patientId),
+      profileId: _nullable(profileId),
       patientNo: _nullable(patientNo),
       payerContactId: _nullable(payerContactId),
       memberNo: _nullable(memberNo),

@@ -20,12 +20,12 @@ class InsuranceClaimDetailScreen extends ConsumerStatefulWidget {
   const InsuranceClaimDetailScreen({
     super.key,
     required this.claimPackId,
-    this.patientId,
+    this.profileId,
     this.initialClaimPack,
   });
 
   final String claimPackId;
-  final String? patientId;
+  final String? profileId;
   final InsuranceClaimPack? initialClaimPack;
 
   @override
@@ -39,10 +39,10 @@ class _InsuranceClaimDetailScreenState
   bool _loading = false;
   String? _error;
 
-  String get _patientId {
-    return (_pack?.patientId ??
-            widget.initialClaimPack?.patientId ??
-            widget.patientId ??
+  String get _profileId {
+    return (_pack?.profileId ??
+            widget.initialClaimPack?.profileId ??
+            widget.profileId ??
             '')
         .trim();
   }
@@ -58,13 +58,13 @@ class _InsuranceClaimDetailScreenState
 
   Future<void> _load() async {
     final String claimPackId = widget.claimPackId.trim();
-    final String patientId = _patientId;
+    final String profileId = _profileId;
 
     if (claimPackId.isEmpty) return;
 
-    if (patientId.isEmpty) {
+    if (profileId.isEmpty) {
       setState(
-        () => _error = 'Patient ID is required to load this claim pack.',
+        () => _error = 'Profile ID is required to load this claim pack.',
       );
       return;
     }
@@ -77,7 +77,7 @@ class _InsuranceClaimDetailScreenState
     try {
       final InsuranceClaimPack? pack = await ref
           .read(insuranceClaimPacksControllerProvider.notifier)
-          .get(patientId: patientId, claimPackId: claimPackId);
+          .get(profileId: profileId, claimPackId: claimPackId);
 
       if (!mounted) return;
 
@@ -120,7 +120,7 @@ class _InsuranceClaimDetailScreenState
     final InsuranceClaimPack? updated = await ref
         .read(insuranceClaimPacksControllerProvider.notifier)
         .update(
-          patientId: pack.patientId,
+          profileId: pack.profileId,
           claimPackId: pack.claimPackId,
           input: result.updateInput,
         );
@@ -151,11 +151,11 @@ class _InsuranceClaimDetailScreenState
     final InsuranceClaimPack? pack = _pack;
     if (pack == null) return;
 
-    final String profileId = pack.patientId.trim();
+    final String profileId = pack.profileId.trim();
     final String prescriptionId = (pack.prescriptionId ?? '').trim();
 
     if (profileId.isEmpty) {
-      _snack('Patient ID is missing.');
+      _snack('Profile ID is missing.');
       return;
     }
 
@@ -289,7 +289,7 @@ class _InsuranceClaimDetailScreenState
               ),
               const SizedBox(height: 12),
               InsuranceDocumentsPanel(
-                patientId: pack.patientId,
+                profileId: pack.profileId,
                 claimPackId: pack.claimPackId,
                 membershipId: pack.membershipId,
                 payerContactId: pack.payerContactId,
@@ -325,8 +325,8 @@ class _ClaimPackSummaryCard extends StatelessWidget {
               title: 'Claim pack summary',
             ),
             const SizedBox(height: 12),
-            _InfoRow('Patient', pack.patientDisplayName ?? pack.patientId),
-            _InfoRow('Patient No.', pack.patientNo ?? pack.patientId),
+            _InfoRow('Patient', pack.patientDisplayName ?? pack.profileId),
+            _InfoRow('Patient No.', pack.patientNo),
             _InfoRow('Insurer', pack.payerDisplayName ?? pack.payerContactId),
             _InfoRow('Member No.', pack.memberNo),
             _InfoRow('Member Name', pack.memberName),

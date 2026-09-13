@@ -17,12 +17,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InsuranceClaimPackFormResult {
   const InsuranceClaimPackFormResult({
-    required this.patientId,
+    required this.profileId,
     required this.createInput,
     required this.updateInput,
   });
 
-  final String patientId;
+  final String profileId;
   final InsuranceClaimPackCreateInput createInput;
   final InsuranceClaimPackUpdateInput updateInput;
 }
@@ -35,8 +35,8 @@ class InsuranceClaimFormDialog extends ConsumerStatefulWidget {
     this.initialMembershipId,
     this.invoiceId,
     this.invoiceNumber,
-    this.patientId,
-    this.allowedPatientIds,
+    this.profileId,
+    this.allowedProfileIds,
   });
 
   final InsuranceClaimPack? initial;
@@ -44,8 +44,8 @@ class InsuranceClaimFormDialog extends ConsumerStatefulWidget {
   final String? initialMembershipId;
   final String? invoiceId;
   final String? invoiceNumber;
-  final String? patientId;
-  final Set<String>? allowedPatientIds;
+  final String? profileId;
+  final Set<String>? allowedProfileIds;
 
   @override
   ConsumerState<InsuranceClaimFormDialog> createState() =>
@@ -80,10 +80,10 @@ class _InsuranceClaimFormDialogState
 
   bool get _isEdit => widget.initial != null;
 
-  String get _selectedPatientId {
-    return (_selectedMembership?.patientId ??
-            widget.initial?.patientId ??
-            widget.patientId ??
+  String get _selectedProfileId {
+    return (_selectedMembership?.profileId ??
+            widget.initial?.profileId ??
+            widget.profileId ??
             '')
         .trim();
   }
@@ -92,7 +92,7 @@ class _InsuranceClaimFormDialogState
     return _cleanOrNull(
       _selectedMembership?.patientNo ??
           widget.initial?.patientNo ??
-          widget.patientId,
+          widget.profileId,
     );
   }
 
@@ -170,8 +170,8 @@ class _InsuranceClaimFormDialogState
       context: context,
       builder: (_) => InsuranceMembershipPickerDialog(
         initialMembershipId: _membershipId,
-        patientId: widget.patientId ?? widget.initial?.patientId,
-        allowedPatientIds: widget.allowedPatientIds,
+        profileId: widget.profileId ?? widget.initial?.profileId,
+        allowedProfileIds: widget.allowedProfileIds,
         title: 'Select insurance membership',
         emptyText: 'No active insurance memberships found.',
       ),
@@ -179,14 +179,14 @@ class _InsuranceClaimFormDialogState
 
     if (!mounted || picked == null) return;
 
-    final String previousPatientId = _selectedPatientId;
-    final String nextPatientId = picked.patientId.trim();
+    final String previousProfileId = _selectedProfileId;
+    final String nextProfileId = picked.profileId.trim();
 
     setState(() {
       _selectedMembership = picked;
       _membershipId = picked.membershipId;
 
-      if (previousPatientId.isNotEmpty && previousPatientId != nextPatientId) {
+      if (previousProfileId.isNotEmpty && previousProfileId != nextProfileId) {
         _clearInvoice();
         _clearPrescription();
       }
@@ -196,9 +196,9 @@ class _InsuranceClaimFormDialogState
   }
 
   Future<void> _pickInvoice() async {
-    final String patientId = _selectedPatientId;
+    final String profileId = _selectedProfileId;
 
-    if (patientId.isEmpty) {
+    if (profileId.isEmpty) {
       _snack('Select a membership first.');
       return;
     }
@@ -207,7 +207,7 @@ class _InsuranceClaimFormDialogState
       context: context,
       builder: (_) => InvoicePickerDialog(
         initialInvoiceId: _nullable(_invoiceIdCtl),
-        patientId: patientId,
+        profileId: profileId,
         patientNo: _selectedPatientNo,
 
         // Do not pass patientNo as accountNumber.
@@ -246,17 +246,17 @@ class _InsuranceClaimFormDialogState
   }
 
   Future<void> _loadPrescriptions() {
-    final String patientId = _selectedPatientId;
+    final String profileId = _selectedProfileId;
 
-    if (patientId.isEmpty) return Future<void>.value();
+    if (profileId.isEmpty) return Future<void>.value();
 
     return ref
-        .read(prescriptionsControllerProvider(patientId).notifier)
-        .load(profileId: patientId, isActive: true);
+        .read(prescriptionsControllerProvider(profileId).notifier)
+        .load(profileId: profileId, isActive: true);
   }
 
   Future<void> _uploadPrescription() async {
-    final String profileId = _selectedPatientId;
+    final String profileId = _selectedProfileId;
 
     if (profileId.isEmpty) {
       _snack('Select a membership first.');
@@ -349,15 +349,15 @@ class _InsuranceClaimFormDialogState
     if (!valid) return;
 
     final String membershipId = (_membershipId ?? '').trim();
-    final String patientId = _selectedPatientId;
+    final String profileId = _selectedProfileId;
 
     if (membershipId.isEmpty) {
       _snack('Select an insurance membership.');
       return;
     }
 
-    if (patientId.isEmpty) {
-      _snack('Selected membership has no patient ID.');
+    if (profileId.isEmpty) {
+      _snack('Selected membership has no Health Profile ID.');
       return;
     }
 
@@ -401,7 +401,7 @@ class _InsuranceClaimFormDialogState
 
     Navigator.of(context).pop(
       InsuranceClaimPackFormResult(
-        patientId: patientId,
+        profileId: profileId,
         createInput: createInput,
         updateInput: updateInput,
       ),
@@ -563,11 +563,11 @@ class _InsuranceClaimFormDialogState
     final bool hasMembership =
         (_membershipId ?? '').trim().isNotEmpty || _selectedMembership != null;
 
-    final String patientId = _selectedPatientId;
+    final String profileId = _selectedProfileId;
 
-    final PrescriptionsState prescriptionState = patientId.isEmpty
+    final PrescriptionsState prescriptionState = profileId.isEmpty
         ? const PrescriptionsState()
-        : ref.watch(prescriptionsControllerProvider(patientId));
+        : ref.watch(prescriptionsControllerProvider(profileId));
 
     return AlertDialog(
       title: Text(_isEdit ? 'Edit claim pack' : 'Create claim pack'),
@@ -607,7 +607,7 @@ class _InsuranceClaimFormDialogState
                 SizedBox(
                   width: 720,
                   child: PrescriptionPickerCard(
-                    patientId: patientId,
+                    profileId: profileId,
                     prescriptions: prescriptionState.items,
                     selectedPrescriptionId:
                         _selectedPrescription?.prescriptionId ??
@@ -615,8 +615,8 @@ class _InsuranceClaimFormDialogState
                     busy: prescriptionState.busy,
                     error: prescriptionState.error,
                     requiredForClaim: true,
-                    onRefresh: patientId.isEmpty ? null : _loadPrescriptions,
-                    onUpload: patientId.isEmpty ? null : _uploadPrescription,
+                    onRefresh: profileId.isEmpty ? null : _loadPrescriptions,
+                    onUpload: profileId.isEmpty ? null : _uploadPrescription,
                     onChanged: _setPrescription,
                   ),
                 ),

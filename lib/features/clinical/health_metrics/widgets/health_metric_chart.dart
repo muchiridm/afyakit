@@ -1,4 +1,4 @@
-// lib/features/health_metrics/widgets/health_metric_chart.dart
+// lib/features/clinical/health_metrics/widgets/health_metric_chart.dart
 
 import 'dart:math' as math;
 

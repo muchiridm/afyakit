@@ -5,7 +5,7 @@ import 'package:afyakit/shared/utils/utils.dart';
 
 class SalesDocumentPatientSnapshot {
   const SalesDocumentPatientSnapshot({
-    required this.patientId,
+    required this.profileId,
     required this.fullName,
     this.patientNo,
     this.dob,
@@ -17,9 +17,19 @@ class SalesDocumentPatientSnapshot {
     this.payerName,
   });
 
-  final String patientId;
+  /// Canonical AfyaKit Health Profile ID.
+  ///
+  /// The snapshot represents the person in their contextual role as a patient,
+  /// while the underlying entity reference remains the Health Profile.
+  final String profileId;
+
+  /// Optional insurer / external patient number.
+  ///
+  /// This is not the canonical AfyaKit identifier.
   final String? patientNo;
+
   final String fullName;
+
   final String? dob;
   final String? gender;
   final String? relationship;
@@ -30,19 +40,16 @@ class SalesDocumentPatientSnapshot {
   final String? scheme;
   final String? payerName;
 
-  @Deprecated('Use memberNo instead.')
-  String? get memberNumber => memberNo;
-
   factory SalesDocumentPatientSnapshot.fromJson(JsonMap j) {
     return SalesDocumentPatientSnapshot(
-      patientId: _asTrimmed(j['patient_id']),
+      profileId: _asTrimmed(j['profile_id']),
       patientNo: _asCleanOrNull(j['patient_no']),
       fullName: _asTrimmed(j['full_name']),
       dob: _asCleanOrNull(j['dob']),
       gender: _asCleanOrNull(j['gender']),
       relationship: _asCleanOrNull(j['relationship']),
       membershipId: _asCleanOrNull(j['membership_id']),
-      memberNo: _asCleanOrNull(j['member_no'] ?? j['member_number']),
+      memberNo: _asCleanOrNull(j['member_no']),
       scheme: _asCleanOrNull(j['scheme']),
       payerName: _asCleanOrNull(j['payer_name']),
     );
@@ -50,7 +57,7 @@ class SalesDocumentPatientSnapshot {
 
   JsonMap toJson() {
     return <String, dynamic>{
-      'patient_id': patientId,
+      'profile_id': profileId,
       'patient_no': patientNo,
       'full_name': fullName,
       'dob': dob,
@@ -64,7 +71,7 @@ class SalesDocumentPatientSnapshot {
   }
 
   SalesDocumentPatientSnapshot copyWith({
-    String? patientId,
+    String? profileId,
     String? patientNo,
     bool clearPatientNo = false,
     String? fullName,
@@ -84,7 +91,7 @@ class SalesDocumentPatientSnapshot {
     bool clearPayerName = false,
   }) {
     return SalesDocumentPatientSnapshot(
-      patientId: patientId ?? this.patientId,
+      profileId: profileId ?? this.profileId,
       patientNo: clearPatientNo ? null : (patientNo ?? this.patientNo),
       fullName: fullName ?? this.fullName,
       dob: clearDob ? null : (dob ?? this.dob),
@@ -107,13 +114,13 @@ class SalesDocumentPatientSnapshot {
     return false;
   }
 
-  static String _asTrimmed(Object? v) {
-    final s = asTrimmedString(v);
-    return s.isEmpty ? '' : s;
+  static String _asTrimmed(Object? value) {
+    final String text = asTrimmedString(value);
+    return text.isEmpty ? '' : text;
   }
 
-  static String? _asCleanOrNull(Object? v) {
-    final s = (v ?? '').toString().trim();
-    return s.isEmpty ? null : s;
+  static String? _asCleanOrNull(Object? value) {
+    final String text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
   }
 }

@@ -305,7 +305,7 @@ class _ContactTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = contact.title.trim().isEmpty ? 'Contact' : contact.title;
     final subtitle = contact.subtitle.trim();
-    final linkedCount = contact.activeLinkedPatientCount;
+    final linkedCount = contact.activeLinkedProfileCount;
 
     return ListTile(
       dense: true,

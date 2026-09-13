@@ -10,8 +10,8 @@ class InsuranceMembershipPickerCard extends ConsumerStatefulWidget {
   const InsuranceMembershipPickerCard({
     super.key,
     this.initialMembershipId,
-    this.patientId,
-    this.allowedPatientIds,
+    this.profileId,
+    this.allowedProfileIds,
     this.title = 'Insurance membership',
     this.emptyText,
     this.onSelected,
@@ -19,15 +19,15 @@ class InsuranceMembershipPickerCard extends ConsumerStatefulWidget {
 
   final String? initialMembershipId;
 
-  /// Optional hard filter. Useful after a patient has already been selected.
-  final String? patientId;
+  /// Optional hard filter. Useful after a Health Profile has already been selected.
+  final String? profileId;
 
   /// Optional local visibility guard.
   ///
-  /// In member-scoped flows, pass the linked patient IDs here so the picker
-  /// never displays memberships belonging to unrelated patients, even if the
+  /// In member-scoped flows, pass linked Health Profile IDs here so the picker
+  /// never displays memberships belonging to unrelated profiles, even if the
   /// controller state contains broader data.
-  final Set<String>? allowedPatientIds;
+  final Set<String>? allowedProfileIds;
 
   final String title;
   final String? emptyText;
@@ -57,8 +57,8 @@ class _InsuranceMembershipPickerCardState
   void didUpdateWidget(covariant InsuranceMembershipPickerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final String oldPatientId = _clean(oldWidget.patientId);
-    final String nextPatientId = _clean(widget.patientId);
+    final String oldProfileId = _clean(oldWidget.profileId);
+    final String nextProfileId = _clean(widget.profileId);
 
     final String? oldInitialId = _cleanOrNull(oldWidget.initialMembershipId);
     final String? nextInitialId = _cleanOrNull(widget.initialMembershipId);
@@ -68,7 +68,7 @@ class _InsuranceMembershipPickerCardState
       _selectedMembershipId = nextInitialId;
     }
 
-    if (oldPatientId != nextPatientId) {
+    if (oldProfileId != nextProfileId) {
       _selectedMembershipId = nextInitialId;
       Future<void>.microtask(_load);
     }
@@ -81,12 +81,12 @@ class _InsuranceMembershipPickerCardState
   }
 
   Future<void> _load() {
-    final String patientId = _clean(widget.patientId);
+    final String profileId = _clean(widget.profileId);
 
     return ref
         .read(insuranceMembershipsControllerProvider.notifier)
         .load(
-          patientId: patientId.isEmpty ? null : patientId,
+          profileId: profileId.isEmpty ? null : profileId,
           isActive: true,
           perPage: 200,
           page: 1,
@@ -107,7 +107,7 @@ class _InsuranceMembershipPickerCardState
   }
 
   bool _isAllowed(InsuranceMembership membership) {
-    final Set<String>? allowed = widget.allowedPatientIds;
+    final Set<String>? allowed = widget.allowedProfileIds;
 
     // null means "no local restriction".
     if (allowed == null) return true;
@@ -117,7 +117,7 @@ class _InsuranceMembershipPickerCardState
     // unavailable or not loaded.
     if (allowed.isEmpty) return false;
 
-    return allowed.contains(membership.patientId.trim());
+    return allowed.contains(membership.profileId.trim());
   }
 
   List<InsuranceMembership> _filtered(List<InsuranceMembership> items) {
@@ -130,9 +130,9 @@ class _InsuranceMembershipPickerCardState
 
           final String haystack = <String?>[
             membership.membershipId,
-            membership.patientId,
+            membership.profileId,
             membership.patientNo,
-            membership.patientDisplayName,
+            membership.profileDisplayName,
             membership.payerDisplayName,
             membership.payerAccountNumber,
             membership.memberNo,
@@ -229,15 +229,15 @@ class InsuranceMembershipPickerDialog extends StatelessWidget {
   const InsuranceMembershipPickerDialog({
     super.key,
     this.initialMembershipId,
-    this.patientId,
-    this.allowedPatientIds,
+    this.profileId,
+    this.allowedProfileIds,
     this.title = 'Select insurance membership',
     this.emptyText,
   });
 
   final String? initialMembershipId;
-  final String? patientId;
-  final Set<String>? allowedPatientIds;
+  final String? profileId;
+  final Set<String>? allowedProfileIds;
   final String title;
   final String? emptyText;
 
@@ -250,8 +250,8 @@ class InsuranceMembershipPickerDialog extends StatelessWidget {
         height: MediaQuery.of(context).size.height * 0.72,
         child: InsuranceMembershipPickerCard(
           initialMembershipId: initialMembershipId,
-          patientId: patientId,
-          allowedPatientIds: allowedPatientIds,
+          profileId: profileId,
+          allowedProfileIds: allowedProfileIds,
           emptyText: emptyText,
           onSelected: (InsuranceMembership membership) {
             Navigator.of(context).pop(membership);

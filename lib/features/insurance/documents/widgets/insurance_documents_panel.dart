@@ -1,3 +1,5 @@
+// lib/features/insurance/documents/widgets/insurance_documents_panel.dart
+
 import 'package:afyakit/features/insurance/documents/controllers/insurance_documents_controller.dart';
 import 'package:afyakit/features/insurance/documents/models/insurance_document.dart';
 import 'package:afyakit/features/insurance/documents/services/insurance_documents_service.dart';
@@ -9,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 class InsuranceDocumentsPanel extends ConsumerStatefulWidget {
   const InsuranceDocumentsPanel({
     super.key,
-    required this.patientId,
+    required this.profileId,
     this.claimPackId,
     this.membershipId,
     this.payerContactId,
@@ -19,7 +21,7 @@ class InsuranceDocumentsPanel extends ConsumerStatefulWidget {
     this.showUploadActions = true,
   });
 
-  final String patientId;
+  final String profileId;
   final String? claimPackId;
   final String? membershipId;
   final String? payerContactId;
@@ -36,7 +38,7 @@ class InsuranceDocumentsPanel extends ConsumerStatefulWidget {
 
 class _InsuranceDocumentsPanelState
     extends ConsumerState<InsuranceDocumentsPanel> {
-  String get _patientId => widget.patientId.trim();
+  String get _profileId => widget.profileId.trim();
 
   String? get _claimPackId {
     final String id = (widget.claimPackId ?? '').trim();
@@ -54,7 +56,7 @@ class _InsuranceDocumentsPanelState
     super.didUpdateWidget(oldWidget);
 
     final bool changed =
-        oldWidget.patientId.trim() != widget.patientId.trim() ||
+        oldWidget.profileId.trim() != widget.profileId.trim() ||
         (oldWidget.claimPackId ?? '').trim() !=
             (widget.claimPackId ?? '').trim();
 
@@ -64,7 +66,7 @@ class _InsuranceDocumentsPanelState
   }
 
   Future<void> _load() {
-    if (_patientId.isEmpty) return Future<void>.value();
+    if (_profileId.isEmpty) return Future<void>.value();
 
     final InsuranceDocumentsController controller = ref.read(
       insuranceDocumentsControllerProvider.notifier,
@@ -74,15 +76,15 @@ class _InsuranceDocumentsPanelState
 
     if (claimPackId != null) {
       return controller.loadForClaimPack(
-        patientId: _patientId,
+        profileId: _profileId,
         claimPackId: claimPackId,
         perPage: 100,
         page: 1,
       );
     }
 
-    return controller.loadForPatient(
-      patientId: _patientId,
+    return controller.loadForProfile(
+      profileId: _profileId,
       isActive: true,
       perPage: 100,
       page: 1,
@@ -90,8 +92,8 @@ class _InsuranceDocumentsPanelState
   }
 
   Future<void> _upload(InsuranceDocumentType type) async {
-    if (_patientId.isEmpty) {
-      _snack('Patient ID is missing.');
+    if (_profileId.isEmpty) {
+      _snack('Profile ID is missing.');
       return;
     }
 
@@ -115,7 +117,7 @@ class _InsuranceDocumentsPanelState
     final InsuranceDocument? document = await ref
         .read(insuranceDocumentsControllerProvider.notifier)
         .uploadDocumentFileAndCreate(
-          patientId: _patientId,
+          profileId: _profileId,
           claimPackId: _claimPackId,
           membershipId: _cleanOrNull(widget.membershipId),
           payerContactId: _cleanOrNull(widget.payerContactId),
@@ -167,7 +169,7 @@ class _InsuranceDocumentsPanelState
 
     final bool ok = await ref
         .read(insuranceDocumentsControllerProvider.notifier)
-        .delete(patientId: document.patientId, documentId: document.documentId);
+        .delete(profileId: document.profileId, documentId: document.documentId);
 
     if (!mounted) return;
 
@@ -210,7 +212,7 @@ class _InsuranceDocumentsPanelState
     return items
         .where((InsuranceDocument document) {
           if (!document.isActive) return false;
-          if (document.patientId.trim() != _patientId) return false;
+          if (document.profileId.trim() != _profileId) return false;
 
           if (claimPackId != null) {
             return (document.claimPackId ?? '').trim() == claimPackId;

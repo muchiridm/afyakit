@@ -1,4 +1,4 @@
-// lib/features/health_metrics/services/health_metrics_service.dart
+// lib/features/clinical/health_metrics/services/health_metrics_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
@@ -13,7 +13,7 @@ class HealthMetricsService {
   final AfyaKitRoutes routes;
 
   Future<List<HealthMetricEntry>> listMetrics({
-    required String patientId,
+    required String profileId,
     HealthMetricType? type,
     DateTime? from,
     DateTime? to,
@@ -21,10 +21,10 @@ class HealthMetricsService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
 
     final response = await api.getUri<Object?>(
-      routes.healthMetricsForPatient(
+      routes.clinicalProfileHealthMetricsList(
         pid,
         type: type?.key,
         isActive: isActive,
@@ -41,7 +41,7 @@ class HealthMetricsService {
   }
 
   Future<List<HealthMetricEntry>> listAllMetrics({
-    String? patientId,
+    String? profileId,
     HealthMetricType? type,
     DateTime? from,
     DateTime? to,
@@ -50,8 +50,8 @@ class HealthMetricsService {
     int page = 1,
   }) async {
     final response = await api.getUri<Object?>(
-      routes.healthMetrics(
-        patientId: _nullable(patientId),
+      routes.clinicalHealthMetricsList(
+        profileId: _nullable(profileId),
         type: type?.key,
         isActive: isActive,
         from: from,
@@ -67,14 +67,16 @@ class HealthMetricsService {
   }
 
   Future<HealthMetricEntry> getMetric({
-    required String patientId,
+    required String profileId,
     required String metricId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
 
     final mid = _requiredId(metricId, 'metricId');
 
-    final response = await api.getUri<Object?>(routes.healthMetric(pid, mid));
+    final response = await api.getUri<Object?>(
+      routes.clinicalProfileHealthMetricGet(profileId: pid, metricId: mid),
+    );
 
     final body = _asMap(response.data);
 
@@ -82,10 +84,10 @@ class HealthMetricsService {
   }
 
   Future<HealthMetricEntry> createMetric(HealthMetricCreateInput input) async {
-    final patientId = _requiredId(input.patientId, 'patientId');
+    final profileId = _requiredId(input.profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.healthMetricsForPatient(patientId),
+      routes.clinicalProfileHealthMetricCreate(profileId),
       data: input.toJson(),
     );
 
@@ -95,16 +97,16 @@ class HealthMetricsService {
   }
 
   Future<HealthMetricEntry> updateMetric({
-    required String patientId,
+    required String profileId,
     required String metricId,
     required HealthMetricUpdateInput input,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
 
     final mid = _requiredId(metricId, 'metricId');
 
     final response = await api.putUri<Object?>(
-      routes.healthMetric(pid, mid),
+      routes.clinicalProfileHealthMetricUpdate(profileId: pid, metricId: mid),
       data: input.toJson(),
     );
 
@@ -114,14 +116,16 @@ class HealthMetricsService {
   }
 
   Future<void> deleteMetric({
-    required String patientId,
+    required String profileId,
     required String metricId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
 
     final mid = _requiredId(metricId, 'metricId');
 
-    await api.deleteUri<Object?>(routes.healthMetric(pid, mid));
+    await api.deleteUri<Object?>(
+      routes.clinicalProfileHealthMetricDelete(profileId: pid, metricId: mid),
+    );
   }
 
   static HealthMetricEntry _readMetric(Object? value) {

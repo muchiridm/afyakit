@@ -30,7 +30,7 @@ class _InsuranceMembershipsScreenState
   String? _linkedError;
 
   List<ZohoContact> _insurancePayers = const <ZohoContact>[];
-  List<_LinkedInsurancePatient> _linkedRows = const <_LinkedInsurancePatient>[];
+  List<_LinkedInsuranceProfile> _linkedRows = const <_LinkedInsuranceProfile>[];
 
   @override
   void initState() {
@@ -72,12 +72,12 @@ class _InsuranceMembershipsScreenState
       final svc = await ref.read(zohoContactsServiceProvider.future);
       final payers = await svc.listInsurancePayers(perPage: 50);
 
-      final rows = <_LinkedInsurancePatient>[];
+      final rows = <_LinkedInsuranceProfile>[];
 
       for (final payer in payers) {
-        for (final linked in payer.activeInsuranceLinkedPatients) {
+        for (final linked in payer.activeInsuranceLinkedProfiles) {
           rows.add(
-            _LinkedInsurancePatient(payer: payer, linkedPatient: linked),
+            _LinkedInsuranceProfile(payer: payer, linkedProfile: linked),
           );
         }
       }
@@ -89,8 +89,8 @@ class _InsuranceMembershipsScreenState
 
         if (byPayer != 0) return byPayer;
 
-        return a.linkedPatient.patientDisplayName.toLowerCase().compareTo(
-          b.linkedPatient.patientDisplayName.toLowerCase(),
+        return a.linkedProfile.profileDisplayName.toLowerCase().compareTo(
+          b.linkedProfile.profileDisplayName.toLowerCase(),
         );
       });
 
@@ -111,7 +111,7 @@ class _InsuranceMembershipsScreenState
     }
   }
 
-  void _openPatientProfiles() {
+  void _openHealthProfiles() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const ProfilesScreen(allowExplicitContactLink: true),
@@ -119,9 +119,9 @@ class _InsuranceMembershipsScreenState
     );
   }
 
-  Future<void> _registerFromLinkedContact(_LinkedInsurancePatient row) async {
+  Future<void> _registerFromLinkedContact(_LinkedInsuranceProfile row) async {
     final existing = _findMembership(
-      patientId: row.linkedPatient.patientId,
+      profileId: row.linkedProfile.profileId,
       payerContactId: row.payer.contactId,
     );
 
@@ -129,8 +129,8 @@ class _InsuranceMembershipsScreenState
       context: context,
       builder: (_) => InsuranceMembershipFormDialog(
         initial: existing,
-        patientId: row.linkedPatient.patientId,
-        patientDisplayName: row.linkedPatient.patientDisplayName,
+        profileId: row.linkedProfile.profileId,
+        profileDisplayName: row.linkedProfile.profileDisplayName,
         payerContactId: row.payer.contactId,
         payerDisplayName: row.payer.displayName,
       ),
@@ -174,8 +174,8 @@ class _InsuranceMembershipsScreenState
       context: context,
       builder: (_) => InsuranceMembershipFormDialog(
         initial: membership,
-        patientId: membership.patientId,
-        patientDisplayName: membership.patientDisplayName,
+        profileId: membership.profileId,
+        profileDisplayName: membership.profileDisplayName,
         payerContactId: membership.payerContactId,
         payerDisplayName: membership.payerDisplayName,
       ),
@@ -249,16 +249,16 @@ class _InsuranceMembershipsScreenState
   }
 
   InsuranceMembership? _findMembership({
-    required String patientId,
+    required String profileId,
     required String payerContactId,
   }) {
     final memberships = ref.read(insuranceMembershipsControllerProvider).items;
 
-    final pid = patientId.trim();
+    final profile = profileId.trim();
     final payer = payerContactId.trim();
 
     for (final membership in memberships) {
-      if (membership.patientId.trim() == pid &&
+      if (membership.profileId.trim() == profile &&
           membership.payerContactId.trim() == payer) {
         return membership;
       }
@@ -267,15 +267,15 @@ class _InsuranceMembershipsScreenState
     return null;
   }
 
-  bool _isRegistered(_LinkedInsurancePatient row) {
+  bool _isRegistered(_LinkedInsuranceProfile row) {
     return _findMembership(
-          patientId: row.linkedPatient.patientId,
+          profileId: row.linkedProfile.profileId,
           payerContactId: row.payer.contactId,
         ) !=
         null;
   }
 
-  List<_LinkedInsurancePatient> _visibleLinkedRows() {
+  List<_LinkedInsuranceProfile> _visibleLinkedRows() {
     final selectedPayer = (_selectedPayerContactId ?? '').trim();
     final search = _searchCtl.text.trim().toLowerCase();
 
@@ -289,8 +289,8 @@ class _InsuranceMembershipsScreenState
           if (search.isEmpty) return true;
 
           return row.payer.displayName.toLowerCase().contains(search) ||
-              row.linkedPatient.patientId.toLowerCase().contains(search) ||
-              row.linkedPatient.patientDisplayName.toLowerCase().contains(
+              row.linkedProfile.profileId.toLowerCase().contains(search) ||
+              row.linkedProfile.profileDisplayName.toLowerCase().contains(
                 search,
               );
         })
@@ -336,9 +336,9 @@ class _InsuranceMembershipsScreenState
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: _openPatientProfiles,
+            onPressed: _openHealthProfiles,
             icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('Open Patients'),
+            label: const Text('Open Health Profiles'),
           ),
         ),
       ],
@@ -399,13 +399,13 @@ class _InsuranceMembershipsScreenState
                             icon: Icons.link_off,
                             title: 'No linked insurance contacts',
                             message:
-                                'Open Patient Profiles and link a patient to an insurance payer first.',
+                                'Open Health Profiles and link a patient to an insurance payer first.',
                           )
                         else
                           ...linkedRows.map(
                             (row) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: _LinkedInsurancePatientCard(
+                              child: _LinkedInsuranceProfileCard(
                                 row: row,
                                 registered: _isRegistered(row),
                                 onRegister: () =>
@@ -549,24 +549,24 @@ class _MembershipFilters extends StatelessWidget {
   }
 }
 
-class _LinkedInsurancePatient {
-  const _LinkedInsurancePatient({
+class _LinkedInsuranceProfile {
+  const _LinkedInsuranceProfile({
     required this.payer,
-    required this.linkedPatient,
+    required this.linkedProfile,
   });
 
   final ZohoContact payer;
-  final ContactLinkedPatient linkedPatient;
+  final ContactLinkedProfile linkedProfile;
 }
 
-class _LinkedInsurancePatientCard extends StatelessWidget {
-  const _LinkedInsurancePatientCard({
+class _LinkedInsuranceProfileCard extends StatelessWidget {
+  const _LinkedInsuranceProfileCard({
     required this.row,
     required this.registered,
     required this.onRegister,
   });
 
-  final _LinkedInsurancePatient row;
+  final _LinkedInsuranceProfile row;
   final bool registered;
   final VoidCallback onRegister;
 
@@ -580,14 +580,14 @@ class _LinkedInsurancePatientCard extends StatelessWidget {
           child: Icon(registered ? Icons.verified_user : Icons.link),
         ),
         title: Text(
-          row.linkedPatient.patientDisplayName,
+          row.linkedProfile.profileDisplayName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-            '${row.linkedPatient.patientId} · ${row.payer.displayName}',
+            '${row.linkedProfile.profileId} · ${row.payer.displayName}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -628,10 +628,10 @@ class _MembershipCard extends StatelessWidget {
       membership.payerLabel,
       if ((membership.scheme ?? '').trim().isNotEmpty)
         membership.scheme!.trim(),
-      if ((membership.policyNumber ?? '').trim().isNotEmpty)
-        'Policy: ${membership.policyNumber!.trim()}',
-      if ((membership.medicalCardNumber ?? '').trim().isNotEmpty)
-        'Card: ${membership.medicalCardNumber!.trim()}',
+      if ((membership.policyNo ?? '').trim().isNotEmpty)
+        'Policy: ${membership.policyNo!.trim()}',
+      if ((membership.medicalCardNo ?? '').trim().isNotEmpty)
+        'Card: ${membership.medicalCardNo!.trim()}',
     ];
 
     final validity = [

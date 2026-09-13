@@ -44,12 +44,12 @@ class InsuranceClaimPacksState {
   }
 
   List<InsuranceClaimPack> visibleActiveItems({
-    String? patientId,
+    String? profileId,
     String? membershipId,
     String? invoiceId,
-    Set<String>? allowedPatientIds,
+    Set<String>? allowedProfileIds,
   }) {
-    final String cleanPatientId = _clean(patientId);
+    final String cleanProfileId = _clean(profileId);
     final String cleanMembershipId = _clean(membershipId);
     final String cleanInvoiceId = _clean(invoiceId);
 
@@ -57,8 +57,8 @@ class InsuranceClaimPacksState {
         .where((InsuranceClaimPack pack) {
           if (!pack.isActive) return false;
 
-          if (cleanPatientId.isNotEmpty &&
-              pack.patientId.trim() != cleanPatientId) {
+          if (cleanProfileId.isNotEmpty &&
+              pack.profileId.trim() != cleanProfileId) {
             return false;
           }
 
@@ -72,10 +72,10 @@ class InsuranceClaimPacksState {
             return false;
           }
 
-          if (allowedPatientIds != null) {
-            if (allowedPatientIds.isEmpty) return false;
+          if (allowedProfileIds != null) {
+            if (allowedProfileIds.isEmpty) return false;
 
-            if (!allowedPatientIds.contains(pack.patientId.trim())) {
+            if (!allowedProfileIds.contains(pack.profileId.trim())) {
               return false;
             }
           }
@@ -86,16 +86,16 @@ class InsuranceClaimPacksState {
   }
 
   int visibleActiveCount({
-    String? patientId,
+    String? profileId,
     String? membershipId,
     String? invoiceId,
-    Set<String>? allowedPatientIds,
+    Set<String>? allowedProfileIds,
   }) {
     return visibleActiveItems(
-      patientId: patientId,
+      profileId: profileId,
       membershipId: membershipId,
       invoiceId: invoiceId,
-      allowedPatientIds: allowedPatientIds,
+      allowedProfileIds: allowedProfileIds,
     ).length;
   }
 
@@ -116,7 +116,7 @@ class InsuranceClaimPacksController
   Future<void> load({
     String? search,
     String? membershipId,
-    String? patientId,
+    String? profileId,
     String? payerContactId,
     String? invoiceId,
     String? memberNo,
@@ -139,7 +139,7 @@ class InsuranceClaimPacksController
       final List<InsuranceClaimPack> items = await svc.list(
         search: search,
         membershipId: membershipId,
-        patientId: patientId,
+        profileId: profileId,
         payerContactId: payerContactId,
         invoiceId: invoiceId,
         memberNo: memberNo,
@@ -159,8 +159,8 @@ class InsuranceClaimPacksController
     }
   }
 
-  Future<void> loadForPatient({
-    required String patientId,
+  Future<void> loadForProfile({
+    required String profileId,
     String? search,
     String? membershipId,
     String? payerContactId,
@@ -175,10 +175,10 @@ class InsuranceClaimPacksController
     int perPage = 50,
     int page = 1,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return;
     }
 
@@ -189,8 +189,8 @@ class InsuranceClaimPacksController
     try {
       final InsuranceClaimPacksService svc = await _service;
 
-      final List<InsuranceClaimPack> items = await svc.listForPatient(
-        patientId: cleanPatientId,
+      final List<InsuranceClaimPack> items = await svc.listForProfile(
+        profileId: cleanProfileId,
         search: search,
         membershipId: membershipId,
         payerContactId: payerContactId,
@@ -221,14 +221,14 @@ class InsuranceClaimPacksController
   }
 
   Future<InsuranceClaimPack?> get({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanClaimPackId = claimPackId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -243,7 +243,7 @@ class InsuranceClaimPacksController
       final InsuranceClaimPacksService svc = await _service;
 
       final InsuranceClaimPack claimPack = await svc.get(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
       );
 
@@ -261,13 +261,13 @@ class InsuranceClaimPacksController
   }
 
   Future<InsuranceClaimPack?> create({
-    required String patientId,
+    required String profileId,
     required InsuranceClaimPackCreateInput input,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -279,7 +279,7 @@ class InsuranceClaimPacksController
       final InsuranceClaimPacksService svc = await _service;
 
       final InsuranceClaimPack claimPack = await svc.create(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         input: input,
       );
 
@@ -298,15 +298,15 @@ class InsuranceClaimPacksController
   }
 
   Future<InsuranceClaimPack?> update({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
     required InsuranceClaimPackUpdateInput input,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanClaimPackId = claimPackId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return null;
     }
 
@@ -323,7 +323,7 @@ class InsuranceClaimPacksController
       final InsuranceClaimPacksService svc = await _service;
 
       final InsuranceClaimPack claimPack = await svc.update(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
         input: input,
       );
@@ -338,14 +338,14 @@ class InsuranceClaimPacksController
   }
 
   Future<bool> delete({
-    required String patientId,
+    required String profileId,
     required String claimPackId,
   }) async {
-    final String cleanPatientId = patientId.trim();
+    final String cleanProfileId = profileId.trim();
     final String cleanClaimPackId = claimPackId.trim();
 
-    if (cleanPatientId.isEmpty) {
-      state = state.copyWith(error: 'Patient ID is empty');
+    if (cleanProfileId.isEmpty) {
+      state = state.copyWith(error: 'Profile ID is empty');
       return false;
     }
 
@@ -362,7 +362,7 @@ class InsuranceClaimPacksController
       final InsuranceClaimPacksService svc = await _service;
 
       await svc.delete(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         claimPackId: cleanClaimPackId,
       );
 

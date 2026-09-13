@@ -12,7 +12,7 @@ import 'package:afyakit/core/hq/tenants/models/feature_registry.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
 
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
-import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
 import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
@@ -109,24 +109,20 @@ final class HomeRegistry {
 
   static const List<StaffFeatureDef> _staffQuickActions = [
     // ─────────────────────────────────────────────
-    // Health Metrics
+    // Clinical
     // ─────────────────────────────────────────────
     StaffFeatureDef(
-      featureKey: FeatureKeys.healthMetrics,
+      featureKey: FeatureKeys.clinical,
       labelOverride: 'Health Metrics',
       iconOverride: Icons.monitor_heart_outlined,
       destination: _healthMetrics,
       allowed: _requireStaff,
     ),
-
-    // ─────────────────────────────────────────────
-    // Clinical
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
-      labelOverride: 'Patient Profiles',
+      labelOverride: 'Health Profiles',
       iconOverride: Icons.people_alt_outlined,
-      destination: _patientProfiles,
+      destination: _healthProfiles,
       allowed: _requireStaff,
     ),
     StaffFeatureDef(
@@ -233,19 +229,15 @@ final class HomeRegistry {
 
   static const List<StaffFeatureDef> _memberQuickActions = [
     // ─────────────────────────────────────────────
-    // Health Metrics
+    // Clinical
     // ─────────────────────────────────────────────
     StaffFeatureDef(
-      featureKey: FeatureKeys.healthMetrics,
+      featureKey: FeatureKeys.clinical,
       labelOverride: 'My Health Metrics',
       iconOverride: Icons.monitor_heart_outlined,
       destination: _healthMetrics,
-      allowedRef: _allowMemberHealthMetrics,
+      allowedRef: _allowMemberClinical,
     ),
-
-    // ─────────────────────────────────────────────
-    // Clinical
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'My Profiles',
@@ -326,7 +318,7 @@ final class HomeRegistry {
     return const InvoicesListScreen();
   }
 
-  static Widget _patientProfiles(BuildContext _) {
+  static Widget _healthProfiles(BuildContext _) {
     return const ProfilesScreen(allowExplicitContactLink: true);
   }
 
@@ -374,16 +366,6 @@ final class HomeRegistry {
     return profile?.features.enabled(FeatureKeys.insurance) == true;
   }
 
-  static bool _allowMemberHealthMetrics(WidgetRef ref, AuthUser user) {
-    if (user.isStaffResolved) {
-      return false;
-    }
-
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
-
-    return profile?.features.enabled(FeatureKeys.healthMetrics) == true;
-  }
-
   static bool _allowMemberClinical(WidgetRef ref, AuthUser user) {
     if (user.isStaffResolved) {
       return false;
@@ -417,15 +399,17 @@ final class HomeRegistry {
       if (featureKey == FeatureKeys.rider) return false;
       if (featureKey == FeatureKeys.backup) return false;
 
-      if (featureKey == FeatureKeys.healthMetrics &&
-          definition.destination != _healthMetrics) {
-        return false;
-      }
+      if (featureKey == FeatureKeys.clinical) {
+        final label = definition.label.trim().toLowerCase();
 
-      if (featureKey == FeatureKeys.clinical &&
-          definition.destination != _myProfiles &&
-          definition.label.trim().toLowerCase() != 'my prescriptions') {
-        return false;
+        final isAllowedClinicalAction =
+            definition.destination == _healthMetrics ||
+            definition.destination == _myProfiles ||
+            label == 'my prescriptions';
+
+        if (!isAllowedClinicalAction) {
+          return false;
+        }
       }
     }
 

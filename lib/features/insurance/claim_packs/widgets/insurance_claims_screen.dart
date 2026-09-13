@@ -78,7 +78,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
     final InsuranceClaimPack? pack = await ref
         .read(insuranceClaimPacksControllerProvider.notifier)
-        .create(patientId: result.patientId, input: result.createInput);
+        .create(profileId: result.profileId, input: result.createInput);
 
     if (!mounted) return;
 
@@ -100,7 +100,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
       MaterialPageRoute<void>(
         builder: (_) => InsuranceClaimDetailScreen(
           claimPackId: pack.claimPackId,
-          patientId: pack.patientId,
+          profileId: pack.profileId,
           initialClaimPack: pack,
         ),
       ),
@@ -132,7 +132,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
     final InsuranceClaimPack? updated = await ref
         .read(insuranceClaimPacksControllerProvider.notifier)
         .update(
-          patientId: pack.patientId,
+          profileId: pack.profileId,
           claimPackId: pack.claimPackId,
           input: result.updateInput,
         );
@@ -177,7 +177,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
     final bool ok = await ref
         .read(insuranceClaimPacksControllerProvider.notifier)
-        .delete(patientId: pack.patientId, claimPackId: pack.claimPackId);
+        .delete(profileId: pack.profileId, claimPackId: pack.claimPackId);
 
     if (!mounted) return;
 
@@ -205,9 +205,9 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
 
     final InsuranceMembership fallback = InsuranceMembership(
       membershipId: pack.membershipId,
-      patientId: pack.patientId,
+      profileId: pack.profileId,
       patientNo: pack.patientNo,
-      patientDisplayName: pack.patientDisplayName,
+      profileDisplayName: pack.patientDisplayName,
       payerContactId: pack.payerContactId ?? '',
       payerDisplayName: pack.payerDisplayName,
       memberNo: pack.memberNo ?? '',
@@ -227,7 +227,7 @@ class _InsuranceClaimsScreenState extends ConsumerState<InsuranceClaimsScreen> {
       MaterialPageRoute<void>(
         builder: (_) => InsuranceClaimDetailScreen(
           claimPackId: pack.claimPackId,
-          patientId: pack.patientId,
+          profileId: pack.profileId,
           initialClaimPack: pack,
         ),
       ),
@@ -413,7 +413,7 @@ class _ClaimPackCard extends StatelessWidget {
       if ((pack.patientDisplayName ?? '').trim().isNotEmpty)
         pack.patientDisplayName!.trim()
       else
-        pack.patientId,
+        pack.profileId,
       if ((pack.invoiceNumber ?? '').trim().isNotEmpty)
         pack.invoiceNumber!.trim()
       else if ((pack.invoiceId ?? '').trim().isNotEmpty)

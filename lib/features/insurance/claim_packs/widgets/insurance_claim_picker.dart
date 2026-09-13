@@ -1,3 +1,5 @@
+// lib/features/insurance/claim_packs/widgets/insurance_claim_picker.dart
+
 import 'package:afyakit/features/insurance/claim_packs/controllers/insurance_claim_packs_controller.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:afyakit/shared/widgets/entity_picker_widgets.dart';
@@ -8,10 +10,10 @@ class InsuranceClaimPickerCard extends ConsumerStatefulWidget {
   const InsuranceClaimPickerCard({
     super.key,
     this.initialClaimPackId,
-    this.patientId,
+    this.profileId,
     this.membershipId,
     this.invoiceId,
-    this.allowedPatientIds,
+    this.allowedProfileIds,
     this.title = 'Insurance claim pack',
     this.emptyText,
     this.onSelected,
@@ -20,12 +22,12 @@ class InsuranceClaimPickerCard extends ConsumerStatefulWidget {
   final String? initialClaimPackId;
 
   /// Optional hard filters.
-  final String? patientId;
+  final String? profileId;
   final String? membershipId;
   final String? invoiceId;
 
   /// Optional local visibility guard.
-  final Set<String>? allowedPatientIds;
+  final Set<String>? allowedProfileIds;
 
   final String title;
   final String? emptyText;
@@ -55,8 +57,8 @@ class _InsuranceClaimPickerCardState
   void didUpdateWidget(covariant InsuranceClaimPickerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final String oldPatientId = _clean(oldWidget.patientId);
-    final String nextPatientId = _clean(widget.patientId);
+    final String oldProfileId = _clean(oldWidget.profileId);
+    final String nextProfileId = _clean(widget.profileId);
 
     final String oldMembershipId = _clean(oldWidget.membershipId);
     final String nextMembershipId = _clean(widget.membershipId);
@@ -73,7 +75,7 @@ class _InsuranceClaimPickerCardState
     }
 
     final bool filterChanged =
-        oldPatientId != nextPatientId ||
+        oldProfileId != nextProfileId ||
         oldMembershipId != nextMembershipId ||
         oldInvoiceId != nextInvoiceId;
 
@@ -90,15 +92,15 @@ class _InsuranceClaimPickerCardState
   }
 
   Future<void> _load() {
-    final String? patientId = _cleanOrNull(widget.patientId);
+    final String? profileId = _cleanOrNull(widget.profileId);
 
     final InsuranceClaimPacksController controller = ref.read(
       insuranceClaimPacksControllerProvider.notifier,
     );
 
-    if (patientId != null) {
-      return controller.loadForPatient(
-        patientId: patientId,
+    if (profileId != null) {
+      return controller.loadForProfile(
+        profileId: profileId,
         membershipId: _cleanOrNull(widget.membershipId),
         invoiceId: _cleanOrNull(widget.invoiceId),
         isActive: true,
@@ -131,12 +133,12 @@ class _InsuranceClaimPickerCardState
   }
 
   bool _isAllowed(InsuranceClaimPack pack) {
-    final Set<String>? allowed = widget.allowedPatientIds;
+    final Set<String>? allowed = widget.allowedProfileIds;
 
     if (allowed == null) return true;
     if (allowed.isEmpty) return false;
 
-    return allowed.contains(pack.patientId.trim());
+    return allowed.contains(pack.profileId.trim());
   }
 
   List<InsuranceClaimPack> _filtered(List<InsuranceClaimPack> items) {
@@ -147,11 +149,11 @@ class _InsuranceClaimPickerCardState
           if (!pack.isActive) return false;
           if (!_isAllowed(pack)) return false;
 
-          final String patientId = _clean(widget.patientId);
+          final String profileId = _clean(widget.profileId);
           final String membershipId = _clean(widget.membershipId);
           final String invoiceId = _clean(widget.invoiceId);
 
-          if (patientId.isNotEmpty && pack.patientId.trim() != patientId) {
+          if (profileId.isNotEmpty && pack.profileId.trim() != profileId) {
             return false;
           }
 
@@ -167,7 +169,7 @@ class _InsuranceClaimPickerCardState
 
           final String haystack = <String?>[
             pack.claimPackId,
-            pack.patientId,
+            pack.profileId,
             pack.patientNo,
             pack.patientDisplayName,
             pack.invoiceId,
@@ -272,19 +274,19 @@ class InsuranceClaimPickerDialog extends StatelessWidget {
   const InsuranceClaimPickerDialog({
     super.key,
     this.initialClaimPackId,
-    this.patientId,
+    this.profileId,
     this.membershipId,
     this.invoiceId,
-    this.allowedPatientIds,
+    this.allowedProfileIds,
     this.title = 'Select claim pack',
     this.emptyText,
   });
 
   final String? initialClaimPackId;
-  final String? patientId;
+  final String? profileId;
   final String? membershipId;
   final String? invoiceId;
-  final Set<String>? allowedPatientIds;
+  final Set<String>? allowedProfileIds;
   final String title;
   final String? emptyText;
 
@@ -297,10 +299,10 @@ class InsuranceClaimPickerDialog extends StatelessWidget {
         height: MediaQuery.of(context).size.height * 0.72,
         child: InsuranceClaimPickerCard(
           initialClaimPackId: initialClaimPackId,
-          patientId: patientId,
+          profileId: profileId,
           membershipId: membershipId,
           invoiceId: invoiceId,
-          allowedPatientIds: allowedPatientIds,
+          allowedProfileIds: allowedProfileIds,
           emptyText: emptyText,
           onSelected: (InsuranceClaimPack pack) {
             Navigator.of(context).pop(pack);
@@ -356,7 +358,7 @@ class _ClaimPackTile extends StatelessWidget {
   }
 
   static String _title(InsuranceClaimPack pack) {
-    final String patient = _clean(pack.patientDisplayName) ?? pack.patientId;
+    final String patient = _clean(pack.patientDisplayName) ?? pack.profileId;
 
     final String ref =
         _clean(pack.invoiceNumber) ??

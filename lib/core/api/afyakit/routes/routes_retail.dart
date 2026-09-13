@@ -133,10 +133,10 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
 
     // Clinical / insurance claim context.
     //
-    // These are important because insurance invoices may be addressed to the
-    // insurer, not the patient. The backend uses these to search invoice
-    // custom fields such as cf_patient_no and cf_claim_pack_id.
-    String? patientId,
+    // The canonical care-recipient identity is profileId/profile_id.
+    // patientNo remains contextual because Zoho/insurer-facing fields may
+    // still use patient terminology such as cf_patient_no.
+    String? profileId,
     String? patientNo,
     String? claimPackId,
     String? membershipId,
@@ -160,7 +160,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
       add('accountNumber', accountNumber);
     }
 
-    add('patient_id', patientId);
+    add('profile_id', profileId);
     add('patient_no', patientNo);
     add('claim_pack_id', claimPackId);
     add('membership_id', membershipId);

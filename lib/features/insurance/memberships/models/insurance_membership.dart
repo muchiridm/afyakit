@@ -3,9 +3,9 @@
 class InsuranceMembership {
   const InsuranceMembership({
     required this.membershipId,
-    required this.patientId,
+    required this.profileId,
     this.patientNo,
-    this.patientDisplayName,
+    this.profileDisplayName,
     required this.payerContactId,
     this.payerAccountNumber,
     this.payerDisplayName,
@@ -27,9 +27,9 @@ class InsuranceMembership {
 
   final String membershipId;
 
-  final String patientId;
+  final String profileId;
   final String? patientNo;
-  final String? patientDisplayName;
+  final String? profileDisplayName;
 
   final String payerContactId;
   final String? payerAccountNumber;
@@ -55,25 +55,15 @@ class InsuranceMembership {
   final String? createdAt;
   final String? updatedAt;
 
-  /// Temporary compatibility for older widgets/controllers.
-  @Deprecated('Use memberNo instead.')
-  String get memberNumber => memberNo;
-
-  @Deprecated('Use medicalCardNo instead.')
-  String? get medicalCardNumber => medicalCardNo;
-
-  @Deprecated('Use policyNo instead.')
-  String? get policyNumber => policyNo;
-
   String get displayTitle {
-    final patient = patientDisplayName?.trim() ?? '';
+    final profile = profileDisplayName?.trim() ?? '';
     final member = memberNo.trim();
 
-    if (patient.isNotEmpty && member.isNotEmpty) {
-      return '$patient · $member';
+    if (profile.isNotEmpty && member.isNotEmpty) {
+      return '$profile · $member';
     }
 
-    if (patient.isNotEmpty) return patient;
+    if (profile.isNotEmpty) return profile;
     if (member.isNotEmpty) return member;
 
     return membershipId;
@@ -88,20 +78,18 @@ class InsuranceMembership {
   factory InsuranceMembership.fromJson(Map<String, Object?> json) {
     return InsuranceMembership(
       membershipId: _s(json['membership_id']),
-      patientId: _s(json['patient_id']),
+      profileId: _s(json['profile_id']),
       patientNo: _sn(json['patient_no']),
-      patientDisplayName: _sn(json['patient_display_name']),
+      profileDisplayName: _sn(json['profile_display_name']),
       payerContactId: _s(json['payer_contact_id']),
       payerAccountNumber: _sn(json['payer_account_number']),
       payerDisplayName: _sn(json['payer_display_name']),
-      memberNo: _s(json['member_no'] ?? json['member_number']),
+      memberNo: _s(json['member_no']),
       memberName: _sn(json['member_name']),
       principalName: _sn(json['principal_name']),
       scheme: _sn(json['scheme']),
-      medicalCardNo: _sn(
-        json['medical_card_no'] ?? json['medical_card_number'],
-      ),
-      policyNo: _sn(json['policy_no'] ?? json['policy_number']),
+      medicalCardNo: _sn(json['medical_card_no']),
+      policyNo: _sn(json['policy_no']),
       providerCode: _sn(json['provider_code']),
       providerName: _sn(json['provider_name']),
       effectiveFrom: _sn(json['effective_from']),
@@ -116,9 +104,9 @@ class InsuranceMembership {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'membership_id': membershipId,
-      'patient_id': patientId,
+      'profile_id': profileId,
       'patient_no': patientNo,
-      'patient_display_name': patientDisplayName,
+      'profile_display_name': profileDisplayName,
       'payer_contact_id': payerContactId,
       'payer_account_number': payerAccountNumber,
       'payer_display_name': payerDisplayName,
@@ -155,7 +143,7 @@ class InsuranceMembership {
 
 class InsuranceMembershipUpsertInput {
   const InsuranceMembershipUpsertInput({
-    required this.patientId,
+    required this.profileId,
     required this.payerContactId,
     this.payerAccountNumber,
     this.payerDisplayName,
@@ -173,7 +161,7 @@ class InsuranceMembershipUpsertInput {
     this.isActive,
   });
 
-  final String patientId;
+  final String profileId;
 
   final String payerContactId;
   final String? payerAccountNumber;
@@ -196,49 +184,9 @@ class InsuranceMembershipUpsertInput {
   final String? notes;
   final bool? isActive;
 
-  /// Temporary compatibility factory for older callers.
-  @Deprecated('Use memberNo, medicalCardNo and policyNo instead.')
-  factory InsuranceMembershipUpsertInput.legacy({
-    required String patientId,
-    required String payerContactId,
-    String? payerAccountNumber,
-    String? payerDisplayName,
-    required String memberNumber,
-    String? memberName,
-    String? principalName,
-    String? scheme,
-    String? medicalCardNumber,
-    String? policyNumber,
-    String? providerCode,
-    String? providerName,
-    String? effectiveFrom,
-    String? effectiveTo,
-    String? notes,
-    bool? isActive,
-  }) {
-    return InsuranceMembershipUpsertInput(
-      patientId: patientId,
-      payerContactId: payerContactId,
-      payerAccountNumber: payerAccountNumber,
-      payerDisplayName: payerDisplayName,
-      memberNo: memberNumber,
-      memberName: memberName,
-      principalName: principalName,
-      scheme: scheme,
-      medicalCardNo: medicalCardNumber,
-      policyNo: policyNumber,
-      providerCode: providerCode,
-      providerName: providerName,
-      effectiveFrom: effectiveFrom,
-      effectiveTo: effectiveTo,
-      notes: notes,
-      isActive: isActive,
-    );
-  }
-
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'patient_id': patientId,
+      'profile_id': profileId,
       'payer_contact_id': payerContactId,
       'payer_account_number': payerAccountNumber,
       'payer_display_name': payerDisplayName,

@@ -284,7 +284,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       'payment=${meta.effectivePaymentContext.apiValue} '
       'customerId=${meta.customerIdResolved} '
       'customer=${meta.contact?.title ?? ''} '
-      'patient=${meta.resolvedPatientId ?? ''} '
+      'patient=${meta.resolvedProfileId ?? ''} '
       'membership=${meta.resolvedMembershipId ?? ''} '
       'prescription=${meta.resolvedPrescriptionId ?? ''}',
     );

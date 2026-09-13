@@ -1,4 +1,4 @@
-// lib/features/health_metrics/widgets/health_metric_ui.dart
+// lib/features/clinical/health_metrics/widgets/health_metric_ui.dart
 
 import 'package:flutter/material.dart';
 

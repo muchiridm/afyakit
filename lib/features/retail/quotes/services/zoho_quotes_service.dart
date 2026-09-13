@@ -310,7 +310,7 @@ class ZohoQuotesService {
       if (dueDate != null) 'due_date': _zohoDateFmt.format(_dateOnly(dueDate)),
       if (deliveryAddress != null) 'delivery_address': deliveryAddress.toJson(),
       if (patientSnapshot != null) ...<String, Object?>{
-        'patient_id': patientSnapshot.patientId,
+        'profile_id': patientSnapshot.profileId,
         'patient_snapshot': patientSnapshot.toJson(),
       },
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
@@ -377,7 +377,7 @@ class ZohoQuotesService {
       throw StateError('Please select a quote date before requesting a quote.');
     }
 
-    final String? patientId = asCleanStringOrNull(draft.resolvedPatientId);
+    final String? profileId = asCleanStringOrNull(draft.resolvedProfileId);
 
     final String? membershipId = asCleanStringOrNull(
       draft.resolvedMembershipId,
@@ -393,7 +393,7 @@ class ZohoQuotesService {
       throw StateError('Insurance is only available for private-use quotes.');
     }
 
-    if (requirePatient && patientId == null) {
+    if (requirePatient && profileId == null) {
       throw StateError('Please select who the quote is for.');
     }
 
@@ -442,7 +442,7 @@ class ZohoQuotesService {
       if (reference != null) 'reference_number': reference,
       if (notes != null) 'notes': notes,
       if (deliveryAddress != null) 'delivery_address': deliveryAddress.toJson(),
-      if (patientId != null) 'patient_id': patientId,
+      if (profileId != null) 'profile_id': profileId,
       if (draft.patientSnapshot != null)
         'patient_snapshot': draft.patientSnapshot!.toJson(),
       if (draft.isInsurancePayment && membershipId != null)

@@ -1,4 +1,4 @@
-// lib/features/clinical/patients/widgets/patient_profiles_screen_widgets.dart
+// lib/features/clinical/profiles/widgets/profiles_screen_widgets.dart
 
 import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
@@ -272,7 +272,7 @@ class ProfilesErrorBanner extends StatelessWidget {
 class ProfileCard extends StatelessWidget {
   const ProfileCard({
     super.key,
-    required this.patient,
+    required this.profile,
     required this.state,
     required this.allowExplicitContactLink,
     required this.onLinkToSelf,
@@ -283,17 +283,17 @@ class ProfileCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  final Profile patient;
+  final Profile profile;
   final ProfilesState state;
   final bool allowExplicitContactLink;
 
   /// Kept for now because the parent screen still wires this callback.
-  /// The card no longer exposes this as a per-patient action.
+  /// The card no longer exposes this as a per-profile action.
   final ValueChanged<Profile> onLinkToSelf;
 
   final ValueChanged<Profile> onRequestPayerLink;
   final ValueChanged<Profile> onLinkContact;
-  final void Function(Profile patient, ProfileLinkedContact link)
+  final void Function(Profile profile, ProfileLinkedContact link)
   onDelinkContact;
   final ValueChanged<Profile> onEdit;
   final ValueChanged<Profile> onDelete;
@@ -303,8 +303,8 @@ class ProfileCard extends StatelessWidget {
   }
 
   Widget _linkedContactsView(BuildContext context) {
-    if (patient.linkedContacts.isEmpty) {
-      final contextualContact = patient.contactDisplayName ?? patient.contactId;
+    if (profile.linkedContacts.isEmpty) {
+      final contextualContact = profile.contactDisplayName ?? profile.contactId;
 
       return _infoLine(
         'Linked contacts',
@@ -320,7 +320,7 @@ class ProfileCard extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: patient.linkedContacts
+          children: profile.linkedContacts
               .map((link) {
                 final title = link.contactDisplayName?.trim().isNotEmpty == true
                     ? link.contactDisplayName!.trim()
@@ -346,7 +346,7 @@ class ProfileCard extends StatelessWidget {
                   avatar: const Icon(Icons.link_off, size: 16),
                   tooltip: 'Delink contact',
                   onPressed: link.isActive
-                      ? () => onDelinkContact(patient, link)
+                      ? () => onDelinkContact(profile, link)
                       : null,
                 );
               })
@@ -356,7 +356,7 @@ class ProfileCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: OutlinedButton.icon(
-              onPressed: state.isSaving ? null : () => onLinkContact(patient),
+              onPressed: state.isSaving ? null : () => onLinkContact(profile),
               icon: const Icon(Icons.add_link),
               label: const Text('Link contact/payer'),
             ),
@@ -366,8 +366,8 @@ class ProfileCard extends StatelessWidget {
   }
 
   Widget _contextualContactView(BuildContext context) {
-    final contact = patient.contactDisplayName ?? patient.contactId;
-    final relationship = patient.relationship;
+    final contact = profile.contactDisplayName ?? profile.contactId;
+    final relationship = profile.relationship;
 
     if (ProfilesLabels.nullable(contact).trim() == '—' &&
         relationship == null) {
@@ -390,54 +390,54 @@ class ProfileCard extends StatelessWidget {
       if (!allowExplicitContactLink)
         IconButton(
           tooltip: 'Request payer',
-          onPressed: state.isSaving ? null : () => onRequestPayerLink(patient),
+          onPressed: state.isSaving ? null : () => onRequestPayerLink(profile),
           icon: const Icon(Icons.request_quote_outlined),
         ),
       if (allowExplicitContactLink)
         IconButton(
           tooltip: 'Link contact/payer',
-          onPressed: state.isSaving ? null : () => onLinkContact(patient),
+          onPressed: state.isSaving ? null : () => onLinkContact(profile),
           icon: const Icon(Icons.add_link),
         ),
       IconButton(
         tooltip: 'Edit',
-        onPressed: state.isSaving ? null : () => onEdit(patient),
+        onPressed: state.isSaving ? null : () => onEdit(profile),
         icon: const Icon(Icons.edit_outlined),
       ),
       IconButton(
         tooltip: 'Delete',
-        onPressed: state.isSaving ? null : () => onDelete(patient),
+        onPressed: state.isSaving ? null : () => onDelete(profile),
         icon: const Icon(Icons.delete_outline),
       ),
     ];
 
     return Card(
       child: ListTile(
-        title: Text(patient.fullName),
+        title: Text(profile.fullName),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _infoLine('ID', patient.profileId),
-              _infoLine('DOB', ProfilesLabels.nullable(patient.dob)),
+              _infoLine('ID', profile.profileId),
+              _infoLine('DOB', ProfilesLabels.nullable(profile.dob)),
               _infoLine(
                 'Gender',
-                patient.gender == null
+                profile.gender == null
                     ? '—'
-                    : ProfilesLabels.gender(patient.gender!),
+                    : ProfilesLabels.gender(profile.gender!),
               ),
-              _infoLine('Phone', ProfilesLabels.nullable(patient.phone)),
-              _infoLine('Email', ProfilesLabels.nullable(patient.email)),
+              _infoLine('Phone', ProfilesLabels.nullable(profile.phone)),
+              _infoLine('Email', ProfilesLabels.nullable(profile.email)),
               _infoLine(
                 'National ID',
-                ProfilesLabels.nullable(patient.nationalId),
+                ProfilesLabels.nullable(profile.nationalId),
               ),
               const SizedBox(height: 6),
               _linkedContactsView(context),
               _contextualContactView(context),
               const SizedBox(height: 6),
-              _infoLine('Status', patient.isActive ? 'Active' : 'Inactive'),
+              _infoLine('Status', profile.isActive ? 'Active' : 'Inactive'),
             ],
           ),
         ),
@@ -471,7 +471,7 @@ class RequestSummaryBox extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
-                Text('Patient ID: ${request.profileId}'),
+                Text('Profile ID: ${request.profileId}'),
                 Text('Requested target: ${request.bestTargetLabel}'),
                 Text(
                   'Relationship: ${ProfilesLabels.relationship(request.relationship)}',
@@ -525,7 +525,7 @@ class ProfileLinkRequestCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _infoLine('Patient ID', request.profileId),
+              _infoLine('Profile ID', request.profileId),
               _infoLine(
                 'Relationship',
                 ProfilesLabels.relationship(request.relationship),

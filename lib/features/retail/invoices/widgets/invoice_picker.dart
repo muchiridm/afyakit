@@ -9,7 +9,7 @@ class InvoicePickerCard extends ConsumerStatefulWidget {
   const InvoicePickerCard({
     super.key,
     this.initialInvoiceId,
-    required this.patientId,
+    required this.profileId,
     this.patientNo,
     this.accountNumber,
     this.title = 'Invoice',
@@ -19,11 +19,8 @@ class InvoicePickerCard extends ConsumerStatefulWidget {
 
   final String? initialInvoiceId;
 
-  /// Patient scope for clinical / insurance workflows.
-  ///
-  /// This may be an internal patient id or patient number depending on the
-  /// calling screen. The backend can use it as patient_id.
-  final String patientId;
+  /// Canonical Health Profile scope for clinical / insurance workflows.
+  final String profileId;
 
   /// Preferred patient number. For insurance invoices this is usually the
   /// most reliable key because Zoho has cf_patient_no.
@@ -51,7 +48,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
   bool _loading = false;
   String? _error;
 
-  String get _scopePatientId => widget.patientId.trim();
+  String get _scopeProfileId => widget.profileId.trim();
 
   String? get _scopePatientNo {
     final String value = (widget.patientNo ?? '').trim();
@@ -64,7 +61,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
   }
 
   bool get _hasScope {
-    return _scopePatientId.isNotEmpty ||
+    return _scopeProfileId.isNotEmpty ||
         (_scopePatientNo ?? '').isNotEmpty ||
         (_scopeAccountNumber ?? '').isNotEmpty;
   }
@@ -83,7 +80,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
     super.didUpdateWidget(oldWidget);
 
     final bool scopeChanged =
-        oldWidget.patientId.trim() != widget.patientId.trim() ||
+        oldWidget.profileId.trim() != widget.profileId.trim() ||
         (oldWidget.patientNo ?? '').trim() != (widget.patientNo ?? '').trim() ||
         (oldWidget.accountNumber ?? '').trim() !=
             (widget.accountNumber ?? '').trim();
@@ -144,9 +141,9 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
         // Explicit account/customer scope only.
         accountNumber: _scopeAccountNumber,
 
-        // Patient/claim context. This is what allows insurer-addressed
+        // Health Profile / patient context. This allows insurer-addressed
         // invoices to still appear in claim-pack workflows.
-        patientId: _scopePatientId.isEmpty ? null : _scopePatientId,
+        profileId: _scopeProfileId.isEmpty ? null : _scopeProfileId,
         patientNo: _scopePatientNo,
       );
 
@@ -170,10 +167,10 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
 
   List<ZohoInvoice> _filterLocally(List<ZohoInvoice> items) {
     final String account = (_scopeAccountNumber ?? '').trim();
-    final String patientId = _scopePatientId;
+    final String profileId = _scopeProfileId;
     final String patientNo = (_scopePatientNo ?? '').trim();
 
-    if (account.isEmpty && patientId.isEmpty && patientNo.isEmpty) {
+    if (account.isEmpty && profileId.isEmpty && patientNo.isEmpty) {
       return items;
     }
 
@@ -187,7 +184,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
           }
 
           final List<String> needles = <String>[
-            patientId,
+            profileId,
             patientNo,
           ].where((String value) => value.trim().isNotEmpty).toList();
 
@@ -199,7 +196,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
             invoice.invoiceNumber,
             invoice.customerName,
             invoice.notes,
-            invoice.resolvedPatientId,
+            invoice.resolvedProfileId,
             invoice.resolvedPatientNo,
             invoice.resolvedPatientName,
             invoice.resolvedMembershipId,
@@ -248,7 +245,7 @@ class _InvoicePickerCardState extends ConsumerState<InvoicePickerCard> {
             invoice.notes,
             invoice.total.toString(),
             invoice.balance?.toString(),
-            invoice.resolvedPatientId,
+            invoice.resolvedProfileId,
             invoice.resolvedPatientNo,
             invoice.resolvedPatientName,
             invoice.resolvedMembershipId,
@@ -355,7 +352,7 @@ class InvoicePickerDialog extends StatelessWidget {
   const InvoicePickerDialog({
     super.key,
     this.initialInvoiceId,
-    required this.patientId,
+    required this.profileId,
     this.patientNo,
     this.accountNumber,
     this.title = 'Select invoice',
@@ -363,7 +360,7 @@ class InvoicePickerDialog extends StatelessWidget {
   });
 
   final String? initialInvoiceId;
-  final String patientId;
+  final String profileId;
   final String? patientNo;
   final String? accountNumber;
   final String title;
@@ -378,7 +375,7 @@ class InvoicePickerDialog extends StatelessWidget {
         height: MediaQuery.of(context).size.height * 0.72,
         child: InvoicePickerCard(
           initialInvoiceId: initialInvoiceId,
-          patientId: patientId,
+          profileId: profileId,
           patientNo: patientNo,
           accountNumber: accountNumber,
           title: title,

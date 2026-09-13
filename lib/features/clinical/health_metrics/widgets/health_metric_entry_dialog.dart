@@ -1,4 +1,4 @@
-// lib/features/health_metrics/widgets/health_metric_entry_dialog.dart
+// lib/features/clinical/health_metrics/widgets/health_metric_entry_dialog.dart
 
 import 'package:flutter/material.dart';
 
@@ -8,25 +8,25 @@ import '../models/health_metric_type.dart';
 class HealthMetricEntryDialog extends StatefulWidget {
   const HealthMetricEntryDialog({
     super.key,
-    required this.patientId,
+    required this.profileId,
     required this.patientName,
     required this.type,
   });
 
-  final String patientId;
+  final String profileId;
   final String patientName;
   final HealthMetricType type;
 
   static Future<HealthMetricCreateInput?> show(
     BuildContext context, {
-    required String patientId,
+    required String profileId,
     required String patientName,
     required HealthMetricType type,
   }) {
     return showDialog<HealthMetricCreateInput>(
       context: context,
       builder: (_) => HealthMetricEntryDialog(
-        patientId: patientId,
+        profileId: profileId,
         patientName: patientName,
         type: type,
       ),
@@ -219,7 +219,7 @@ class _HealthMetricEntryDialogState extends State<HealthMetricEntryDialog> {
 
     Navigator.of(context).pop(
       HealthMetricCreateInput(
-        patientId: widget.patientId,
+        profileId: widget.profileId,
         type: _type,
         recordedAt: _recordedAt,
         primaryValue: primaryValue,

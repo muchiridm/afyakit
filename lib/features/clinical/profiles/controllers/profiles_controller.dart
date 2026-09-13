@@ -255,13 +255,13 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   }
 
   Future<Profile> linkToSelf(
-    String patientId,
+    String profileId,
     ProfileLinkToSelfInput input,
   ) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final linked = await _service.linkToSelf(patientId, input);
+      final linked = await _service.linkToSelf(profileId, input);
       final items = _upsertProfile(state.items, linked);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -270,18 +270,18 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        error: 'Failed to link patient profile: $e',
+        error: 'Failed to link Health Profile: $e',
       );
       rethrow;
     }
   }
 
-  Future<Profile> update(String patientId, ProfileUpsertInput input) async {
+  Future<Profile> update(String profileId, ProfileUpsertInput input) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final effectiveInput = _withFixedContact(input);
-      final updated = await _service.update(patientId, effectiveInput);
+      final updated = await _service.update(profileId, effectiveInput);
       final items = _upsertProfile(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -296,14 +296,14 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     }
   }
 
-  Future<void> remove(String patientId) async {
+  Future<void> remove(String profileId) async {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      await _service.remove(patientId);
+      await _service.remove(profileId);
 
       final items = state.items
-          .where((p) => p.profileId != patientId)
+          .where((p) => p.profileId != profileId)
           .toList(growable: false);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);

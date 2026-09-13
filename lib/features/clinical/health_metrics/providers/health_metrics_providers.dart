@@ -1,4 +1,4 @@
-// lib/features/health_metrics/providers/health_metrics_providers.dart
+// lib/features/clinical/health_metrics/providers/health_metrics_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +20,7 @@ final healthMetricEntriesProvider = FutureProvider.autoDispose
       final service = ref.watch(healthMetricsServiceProvider);
 
       return service.listMetrics(
-        patientId: query.patientId,
+        profileId: query.profileId,
         type: query.type,
         from: query.from,
         to: query.to,
@@ -32,7 +32,7 @@ final healthMetricEntriesProvider = FutureProvider.autoDispose
 
 class HealthMetricEntriesQuery {
   const HealthMetricEntriesQuery({
-    required this.patientId,
+    required this.profileId,
     this.type,
     this.from,
     this.to,
@@ -41,7 +41,7 @@ class HealthMetricEntriesQuery {
     this.perPage = 50,
   });
 
-  final String patientId;
+  final String profileId;
   final HealthMetricType? type;
   final DateTime? from;
   final DateTime? to;
@@ -52,7 +52,7 @@ class HealthMetricEntriesQuery {
   @override
   bool operator ==(Object other) {
     return other is HealthMetricEntriesQuery &&
-        other.patientId == patientId &&
+        other.profileId == profileId &&
         other.type == type &&
         other.from == from &&
         other.to == to &&
@@ -63,5 +63,5 @@ class HealthMetricEntriesQuery {
 
   @override
   int get hashCode =>
-      Object.hash(patientId, type, from, to, isActive, page, perPage);
+      Object.hash(profileId, type, from, to, isActive, page, perPage);
 }

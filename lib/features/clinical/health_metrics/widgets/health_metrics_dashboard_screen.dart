@@ -1,4 +1,4 @@
-// lib/features/health_metrics/widgets/health_metrics_dashboard_screen.dart
+// lib/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,12 +32,12 @@ const List<HealthMetricType> _otherMetricOrder = [
 class HealthMetricsDashboardScreen extends ConsumerStatefulWidget {
   const HealthMetricsDashboardScreen({
     super.key,
-    this.initialPatient,
+    this.initialProfile,
     this.profilePickerContactId,
     this.memberMode = false,
   });
 
-  final Profile? initialPatient;
+  final Profile? initialProfile;
   final String? profilePickerContactId;
   final bool memberMode;
 
@@ -54,18 +54,18 @@ class _HealthMetricsDashboardScreenState
   @override
   void initState() {
     super.initState();
-    _selectedProfile = widget.initialPatient;
+    _selectedProfile = widget.initialProfile;
   }
 
   @override
   void didUpdateWidget(covariant HealthMetricsDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldPatientId = oldWidget.initialPatient?.profileId;
-    final newPatientId = widget.initialPatient?.profileId;
+    final oldProfileId = oldWidget.initialProfile?.profileId;
+    final newProfileId = widget.initialProfile?.profileId;
 
-    if (oldPatientId != newPatientId) {
-      _selectedProfile = widget.initialPatient;
+    if (oldProfileId != newProfileId) {
+      _selectedProfile = widget.initialProfile;
     }
   }
 
@@ -114,11 +114,11 @@ class _HealthMetricsDashboardScreenState
           ),
           const SizedBox(height: AppShape.gap14),
           if (selectedProfile == null)
-            const _NoPatientSelectedCard()
+            const _NoProfileSelectedCard()
           else
-            _PatientMetricsSection(
+            _ProfileMetricsSection(
               key: ValueKey(selectedProfile.profileId),
-              patient: selectedProfile,
+              profile: selectedProfile,
             ),
         ],
       ),
@@ -137,20 +137,20 @@ class _MemberHealthMetricsInfoCard extends StatelessWidget {
       child: Text(
         'Record measurements for yourself or a dependant, then review the '
         'latest readings and changes over time. Always select the correct '
-        'patient profile before adding a measurement.',
+        'Health Profile before adding a measurement.',
       ),
     );
   }
 }
 
-class _PatientMetricsSection extends ConsumerWidget {
-  const _PatientMetricsSection({super.key, required this.patient});
+class _ProfileMetricsSection extends ConsumerWidget {
+  const _ProfileMetricsSection({super.key, required this.profile});
 
-  final Profile patient;
+  final Profile profile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final query = _metricsQueryFor(patient);
+    final query = _metricsQueryFor(profile);
 
     final metricsAsync = ref.watch(healthMetricEntriesProvider(query));
 
@@ -163,7 +163,7 @@ class _PatientMetricsSection extends ConsumerWidget {
         },
       ),
       data: (metrics) => _MetricsDashboard(
-        patient: patient,
+        profile: profile,
         metrics: metrics,
         onView: (type) => _openHistory(context, type: type),
         onAdd: (type) => _recordMetric(context, ref, type: type, query: query),
@@ -177,7 +177,7 @@ class _PatientMetricsSection extends ConsumerWidget {
   }) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => HealthMetricHistoryScreen(patient: patient, type: type),
+        builder: (_) => HealthMetricHistoryScreen(profile: profile, type: type),
       ),
     );
   }
@@ -190,8 +190,8 @@ class _PatientMetricsSection extends ConsumerWidget {
   }) async {
     final input = await HealthMetricEntryDialog.show(
       context,
-      patientId: patient.profileId,
-      patientName: patient.fullName,
+      profileId: profile.profileId,
+      patientName: profile.fullName,
       type: type,
     );
 
@@ -209,7 +209,7 @@ class _PatientMetricsSection extends ConsumerWidget {
       ref.invalidate(
         healthMetricEntriesProvider(
           HealthMetricEntriesQuery(
-            patientId: patient.profileId,
+            profileId: profile.profileId,
             type: type,
             isActive: true,
             page: 1,
@@ -226,7 +226,7 @@ class _PatientMetricsSection extends ConsumerWidget {
         SnackBar(
           content: Text(
             '${type.label} recorded for '
-            '${patient.fullName}.',
+            '${profile.fullName}.',
           ),
         ),
       );
@@ -247,16 +247,16 @@ class _PatientMetricsSection extends ConsumerWidget {
   }
 }
 
-class _NoPatientSelectedCard extends StatelessWidget {
-  const _NoPatientSelectedCard();
+class _NoProfileSelectedCard extends StatelessWidget {
+  const _NoProfileSelectedCard();
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      title: 'No Profile Selected',
+      title: 'No Health Profile Selected',
       icon: Icons.info_outline,
       child: Text(
-        'Select a patient profile before recording or viewing health measurements.',
+        'Select a Health Profile before recording or viewing health measurements.',
         style: Theme.of(context).textTheme.bodyMedium,
       ),
     );
@@ -324,13 +324,13 @@ class _MetricsErrorCard extends StatelessWidget {
 
 class _MetricsDashboard extends StatelessWidget {
   const _MetricsDashboard({
-    required this.patient,
+    required this.profile,
     required this.metrics,
     required this.onView,
     required this.onAdd,
   });
 
-  final Profile patient;
+  final Profile profile;
   final List<HealthMetricEntry> metrics;
   final ValueChanged<HealthMetricType> onView;
   final ValueChanged<HealthMetricType> onAdd;
@@ -345,19 +345,19 @@ class _MetricsDashboard extends StatelessWidget {
 
     final bmi = _calculateBmi(height: latestHeight, weight: latestWeight);
 
-    final age = _calculateAge(patient.dob);
+    final age = _calculateAge(profile.dob);
 
     final measurementRange = _measurementDateRange(metrics);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PatientHealthSummaryCard(
-          patient: patient,
+        _ProfileHealthSummaryCard(
+          profile: profile,
           metrics: metrics,
           latestByType: latestByType,
           bmi: bmi,
-          patientAge: age,
+          profileAge: age,
           measurementRange: measurementRange,
         ),
         const SizedBox(height: AppShape.gap14),
@@ -380,7 +380,7 @@ class _MetricsDashboard extends StatelessWidget {
             weight: latestWeight,
             waist: latestByType[HealthMetricType.waistCircumference],
             bmi: bmi,
-            patientAge: age,
+            profileAge: age,
             onView: onView,
             onAdd: onAdd,
           ),
@@ -417,21 +417,21 @@ class _MetricsDashboard extends StatelessWidget {
   }
 }
 
-class _PatientHealthSummaryCard extends StatelessWidget {
-  const _PatientHealthSummaryCard({
-    required this.patient,
+class _ProfileHealthSummaryCard extends StatelessWidget {
+  const _ProfileHealthSummaryCard({
+    required this.profile,
     required this.metrics,
     required this.latestByType,
     required this.bmi,
-    required this.patientAge,
+    required this.profileAge,
     required this.measurementRange,
   });
 
-  final Profile patient;
+  final Profile profile;
   final List<HealthMetricEntry> metrics;
   final Map<HealthMetricType, HealthMetricEntry> latestByType;
   final double? bmi;
-  final int? patientAge;
+  final int? profileAge;
   final DateTimeRange? measurementRange;
 
   @override
@@ -449,11 +449,11 @@ class _PatientHealthSummaryCard extends StatelessWidget {
       );
     }
 
-    final summary = _buildPatientSummary(
-      patient: patient,
+    final summary = _buildProfileSummary(
+      profile: profile,
       latestByType: latestByType,
       bmi: bmi,
-      patientAge: patientAge,
+      profileAge: profileAge,
     );
 
     return AppCard(
@@ -577,7 +577,7 @@ class _BodyMeasurementsGrid extends StatelessWidget {
     required this.weight,
     required this.waist,
     required this.bmi,
-    required this.patientAge,
+    required this.profileAge,
     required this.onView,
     required this.onAdd,
   });
@@ -586,7 +586,7 @@ class _BodyMeasurementsGrid extends StatelessWidget {
   final HealthMetricEntry? weight;
   final HealthMetricEntry? waist;
   final double? bmi;
-  final int? patientAge;
+  final int? profileAge;
 
   final ValueChanged<HealthMetricType> onView;
   final ValueChanged<HealthMetricType> onAdd;
@@ -623,7 +623,7 @@ class _BodyMeasurementsGrid extends StatelessWidget {
               width: width,
               child: _BmiCard(
                 bmi: bmi,
-                patientAge: patientAge,
+                profileAge: profileAge,
                 height: height,
                 weight: weight,
                 onRecordMissingMetric: () {
@@ -737,14 +737,14 @@ class _HealthMetricCard extends StatelessWidget {
 class _BmiCard extends StatelessWidget {
   const _BmiCard({
     required this.bmi,
-    required this.patientAge,
+    required this.profileAge,
     required this.height,
     required this.weight,
     required this.onRecordMissingMetric,
   });
 
   final double? bmi;
-  final int? patientAge;
+  final int? profileAge;
   final HealthMetricEntry? height;
   final HealthMetricEntry? weight;
   final VoidCallback onRecordMissingMetric;
@@ -758,9 +758,9 @@ class _BmiCard extends StatelessWidget {
     final theme = Theme.of(context);
     final currentBmi = bmi;
 
-    final adultCategory = currentBmi == null || patientAge == null
+    final adultCategory = currentBmi == null || profileAge == null
         ? null
-        : patientAge! >= 18
+        : profileAge! >= 18
         ? _adultBmiCategory(currentBmi)
         : null;
 
@@ -824,21 +824,21 @@ class _BmiCard extends StatelessWidget {
   }
 }
 
-String _buildPatientSummary({
-  required Profile patient,
+String _buildProfileSummary({
+  required Profile profile,
   required Map<HealthMetricType, HealthMetricEntry> latestByType,
   required double? bmi,
-  required int? patientAge,
+  required int? profileAge,
 }) {
   final sections = <String>[];
 
-  final profile = [
-    if (patientAge != null) '$patientAge years',
-    _genderLabel(patient.gender),
+  final demographics = [
+    if (profileAge != null) '$profileAge years',
+    _genderLabel(profile.gender),
   ].whereType<String>().join(', ');
 
-  if (profile.isNotEmpty) {
-    sections.add(profile);
+  if (demographics.isNotEmpty) {
+    sections.add(demographics);
   }
 
   final vitals = <String>[
@@ -863,7 +863,7 @@ String _buildPatientSummary({
       'weight ${reading.displayValue}',
     if (latestByType[HealthMetricType.height] case final reading?)
       'height ${reading.displayValue}',
-    if (bmi != null) _bmiSummary(bmi, patientAge),
+    if (bmi != null) _bmiSummary(bmi, profileAge),
   ];
 
   if (bodyMeasurements.isNotEmpty) {
@@ -879,10 +879,10 @@ String _buildPatientSummary({
   return sections.isEmpty ? 'No summary available.' : '${sections.join('. ')}.';
 }
 
-String _bmiSummary(double bmi, int? patientAge) {
+String _bmiSummary(double bmi, int? profileAge) {
   final value = bmi.toStringAsFixed(1);
 
-  if (patientAge == null || patientAge < 18) {
+  if (profileAge == null || profileAge < 18) {
     return 'BMI $value';
   }
 
@@ -898,9 +898,9 @@ String _joinSummaryItems(List<String> items) {
   return '${items.take(items.length - 1).join(', ')}, and ${items.last}';
 }
 
-HealthMetricEntriesQuery _metricsQueryFor(Profile patient) {
+HealthMetricEntriesQuery _metricsQueryFor(Profile profile) {
   return HealthMetricEntriesQuery(
-    patientId: patient.profileId,
+    profileId: profile.profileId,
     isActive: true,
     page: 1,
     perPage: 100,
