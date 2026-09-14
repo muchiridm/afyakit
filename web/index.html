@@ -28,26 +28,30 @@
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
 
-    <!-- X/Twitter and other preview consumers -->
+    <!-- X/Twitter -->
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="__APP_TITLE__" />
     <meta name="twitter:description" content="__APP_DESCRIPTION__" />
     <meta name="twitter:image" content="__APP_IMAGE__" />
 
-    <!-- iOS / PWA -->
+    <!-- Mobile / PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta
       id="apple-mobile-web-app-title"
       name="apple-mobile-web-app-title"
       content="__APP_TITLE__"
     />
 
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/favicon.png" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="favicon.png" />
 
-    <link id="app-favicon" rel="icon" type="image/png" href="/favicon.png" />
+    <link id="app-favicon" rel="icon" type="image/png" href="favicon.png" />
 
-    <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
+    <link id="app-manifest" rel="manifest" href="manifest.webmanifest" />
   </head>
 
   <body>
@@ -57,6 +61,8 @@
 
     <script>
       (() => {
+        const MANIFEST_URL = "manifest.webmanifest";
+
         const setMetaContent = (id, value) => {
           const element = document.getElementById(id);
 
@@ -73,23 +79,40 @@
           }
         };
 
+        const resolveManifestAsset = (src) => {
+          if (!src) return "favicon.png";
+
+          try {
+            return new URL(src, new URL(MANIFEST_URL, window.location.href))
+              .href;
+          } catch (_) {
+            return src;
+          }
+        };
+
+        const hasPurpose = (icon, purpose) => {
+          const purposes = String(icon.purpose || "any")
+            .split(/\s+/)
+            .filter(Boolean);
+
+          return purposes.includes(purpose);
+        };
+
         const pickIcon = (manifest) => {
           const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
 
           const preferred =
             icons.find(
-              (icon) =>
-                icon.sizes === "192x192" &&
-                (!icon.purpose || icon.purpose === "any"),
+              (icon) => icon.sizes === "192x192" && hasPurpose(icon, "any"),
             ) ||
             icons.find(
-              (icon) =>
-                icon.sizes === "512x512" &&
-                (!icon.purpose || icon.purpose === "any"),
+              (icon) => icon.sizes === "512x512" && hasPurpose(icon, "any"),
             ) ||
+            icons.find((icon) => icon.sizes === "192x192" && !icon.purpose) ||
+            icons.find((icon) => icon.sizes === "512x512" && !icon.purpose) ||
             icons.find((icon) => icon.src);
 
-          return preferred?.src || "/favicon.png";
+          return resolveManifestAsset(preferred?.src);
         };
 
         const applyBranding = (manifest) => {
@@ -97,28 +120,36 @@
 
           const title = manifest.name || manifest.short_name || "";
 
+          const description = manifest.description || title;
+
+          const icon = pickIcon(manifest);
+
           if (title) {
             document.title = title;
             setMetaContent("apple-mobile-web-app-title", title);
           }
 
-          setMetaContent("app-description", manifest.description || title);
+          setMetaContent("app-description", description);
+
           setMetaContent("app-theme-color", manifest.theme_color);
-          setHref("apple-touch-icon", pickIcon(manifest));
+
+          setHref("apple-touch-icon", icon);
+          setHref("app-favicon", icon);
         };
 
         const loadBranding = async () => {
           try {
-            const response = await fetch("/manifest.webmanifest", {
+            const response = await fetch(MANIFEST_URL, {
               cache: "no-store",
               credentials: "same-origin",
             });
 
             if (!response.ok) return;
 
-            applyBranding(await response.json());
+            const manifest = await response.json();
+            applyBranding(manifest);
           } catch (_) {
-            // Static build metadata already provides a safe fallback.
+            // Build-time metadata remains as fallback.
           }
         };
 

@@ -1,5 +1,3 @@
-// lib/core/home/widgets/shared/home_dashboard/home_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +9,11 @@ import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
 
 import 'package:afyakit/core/home/widgets/staff/home_staff_body.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
+
+import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+
+import 'package:afyakit/features/messaging/widgets/messaging_entry_screen.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -37,6 +40,11 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tenantProfile = ref.watch(tenantProfileProvider).valueOrNull;
+
+    final bool messagingEnabled =
+        tenantProfile?.features.enabled(FeatureKeys.messaging) == true;
+
     return AppPage(
       key: ValueKey<String>('home-page-${effectiveEntry.name}'),
       scrollable: true,
@@ -46,7 +54,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       maxWidth: _maxWidth,
       padding: AppLayout.pagePadding,
-      fab: _buildQuickActions(context),
+      fab: _buildQuickActions(context, messagingEnabled: messagingEnabled),
       fabAlignment: Alignment.bottomRight,
       body: _buildBody(),
     );
@@ -70,26 +78,42 @@ class HomeScreen extends ConsumerWidget {
     };
   }
 
-  Widget? _buildQuickActions(BuildContext context) {
+  Widget? _buildQuickActions(
+    BuildContext context, {
+    required bool messagingEnabled,
+  }) {
     return switch (effectiveEntry) {
       EntryMode.member => MemberHomeQuickActions(
         key: ValueKey<String>(
           'member-home-quick-actions-${user?.contactId ?? 'unknown'}',
         ),
         user: user,
-        onChat: () => _openChat(context),
+        onChat: messagingEnabled ? () => _openChat(context) : null,
       ),
       EntryMode.staff => StaffHomeQuickActions(
         key: const ValueKey<String>('staff-home-quick-actions'),
-        onChat: () => _openChat(context),
+        onChat: messagingEnabled ? () => _openChat(context) : null,
       ),
       EntryMode.guest => null,
     };
   }
 
   void _openChat(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Chat navigation is not connected yet.')),
+    final currentUser = user;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to use chat.')),
+      );
+
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            MessagingEntryScreen(entry: effectiveEntry, user: currentUser),
+      ),
     );
   }
 }

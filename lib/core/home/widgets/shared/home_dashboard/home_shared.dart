@@ -372,7 +372,7 @@ class HomeCatalogSearchHero extends StatefulWidget {
   });
 
   final void Function(String query) onSearch;
-  final VoidCallback onBrowse;
+  final void Function(String query) onBrowse;
   final VoidCallback? onSecondaryTap;
   final String secondaryLabel;
   final IconData secondaryIcon;
@@ -406,8 +406,14 @@ class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
     super.dispose();
   }
 
+  String get _query => _c.text.trim();
+
   void _submit() {
-    widget.onSearch(_c.text.trim());
+    widget.onSearch(_query);
+  }
+
+  void _browse() {
+    widget.onBrowse(_query);
   }
 
   @override
@@ -459,7 +465,7 @@ class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: widget.onBrowse,
+                      onPressed: _browse,
                       icon: const Icon(Icons.shopping_bag_outlined, size: 18),
                       label: const Text('Browse catalog'),
                     ),
@@ -468,7 +474,7 @@ class _HomeCatalogSearchHeroState extends State<HomeCatalogSearchHero> {
               )
             else
               FilledButton.icon(
-                onPressed: widget.onBrowse,
+                onPressed: _browse,
                 icon: const Icon(Icons.shopping_bag_outlined, size: 18),
                 label: const Text('Browse catalog'),
               ),

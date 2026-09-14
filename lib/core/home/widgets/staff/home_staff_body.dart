@@ -46,7 +46,8 @@ class HomeStaffBody extends StatelessWidget {
         leading: const StaffFeaturesPanel(),
         trailing: _StaffMainColumn(
           onSearch: (query) => _openCatalog(context, q: query),
-          onBrowseCatalog: () => _openCatalog(context, autofocus: true),
+          onBrowseCatalog: (query) =>
+              _openCatalog(context, q: query, autofocus: query.trim().isEmpty),
         ),
       ),
       const SizedBox(height: AppShape.gap12),
@@ -61,7 +62,7 @@ class _StaffMainColumn extends StatelessWidget {
   });
 
   final void Function(String query) onSearch;
-  final VoidCallback onBrowseCatalog;
+  final void Function(String query) onBrowseCatalog;
 
   @override
   Widget build(BuildContext context) {

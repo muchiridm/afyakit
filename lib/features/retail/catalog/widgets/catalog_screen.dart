@@ -11,6 +11,7 @@ import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
 import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
 import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/features/messaging/widgets/messaging_entry_screen.dart';
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/providers/catalog_providers.dart';
@@ -333,14 +334,25 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       EntryMode.guest => GuestHomeQuickActions(
         key: const ValueKey<String>('catalog-guest-quick-actions'),
         onAuth: () => _openAuth(context),
-        onChat: () => _openChat(context),
       ),
     };
   }
 
   void _openChat(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Chat navigation is not connected yet.')),
+    final AuthUser? currentUser = widget.user;
+
+    if (currentUser == null || widget.entry == EntryMode.guest) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to use chat.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            MessagingEntryScreen(entry: widget.entry, user: currentUser),
+      ),
     );
   }
 

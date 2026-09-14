@@ -8,7 +8,7 @@ import 'package:afyakit/features/insurance/memberships/widgets/insurance_members
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
-import 'package:afyakit/features/retail/quotes/models/quote_sale_context.dart';
+import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:flutter/material.dart';

@@ -1,4 +1,4 @@
-// lib/features/retail/quotes/controllers/quote_state.dart
+// lib/features/retail/quotes/controllers/states/quote_state.dart
 
 import 'package:flutter/material.dart';
 
