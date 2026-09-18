@@ -2,8 +2,8 @@
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
-import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/features/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_header.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';

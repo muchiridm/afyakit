@@ -1,4 +1,4 @@
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_engine.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';
 import 'package:afyakit/features/inventory/records/deliveries/services/delivery_session_service.dart';

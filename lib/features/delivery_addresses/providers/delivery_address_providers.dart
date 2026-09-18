@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/delivery_addresses/controllers/delivery_address_controller.dart';
 import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/features/delivery_addresses/services/delivery_address_repo.dart';

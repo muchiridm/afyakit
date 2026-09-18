@@ -1,16 +1,16 @@
 // lib/core/auth/auth_user/widgets/user_badge.dart
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/providers/entry_mode_providers.dart';
+import 'package:afyakit/features/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
-import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
-import 'package:afyakit/core/hq/tenants/widgets/feature_gate.dart';
+import 'package:afyakit/core/capabilities/feature_keys.dart';
+import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';

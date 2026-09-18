@@ -1,7 +1,7 @@
 // lib/features/retail/quotes/widgets/quote_editor_screen.dart
 
 import 'package:afyakit/core/auth/auth_user/guards/require_auth.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';

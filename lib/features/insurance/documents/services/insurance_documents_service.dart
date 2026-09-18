@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/insurance/documents/models/insurance_document.dart';
 import 'package:afyakit/features/insurance/documents/services/insurance_document_storage_paths.dart';
 import 'package:firebase_storage/firebase_storage.dart';

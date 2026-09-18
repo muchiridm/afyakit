@@ -9,7 +9,7 @@ import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((
   ref,

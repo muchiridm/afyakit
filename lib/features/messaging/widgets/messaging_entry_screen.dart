@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 

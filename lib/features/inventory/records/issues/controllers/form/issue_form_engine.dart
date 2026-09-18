@@ -1,6 +1,6 @@
 // lib/features/inventory/records/issues/controllers/form/issue_form_engine.dart
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 

@@ -3,7 +3,7 @@
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

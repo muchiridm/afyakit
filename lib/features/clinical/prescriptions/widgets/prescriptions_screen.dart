@@ -1,6 +1,6 @@
 // lib/features/clinical/prescriptions/widgets/prescriptions_screen.dart
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';

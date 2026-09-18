@@ -1,6 +1,8 @@
 // lib/core/auth_users/widgets/screens/splash_screen.dart
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/hq/branding/providers/tenant_logo_providers.dart';
+
+import 'package:afyakit/app/app_identity.dart';
+import 'package:afyakit/app/providers/app_profile_provider.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,10 +14,26 @@ class SplashScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Use display-name provider so we never show "Loading…"
-    final displayName = ref.watch(tenantDisplayNameProvider);
-    final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
-    final primary = theme.colorScheme.primary;
+    final appProfileAsync = ref.watch(appProfileProvider);
+
+    final displayName = appProfileAsync.maybeWhen(
+      data: (profile) {
+        final name = profile.displayName.trim();
+
+        return name.isNotEmpty ? name : profile.id;
+      },
+      orElse: () => AppIdentity.appId,
+    );
+
+    final logoUrl = appProfileAsync.maybeWhen<String?>(
+      data: (profile) => profile.logoUrl(),
+      orElse: () => null,
+    );
+
+    final primary = appProfileAsync.maybeWhen(
+      data: (profile) => profile.primaryColor,
+      orElse: () => theme.colorScheme.primary,
+    );
 
     return Scaffold(
       backgroundColor: isDark ? theme.colorScheme.surface : Colors.white,
@@ -39,7 +57,9 @@ class SplashScreen extends ConsumerWidget {
     );
   }
 
-  // ── private builders ────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Brand
+  // ─────────────────────────────────────────────
 
   Widget _buildBrand({
     required ThemeData theme,
@@ -47,11 +67,14 @@ class SplashScreen extends ConsumerWidget {
     required String? logoUrl,
     required Color primary,
   }) {
-    const double logoSize = 140.0;
-    final hasUrl = logoUrl != null && logoUrl.trim().isNotEmpty;
+    const logoSize = 140.0;
+
+    final cleanLogoUrl = logoUrl?.trim();
+
+    final hasLogo = cleanLogoUrl != null && cleanLogoUrl.isNotEmpty;
+
     final radius = BorderRadius.circular(16);
 
-    // Placeholder: initials block + app name
     Widget placeholder() {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -75,16 +98,14 @@ class SplashScreen extends ConsumerWidget {
       );
     }
 
-    // No URL at all → placeholder + name
-    if (!hasUrl) {
+    if (!hasLogo) {
       return placeholder();
     }
 
-    // URL present → try to load; on error fallback to placeholder
     return ClipRRect(
       borderRadius: radius,
       child: Image.network(
-        logoUrl,
+        cleanLogoUrl,
         height: logoSize,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
@@ -100,12 +121,13 @@ class SplashScreen extends ConsumerWidget {
     double size = 140.0,
   }) {
     final initials = _initialsFromName(displayName);
+
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: primary.withOpacity(0.12),
+        color: primary.withValues(alpha: 0.12),
         borderRadius: radius,
       ),
       child: Text(
@@ -120,13 +142,26 @@ class SplashScreen extends ConsumerWidget {
   }
 
   String _initialsFromName(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) return '';
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) {
+      return '';
+    }
+
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
     }
-    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
+
+  // ─────────────────────────────────────────────
+  // Loading
+  // ─────────────────────────────────────────────
 
   Widget _buildSpinner() {
     return const SizedBox(
@@ -137,7 +172,8 @@ class SplashScreen extends ConsumerWidget {
   }
 
   Widget _buildLoadingText(ThemeData theme) {
-    final color = theme.hintColor.withOpacity(0.9);
+    final color = theme.hintColor.withValues(alpha: 0.9);
+
     return Text(
       'Loading...',
       style: theme.textTheme.labelMedium?.copyWith(
