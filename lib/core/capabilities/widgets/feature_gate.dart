@@ -1,4 +1,4 @@
-// lib/core/tenancy/widgets/feature_gate.dart
+// lib/core/capabilities/widgets/feature_gate.dart
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

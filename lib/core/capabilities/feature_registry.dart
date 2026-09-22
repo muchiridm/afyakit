@@ -6,93 +6,169 @@ import 'feature_keys.dart';
 
 @immutable
 class FeatureDef {
-  final String key;
-  final String label;
-  final IconData icon;
-  final String? description;
-  final WidgetBuilder? entry;
-
   const FeatureDef({
     required this.key,
     required this.label,
     required this.icon,
     this.description,
+    this.requires = const <String>[],
     this.entry,
   });
+
+  final String key;
+  final String label;
+  final IconData icon;
+  final String? description;
+
+  /// Other capabilities required by this feature.
+  final List<String> requires;
+
+  /// Optional landing page for feature navigation.
+  final WidgetBuilder? entry;
 }
 
-final class FeatureRegistry {
+abstract final class FeatureRegistry {
   const FeatureRegistry._();
 
-  static const List<FeatureDef> features = <FeatureDef>[
+  static const List<FeatureDef> features = [
+    // ─────────────────────────────────────
+    // Platform
+    // ─────────────────────────────────────
+    FeatureDef(
+      key: FeatureKeys.core,
+      label: 'Core',
+      icon: Icons.apps_rounded,
+      description: 'Shared application services.',
+    ),
+
     FeatureDef(
       key: FeatureKeys.hq,
       label: 'HQ',
-      icon: Icons.admin_panel_settings,
-      description: 'Admin console for managing users and preferences.',
+      icon: Icons.admin_panel_settings_rounded,
+      description: 'Platform administration, users and preferences.',
     ),
-    FeatureDef(
-      key: FeatureKeys.inventory,
-      label: 'Inventory',
-      icon: Icons.inventory_2,
-      description:
-          'Stock items, batches, locations, reports, and reorder workflows.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.retail,
-      label: 'Retail',
-      icon: Icons.storefront,
-      description:
-          'Catalog, contacts, quotes, invoices, payments, and delivery.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.clinical,
-      label: 'Clinical',
-      icon: Icons.local_hospital,
-      description:
-          'Health profiles, health metrics, prescriptions, encounters, and clinical records.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.insurance,
-      label: 'Insurance',
-      icon: Icons.verified_user,
-      description:
-          'Insurance memberships, claim invoices, payer links, and claim tracking.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.rider,
-      label: 'Rider',
-      icon: Icons.delivery_dining,
-      description: 'Deliveries, rider jobs, tracking, and confirmations.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.reporting,
-      label: 'Reporting',
-      icon: Icons.bar_chart,
-      description: 'Analytics dashboards and exports.',
-    ),
-    FeatureDef(
-      key: FeatureKeys.messaging,
-      label: 'Messaging',
-      icon: Icons.chat_bubble,
-      description: 'Customer and staff messaging and notifications.',
-    ),
+
     FeatureDef(
       key: FeatureKeys.backup,
       label: 'Backup',
-      icon: Icons.cloud_upload,
-      description: 'Backups, exports, and recovery utilities.',
+      icon: Icons.cloud_upload_rounded,
+      description: 'Backups, exports and recovery utilities.',
+    ),
+
+    // ─────────────────────────────────────
+    // Healthcare
+    // ─────────────────────────────────────
+    FeatureDef(
+      key: FeatureKeys.clinical,
+      label: 'Clinical',
+      icon: Icons.medical_information_rounded,
+      description:
+          'Health profiles, metrics, encounters, '
+          'prescriptions and clinical records.',
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.healthTracking,
+      label: 'Health Tracking',
+      icon: Icons.monitor_heart_rounded,
+      description:
+          'Personal health journeys, health metrics, '
+          'record uploads and patient-controlled access.',
+      requires: [FeatureKeys.clinical],
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.diagnostics,
+      label: 'Diagnostics',
+      icon: Icons.biotech_rounded,
+      description:
+          'Laboratory tests, imaging, physiological testing, '
+          'diagnostic requests, results and reports.',
+      requires: [FeatureKeys.clinical],
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.pharmacy,
+      label: 'Pharmacy',
+      icon: Icons.local_pharmacy_rounded,
+      description:
+          'Pharmacy services, dispensing and '
+          'medicine-specific workflows.',
+      requires: [FeatureKeys.clinical],
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.occupationalHealth,
+      label: 'Occupational Health',
+      icon: Icons.health_and_safety_rounded,
+      description:
+          'Employer programmes, screening campaigns, '
+          'health surveillance and fitness certification.',
+      requires: [FeatureKeys.clinical],
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.insurance,
+      label: 'Insurance',
+      icon: Icons.verified_user_rounded,
+      description:
+          'Memberships, payer links, claims and '
+          'insurance billing.',
+    ),
+
+    // ─────────────────────────────────────
+    // Commerce and operations
+    // ─────────────────────────────────────
+    FeatureDef(
+      key: FeatureKeys.retail,
+      label: 'Retail',
+      icon: Icons.storefront_rounded,
+      description:
+          'Catalogue, contacts, quotes, invoices, '
+          'payments and sales.',
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.inventory,
+      label: 'Inventory',
+      icon: Icons.inventory_2_rounded,
+      description:
+          'Stock, batches, locations and '
+          'reorder workflows.',
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.rider,
+      label: 'Rider',
+      icon: Icons.delivery_dining_rounded,
+      description: 'Delivery jobs, tracking and confirmations.',
+    ),
+
+    // ─────────────────────────────────────
+    // Shared services
+    // ─────────────────────────────────────
+    FeatureDef(
+      key: FeatureKeys.messaging,
+      label: 'Messaging',
+      icon: Icons.chat_bubble_rounded,
+      description: 'Messaging and notifications.',
+    ),
+
+    FeatureDef(
+      key: FeatureKeys.reporting,
+      label: 'Reporting',
+      icon: Icons.bar_chart_rounded,
+      description: 'Analytics, dashboards and exports.',
     ),
   ];
 
-  static List<String> get keys =>
-      features.map((feature) => feature.key).toList(growable: false);
+  static List<String> get keys => [for (final feature in features) feature.key];
 
   static FeatureDef? byKey(String key) {
-    final normalizedKey = key.trim().toLowerCase();
+    final normalized = key.trim().toLowerCase();
 
     for (final feature in features) {
-      if (feature.key.trim().toLowerCase() == normalizedKey) {
+      if (feature.key == normalized) {
         return feature;
       }
     }

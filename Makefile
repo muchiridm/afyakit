@@ -1,20 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AfyaKit multi-app Makefile
 #
-# Tenant app:
-#   make run-web <tenantId> <appId>
-#   make run-android <tenantId> <appId>
-#   make release-web <tenantId> <appId>
-#
-# Examples:
-#   make run-web afya dawapap
-#   make run-web afya afyatracker
-#   make release-web afya dawapap
-#
-# HQ:
-#   make run-hq
-#   make run-web-hq
-#   make release-web-hq
+# Commands use tenant first, then app:
+#   make dev afya afyatracker          # Chrome development
+#   make android afya occuwell        # Android development
+#   make build afya afyatracker       # Web build only
+#   make publish afya afyatracker     # Deploy existing Web build
+#   make release afya afyatracker     # Build + deploy
+#   make release danabtmc danabtmc
+#   make release hq hq                # HQ build + deploy
+#   make release hq                   # HQ shorthand (also supported)
+# Explicit CI selectors: make release-web TENANT_ID=afya APP_ID=afyatracker
 #
 # Bootstrap identity:
 #   APP=tenant|hq
@@ -35,19 +31,18 @@ SHELL := /bin/bash
 
 ENTRY ?= lib/main.dart
 
-# Runtime selectors used by Make/Firebase/branding commands.
-# Allows: make <target> <tenantId> <appId>
-TENANT_KEY ?= $(word 2,$(MAKECMDGOALS))
-APP_KEY    ?= $(word 3,$(MAKECMDGOALS))
+# Tenant-first positional syntax: make <action> <tenantId> <appId>.
+# HQ also permits the short form: make <action> hq.
+# Recursive Make/CI may pass TENANT_ID and APP_ID as named variables.
+TENANT_KEY ?= $(if $(word 3,$(MAKECMDGOALS)),$(word 2,$(MAKECMDGOALS)),)
+APP_KEY    ?= $(if $(word 3,$(MAKECMDGOALS)),$(word 3,$(MAKECMDGOALS)),$(if $(filter hq,$(word 2,$(MAKECMDGOALS))),hq,))
 
-ifneq ($(TENANT_KEY),)
-  .PHONY: $(TENANT_KEY)
-  $(TENANT_KEY): ; @:
-endif
-
-ifneq ($(APP_KEY),)
-  .PHONY: $(APP_KEY)
-  $(APP_KEY): ; @:
+# Make treats positional words as targets; consume them as no-op selectors.
+# Even an incomplete invocation reaches assert_app instead of "No rule to make target".
+POSITIONAL_ARGS := $(sort $(wordlist 2,3,$(MAKECMDGOALS)))
+ifneq ($(strip $(POSITIONAL_ARGS)),)
+  .PHONY: $(POSITIONAL_ARGS)
+  $(POSITIONAL_ARGS): ; @:
 endif
 
 # Preferred batch list. Each entry is tenantId:appId.
@@ -120,22 +115,17 @@ ENV_FILE := $(call resolve_env_file,$(APP_KEY))
 ENV_TENANT_ID := $(call env_value,$(ENV_FILE),TENANT_ID)
 ENV_APP_ID    := $(call env_value,$(ENV_FILE),APP_ID)
 
-# Canonical runtime identity.
-# Positional selectors win for direct Make commands. Recursive/CI calls may
-# still pass TENANT_ID / APP_ID explicitly. Environment files remain useful for
-# non-identity configuration and as a fallback when selectors are omitted.
+# Canonical runtime identity. Never silently default to the afya tenant:
+# this prevents accidental cross-tenant builds and deployments.
+# CLI TENANT_ID/APP_ID override positional selectors for CI/recursive Make.
 APP_MODE ?= tenant
+TENANT_ID ?= $(TENANT_KEY)
+APP_ID ?= $(APP_KEY)
 
-ifneq ($(strip $(TENANT_KEY)),)
-  TENANT_ID := $(TENANT_KEY)
-else
-  TENANT_ID ?= $(ENV_TENANT_ID)
-endif
-
-ifneq ($(strip $(APP_KEY)),)
-  APP_ID := $(APP_KEY)
-else
-  APP_ID ?= $(ENV_APP_ID)
+# HQ shorthand has a known, explicit identity.
+ifeq ($(APP_KEY),hq)
+  TENANT_ID := hq
+  APP_ID := hq
 endif
 
 DART_DEFINES := $(call defines_from_env,$(ENV_FILE))
@@ -159,32 +149,42 @@ HQ_DEFINES := \
 WEB_OUT    ?= build/web
 WEB_OUT_HQ ?= build/web-hq
 
+# Per-app Hosting JSON lives in firebase/hosting/<app>.json.
+# Its public path is build/web (HQ: build/web-hq). Deployment stages a temporary
+# copy at the repository root so Firebase resolves public correctly.
+# The root firebase.json is not used for multi-app releases.
+HOSTING_CONFIG_DIR ?= firebase/hosting
+FIREBASE_PROJECT ?= afyakit-api
+
 HQ_SITE ?= afyakit-hq
 HQ_HOST ?= admin.afyakit.app
 
-HOST ?= $(if $(filter dawapap,$(APP_ID)),www.dawapap.com,\
+HOST ?= $(strip $(if $(filter dawapap,$(APP_ID)),www.dawapap.com,\
         $(if $(filter afyakit,$(APP_ID)),www.afyakit.app,\
         $(if $(filter danabtmc,$(APP_ID)),www.danabtmc.com,\
-        $(if $(filter hq,$(APP_ID)),$(HQ_HOST),))))
+        $(if $(filter afyatracker,$(APP_ID)),www.afyatracker.com,\
+        $(if $(filter occuwell,$(APP_ID)),app.occuwell.co.ke,\
+        $(if $(filter hq,$(APP_ID)),$(HQ_HOST),)))))))
 
-APP_TITLE ?= $(if $(filter dawapap,$(APP_ID)),DawaPap Pharmacy,\
+APP_TITLE ?= $(strip $(if $(filter dawapap,$(APP_ID)),DawaPap Pharmacy,\
              $(if $(filter afyakit,$(APP_ID)),AfyaKit,\
              $(if $(filter danabtmc,$(APP_ID)),Dana B TMC,\
              $(if $(filter afyatracker,$(APP_ID)),AfyaTracker,\
-             $(if $(filter hq,$(APP_ID)),AfyaKit HQ,AfyaKit)))))
+             $(if $(filter occuwell,$(APP_ID)),Occuwell,\
+             $(if $(filter hq,$(APP_ID)),AfyaKit HQ,AfyaKit)))))))
 
-APP_DESCRIPTION ?= $(if $(filter dawapap,$(APP_ID)),Your Pharmacy. Anywhere. Anytime.,\
+APP_DESCRIPTION ?= $(strip $(if $(filter dawapap,$(APP_ID)),Your Pharmacy. Anywhere. Anytime.,\
                    $(if $(filter afyakit,$(APP_ID)),Digital healthcare management made simple.,\
                    $(if $(filter danabtmc,$(APP_ID)),Healthcare services and medical support.,\
                    $(if $(filter afyatracker,$(APP_ID)),Your longitudinal health and care record.,\
-                   AfyaKit healthcare platform.))))
+                   $(if $(filter occuwell,$(APP_ID)),Occupational Health and Wellness.,\
+                   AfyaKit healthcare platform.))))))
 
 APP_URL ?= $(if $(HOST),https://$(HOST)/,)
 
 # Keep the current DawaPap production image during the storage-path transition.
-APP_IMAGE ?= $(if $(filter dawapap,$(APP_ID)),\
-https://firebasestorage.googleapis.com/v0/b/afyakit-api.firebasestorage.app/o/public%2Fdawapap%2Fbranding%2Fweb%2Ficon-512.png?alt=media,\
-$(APP_URL)favicon.png)
+APP_IMAGE ?= $(strip $(if $(filter dawapap,$(APP_ID)),https://firebasestorage.googleapis.com/v0/b/afyakit-api.firebasestorage.app/o/public%2Fdawapap%2Fbranding%2Fweb%2Ficon-512.png?alt=media,\
+$(APP_URL)favicon.png))
 
 HASH := \#
 THEME_COLOR ?= $(if $(filter dawapap,$(APP_ID)),$(HASH)00A86B,$(HASH)2196F3)
@@ -262,7 +262,7 @@ endef
 # $(1) output dir
 # $(2) label
 # $(3) dart defines
-# $(4) app used for web branding
+# $(4) app selector (for recursive build verification)
 # ─────────────────────────────────────────────────────────────────────────────
 
 define flutter_web_build
@@ -278,6 +278,7 @@ define flutter_web_build
 	  $(3)
 	@$(MAKE) web-brand \
 	  APP_KEY="$(4)" \
+	  APP_MODE="$(APP_MODE)" \
 	  APP_ID="$(APP_ID)" \
 	  TENANT_ID="$(TENANT_ID)" \
 	  WEB_OUT="$(1)" \
@@ -304,8 +305,9 @@ endef
 
 help:
 	@echo "Targets:"
-	@echo "  run / run-android / run-web           — run one tenant app"
-	@echo "  run-web-all / run-android-all         — run APP_TARGETS"
+	@echo "  dev / android / build / publish / release — short app commands"
+	@echo "  run-android-all                       — run APP_TARGETS on Android"
+	@echo "  run-web-all                           — disabled: shared branding assets"
 	@echo "  web / deploy / release-web            — build/deploy one tenant app"
 	@echo "  web-all / deploy-all / release-web-all— build/deploy APP_TARGETS"
 	@echo "  web-verify / deploy-verify            — local/live web checks"
@@ -315,9 +317,9 @@ help:
 	@echo "Bootstrap: APP=tenant|hq TENANT_ID=<data universe> APP_ID=<product>"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make run-web afya dawapap"
-	@echo "  make run-web afya afyatracker"
-	@echo "  make release-web afya dawapap"
+	@echo "  make dev dawapap"
+	@echo "  make dev afyatracker"
+	@echo "  make release dawapap"
 	@echo '  APP_TARGETS="afya:dawapap afya:afyatracker" make release-web-all'
 
 env-check:
@@ -331,6 +333,8 @@ env-check:
 	@echo "ENV_FILE=$(ENV_FILE)"
 	@echo "DART_DEFINES=$(DART_DEFINES)"
 	@echo "APP_BOOT_DEFINES=$(APP_BOOT_DEFINES)"
+	@echo "FIREBASE_PROJECT=$(FIREBASE_PROJECT)"
+	@echo "HOSTING_CONFIG_DIR=$(HOSTING_CONFIG_DIR)"
 	@echo "HOST=$(HOST)"
 	@echo "APP_TITLE=$(APP_TITLE)"
 	@echo "APP_DESCRIPTION=$(APP_DESCRIPTION)"
@@ -355,6 +359,27 @@ pubget:
 	flutter pub get
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Short commands: the only commands needed for normal work.
+# "hq" is a special application mode; use hq hq or shorthand hq.
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: dev android build publish release
+
+ifeq ($(APP_KEY),hq)
+dev: run-web-hq
+android: run-hq
+build: web-hq
+publish: deploy-hq
+release: release-web-hq
+else
+dev: run-web
+android: run-android
+build: web
+publish: deploy
+release: release-web
+endif
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run: one app
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -365,7 +390,7 @@ run: run-android
 run-web:
 	@$(call assert_app)
 	@echo "🌐 Running $(APP_ID) [tenant=$(TENANT_ID)] on Chrome :$(WEB_PORT)…"
-	./scripts/run_web_tenant.sh "$(APP_KEY)" -- \
+	./scripts/run_web_tenant.sh "$(TENANT_ID)" "$(APP_ID)" -- \
 	  flutter run \
 	    -d chrome \
 	    --web-port="$(WEB_PORT)" \
@@ -398,20 +423,9 @@ run-android:
 .PHONY: run-web-all run-android-all
 
 run-web-all:
-	@$(call assert_apps)
-	@PORT=$(WEB_PORT_BASE); \
-	for target in $(APP_TARGETS); do \
-	  tenant="$${target%%:*}"; \
-	  app="$${target#*:}"; \
-	  if [ -z "$$tenant" ] || [ -z "$$app" ] || [ "$$tenant" = "$$app" -a "$$target" != "$$tenant:$$app" ]; then \
-	    echo "❌ Invalid APP_TARGETS entry: $$target (expected tenantId:appId)"; \
-	    exit 2; \
-	  fi; \
-	  echo "🌐 Launch $$app [tenant=$$tenant] on Chrome :$$PORT…"; \
-	  ($(MAKE) run-web TENANT_ID="$$tenant" APP_ID="$$app" APP_KEY="$$app" WEB_PORT="$$PORT" &) ; \
-	  PORT=$$((PORT + 1)); \
-	done; \
-	echo "ℹ️ Started $(words $(APP_TARGETS)) Chrome debuggers."
+	@echo "❌ Concurrent Flutter Web runs share web/manifest.webmanifest, favicon.png and icons/." >&2
+	@echo "   Run one app at a time with: make run-web <tenantId> <appId>" >&2
+	@exit 2
 
 run-android-all:
 	@$(call assert_apps)
@@ -436,8 +450,13 @@ web:
 	@$(call assert_app)
 	$(call flutter_web_build,$(WEB_OUT),🌐 Release build: $(APP_ID) [tenant=$(TENANT_ID)] → $(WEB_OUT),$(DART_DEFINES) $(APP_BOOT_DEFINES),$(APP_KEY))
 
+# Branding identity follows the app's host tenant. HQ remains a special mode.
+# The production script accepts: tenantId appId [outputDir].
+BRANDING_TENANT_ID = $(if $(filter hq,$(APP_MODE)),hq,$(TENANT_ID))
+BRANDING_APP_ID = $(if $(filter hq,$(APP_MODE)),afyakit,$(APP_ID))
+
 web-brand:
-	@echo "🎨 Applying web branding for $(APP_ID)…"
+	@echo "🎨 Applying web branding: $(BRANDING_TENANT_ID)/$(BRANDING_APP_ID) → $(WEB_OUT)"
 	@test -f "$(WEB_OUT)/index.html" || { \
 	  echo "❌ Missing $(WEB_OUT)/index.html"; \
 	  exit 2; \
@@ -449,36 +468,11 @@ web-brand:
 	THEME_COLOR='$(THEME_COLOR)' \
 	WEB_INDEX='$(WEB_OUT)/index.html' \
 	node -e 'const fs=require("fs"); const p=process.env.WEB_INDEX; const r={"__APP_TITLE__":process.env.APP_TITLE,"__APP_DESCRIPTION__":process.env.APP_DESCRIPTION,"__APP_URL__":process.env.APP_URL,"__APP_IMAGE__":process.env.APP_IMAGE,"__THEME_COLOR__":process.env.THEME_COLOR}; let s=fs.readFileSync(p,"utf8"); for(const [k,v] of Object.entries(r)) s=s.split(k).join(v||""); fs.writeFileSync(p,s);'
-	@app_dir="web/apps/$(APP_ID)"; \
-	legacy_dir="web/tenants/$(APP_ID)"; \
-	if [ -d "$$app_dir" ]; then \
-	  branding_dir="$$app_dir"; \
-	elif [ -d "$$legacy_dir" ]; then \
-	  branding_dir="$$legacy_dir"; \
-	  echo "⚠️ Using legacy branding overlay $$legacy_dir"; \
-	else \
-	  branding_dir=""; \
-	fi; \
-	if [ -n "$$branding_dir" ]; then \
-	  echo "🎨 Overlaying $$branding_dir → $(WEB_OUT)"; \
-	  [ ! -f "$$branding_dir/favicon.png" ] || cp "$$branding_dir/favicon.png" "$(WEB_OUT)/favicon.png"; \
-	  if [ -f "$$branding_dir/manifest.webmanifest" ]; then \
-	    cp "$$branding_dir/manifest.webmanifest" "$(WEB_OUT)/manifest.webmanifest"; \
-	  elif [ -f "$$branding_dir/manifest.json" ]; then \
-	    cp "$$branding_dir/manifest.json" "$(WEB_OUT)/manifest.webmanifest"; \
-	  fi; \
-	  if [ -d "$$branding_dir/icons" ]; then \
-	    mkdir -p "$(WEB_OUT)/icons"; \
-	    cp -a "$$branding_dir/icons/." "$(WEB_OUT)/icons/"; \
-	  fi; \
-	else \
-	  echo "ℹ️ No app web overlay for $(APP_ID); using defaults."; \
-	fi
-	@echo "   app:    $(APP_ID)"
-	@echo "   tenant: $(TENANT_ID)"
-	@echo "   title:  $(APP_TITLE)"
-	@echo "   URL:    $(APP_URL)"
-	@echo "   image:  $(APP_IMAGE)"
+	@./scripts/apply_web_branding.sh \
+	  "$(BRANDING_TENANT_ID)" \
+	  "$(BRANDING_APP_ID)" \
+	  "$(WEB_OUT)"
+	@echo "✅ Web branding complete: $(BRANDING_TENANT_ID)/$(BRANDING_APP_ID)"
 
 web-strip-service-worker:
 	@if [ "$(WEB_STRIP_SERVICE_WORKER)" = "1" ]; then \
@@ -542,17 +536,25 @@ deploy:
 	@$(call assert_app)
 	@$(MAKE) web-verify APP_KEY="$(APP_KEY)" APP_ID="$(APP_ID)" TENANT_ID="$(TENANT_ID)" WEB_OUT="$(WEB_OUT)"
 	@echo "🚀 Deploy hosting:$(APP_ID) from $(WEB_OUT)…"
-	@cfg="firebase.$(APP_ID).json"; \
-	[ -f "$$cfg" ] || cfg="firebase.json"; \
-	[ -f "$$cfg" ] || { echo "❌ Missing Firebase config for $(APP_ID)."; exit 2; }; \
-	echo "   → using $$cfg"; \
-	firebase deploy --config "$$cfg" --only hosting:$(APP_ID)
-	@$(MAKE) deploy-verify \
-	  APP_KEY="$(APP_KEY)" \
-	  APP_ID="$(APP_ID)" \
-	  TENANT_ID="$(TENANT_ID)" \
-	  HOST="$(HOST)" \
-	  APP_TITLE="$(APP_TITLE)"
+	@cfg="$(HOSTING_CONFIG_DIR)/$(APP_ID).json"; \
+	[ -f "$$cfg" ] || { echo "❌ Missing Hosting config: $$cfg"; exit 2; }; \
+	site=$$(node -e ' \
+	  const fs=require("fs"); \
+	  const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).hosting; \
+	  const expectedSites={afyatracker:"afyatracker-app",occuwell:"occuwell-app"}; \
+	  const app=process.argv[3]; \
+	  if (!h || !h.site || h.target || h.public!==process.argv[2] || \
+	      (expectedSites[app] && h.site!==expectedSites[app])) process.exit(2); \
+	  console.log(h.site); \
+	' "$$cfg" "$(WEB_OUT)" "$(APP_ID)") || { \
+	  echo "❌ Hosting config invalid: $$cfg"; exit 2; \
+	}; \
+	echo "   → $$cfg (site: $$site)"; \
+	tmp=$$(mktemp "./.firebase-deploy-$(APP_ID)-XXXXXXXX.json"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	cp "$$cfg" "$$tmp"; \
+	firebase deploy --project "$(FIREBASE_PROJECT)" --config "$$tmp" --only hosting; \
+	$(MAKE) deploy-verify HOST="$$site.web.app" APP_TITLE="$(APP_TITLE)"
 
 deploy-verify:
 	@if [ -z "$(HOST)" ]; then \
@@ -640,30 +642,59 @@ run-hq:
 run-web-hq: LOAD_ENV=0
 run-web-hq:
 	@echo "🏢🌐 Running HQ on Chrome :$(WEB_PORT)…"
-	flutter run \
-	  -d chrome \
-	  --web-port="$(WEB_PORT)" \
-	  $(WEB_RENDERER_RUN_FLAG) \
-	  -t "$(ENTRY)" \
-	  $(HQ_DEFINES) \
-	  $(EXTRA)
+	./scripts/run_web_tenant.sh hq afyakit -- \
+	  flutter run \
+	    -d chrome \
+	    --web-port="$(WEB_PORT)" \
+	    $(WEB_RENDERER_RUN_FLAG) \
+	    -t "$(ENTRY)" \
+	    $(HQ_DEFINES) \
+	    $(EXTRA)
 
 web-hq: LOAD_ENV=0
+web-hq: APP_MODE=hq
 web-hq: APP_ID=$(HQ_APP_ID)
 web-hq: TENANT_ID=$(HQ_TENANT_ID)
+web-hq: HOST=$(HQ_HOST)
+web-hq: APP_TITLE=AfyaKit HQ
+web-hq: APP_DESCRIPTION=AfyaKit administration portal.
 web-hq:
 	$(call flutter_web_build,$(WEB_OUT_HQ),🏢🌐 Release build HQ → $(WEB_OUT_HQ),$(HQ_DEFINES),hq)
 
 deploy-hq:
-	@$(MAKE) web-verify APP_KEY="hq" APP_ID="$(HQ_APP_ID)" TENANT_ID="$(HQ_TENANT_ID)" WEB_OUT="$(WEB_OUT_HQ)"
-	@echo "🚀 Deploy HQ hosting:$(HQ_SITE) from $(WEB_OUT_HQ)…"
-	@test -f firebase.hq.json || { echo "❌ Missing firebase.hq.json"; exit 2; }
-	firebase deploy --config firebase.hq.json --only hosting:$(HQ_SITE)
-	@$(MAKE) deploy-verify \
+	@$(MAKE) web-verify \
 	  APP_KEY="hq" \
 	  APP_ID="$(HQ_APP_ID)" \
 	  TENANT_ID="$(HQ_TENANT_ID)" \
-	  HOST="$(HQ_HOST)" \
+	  WEB_OUT="$(WEB_OUT_HQ)"
+
+	@echo "🚀 Deploy HQ hosting:$(HQ_SITE) from $(WEB_OUT_HQ)…"
+
+	@cfg="$(HOSTING_CONFIG_DIR)/afyakit-hq.json"; \
+	[ -f "$$cfg" ] || { \
+	  echo "❌ Missing HQ Hosting config: $$cfg"; \
+	  exit 2; \
+	}; \
+	site=$$(node -e ' \
+	  const fs = require("fs"); \
+	  const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8")).hosting; \
+	  if (!h || h.site !== process.argv[2] || h.target || \
+	      h.public !== process.argv[3]) process.exit(2); \
+	  console.log(h.site); \
+	' "$$cfg" "$(HQ_SITE)" "$(WEB_OUT_HQ)") || { \
+	  echo "❌ HQ Hosting config invalid: $$cfg"; \
+	  exit 2; \
+	}; \
+	echo "   → $$cfg (site: $$site)"; \
+	tmp=$$(mktemp "./.firebase-deploy-hq-XXXXXXXX.json"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	cp "$$cfg" "$$tmp"; \
+	firebase deploy \
+	  --project "$(FIREBASE_PROJECT)" \
+	  --config "$$tmp" \
+	  --only hosting; \
+	$(MAKE) deploy-verify \
+	  HOST="$$site.web.app" \
 	  APP_TITLE="AfyaKit HQ"
 
 release-web-hq: LOAD_ENV=0

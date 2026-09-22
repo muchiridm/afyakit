@@ -8,6 +8,7 @@ import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
+import 'package:afyakit/features/hq/branding/widgets/app_brand_logo.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
@@ -101,10 +102,10 @@ class _BrandHeaderBar extends StatelessWidget {
 
     final isWide = layout == _HeaderLayout.wide;
 
-    final logo = _AppBrandLogo(
-      appProfileAsync: appProfileAsync,
+    final logo = AppBrandLogo(
       height: isWide ? 88 : 82,
       maxWidth: 220,
+      fallbackLabel: appProfileAsync.valueOrNull?.displayName ?? 'AfyaKit',
     );
 
     return DecoratedBox(
@@ -138,152 +139,6 @@ class _BrandHeaderBar extends StatelessWidget {
         },
       ),
     );
-  }
-}
-
-class _AppBrandLogo extends StatelessWidget {
-  const _AppBrandLogo({
-    required this.appProfileAsync,
-    required this.height,
-    required this.maxWidth,
-  });
-
-  final AsyncValue<AppProfile> appProfileAsync;
-  final double height;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return appProfileAsync.maybeWhen(
-      data: (profile) {
-        final displayName = profile.displayName.trim().isNotEmpty
-            ? profile.displayName.trim()
-            : profile.id;
-
-        final logoUrl = profile.logoUrl()?.trim();
-
-        final primary = profile.primaryColor;
-
-        Widget fallback() {
-          return _BrandFallback(
-            displayName: displayName,
-            primary: primary,
-            maxWidth: maxWidth,
-          );
-        }
-
-        if (logoUrl == null || logoUrl.isEmpty) {
-          return fallback();
-        }
-
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: height),
-          child: Image.network(
-            logoUrl,
-            height: height,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) {
-              return fallback();
-            },
-          ),
-        );
-      },
-      orElse: () {
-        return SizedBox(
-          height: height,
-          width: maxWidth,
-          child: Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator.adaptive(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  theme.colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _BrandFallback extends StatelessWidget {
-  const _BrandFallback({
-    required this.displayName,
-    required this.primary,
-    required this.maxWidth,
-  });
-
-  final String displayName;
-  final Color primary;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final initials = _initialsFromName(displayName);
-
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              initials,
-              style: TextStyle(
-                color: primary,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              displayName,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _initialsFromName(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) {
-      return '';
-    }
-
-    if (parts.length == 1) {
-      return parts.first[0].toUpperCase();
-    }
-
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 }
 

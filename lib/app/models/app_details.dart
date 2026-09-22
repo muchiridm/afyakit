@@ -1,31 +1,41 @@
-// lib/app/models/app_details.dart
-
 import 'package:flutter/foundation.dart';
 
 import 'package:afyakit/shared/utils/utils.dart';
 
 @immutable
 class AppDetails {
-  // Product / public identity
+  // ─────────────────────────────────────────────
+  // Public identity and contact
+  // ─────────────────────────────────────────────
+
   final String? tagline;
   final String? website;
   final String? email;
   final String? whatsapp;
   final String? supportNote;
 
+  // ─────────────────────────────────────────────
   // Product operations
+  // ─────────────────────────────────────────────
+
   final String currency;
   final String? locale;
   final String accountFormat;
 
-  // Public / operational metadata
+  // ─────────────────────────────────────────────
+  // Public and operational metadata
+  // ─────────────────────────────────────────────
+
   final Map<String, String> social;
   final Map<String, String> hours;
   final JsonObj address;
   final JsonObj compliance;
   final JsonObj payments;
 
-  // Web / SEO
+  // ─────────────────────────────────────────────
+  // Web and SEO
+  // ─────────────────────────────────────────────
+
   final String? seoTitle;
   final String? seoDescription;
 
@@ -46,6 +56,10 @@ class AppDetails {
     this.seoTitle,
     this.seoDescription,
   });
+
+  // ─────────────────────────────────────────────
+  // Firestore decoding
+  // ─────────────────────────────────────────────
 
   factory AppDetails.fromMap(Map<String, dynamic>? map) {
     final source = map ?? const <String, dynamic>{};
@@ -69,21 +83,134 @@ class AppDetails {
     );
   }
 
-  String? get mobileMoneyName {
-    return _string(payments['mobileMoneyName']);
+  // ─────────────────────────────────────────────
+  // Payment details
+  // ─────────────────────────────────────────────
+
+  /// Public payment method label.
+  ///
+  /// Example: M-Pesa Till
+  String? get mobileMoneyName => _string(payments['mobileMoneyName']);
+
+  /// Optional payment account or account reference.
+  String? get mobileMoneyAccount => _string(payments['mobileMoneyAccount']);
+
+  /// Till, Paybill or other mobile-money number.
+  ///
+  /// Always treated as a string.
+  String? get mobileMoneyNumber => _string(payments['mobileMoneyNumber']);
+
+  // ─────────────────────────────────────────────
+  // Compliance details
+  // ─────────────────────────────────────────────
+
+  /// Public professional or business
+  /// registration number.
+  ///
+  /// Example: PPB/D/3483
+  String? get registrationNumber => _string(compliance['registrationNumber']);
+
+  // ─────────────────────────────────────────────
+  // Firestore encoding
+  // ─────────────────────────────────────────────
+
+  /// Serialises known AppDetails fields.
+  ///
+  /// Preserves additional keys already present
+  /// inside payments, compliance and address.
+  ///
+  /// If the backend replaces the complete
+  /// profile object, merge this output against
+  /// the existing raw profile first to preserve
+  /// any unknown top-level fields.
+  JsonObj toMap() {
+    return <String, dynamic>{
+      'tagline': tagline,
+      'website': website,
+      'email': email,
+      'whatsapp': whatsapp,
+      'supportNote': supportNote,
+      'currency': currency,
+      'locale': locale,
+      'accountFormat': accountFormat,
+      'social': Map<String, String>.from(social),
+      'hours': Map<String, String>.from(hours),
+      'address': Map<String, dynamic>.from(address),
+      'compliance': Map<String, dynamic>.from(compliance),
+      'payments': Map<String, dynamic>.from(payments),
+      'seoTitle': seoTitle,
+      'seoDescription': seoDescription,
+    };
   }
 
-  String? get mobileMoneyAccount {
-    return _string(payments['mobileMoneyAccount']);
+  // ─────────────────────────────────────────────
+  // Immutable updates
+  // ─────────────────────────────────────────────
+
+  AppDetails copyWith({
+    String? tagline,
+    String? website,
+    String? email,
+    String? whatsapp,
+    String? supportNote,
+    String? currency,
+    String? locale,
+    String? accountFormat,
+    Map<String, String>? social,
+    Map<String, String>? hours,
+    JsonObj? address,
+    JsonObj? compliance,
+    JsonObj? payments,
+    String? seoTitle,
+    String? seoDescription,
+  }) {
+    return AppDetails(
+      tagline: tagline ?? this.tagline,
+      website: website ?? this.website,
+      email: email ?? this.email,
+      whatsapp: whatsapp ?? this.whatsapp,
+      supportNote: supportNote ?? this.supportNote,
+      currency: currency ?? this.currency,
+      locale: locale ?? this.locale,
+      accountFormat: accountFormat ?? this.accountFormat,
+      social: social ?? this.social,
+      hours: hours ?? this.hours,
+      address: address ?? this.address,
+      compliance: compliance ?? this.compliance,
+      payments: payments ?? this.payments,
+      seoTitle: seoTitle ?? this.seoTitle,
+      seoDescription: seoDescription ?? this.seoDescription,
+    );
   }
 
-  String? get mobileMoneyNumber {
-    return _string(payments['mobileMoneyNumber']);
+  /// Updates public business details while
+  /// preserving unrelated payment/compliance keys.
+  AppDetails withBusinessDetails({
+    required String whatsapp,
+    required String mobileMoneyName,
+    required String mobileMoneyNumber,
+    required String registrationNumber,
+    String? mobileMoneyAccount,
+  }) {
+    return copyWith(
+      whatsapp: whatsapp.trim(),
+      payments: <String, dynamic>{
+        ...payments,
+        'mobileMoneyName': mobileMoneyName.trim(),
+        'mobileMoneyNumber': mobileMoneyNumber.trim(),
+        if (mobileMoneyAccount != null)
+          'mobileMoneyAccount': mobileMoneyAccount.trim(),
+      },
+      compliance: <String, dynamic>{
+        ...compliance,
+        'registrationNumber': registrationNumber.trim(),
+      },
+    );
   }
 
-  String? get registrationNumber {
-    return _string(compliance['registrationNumber']);
-  }
+  // ─────────────────────────────────────────────
+  // Parsing helpers
+  // ─────────────────────────────────────────────
 
   static String? _string(Object? value) {
     final text = value?.toString().trim();

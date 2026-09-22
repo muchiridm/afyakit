@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
-import 'package:afyakit/features/hq/branding/widgets/tenant_brand_logo.dart';
+import 'package:afyakit/features/hq/branding/widgets/app_brand_logo.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 const double homeDashboardTwoColBreakpoint = 900;
@@ -105,8 +105,8 @@ class HomeDashboardTopBar extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 180),
-                    child: TenantBrandLogo(
-                      size: TenantBrandLogoSize.large,
+                    child: AppBrandLogo(
+                      size: AppBrandLogoSize.large,
                       fallbackLabel: cleanTitle,
                     ),
                   ),
@@ -127,8 +127,8 @@ class HomeDashboardTopBar extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TenantBrandLogo(
-                    size: TenantBrandLogoSize.large,
+                  AppBrandLogo(
+                    size: AppBrandLogoSize.large,
                     fallbackLabel: cleanTitle,
                   ),
                   const SizedBox(height: AppShape.gap10),
@@ -153,8 +153,8 @@ class HomeDashboardTopBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TenantBrandLogo(
-                  size: TenantBrandLogoSize.large,
+                AppBrandLogo(
+                  size: AppBrandLogoSize.large,
                   fallbackLabel: cleanTitle,
                 ),
                 const SizedBox(height: AppShape.gap8),

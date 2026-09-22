@@ -1,11 +1,22 @@
-// lib/core/branding/models/branding_assets.dart
-
 import 'package:flutter/foundation.dart';
 
 @immutable
 class BrandingAssets {
   final String bucket;
   final int version;
+
+  /// Asset keys:
+  ///
+  /// primary
+  /// secondary
+  /// appbar (legacy/optional)
+  /// favicon
+  /// icon192
+  /// icon512
+  /// maskableIcon192
+  /// maskableIcon512
+  ///
+  /// Values are resolved HTTP(S) image URLs.
   final Map<String, String> logos;
 
   const BrandingAssets({
@@ -19,45 +30,78 @@ class BrandingAssets {
 
     final rawBucket = source['bucket']?.toString().trim();
 
+    final rawVersion = source['version'];
+
+    final rawLogos = source['logos'] as Map? ?? const {};
+
     return BrandingAssets(
       bucket: rawBucket == null || rawBucket.isEmpty
           ? 'afyakit-api.firebasestorage.app'
           : rawBucket,
-      version: (source['version'] as num?)?.toInt() ?? 0,
+      version: rawVersion is num ? rawVersion.toInt() : 0,
       logos: {
-        for (final entry in ((source['logos'] as Map?) ?? const {}).entries)
+        for (final entry in rawLogos.entries)
           entry.key.toString(): entry.value.toString(),
       },
     );
   }
 
+  // ─────────────────────────────────────────
+  // App logos
+  // ─────────────────────────────────────────
+
+  /// Header and general app branding.
+  ///
+  /// public/{tenantId}/{appId}/branding/
+  /// logos/logo-primary.png
+  String? get primaryLogoUrl => _exactUrl('primary');
+
+  /// Splash screen.
+  ///
+  /// public/{tenantId}/{appId}/branding/
+  /// logos/logo-secondary.png
+  String? get secondaryLogoUrl => _exactUrl('secondary');
+
+  /// Optional legacy app-bar logo.
+  String? get appBarLogoUrl => _exactUrl('appbar');
+
+  /// Backwards-compatible in-app logo lookup.
+  ///
+  /// preferred → appbar → primary
+  ///
+  /// Use primaryLogoUrl or secondaryLogoUrl
+  /// when the exact image is required.
   String? logoUrl({String? prefer}) {
-    final raw = _pickRaw(prefer: prefer);
-
-    if (raw == null) return null;
-
-    if (!_isHttpUrl(raw)) {
-      return null;
-    }
-
-    return _withVersion(raw);
+    return _resolvedHttpUrl(_pickLogoRaw(prefer: prefer));
   }
 
   String? rawLogoValue({String? prefer}) {
-    return _pickRaw(prefer: prefer);
+    return _pickLogoRaw(prefer: prefer);
   }
 
-  String? get faviconUrl => logoUrl(prefer: 'favicon');
+  // ─────────────────────────────────────────
+  // Browser and PWA assets
+  // ─────────────────────────────────────────
 
-  String? get icon192Url => logoUrl(prefer: 'icon192');
+  String? get faviconUrl => _exactUrl('favicon');
 
-  String? get icon512Url => logoUrl(prefer: 'icon512');
+  String? get icon192Url => _exactUrl('icon192');
 
-  String? get maskableIcon192Url => logoUrl(prefer: 'maskableIcon192');
+  String? get icon512Url => _exactUrl('icon512');
 
-  String? get maskableIcon512Url => logoUrl(prefer: 'maskableIcon512');
+  String? get maskableIcon192Url => _exactUrl('maskableIcon192');
 
-  String? _pickRaw({String? prefer}) {
+  String? get maskableIcon512Url => _exactUrl('maskableIcon512');
+
+  // ─────────────────────────────────────────
+  // Internal URL resolution
+  // ─────────────────────────────────────────
+
+  String? _exactUrl(String key) {
+    return _resolvedHttpUrl(logos[key]);
+  }
+
+  String? _pickLogoRaw({String? prefer}) {
     if (prefer != null) {
       final preferred = (logos[prefer] ?? '').trim();
 
@@ -77,6 +121,16 @@ class BrandingAssets {
     return primary.isEmpty ? null : primary;
   }
 
+  String? _resolvedHttpUrl(String? raw) {
+    final value = raw?.trim();
+
+    if (value == null || value.isEmpty || !_isHttpUrl(value)) {
+      return null;
+    }
+
+    return _withVersion(value);
+  }
+
   String _withVersion(String url) {
     if (version <= 0) {
       return url;
@@ -86,6 +140,10 @@ class BrandingAssets {
   }
 
   bool _isHttpUrl(String value) {
-    return value.startsWith('http://') || value.startsWith('https://');
+    final uri = Uri.tryParse(value);
+
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
   }
 }

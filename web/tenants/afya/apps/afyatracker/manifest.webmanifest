@@ -1,0 +1,14 @@
+{
+  "id": "/",
+  "name": "AfyaTracker",
+  "short_name": "AfyaTracker",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2196F3",
+  "description": "Your health journey, connected.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": []
+}

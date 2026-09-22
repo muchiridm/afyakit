@@ -1,5 +1,3 @@
-// lib/core/home/widgets/home_shell.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,11 +9,12 @@ import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
-import 'package:afyakit/core/tenancy/providers/tenant_feature_providers.dart';
+import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
+import 'package:afyakit/features/home/widgets/guest/guest_health_landing.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_screen.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
@@ -31,56 +30,105 @@ class HomeShell extends ConsumerWidget {
     return user.isStaffResolved ? EntryMode.staff : EntryMode.member;
   }
 
+  Widget _loginScreen(String appName) {
+    return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: appName));
+  }
+
+  Widget _loadingScreen() {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+
+  void _openLogin(BuildContext context, String appName) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _loginScreen(appName),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
 
     final appProfileAsync = ref.watch(appProfileProvider);
 
-    final appName = appProfileAsync.maybeWhen(
-      data: (profile) {
-        final name = profile.displayName.trim();
-
-        return name.isNotEmpty ? name : profile.id;
-      },
-      orElse: () => AppIdentity.appId,
-    );
-
-    // TODO:
-    // This currently represents the tenant capability ceiling.
-    //
-    // Once the shared effective-feature provider is in place,
-    // Retail should be enabled only when BOTH are true:
-    //
-    // tenant.features.retail && app.features.retail
-    final retailEnabled = ref.watch(tenantRetailEnabledProvider);
-
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
-      loading: () {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      },
-      error: (error, _) {
-        return _buildError(context, ref, tenantId, appName, error);
-      },
+      loading: _loadingScreen,
+
+      error: (error, _) =>
+          _buildError(context, ref, tenantId, AppIdentity.appId, error),
+
       data: (user) {
         final realEntry = _entryModeFor(user);
 
-        // Guests:
-        //
-        // - retail-enabled app → browse catalog directly
-        // - non-retail app    → require login
+        // Guest routing is determined by the current
+        // application's enabled capabilities.
         if (realEntry == EntryMode.guest) {
-          if (retailEnabled) {
-            return const CatalogScreen();
-          }
+          return appProfileAsync.when(
+            loading: _loadingScreen,
 
-          return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: appName));
+            error: (error, _) => Scaffold(
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Text(
+                    'Unable to load app configuration.\n$error',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+
+            data: (profile) {
+              final name = profile.displayName.trim();
+
+              final appName = name.isNotEmpty ? name : profile.id;
+
+              final features = profile.features;
+
+              final pharmacyEnabled = features.enabled(FeatureKeys.pharmacy);
+
+              final healthTrackingEnabled = features.enabled(
+                FeatureKeys.healthTracking,
+              );
+
+              final occupationalHealthEnabled = features.enabled(
+                FeatureKeys.occupationalHealth,
+              );
+
+              // Pharmacy applications open their
+              // public catalogue.
+              if (pharmacyEnabled) {
+                return const CatalogScreen();
+              }
+
+              // Health Tracking applications open a
+              // reusable guest landing page.
+              //
+              // Occupational Health changes the landing
+              // page's content, not its implementation.
+              if (healthTrackingEnabled) {
+                return GuestHealthLanding(
+                  appName: appName,
+                  occupationalHealthEnabled: occupationalHealthEnabled,
+                  onGetStarted: () {
+                    _openLogin(context, appName);
+                  },
+                );
+              }
+
+              // Applications without a public guest
+              // experience require login.
+              return _loginScreen(appName);
+            },
+          );
         }
 
-        // Authenticated users land in member mode by default.
-        // Staff can explicitly switch between member and staff views.
+        // Authenticated users enter the member experience.
+        // Staff may switch between member and staff views.
         final staffView = ref.watch(staffViewModeProvider);
 
         final effectiveEntry = switch (realEntry) {
@@ -113,6 +161,19 @@ class HomeShell extends ConsumerWidget {
     String appName,
     Object error,
   ) {
+    Future<void> logOut() {
+      return ref.read(sessionControllerProvider(tenantId).notifier).logOut();
+    }
+
+    Future<void> openLogin() async {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => _loginScreen(appName),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
     return Scaffold(
       body: Center(
         child: Padding(
@@ -120,46 +181,33 @@ class HomeShell extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('❌ Failed to load session'),
+              const Text('Failed to load session'),
+
               const SizedBox(height: 8),
+
               Text(error.toString(), textAlign: TextAlign.center),
+
               const SizedBox(height: 14),
+
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
                 alignment: WrapAlignment.center,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: () async {
-                      await ref
-                          .read(sessionControllerProvider(tenantId).notifier)
-                          .logOut();
-                    },
+                    onPressed: logOut,
                     icon: const Icon(Icons.person_outline),
                     label: const Text('Continue as guest'),
                   ),
+
                   FilledButton.icon(
-                    onPressed: () async {
-                      await ref
-                          .read(sessionControllerProvider(tenantId).notifier)
-                          .logOut();
-                    },
+                    onPressed: logOut,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                   ),
+
                   OutlinedButton.icon(
-                    onPressed: () async {
-                      await Navigator.of(context).push<bool>(
-                        MaterialPageRoute<bool>(
-                          builder: (_) {
-                            return LoginScreen(
-                              copy: OtpLoginCopy.tenant(tenantName: appName),
-                            );
-                          },
-                          fullscreenDialog: true,
-                        ),
-                      );
-                    },
+                    onPressed: openLogin,
                     icon: const Icon(Icons.login),
                     label: const Text('Sign in'),
                   ),
