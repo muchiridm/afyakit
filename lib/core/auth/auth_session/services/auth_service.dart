@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
@@ -20,17 +21,22 @@ final authServiceProvider = FutureProvider.family<AuthService, String>((
   ref,
   tenantId,
 ) async {
+  final cleanTenantId = tenantId.trim().toLowerCase();
+
+  final appId = ref.watch(appIdProvider).trim().toLowerCase();
+
   final api = await AfyaKitClient.create(
-    baseUrl: apiBaseUrl(tenantId),
+    baseUrl: apiBaseUrl(cleanTenantId),
+    appId: appId,
     getToken: () async => fb.FirebaseAuth.instance.currentUser?.getIdToken(),
     getFreshToken: () async =>
         fb.FirebaseAuth.instance.currentUser?.getIdToken(true),
   );
 
   return AuthService(
-    tenantId: tenantId,
+    tenantId: cleanTenantId,
     client: api,
-    routes: AfyaKitRoutes(tenantId),
+    routes: AfyaKitRoutes(cleanTenantId),
   );
 });
 

@@ -1,4 +1,8 @@
-// lib/core/auth_users/controllers/profile/profile_controller.dart
+// lib/core/auth/auth_user/controllers/profile_controller.dart
+
+import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+// lib/core/auth/auth_user/controllers/profile_controller.dart
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
@@ -99,7 +103,12 @@ final profileControllerProvider =
       ProfileController,
       ProfileFormState,
       AuthUser?
-    >((ref, targetUser) => ProfileController(ref, targetUser));
+    >((ref, targetUser) {
+      ref.watch(appIdProvider);
+      ref.watch(tenantIdProvider);
+      ref.watch(firebaseUserProvider.select((value) => value.valueOrNull?.uid));
+      return ProfileController(ref, targetUser);
+    });
 
 class ProfileController extends StateNotifier<ProfileFormState> {
   ProfileController(this.ref, this.targetUser)
@@ -112,6 +121,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   final AuthUser? targetUser;
 
   bool _inited = false;
+  String? _actorUid;
 
   void _afterFrame(VoidCallback fn) {
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -133,7 +143,9 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   }
 
   List<StaffRole> _effectiveTargetRoles(AuthUser target) {
-    return List<StaffRole>.from(state.staffRoleOverrides ?? target.staffRoles);
+    return List<StaffRole>.from(
+      state.staffRoleOverrides ?? target.rolesForApp(target.activeAppId!),
+    );
   }
 
   List<String> _effectiveTargetStores(AuthUser target) {
@@ -148,17 +160,44 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     if (_inited) return;
     _inited = true;
 
-    final sessionUser = ref.read(currentUserValueProvider);
-    final baseUser = targetUser ?? sessionUser;
+    AuthUser? loadedUser;
+    try {
+      loadedUser =
+          ref.read(currentUserValueProvider) ??
+          await ref.read(currentUserProvider.future);
+    } catch (_) {
+      if (mounted) {
+        _inited = false;
+        _afterFrame(() => state = state.copyWith(loading: false));
+        SnackService.showError(
+          'Could not load your account. Please reopen the profile.',
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final sessionUser = loadedUser;
+    if (sessionUser == null) {
+      _inited = false;
+      _afterFrame(() => state = state.copyWith(loading: false));
+      return;
+    }
+    _actorUid = sessionUser.uid;
+    if (targetUser != null && targetUser!.tenantId != sessionUser.tenantId) {
+      SnackService.showError('This account belongs to a different tenant.');
+      _afterFrame(() => state = state.copyWith(loading: false));
+      return;
+    }
+    final baseUser = (targetUser ?? sessionUser).forApp(
+      sessionUser.activeAppId!,
+    );
 
     // Admin editing is ONLY when:
     // - session user exists
     // - target user exists
     // - SOT permission says editor can manage target
     final isAdminEditing =
-        (sessionUser != null &&
-        targetUser != null &&
-        sessionUser.canManageUser(targetUser!));
+        (targetUser != null && sessionUser.canManageUser(baseUser));
 
     _afterFrame(() {
       state = state.copyWith(
@@ -168,11 +207,9 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       );
 
       final u = baseUser;
-      if (u != null) {
-        // Use displayName field for editing (not computed fallback)
-        state.nameController.text = (u.displayName ?? '').trim();
-        state.phoneController.text = (u.phoneNumber ?? '').trim();
-      }
+      // Use displayName field for editing (not computed fallback)
+      state.nameController.text = (u.displayName ?? '').trim();
+      state.phoneController.text = (u.phoneNumber ?? '').trim();
     });
   }
 
@@ -277,118 +314,127 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   // ────────────────────────────────────────────
 
   Future<void> save(BuildContext context) async {
+    if (!mounted || state.loading) return;
     final target = state.user;
-    if (target == null || !mounted) return;
-
     final editor = ref.read(currentUserValueProvider);
-    final name = state.nameController.text.trim();
-
-    if (name.isEmpty) {
-      SnackService.showError('Display name is required.');
+    if (target == null ||
+        editor == null ||
+        editor.uid != _actorUid ||
+        target.tenantId != editor.tenantId ||
+        target.activeAppId != editor.activeAppId) {
+      SnackService.showError('Account or app changed. Reopen the profile.');
       return;
     }
-
     final fields = <String, dynamic>{};
-
-    // Everyone can edit their display name (self profile path)
+    final name = state.nameController.text.trim();
     if (name != (target.displayName ?? '').trim()) {
+      if (editor.uid != target.uid && !editor.canEditUserAccounts) {
+        SnackService.showError(
+          'Only platform administrators can edit another account profile.',
+        );
+        return;
+      }
+      if (name.isEmpty) {
+        SnackService.showError('Display name is required.');
+        return;
+      }
       fields['displayName'] = name;
     }
-
-    // Admin path: status/roles/stores (all SOT-gated)
-    if (state.isAdminEditing && editor != null) {
-      // STATUS
-      if (editor.canChangeStatusFor(target)) {
-        final nextStatus = state.statusOverride ?? target.status;
-        if (nextStatus != target.status) {
-          if (nextStatus.isDisabled && !editor.canDisableUser(target)) {
-            SnackService.showError("You can't disable this account.");
-          } else {
-            fields['status'] = nextStatus.wire;
-          }
-        }
+    final nextStatus = state.statusOverride;
+    if (nextStatus != null && nextStatus != target.status) {
+      if (!editor.canChangeStatusFor(target)) {
+        SnackService.showError('You cannot change this account status.');
+        return;
       }
-
-      // STAFF ROLES
-      if (editor.canEditUserRolesFor(target)) {
-        final desiredRoles = _effectiveTargetRoles(target);
-
-        // Enforce assignment policy: editor may only assign roles they are allowed to assign.
-        final filteredRoles = desiredRoles
-            .where((r) => _canAssignRole(editor, r))
-            .toList(growable: false);
-
-        // Safety (future-proof): if ever editing self in future, ensure governance not lost
-        if (editor.uid == target.uid) {
-          final hasGovernance = filteredRoles.any(
-            (r) => r == StaffRole.owner || r == StaffRole.admin,
-          );
-          if (!hasGovernance) {
-            SnackService.showError(
-              "You can't remove your last owner/admin role.",
-            );
-          } else if (!listEquals(filteredRoles, target.staffRoles)) {
-            fields['staffRoles'] = filteredRoles
-                .map((r) => r.wire)
-                .toList(growable: false);
-          }
-        } else {
-          if (!listEquals(filteredRoles, target.staffRoles)) {
-            fields['staffRoles'] = filteredRoles
-                .map((r) => r.wire)
-                .toList(growable: false);
-          }
-        }
+      fields['status'] = nextStatus.wire;
+    }
+    final stores = state.storeOverrides;
+    if (stores != null && !listEquals(stores, target.stores)) {
+      if (!editor.canEditUserStoresFor(target)) {
+        SnackService.showError('You cannot change this account store access.');
+        return;
       }
-
-      // STORES
-      if (editor.canEditUserStoresFor(target)) {
-        final desiredStores = _effectiveTargetStores(target);
-        if (!listEquals(desiredStores, target.stores)) {
-          fields['stores'] = desiredStores;
-        }
+      fields['stores'] = stores;
+    }
+    final desiredRoles = _effectiveTargetRoles(target);
+    final oldRoles = target.rolesForApp(target.activeAppId!);
+    final rolesChanged = !setEquals(desiredRoles.toSet(), oldRoles.toSet());
+    if (rolesChanged) {
+      if (!editor.canEditUserRolesFor(target) ||
+          desiredRoles.any((role) => !_canAssignRole(editor, role))) {
+        SnackService.showError('You cannot make this app role change.');
+        return;
+      }
+      if (desiredRoles.isNotEmpty && !(nextStatus ?? target.status).isActive) {
+        SnackService.showError(
+          'Enable the account before assigning app roles.',
+        );
+        return;
       }
     }
-
-    if (fields.isEmpty) {
+    if (fields.isEmpty && !rolesChanged) {
       SnackService.showSuccess('No changes to save.');
       return;
     }
-
     state = state.copyWith(loading: true);
+    var profileSaved = false;
+    bool sessionMatches() {
+      if (!mounted) return false;
+      final current = ref.read(currentUserValueProvider);
+      return current?.uid == editor.uid &&
+          current?.tenantId == editor.tenantId &&
+          current?.activeAppId == editor.activeAppId;
+    }
 
     try {
-      final tenantId = (editor ?? target).tenantId;
-      final svc = await ref.read(userProfileServiceProvider(tenantId).future);
-      await svc.updateUserFields(target.uid, fields);
-
+      final service = await ref.read(
+        userProfileServiceProvider(editor.tenantId).future,
+      );
+      if (!sessionMatches() || service.appId != editor.activeAppId) {
+        throw StateError('Account or app changed');
+      }
+      if (fields.isNotEmpty) {
+        await service.updateUserFields(target.uid, fields);
+        profileSaved = true;
+      }
+      if (rolesChanged) {
+        if (!sessionMatches()) throw StateError('Account or app changed');
+        await service.setAppStaffRoles(target.uid, desiredRoles);
+      }
+      if (!mounted || !context.mounted) return;
+      if (!sessionMatches()) return;
       SnackService.showSuccess('Profile updated');
-
-      _afterFrame(() {
-        if (!mounted) return;
-
-        // Admin editing a target → close back to list/detail
-        if (state.isAdminEditing) {
-          if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-          return;
-        }
-
-        // Self-edit → refresh session user and restart shell
-        ref.invalidate(currentUserProvider);
-        ref.invalidate(currentUserValueProvider);
-
+      ref.invalidate(currentUserProvider);
+      if (state.isAdminEditing) {
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      } else {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeShell()),
           (_) => false,
         );
-      });
+      }
     } catch (_) {
-      SnackService.showError('Failed to update profile.');
+      if (mounted) {
+        // Two API writes are not atomic. Keep role overrides so they can be retried.
+        if (profileSaved) {
+          state = state.copyWith(
+            user: target.copyWith(
+              displayName: fields['displayName'] as String?,
+              status: nextStatus,
+              stores: stores,
+            ),
+            statusOverride: null,
+            storeOverrides: null,
+          );
+        }
+        SnackService.showError(
+          profileSaved
+              ? 'Profile details were saved, but the app role change did not complete. Refresh and check roles before retrying.'
+              : 'Update did not complete. Refresh and check the account before retrying.',
+        );
+      }
     } finally {
-      _afterFrame(() {
-        if (!mounted) return;
-        state = state.copyWith(loading: false);
-      });
+      if (mounted) state = state.copyWith(loading: false);
     }
   }
 

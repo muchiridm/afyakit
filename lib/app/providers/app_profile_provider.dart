@@ -18,7 +18,6 @@ final appIdProvider = Provider<String>((ref) {
 
 final appProfileProvider = FutureProvider<AppProfile>((ref) async {
   final tenantId = ref.watch(tenantIdProvider);
-
   final appId = ref.watch(appIdProvider);
 
   final loader = ref.watch(appProfileLoaderProvider);

@@ -1,3 +1,5 @@
+// lib/core/api/afyakit/routes/routes_hq.dart
+
 part of 'routes.dart';
 
 extension AfyaKitHqRoutes on AfyaKitRoutes {
@@ -74,6 +76,44 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
       _hqAppDomain(tenantId, appId, domain);
 
   // ═════════════════════════════════════════════
+  // App Zoho Books
+  //
+  // /api/hq/tenants/:tenantId/apps/:appId/zoho
+  //
+  // One resource URI is shared by:
+  // GET
+  // PUT
+  // PATCH
+  // DELETE
+  // ═════════════════════════════════════════════
+
+  /// Canonical Zoho Books configuration URI
+  /// for one app.
+  ///
+  /// The HTTP method determines whether the
+  /// configuration is read, created, updated
+  /// or deleted.
+  Uri getTenantAppZoho(String tenantId, String appId) =>
+      _hqAppZoho(tenantId, appId);
+
+  // Compatibility aliases.
+  //
+  // These all intentionally resolve to the
+  // same app-owned Zoho resource.
+
+  Uri getAppZoho(String tenantId, String appId) =>
+      getTenantAppZoho(tenantId, appId);
+
+  Uri putAppZoho(String tenantId, String appId) =>
+      getTenantAppZoho(tenantId, appId);
+
+  Uri updateAppZoho(String tenantId, String appId) =>
+      getTenantAppZoho(tenantId, appId);
+
+  Uri deleteAppZoho(String tenantId, String appId) =>
+      getTenantAppZoho(tenantId, appId);
+
+  // ═════════════════════════════════════════════
   // Global users
   // /api/hq/users
   // ═════════════════════════════════════════════
@@ -84,7 +124,7 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
     int limit = 50,
   }) => _uriCore(
     'hq/users',
-    query: {
+    query: <String, String>{
       if (tenant != null && tenant.trim().isNotEmpty) 'tenantId': tenant.trim(),
 
       if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
@@ -133,5 +173,11 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
     'hq/tenants/${_seg(tenantId)}'
     '/apps/${_seg(appId)}'
     '/domains/${_seg(domain)}',
+  );
+
+  Uri _hqAppZoho(String tenantId, String appId) => _uriCore(
+    'hq/tenants/${_seg(tenantId)}'
+    '/apps/${_seg(appId)}'
+    '/zoho',
   );
 }

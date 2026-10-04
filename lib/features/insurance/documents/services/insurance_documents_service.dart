@@ -1,6 +1,7 @@
 // lib/features/insurance/documents/services/insurance_documents_service.dart
 
 import 'dart:typed_data';
+import 'package:afyakit/core/storage/profile_storage_access.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
@@ -10,16 +11,19 @@ import 'package:afyakit/features/insurance/documents/models/insurance_document.d
 import 'package:afyakit/features/insurance/documents/services/insurance_document_storage_paths.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/core/storage/document_app_provider.dart';
 
 final insuranceDocumentsServiceProvider =
     FutureProvider<InsuranceDocumentsService>((ref) async {
       final String tenantId = ref.watch(tenantIdProvider);
+      final appId = ref.watch(documentAppIdProvider);
       final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
       final AfyaKitClient api = await ref.watch(
         afyakitClientFutureProvider.future,
       );
 
       return InsuranceDocumentsService(
+        appId: appId,
         tenantId: tenantId,
         api: api,
         routes: routes,
@@ -76,8 +80,8 @@ class UploadedInsuranceDocumentFile {
       fileName: fileName,
       storagePath: storagePath,
       originalStoragePath: originalStoragePath,
-      thumbnailStoragePath: thumbnailStoragePath,
-      downloadUrl: downloadUrl,
+      // Neither an ungenerated thumbnail nor a short-lived URL is persisted.
+      thumbnailStoragePath: thumbnailStoragePath.isEmpty ? null : thumbnailStoragePath,
       contentType: contentType,
       sizeBytes: sizeBytes,
       membershipId: membershipId,
@@ -93,6 +97,7 @@ class UploadedInsuranceDocumentFile {
 
 class InsuranceDocumentsService {
   const InsuranceDocumentsService({
+    required this.appId,
     required this.tenantId,
     required this.api,
     required this.routes,
@@ -100,6 +105,9 @@ class InsuranceDocumentsService {
   }) : _storage = storage;
 
   final String tenantId;
+  final String appId;
+  Uri _scopeUri(Uri uri) => ProfileStorageAccess.scopedUri(uri, appId);
+
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
   final FirebaseStorage? _storage;
@@ -131,7 +139,7 @@ class InsuranceDocumentsService {
       page: page,
     );
 
-    final response = await api.getUri<Object?>(uri);
+    final response = await api.getUri<Object?>(_scopeUri(uri));
     final Map<String, Object?> body = _asMap(response.data);
 
     return _readDocuments(body['documents']);
@@ -164,7 +172,7 @@ class InsuranceDocumentsService {
       page: page,
     );
 
-    final response = await api.getUri<Object?>(uri);
+    final response = await api.getUri<Object?>(_scopeUri(uri));
     final Map<String, Object?> body = _asMap(response.data);
 
     return _readDocuments(body['documents']);
@@ -177,11 +185,10 @@ class InsuranceDocumentsService {
     final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
-    final response = await api.getUri<Object?>(
-      routes.insuranceDocumentGet(
+    final response = await api.getUri<Object?>(_scopeUri(routes.insuranceDocumentGet(
         profileId: cleanProfileId,
         documentId: cleanDocumentId,
-      ),
+      )),
     );
 
     final Map<String, Object?> body = _asMap(response.data);
@@ -194,8 +201,7 @@ class InsuranceDocumentsService {
   }) async {
     final String cleanProfileId = _requiredId(profileId, 'profileId');
 
-    final response = await api.postUri<Object?>(
-      routes.insuranceDocumentCreate(profileId: cleanProfileId),
+    final response = await api.postUri<Object?>(_scopeUri(routes.insuranceDocumentCreate(profileId: cleanProfileId)),
       data: input.toJson(),
     );
 
@@ -211,11 +217,10 @@ class InsuranceDocumentsService {
     final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
-    final response = await api.putUri<Object?>(
-      routes.insuranceDocumentUpdate(
+    final response = await api.putUri<Object?>(_scopeUri(routes.insuranceDocumentUpdate(
         profileId: cleanProfileId,
         documentId: cleanDocumentId,
-      ),
+      )),
       data: input.toJson(),
     );
 
@@ -230,11 +235,10 @@ class InsuranceDocumentsService {
     final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
-    await api.deleteUri<Object?>(
-      routes.insuranceDocumentDelete(
+    await api.deleteUri<Object?>(_scopeUri(routes.insuranceDocumentDelete(
         profileId: cleanProfileId,
         documentId: cleanDocumentId,
-      ),
+      )),
     );
   }
 
@@ -247,6 +251,10 @@ class InsuranceDocumentsService {
     final String cleanTenantId = _requiredId(tenantId, 'tenantId');
     final String cleanProfileId = _requiredId(profileId, 'profileId');
 
+    if (file.sizeBytes == 0 || file.sizeBytes > InsuranceDocumentStoragePaths.maxFileBytes) {
+      throw ArgumentError('Choose a non-empty file no larger than 20 MiB');
+    }
+
     final String uploadId = InsuranceDocumentStoragePaths.newUploadId();
     final String ext = InsuranceDocumentStoragePaths.cleanExt(file.extension);
     final String contentType = InsuranceDocumentStoragePaths.contentTypeForExt(
@@ -255,18 +263,22 @@ class InsuranceDocumentsService {
 
     final String originalPath = InsuranceDocumentStoragePaths.originalPath(
       tenantId: cleanTenantId,
+      appId: appId,
       profileId: cleanProfileId,
       uploadId: uploadId,
       ext: ext,
     );
 
-    final String thumbnailPath = InsuranceDocumentStoragePaths.thumbnailPath(
+    final context = await ProfileStorageAccess.uploadMetadata(
+      api: api,
+      collectionUri: routes.insuranceDocumentCreate(profileId: cleanProfileId),
       tenantId: cleanTenantId,
       profileId: cleanProfileId,
-      uploadId: uploadId,
+      appId: appId,
     );
 
     final Map<String, String> customMetadata = <String, String>{
+      ...context,
       'tenant_id': cleanTenantId,
       'profile_id': cleanProfileId,
       'upload_id': uploadId,
@@ -288,13 +300,15 @@ class InsuranceDocumentsService {
 
     await ref.putData(file.bytes, metadata);
 
-    final String downloadUrl = await ref.getDownloadURL();
+    final String downloadUrl = await this.downloadUrl(
+      profileId: cleanProfileId, storagePath: originalPath,
+    );
 
     return UploadedInsuranceDocumentFile(
       fileName: file.fileName,
       storagePath: originalPath,
       originalStoragePath: originalPath,
-      thumbnailStoragePath: thumbnailPath,
+      thumbnailStoragePath: '',
       downloadUrl: downloadUrl,
       contentType: contentType,
       sizeBytes: file.sizeBytes,
@@ -336,6 +350,19 @@ class InsuranceDocumentsService {
       ),
     );
   }
+
+  /// Refresh on open; returned URLs expire after five minutes.
+  Future<String> downloadUrl({
+    required String profileId,
+    required String storagePath,
+  }) => ProfileStorageAccess.downloadUrl(
+    appId: appId,
+    api: api,
+    collectionUri: routes.insuranceDocumentCreate(
+      profileId: _requiredId(profileId, 'profileId'),
+    ),
+    storagePath: _requiredId(storagePath, 'storagePath'),
+  );
 
   static InsuranceDocument _readDocument(Object? value) {
     return InsuranceDocument.fromJson(_asMap(value));

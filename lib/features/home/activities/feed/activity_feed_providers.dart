@@ -1,5 +1,6 @@
 // lib/core/home/activities/feed/activity_feed_providers.dart
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,9 +54,15 @@ class MemberActivityScope {
 final staffActivityFeedProvider =
     StreamProvider.autoDispose<List<ActivityFeedRecord>>((ref) {
       final tenantId = ref.watch(tenantIdProvider);
+      final appId = ref.watch(appIdProvider);
+
       final service = ref.watch(activityFeedServiceProvider);
 
-      return service.watchStaffActivity(tenantId: tenantId, limit: 50);
+      return service.watchStaffActivity(
+        tenantId: tenantId,
+        appId: appId,
+        limit: 50,
+      );
     });
 
 final memberActivityFeedProvider = StreamProvider.autoDispose

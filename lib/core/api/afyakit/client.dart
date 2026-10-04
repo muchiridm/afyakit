@@ -14,14 +14,17 @@ bool _isPublicAuthRoute(Uri uri) {
   if (!p.contains('/auth_login/')) return false;
 
   // Only endpoints that are ALWAYS public should live here.
-  // Anything "token-gated after login" must NOT be here, otherwise we strip Authorization.
+  // Anything "token-gated after login" must NOT be here,
+  // otherwise we strip Authorization.
   const allowed = <String>[
     '/auth_login/otp/start',
     '/auth_login/otp/verify',
     '/auth_login/whatsapp/start',
+
     // '/auth_login/email/start' is DUAL USE:
     // - PUBLIC for login (caller sets skipAuth)
     // - AUTH REQUIRED for purpose=verify_email
+    //
     // So it must NEVER be "always public".
   ];
 
@@ -30,7 +33,10 @@ bool _isPublicAuthRoute(Uri uri) {
 
 bool _shouldSkipAuth(RequestOptions options) {
   final skipAuth = options.extra['skipAuth'] == true;
-  if (skipAuth) return true;
+
+  if (skipAuth) {
+    return true;
+  }
 
   return _isPublicAuthRoute(options.uri);
 }
@@ -41,14 +47,26 @@ bool _shouldForceFreshToken(RequestOptions options) {
 
 void _setBearerOrRemoveHeader(RequestOptions options, String? token) {
   final t = token?.trim();
+
   if (t == null || t.isEmpty) {
     options.headers.remove('Authorization');
     return;
   }
+
   options.headers['Authorization'] = 'Bearer $t';
 }
 
-/// Extra flags used in Dio RequestOptions.extra
+String _normaliseAppId(String value) {
+  final appId = value.trim().toLowerCase();
+
+  if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) {
+    throw ArgumentError.value(value, 'appId', 'Invalid AfyaKit app ID');
+  }
+
+  return appId;
+}
+
+/// Extra flags used in Dio RequestOptions.extra.
 final class _ExtraKeys {
   static const retriedAuth = 'retried';
   static const retriedConnTimeout = 'retriedConnTimeout';
@@ -59,13 +77,17 @@ final class _ExtraKeys {
 
 final class AfyaKitClient {
   final Dio dio;
+
   AfyaKitClient(this.dio);
 
   static Future<AfyaKitClient> create({
     required String baseUrl,
+    required String appId,
     required Future<String?> Function() getToken,
     Future<String?> Function()? getFreshToken,
   }) async {
+    final cleanAppId = _normaliseAppId(appId);
+
     final http = createHttpClient(baseUrl);
 
     const connectT = Duration(seconds: 30);
@@ -78,13 +100,16 @@ final class AfyaKitClient {
       sendTimeout: sendT,
       validateStatus: (code) {
         final c = code ?? 0;
+
         return c >= 200 && c < 300;
       },
     );
 
     if (kDebugMode) {
       debugPrint(
-        '🧪 [api] init baseUrl=${http.options.baseUrl} '
+        '🧪 [api] init '
+        'baseUrl=${http.options.baseUrl} '
+        'appId=$cleanAppId '
         'connect=${http.options.connectTimeout} '
         'receive=${http.options.receiveTimeout} '
         'send=${http.options.sendTimeout}',
@@ -95,51 +120,82 @@ final class AfyaKitClient {
 
     http.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (o, h) {
+        onRequest: (options, handler) {
+          /*
+           * The running app identity is supplied by the
+           * AfyaKitClient factory and is authoritative.
+           *
+           * Do not trust a caller-supplied x-app-id:
+           * individual services must not be able to switch
+           * app context on a shared client.
+           */
+          options.headers['x-app-id'] = cleanAppId;
+
           if (kDebugMode) {
             debugPrint(
-              '🌐 [api] → ${o.method} ${o.uri} '
-              'connectTimeout=${o.connectTimeout ?? http.options.connectTimeout}',
+              '🌐 [api] → '
+              '${options.method} '
+              '${options.uri} '
+              'app=$cleanAppId '
+              'connectTimeout='
+              '${options.connectTimeout ?? http.options.connectTimeout}',
             );
           }
-          h.next(o);
+
+          handler.next(options);
         },
-        onResponse: (r, h) {
+        onResponse: (response, handler) {
           if (kDebugMode) {
-            final status = r.statusCode ?? 0;
-            final extra = r.requestOptions.extra;
+            final status = response.statusCode ?? 0;
+
+            final extra = response.requestOptions.extra;
+
             final allow404 = extra[_ExtraKeys.allow404] == true;
+
             final silence404 = extra[_ExtraKeys.silence404] == true;
 
             if (status == 404 && allow404) {
               if (!silence404) {
                 debugPrint(
-                  'ℹ️ [api] ← 404 (allowed) ${r.requestOptions.method} ${r.requestOptions.uri}',
+                  'ℹ️ [api] ← 404 (allowed) '
+                  '${response.requestOptions.method} '
+                  '${response.requestOptions.uri}',
                 );
               }
-              return h.next(r);
+
+              return handler.next(response);
             }
 
             debugPrint(
-              '✅ [api] ← $status ${r.requestOptions.method} ${r.requestOptions.uri}',
+              '✅ [api] ← $status '
+              '${response.requestOptions.method} '
+              '${response.requestOptions.uri}',
             );
           }
-          h.next(r);
+
+          handler.next(response);
         },
-        onError: (e, h) {
+        onError: (error, handler) {
           if (kDebugMode) {
             debugPrint(
-              '💥 [api] ✕ ${e.type} ${e.requestOptions.method} ${e.requestOptions.uri} '
-              'status=${e.response?.statusCode}',
+              '💥 [api] ✕ '
+              '${error.type} '
+              '${error.requestOptions.method} '
+              '${error.requestOptions.uri} '
+              'status='
+              '${error.response?.statusCode}',
             );
-            debugPrint('💥 [api] msg=${e.message}');
 
-            final data = e.response?.data;
+            debugPrint('💥 [api] msg=${error.message}');
+
+            final data = error.response?.data;
+
             if (data != null) {
               debugPrint('💥 [api] body=$data');
             }
           }
-          h.next(e);
+
+          handler.next(error);
         },
       ),
     );
@@ -147,11 +203,24 @@ final class AfyaKitClient {
     // ─────────────────────────────────────────────
     // Auth header injector + auth-refresh retry
     // ─────────────────────────────────────────────
+
     http.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          /*
+           * Re-assert app identity here as well.
+           *
+           * The logging interceptor above runs first, but
+           * all AfyaKit requests must reach the server with
+           * the canonical app header even if another
+           * interceptor or request Options attempted to
+           * modify it.
+           */
+          options.headers['x-app-id'] = cleanAppId;
+
           if (_shouldSkipAuth(options)) {
             options.headers.remove('Authorization');
+
             return handler.next(options);
           }
 
@@ -161,29 +230,41 @@ final class AfyaKitClient {
                 : await getToken();
 
             _setBearerOrRemoveHeader(options, token);
-          } catch (e) {
+          } catch (error) {
             options.headers.remove('Authorization');
-            if (kDebugMode) debugPrint('⚠️ [api] token fetch failed: $e');
+
+            if (kDebugMode) {
+              debugPrint(
+                '⚠️ [api] token fetch failed: '
+                '$error',
+              );
+            }
           }
 
           return handler.next(options);
         },
-        onError: (e, handler) async {
-          final status = e.response?.statusCode ?? 0;
-          final options = e.requestOptions;
+        onError: (error, handler) async {
+          final status = error.response?.statusCode ?? 0;
+
+          final options = error.requestOptions;
 
           final wasConnRetried =
               options.extra[_ExtraKeys.retriedConnTimeout] == true;
-          final isConnTimeout = e.type == DioExceptionType.connectionTimeout;
 
-          final isIdempotent =
-              options.method.toUpperCase() == 'GET' ||
-              options.method.toUpperCase() == 'HEAD';
+          final isConnTimeout =
+              error.type == DioExceptionType.connectionTimeout;
+
+          final method = options.method.toUpperCase();
+
+          final isIdempotent = method == 'GET' || method == 'HEAD';
 
           if (isConnTimeout && !wasConnRetried && isIdempotent) {
             if (kDebugMode) {
               debugPrint(
-                '🔁 [api] retrying once after connectionTimeout: ${options.method} ${options.uri}',
+                '🔁 [api] retrying once '
+                'after connectionTimeout: '
+                '${options.method} '
+                '${options.uri}',
               );
             }
 
@@ -191,22 +272,32 @@ final class AfyaKitClient {
               await Future<void>.delayed(const Duration(milliseconds: 400));
 
               final req = options.copyWith(
+                headers: <String, dynamic>{
+                  ...options.headers,
+                  'x-app-id': cleanAppId,
+                },
                 extra: <String, dynamic>{
                   ...options.extra,
                   _ExtraKeys.retriedConnTimeout: true,
                 },
               );
 
-              final resp = await http.fetch(req);
-              return handler.resolve(resp);
-            } catch (err) {
+              final response = await http.fetch(req);
+
+              return handler.resolve(response);
+            } catch (retryError) {
               if (kDebugMode) {
-                debugPrint('❌ [api] conn-timeout retry failed: $err');
+                debugPrint(
+                  '❌ [api] conn-timeout '
+                  'retry failed: '
+                  '$retryError',
+                );
               }
             }
           }
 
           final isPublic = _shouldSkipAuth(options);
+
           final wasRetriedAuth = options.extra[_ExtraKeys.retriedAuth] == true;
 
           final shouldRetryAuth =
@@ -214,23 +305,37 @@ final class AfyaKitClient {
               !wasRetriedAuth &&
               (status == 401 || status == 419 || status == 440);
 
-          if (!shouldRetryAuth) return handler.next(e);
+          if (!shouldRetryAuth) {
+            return handler.next(error);
+          }
 
           try {
             final fresh = await (getFreshToken ?? getToken)();
-            final t = fresh?.trim();
 
-            if (t == null || t.isEmpty) {
+            final token = fresh?.trim();
+
+            if (token == null || token.isEmpty) {
               if (kDebugMode) {
-                debugPrint('⚠️ [api] retry blocked: fresh token is empty');
+                debugPrint(
+                  '⚠️ [api] retry blocked: '
+                  'fresh token is empty',
+                );
               }
-              return handler.next(e);
+
+              return handler.next(error);
             }
 
             final req = options.copyWith(
               headers: <String, dynamic>{
                 ...options.headers,
-                'Authorization': 'Bearer $t',
+
+                /*
+                         * Keep app identity immutable
+                         * through an auth retry.
+                         */
+                'x-app-id': cleanAppId,
+
+                'Authorization': 'Bearer $token',
               },
               extra: <String, dynamic>{
                 ...options.extra,
@@ -238,11 +343,18 @@ final class AfyaKitClient {
               },
             );
 
-            final resp = await http.fetch(req);
-            return handler.resolve(resp);
-          } catch (err) {
-            if (kDebugMode) debugPrint('❌ [api] retry failed: $err');
-            return handler.next(e);
+            final response = await http.fetch(req);
+
+            return handler.resolve(response);
+          } catch (retryError) {
+            if (kDebugMode) {
+              debugPrint(
+                '❌ [api] retry failed: '
+                '$retryError',
+              );
+            }
+
+            return handler.next(error);
           }
         },
       ),
@@ -258,6 +370,7 @@ final class AfyaKitClient {
   Options _mergeOptions(Options? options, {required bool allow404}) {
     final extra = <String, dynamic>{
       ...?options?.extra,
+
       if (allow404) _ExtraKeys.allow404: true,
     };
 
@@ -265,7 +378,11 @@ final class AfyaKitClient {
       extra: extra,
       validateStatus: (code) {
         final c = code ?? 0;
-        if (allow404 && c == 404) return true;
+
+        if (allow404 && c == 404) {
+          return true;
+        }
+
         return c >= 200 && c < 300;
       },
     );
@@ -335,6 +452,7 @@ final class AfyaKitClient {
     bool allow404 = false,
   }) {
     final m = method.trim().toUpperCase();
+
     if (m.isEmpty) {
       throw ArgumentError.value(method, 'method', 'HTTP method is required');
     }

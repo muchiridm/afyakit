@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:afyakit/app/models/zoho_app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -293,6 +294,68 @@ class AppProfileService {
         'logos': logos,
       },
     );
+  }
+
+  Future<ZohoAppConfig> getZohoConfig({
+    required String tenantId,
+    required String appId,
+  }) async {
+    final cleanTenantId = _cleanId(tenantId, fieldName: 'tenantId');
+
+    final cleanAppId = _cleanId(appId, fieldName: 'appId');
+
+    final response = await _dio.getUri(
+      routes.getTenantAppZoho(cleanTenantId, cleanAppId),
+    );
+
+    _ensureSuccess(response, 'Get Zoho Books configuration');
+
+    return ZohoAppConfig.fromMap(_asMap(response.data));
+  }
+
+  Future<ZohoAppConfig> saveZohoConfig({
+    required String tenantId,
+    required String appId,
+    required bool enabled,
+    required String? organisationId,
+  }) async {
+    final cleanTenantId = _cleanId(tenantId, fieldName: 'tenantId');
+
+    final cleanAppId = _cleanId(appId, fieldName: 'appId');
+
+    final response = await _dio.putUri(
+      routes.getTenantAppZoho(cleanTenantId, cleanAppId),
+      data: <String, dynamic>{
+        'enabled': enabled,
+        'organisationId': organisationId?.trim().isEmpty == true
+            ? null
+            : organisationId?.trim(),
+      },
+      options: Options(contentType: _json),
+    );
+
+    _ensureSuccess(response, 'Save Zoho Books configuration');
+
+    return ZohoAppConfig.fromMap(_asMap(response.data));
+  }
+
+  Future<void> deleteZohoConfig({
+    required String tenantId,
+    required String appId,
+  }) async {
+    final cleanTenantId = _cleanId(tenantId, fieldName: 'tenantId');
+
+    final cleanAppId = _cleanId(appId, fieldName: 'appId');
+
+    final response = await _dio.deleteUri(
+      routes.getTenantAppZoho(cleanTenantId, cleanAppId),
+    );
+
+    final status = response.statusCode;
+
+    if (status != 204 && !_is2xx(status)) {
+      _bad(response, 'Delete Zoho Books configuration');
+    }
   }
 
   // ─────────────────────────────────────────────

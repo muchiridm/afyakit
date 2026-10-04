@@ -10,7 +10,7 @@ import 'package:afyakit/features/home/enums/entry_mode.dart';
 /// - NOT autoDispose: must persist across navigation/rebuilds.
 /// - Default is member so staff land in the normal customer/member UX first.
 final staffViewModeProvider = StateProvider<EntryMode>((ref) {
-  return EntryMode.member;
+  return EntryMode.staff;
 });
 
 /// True if the current user is staff for this tenant (real permission),
