@@ -1,28 +1,29 @@
-// lib/features/inventory/batches/providers/batch_records_stream_provider.dart
-
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final batchRecordsStreamProvider = StreamProvider.autoDispose
     .family<List<BatchRecord>, String>((ref, tenantId) {
-      final cleanTenantId = tenantId.trim();
+      final cleanTenantId = tenantId.trim().toLowerCase();
+      final appId = ref.watch(appIdProvider).trim().toLowerCase();
 
-      if (cleanTenantId.isEmpty) {
+      if (cleanTenantId.isEmpty || appId.isEmpty) {
         return Stream.value(const <BatchRecord>[]);
       }
 
       return db
           .collectionGroup('batches')
           .where('tenantId', isEqualTo: cleanTenantId)
+          .where('app_id', isEqualTo: appId)
           .snapshots()
           .map((snapshot) {
             if (kDebugMode) {
               debugPrint(
                 '📡 [batches.stream] '
                 'tenant=$cleanTenantId '
+                'app=$appId '
                 'docs=${snapshot.size}',
               );
             }
@@ -33,26 +34,29 @@ final batchRecordsStreamProvider = StreamProvider.autoDispose
               try {
                 final data = doc.data();
 
-                // Extra defensive tenant check.
-                //
-                // The Firestore query + security rules already enforce this,
-                // but this prevents malformed documents from entering the UI.
-                final docTenantId = data['tenantId']?.toString().trim();
+                final docTenantId = data['tenantId']
+                    ?.toString()
+                    .trim()
+                    .toLowerCase();
+                final docAppId = data['app_id']
+                    ?.toString()
+                    .trim()
+                    .toLowerCase();
 
-                if (docTenantId != cleanTenantId) {
+                if (docTenantId != cleanTenantId || docAppId != appId) {
                   if (kDebugMode) {
                     debugPrint(
                       '⚠️ [batches.stream] '
-                      'Skipping tenant mismatch '
+                      'Skipping scope mismatch '
                       '${doc.reference.path} '
-                      'tenantId=$docTenantId',
+                      'tenantId=$docTenantId '
+                      'app_id=$docAppId',
                     );
                   }
 
                   continue;
                 }
 
-                // A batch must belong to an inventory item.
                 final itemId = (data['itemId'] ?? data['item_id'])
                     ?.toString()
                     .trim();
@@ -82,10 +86,6 @@ final batchRecordsStreamProvider = StreamProvider.autoDispose
               }
             }
 
-            // Newest received first.
-            //
-            // If receivedDate is equal/missing, prefer the batch with
-            // the farthest expiry date, then use id as a stable fallback.
             records.sort((a, b) {
               final byReceived = _compareDateDesc(
                 a.receivedDate,
@@ -109,6 +109,7 @@ final batchRecordsStreamProvider = StreamProvider.autoDispose
               debugPrint(
                 '📦 [batches.stream] '
                 'tenant=$cleanTenantId '
+                'app=$appId '
                 'yielded=${records.length}',
               );
             }
