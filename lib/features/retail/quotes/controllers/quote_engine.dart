@@ -216,9 +216,9 @@ class QuoteEngine {
   }
 
   bool _hasPatientContext(QuoteMetaState meta) {
-    final String patientId = _cleanNullable(meta.resolvedPatientId) ?? '';
+    final String profileId = _cleanNullable(meta.resolvedProfileId) ?? '';
 
-    return patientId.isNotEmpty && meta.patientSnapshot != null;
+    return profileId.isNotEmpty && meta.patientSnapshot != null;
   }
 
   int missingPriceLineCount() {
@@ -253,7 +253,7 @@ class QuoteEngine {
       paymentContext: paymentContext,
       fulfilmentMethod: meta.fulfilmentMethod,
       deliveryAddress: deliveryAddress,
-      patientId: meta.resolvedPatientId,
+      profileId: meta.resolvedProfileId,
       patientSnapshot: meta.patientSnapshot,
       membershipId: meta.isInsurancePayment ? meta.resolvedMembershipId : null,
       prescriptionId: meta.resolvedPrescriptionId,

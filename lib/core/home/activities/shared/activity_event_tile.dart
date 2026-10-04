@@ -2,88 +2,103 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/shared/theme/app_shape.dart';
-
 class ActivityEventTile extends StatelessWidget {
   const ActivityEventTile({
     super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.timestamp,
+    required this.timestamp,
     this.onTap,
+    this.statusLabel,
+    this.statusColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final String? timestamp;
+  final String timestamp;
   final VoidCallback? onTap;
+
+  final String? statusLabel;
+  final Color? statusColor;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final timestampText = timestamp?.trim();
+    final String? cleanStatus = statusLabel?.trim();
+    final bool hasStatus = cleanStatus != null && cleanStatus.isNotEmpty;
 
-    final child = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: AppShape.gap10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-                if (timestampText != null && timestampText.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 22),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    timestampText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    timestamp,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          if (onTap != null) ...[
-            const SizedBox(width: AppShape.gap8),
-            Icon(Icons.chevron_right_rounded, size: 20, color: theme.hintColor),
+
+            if (hasStatus) ...[
+              const SizedBox(width: 12),
+              _StatusPill(
+                label: cleanStatus,
+                color: statusColor ?? Theme.of(context).colorScheme.primary,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
+  }
+}
 
-    if (onTap == null) return child;
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: child,
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

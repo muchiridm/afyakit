@@ -56,7 +56,7 @@ class QuoteMetaState {
 
   final SalesDocumentAddress? deliveryAddress;
 
-  /// Person receiving care/medicine.
+  /// Person receiving care/medicine in the contextual patient role.
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
   /// Insurance membership used later for quote → invoice → claim.
@@ -111,7 +111,8 @@ class QuoteMetaState {
     return title ?? 'Customer';
   }
 
-  String? get resolvedPatientId => _clean(patientSnapshot?.patientId);
+  /// Canonical AfyaKit Health Profile ID for the person in the patient role.
+  String? get resolvedProfileId => _clean(patientSnapshot?.profileId);
 
   String? get resolvedMembershipId {
     return _clean(membershipId) ?? _clean(patientSnapshot?.membershipId);
@@ -119,7 +120,7 @@ class QuoteMetaState {
 
   String? get resolvedPrescriptionId => _clean(prescriptionId);
 
-  bool get hasPatientContext => resolvedPatientId != null;
+  bool get hasPatientContext => resolvedProfileId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
 
@@ -139,7 +140,7 @@ class QuoteMetaState {
   String get patientLabel {
     return _clean(patientSnapshot?.fullName) ??
         _clean(patientSnapshot?.patientNo) ??
-        _clean(patientSnapshot?.patientId) ??
+        _clean(patientSnapshot?.profileId) ??
         'Patient';
   }
 

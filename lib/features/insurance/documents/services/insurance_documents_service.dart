@@ -108,7 +108,7 @@ class InsuranceDocumentsService {
 
   Future<List<InsuranceDocument>> list({
     String? search,
-    String? patientId,
+    String? profileId,
     String? claimPackId,
     InsuranceDocumentType? documentType,
     String? membershipId,
@@ -120,7 +120,7 @@ class InsuranceDocumentsService {
   }) async {
     final Uri uri = routes.insuranceDocumentsList(
       search: _nullable(search),
-      patientId: _nullable(patientId),
+      profileId: _nullable(profileId),
       claimPackId: _nullable(claimPackId),
       documentType: documentType?.wire,
       membershipId: _nullable(membershipId),
@@ -137,8 +137,8 @@ class InsuranceDocumentsService {
     return _readDocuments(body['documents']);
   }
 
-  Future<List<InsuranceDocument>> listForPatient({
-    required String patientId,
+  Future<List<InsuranceDocument>> listForProfile({
+    required String profileId,
     String? search,
     String? claimPackId,
     InsuranceDocumentType? documentType,
@@ -149,10 +149,10 @@ class InsuranceDocumentsService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
 
-    final Uri uri = routes.insuranceDocumentsListForPatient(
-      patientId: cleanPatientId,
+    final Uri uri = routes.insuranceDocumentsListForProfile(
+      profileId: cleanProfileId,
       search: _nullable(search),
       claimPackId: _nullable(claimPackId),
       documentType: documentType?.wire,
@@ -171,15 +171,15 @@ class InsuranceDocumentsService {
   }
 
   Future<InsuranceDocument> get({
-    required String patientId,
+    required String profileId,
     required String documentId,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     final response = await api.getUri<Object?>(
       routes.insuranceDocumentGet(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         documentId: cleanDocumentId,
       ),
     );
@@ -189,13 +189,13 @@ class InsuranceDocumentsService {
   }
 
   Future<InsuranceDocument> create({
-    required String patientId,
+    required String profileId,
     required InsuranceDocumentCreateInput input,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.insuranceDocumentCreate(patientId: cleanPatientId),
+      routes.insuranceDocumentCreate(profileId: cleanProfileId),
       data: input.toJson(),
     );
 
@@ -204,16 +204,16 @@ class InsuranceDocumentsService {
   }
 
   Future<InsuranceDocument> update({
-    required String patientId,
+    required String profileId,
     required String documentId,
     required InsuranceDocumentUpdateInput input,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     final response = await api.putUri<Object?>(
       routes.insuranceDocumentUpdate(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         documentId: cleanDocumentId,
       ),
       data: input.toJson(),
@@ -224,28 +224,28 @@ class InsuranceDocumentsService {
   }
 
   Future<void> delete({
-    required String patientId,
+    required String profileId,
     required String documentId,
   }) async {
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
     final String cleanDocumentId = _requiredId(documentId, 'documentId');
 
     await api.deleteUri<Object?>(
       routes.insuranceDocumentDelete(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         documentId: cleanDocumentId,
       ),
     );
   }
 
   Future<UploadedInsuranceDocumentFile> uploadDocumentFile({
-    required String patientId,
+    required String profileId,
     required PickedInsuranceDocumentFile file,
     required InsuranceDocumentType documentType,
     String? claimPackId,
   }) async {
     final String cleanTenantId = _requiredId(tenantId, 'tenantId');
-    final String cleanPatientId = _requiredId(patientId, 'patientId');
+    final String cleanProfileId = _requiredId(profileId, 'profileId');
 
     final String uploadId = InsuranceDocumentStoragePaths.newUploadId();
     final String ext = InsuranceDocumentStoragePaths.cleanExt(file.extension);
@@ -255,20 +255,20 @@ class InsuranceDocumentsService {
 
     final String originalPath = InsuranceDocumentStoragePaths.originalPath(
       tenantId: cleanTenantId,
-      patientId: cleanPatientId,
+      profileId: cleanProfileId,
       uploadId: uploadId,
       ext: ext,
     );
 
     final String thumbnailPath = InsuranceDocumentStoragePaths.thumbnailPath(
       tenantId: cleanTenantId,
-      patientId: cleanPatientId,
+      profileId: cleanProfileId,
       uploadId: uploadId,
     );
 
     final Map<String, String> customMetadata = <String, String>{
       'tenant_id': cleanTenantId,
-      'patient_id': cleanPatientId,
+      'profile_id': cleanProfileId,
       'upload_id': uploadId,
       'document_type': documentType.wire,
       'original_file_name': file.fileName,
@@ -302,7 +302,7 @@ class InsuranceDocumentsService {
   }
 
   Future<InsuranceDocument> uploadDocumentFileAndCreate({
-    required String patientId,
+    required String profileId,
     required PickedInsuranceDocumentFile file,
     required InsuranceDocumentType documentType,
     String? claimPackId,
@@ -315,14 +315,14 @@ class InsuranceDocumentsService {
     bool? isActive,
   }) async {
     final UploadedInsuranceDocumentFile uploaded = await uploadDocumentFile(
-      patientId: patientId,
+      profileId: profileId,
       file: file,
       documentType: documentType,
       claimPackId: claimPackId,
     );
 
     return create(
-      patientId: patientId,
+      profileId: profileId,
       input: uploaded.toCreateInput(
         claimPackId: claimPackId,
         documentType: documentType,

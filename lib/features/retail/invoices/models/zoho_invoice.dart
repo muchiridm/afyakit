@@ -24,7 +24,7 @@ class ZohoInvoice {
     this.dueDate,
     this.balance,
     this.deliveryAddress,
-    this.patientId,
+    this.profileId,
     this.patientNo,
     this.patientName,
     this.saleContext,
@@ -68,7 +68,7 @@ class ZohoInvoice {
   ///
   /// These are read from Zoho custom fields on the backend and normalised into
   /// snake_case JSON fields before reaching Flutter.
-  final String? patientId;
+  final String? profileId;
   final String? patientNo;
   final String? patientName;
 
@@ -110,8 +110,8 @@ class ZohoInvoice {
 
   bool get hasClaimPack => resolvedClaimPackId != null;
 
-  String? get resolvedPatientId {
-    final String direct = (patientId ?? '').trim();
+  String? get resolvedProfileId {
+    final String direct = (profileId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
     final String no = (patientNo ?? '').trim();
@@ -120,10 +120,7 @@ class ZohoInvoice {
 
   String? get resolvedPatientNo {
     final String no = (patientNo ?? '').trim();
-    if (no.isNotEmpty) return no;
-
-    final String id = (patientId ?? '').trim();
-    return id.isEmpty ? null : id;
+    return no.isEmpty ? null : no;
   }
 
   String? get resolvedPatientName {
@@ -153,7 +150,7 @@ class ZohoInvoice {
       return value;
     }
 
-    return resolvedPatientId == null ? 'general' : 'clinical';
+    return resolvedProfileId == null ? 'general' : 'clinical';
   }
 
   String get resolvedPaymentContext {
@@ -221,8 +218,7 @@ class ZohoInvoice {
       j['patient_no'] ?? j['patientNo'],
     );
 
-    final String? patientId =
-        cleanStringOrNull(j['patient_id'] ?? j['patientId']) ?? patientNo;
+    final String? profileId = cleanStringOrNull(j['profile_id']);
 
     final String? patientName = cleanStringOrNull(
       j['patient_name'] ?? j['patientName'],
@@ -265,7 +261,7 @@ class ZohoInvoice {
       notes: notes,
       terms: terms,
       deliveryAddress: deliveryAddress,
-      patientId: patientId,
+      profileId: profileId,
       patientNo: patientNo,
       patientName: patientName,
       saleContext: saleContext,
@@ -296,7 +292,7 @@ class ZohoInvoice {
       'notes': notes,
       'terms': terms,
       'delivery_address': deliveryAddress?.toJson(),
-      'patient_id': patientId,
+      'profile_id': profileId,
       'patient_no': patientNo,
       'patient_name': patientName,
       'sale_context': saleContext,
@@ -337,8 +333,8 @@ class ZohoInvoice {
     bool clearBalance = false,
     SalesDocumentAddress? deliveryAddress,
     bool clearDeliveryAddress = false,
-    String? patientId,
-    bool clearPatientId = false,
+    String? profileId,
+    bool clearProfileId = false,
     String? patientNo,
     bool clearPatientNo = false,
     String? patientName,
@@ -383,7 +379,7 @@ class ZohoInvoice {
       deliveryAddress: clearDeliveryAddress
           ? null
           : (deliveryAddress ?? this.deliveryAddress),
-      patientId: clearPatientId ? null : (patientId ?? this.patientId),
+      profileId: clearProfileId ? null : (profileId ?? this.profileId),
       patientNo: clearPatientNo ? null : (patientNo ?? this.patientNo),
       patientName: clearPatientName ? null : (patientName ?? this.patientName),
       saleContext: clearSaleContext ? null : (saleContext ?? this.saleContext),

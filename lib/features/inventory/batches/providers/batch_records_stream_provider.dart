@@ -1,72 +1,134 @@
-// lib/features/batches/providers/batch_records_stream_provider.dart
+// lib/features/inventory/batches/providers/batch_records_stream_provider.dart
+
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final batchRecordsStreamProvider = StreamProvider.autoDispose
     .family<List<BatchRecord>, String>((ref, tenantId) {
+      final cleanTenantId = tenantId.trim();
+
+      if (cleanTenantId.isEmpty) {
+        return Stream.value(const <BatchRecord>[]);
+      }
+
       return db
           .collectionGroup('batches')
-          // Required discriminator for collectionGroup + rules
-          .where('tenantId', isEqualTo: tenantId)
+          .where('tenantId', isEqualTo: cleanTenantId)
           .snapshots()
-          .map((snap) {
+          .map((snapshot) {
             if (kDebugMode) {
               debugPrint(
-                '📡 [batches.stream] tenant=$tenantId → docs=${snap.size}',
+                '📡 [batches.stream] '
+                'tenant=$cleanTenantId '
+                'docs=${snapshot.size}',
               );
             }
 
-            final out = <BatchRecord>[];
+            final records = <BatchRecord>[];
 
-            for (final doc in snap.docs) {
+            for (final doc in snapshot.docs) {
               try {
-                // Light guard so a missing itemId doesn't throw inside the model
                 final data = doc.data();
-                final rawItemId = (data['itemId'] ?? data['item_id'])
-                    ?.toString()
-                    .trim();
-                if (rawItemId == null || rawItemId.isEmpty) {
+
+                // Extra defensive tenant check.
+                //
+                // The Firestore query + security rules already enforce this,
+                // but this prevents malformed documents from entering the UI.
+                final docTenantId = data['tenantId']?.toString().trim();
+
+                if (docTenantId != cleanTenantId) {
                   if (kDebugMode) {
                     debugPrint(
-                      '⚠️  Skipping batch with no itemId: ${doc.reference.path}',
+                      '⚠️ [batches.stream] '
+                      'Skipping tenant mismatch '
+                      '${doc.reference.path} '
+                      'tenantId=$docTenantId',
                     );
                   }
+
                   continue;
                 }
 
-                out.add(BatchRecord.fromSnapshot(doc));
+                // A batch must belong to an inventory item.
+                final itemId = (data['itemId'] ?? data['item_id'])
+                    ?.toString()
+                    .trim();
+
+                if (itemId == null || itemId.isEmpty) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      '⚠️ [batches.stream] '
+                      'Skipping batch with no itemId: '
+                      '${doc.reference.path}',
+                    );
+                  }
+
+                  continue;
+                }
+
+                records.add(BatchRecord.fromSnapshot(doc));
               } catch (e, st) {
                 if (kDebugMode) {
                   debugPrint(
-                    '⚠️  Skipping malformed batch ${doc.reference.path}: $e\n$st',
+                    '⚠️ [batches.stream] '
+                    'Skipping malformed batch '
+                    '${doc.reference.path}: '
+                    '$e\n$st',
                   );
                 }
               }
             }
 
-            // Sort: newest received first, then farthest expiry, then id
-            int cmpDate(DateTime? a, DateTime? b) {
-              if (a == null && b == null) return 0;
-              if (a == null) return 1;
-              if (b == null) return -1;
-              return b.compareTo(a); // desc
-            }
+            // Newest received first.
+            //
+            // If receivedDate is equal/missing, prefer the batch with
+            // the farthest expiry date, then use id as a stable fallback.
+            records.sort((a, b) {
+              final byReceived = _compareDateDesc(
+                a.receivedDate,
+                b.receivedDate,
+              );
 
-            out.sort((a, b) {
-              final byReceived = cmpDate(a.receivedDate, b.receivedDate);
-              if (byReceived != 0) return byReceived;
-              final byExpiry = cmpDate(a.expiryDate, b.expiryDate);
-              if (byExpiry != 0) return byExpiry;
-              return b.id.compareTo(a.id); // stable fallback
+              if (byReceived != 0) {
+                return byReceived;
+              }
+
+              final byExpiry = _compareDateDesc(a.expiryDate, b.expiryDate);
+
+              if (byExpiry != 0) {
+                return byExpiry;
+              }
+
+              return b.id.compareTo(a.id);
             });
 
             if (kDebugMode) {
               debugPrint(
-                '📦 [batches.stream] yielded ${out.length} valid records',
+                '📦 [batches.stream] '
+                'tenant=$cleanTenantId '
+                'yielded=${records.length}',
               );
             }
-            return out;
+
+            return records;
           });
     });
+
+int _compareDateDesc(DateTime? a, DateTime? b) {
+  if (a == null && b == null) {
+    return 0;
+  }
+
+  if (a == null) {
+    return 1;
+  }
+
+  if (b == null) {
+    return -1;
+  }
+
+  return b.compareTo(a);
+}

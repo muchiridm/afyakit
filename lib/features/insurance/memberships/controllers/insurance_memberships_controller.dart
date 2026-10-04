@@ -44,24 +44,24 @@ class InsuranceMembershipsState {
   }
 
   List<InsuranceMembership> visibleActiveItems({
-    String? patientId,
-    Set<String>? allowedPatientIds,
+    String? profileId,
+    Set<String>? allowedProfileIds,
   }) {
-    final String cleanPatientId = _clean(patientId);
+    final String cleanProfileId = _clean(profileId);
 
     return items
         .where((InsuranceMembership membership) {
           if (!membership.isActive) return false;
 
-          if (cleanPatientId.isNotEmpty &&
-              membership.patientId.trim() != cleanPatientId) {
+          if (cleanProfileId.isNotEmpty &&
+              membership.profileId.trim() != cleanProfileId) {
             return false;
           }
 
-          if (allowedPatientIds != null) {
-            if (allowedPatientIds.isEmpty) return false;
+          if (allowedProfileIds != null) {
+            if (allowedProfileIds.isEmpty) return false;
 
-            if (!allowedPatientIds.contains(membership.patientId.trim())) {
+            if (!allowedProfileIds.contains(membership.profileId.trim())) {
               return false;
             }
           }
@@ -71,10 +71,10 @@ class InsuranceMembershipsState {
         .toList(growable: false);
   }
 
-  int visibleActiveCount({String? patientId, Set<String>? allowedPatientIds}) {
+  int visibleActiveCount({String? profileId, Set<String>? allowedProfileIds}) {
     return visibleActiveItems(
-      patientId: patientId,
-      allowedPatientIds: allowedPatientIds,
+      profileId: profileId,
+      allowedProfileIds: allowedProfileIds,
     ).length;
   }
 
@@ -94,7 +94,7 @@ class InsuranceMembershipsController
 
   Future<void> load({
     String? search,
-    String? patientId,
+    String? profileId,
     String? patientNo,
     String? payerContactId,
     String? memberNo,
@@ -112,7 +112,7 @@ class InsuranceMembershipsController
 
       final List<InsuranceMembership> items = await svc.list(
         search: search,
-        patientId: patientId,
+        profileId: profileId,
         patientNo: patientNo,
         payerContactId: payerContactId,
         memberNo: memberNo,
@@ -122,39 +122,14 @@ class InsuranceMembershipsController
         page: page,
       );
 
-      state = state.copyWith(items: items, isLoading: false);
+      state = state.copyWith(items: items, isLoading: false, clearError: true);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  @Deprecated('Use load(memberNo: ...) instead.')
-  Future<void> loadLegacy({
-    String? search,
-    String? patientId,
-    String? patientNo,
-    String? payerContactId,
-    String? memberNumber,
-    String? scheme,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) {
-    return load(
-      search: search,
-      patientId: patientId,
-      patientNo: patientNo,
-      payerContactId: payerContactId,
-      memberNo: memberNumber,
-      scheme: scheme,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-    );
-  }
-
-  Future<void> loadForPatient(String patientId) {
-    return load(patientId: patientId, isActive: true);
+  Future<void> loadForProfile(String profileId) {
+    return load(profileId: profileId, isActive: true);
   }
 
   Future<InsuranceMembership?> get(String membershipId) async {
@@ -171,7 +146,12 @@ class InsuranceMembershipsController
       final InsuranceMembershipsService svc = await _service;
       final InsuranceMembership membership = await svc.get(id);
 
-      state = state.copyWith(selected: membership, isLoading: false);
+      state = state.copyWith(
+        selected: membership,
+        isLoading: false,
+        clearError: true,
+      );
+
       return membership;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -194,6 +174,7 @@ class InsuranceMembershipsController
         isSaving: false,
         selected: membership,
         items: <InsuranceMembership>[membership, ...state.items],
+        clearError: true,
       );
 
       return membership;
@@ -236,6 +217,7 @@ class InsuranceMembershipsController
         isSaving: false,
         selected: membership,
         items: updatedItems,
+        clearError: true,
       );
 
       return membership;
@@ -269,6 +251,7 @@ class InsuranceMembershipsController
         isSaving: false,
         items: updatedItems,
         clearSelected: state.selected?.membershipId == id,
+        clearError: true,
       );
 
       return true;

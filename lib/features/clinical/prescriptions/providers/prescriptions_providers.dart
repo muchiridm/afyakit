@@ -15,41 +15,43 @@ final prescriptionsServiceProvider = Provider<PrescriptionsService>((ref) {
 final prescriptionsControllerProvider = StateNotifierProvider.autoDispose
     .family<PrescriptionsController, PrescriptionsState, String?>((
       ref,
-      patientId,
+      profileId,
     ) {
       final service = ref.watch(prescriptionsServiceProvider);
 
+      final cleanProfileId = profileId?.trim();
+
       final controller = PrescriptionsController(
         service: service,
-        patientId: patientId,
+        profileId: cleanProfileId,
       );
 
-      final pid = patientId?.trim();
-
-      if (pid != null && pid.isNotEmpty) {
-        Future.microtask(() {
-          controller.load(profileId: pid);
+      if (cleanProfileId != null && cleanProfileId.isNotEmpty) {
+        Future<void>.microtask(() {
+          controller.load(profileId: cleanProfileId);
         });
       }
+
       return controller;
     });
 
 final prescriptionPickerControllerProvider = StateNotifierProvider.autoDispose
     .family<PrescriptionsController, PrescriptionsState, String>((
       ref,
-      patientId,
+      profileId,
     ) {
       final service = ref.watch(prescriptionsServiceProvider);
-      final pid = patientId.trim();
+
+      final cleanProfileId = profileId.trim();
 
       final controller = PrescriptionsController(
         service: service,
-        patientId: pid,
+        profileId: cleanProfileId,
       );
 
-      if (pid.isNotEmpty) {
+      if (cleanProfileId.isNotEmpty) {
         Future<void>.microtask(() {
-          controller.load(profileId: pid, isActive: true);
+          controller.load(profileId: cleanProfileId, isActive: true);
         });
       }
 

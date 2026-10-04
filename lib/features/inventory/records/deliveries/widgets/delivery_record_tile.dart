@@ -1,10 +1,10 @@
-// lib/shared/widgets/delivery_record_tile.dart
+// lib/features/inventory/records/deliveries/widgets/delivery_record_tile.dart
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:flutter/material.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';
-import 'package:afyakit/features/inventory/records/deliveries/screens/delivery_details_screen.dart';
+import 'package:afyakit/features/inventory/records/deliveries/widgets/screens/delivery_details_screen.dart';
 import 'package:afyakit/shared/utils/format/format_date.dart';
 
 class DeliveryRecordTile extends StatelessWidget {
@@ -46,7 +46,7 @@ class DeliveryRecordTile extends StatelessWidget {
         // ✅ match IssueRecordTile so the “content box” is consistent
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         leading: CircleAvatar(
-          backgroundColor: Colors.teal.withOpacity(0.15),
+          backgroundColor: Colors.teal.withValues(alpha: 0.15),
           child: const Icon(Icons.local_shipping, color: Colors.teal, size: 20),
         ),
         title: Text(record.deliveryId),
@@ -63,9 +63,8 @@ class DeliveryRecordTile extends StatelessWidget {
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                DeliveryDetailScreen(summary: record, stores: stores),
+          MaterialPageRoute<void>(
+            builder: (_) => DeliveryDetailScreen(deliveryId: record.deliveryId),
           ),
         ),
       ),

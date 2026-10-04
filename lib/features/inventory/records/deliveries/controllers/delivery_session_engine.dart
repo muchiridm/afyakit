@@ -1,55 +1,47 @@
-// lib/core/records/deliveries/controllers/delivery_session_engine.dart
+// lib/features/inventory/records/deliveries/controllers/delivery_session_engine.dart
 
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/inventory/batches/providers/batch_records_stream_provider.dart';
+import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_state.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_review_summary.dart';
 import 'package:afyakit/features/inventory/records/deliveries/services/delivery_session_service.dart';
 
-/// Engine: holds state + logic. Single source of truth for delivery sessions.
 final deliverySessionEngineProvider =
     StateNotifierProvider.autoDispose<
       DeliverySessionEngine,
       DeliverySessionState
     >((ref) {
-      // Keep the engine alive briefly after last listener disappears to avoid flapping.
       final link = ref.keepAlive();
+
       ref.onCancel(() {
         Future.delayed(const Duration(seconds: 10), link.close);
       });
-      return DeliverySessionEngine(ref, DeliverySessionService());
+
+      final service = ref.read(deliverySessionServiceProvider);
+
+      return DeliverySessionEngine(ref, service);
     });
 
 class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
-  final Ref ref;
-  final DeliverySessionService svc;
-
   DeliverySessionEngine(this.ref, this.svc)
     : super(const DeliverySessionState()) {
     _restore();
-
-    // Re-run restore when the session user resolves/changes.
-    ref.listen<AsyncValue<AuthUser?>>(currentUserProvider, (prev, next) async {
-      final user = next.valueOrNull;
-      if (!mounted || user == null) return;
-
-      if (!state.isActive) {
-        debugPrint('🔁 [DSE] user resolved → re-restoring session…');
-        await _restore();
-      }
-    });
   }
 
-  // ── keepAlive for async ops ──────────────────────────────────
+  final Ref ref;
+  final DeliverySessionService svc;
+
+  // ─────────────────────────────────────────────
+  // Keep alive for async operations
+  // ─────────────────────────────────────────────
+
   Future<T> _withKeepAlive<T>(Future<T> Function() body) async {
     final link = ref.keepAlive();
+
     try {
       return await body();
     } finally {
@@ -57,307 +49,256 @@ class DeliverySessionEngine extends StateNotifier<DeliverySessionState> {
     }
   }
 
-  // ── safe state setters ───────────────────────────────────────
   void _safeSet(DeliverySessionState next) {
     if (!mounted) {
-      if (kDebugMode) debugPrint('🛑 [DSE] set skipped (unmounted)');
+      if (kDebugMode) {
+        debugPrint(
+          '🛑 [DSE] state update skipped '
+          '(unmounted)',
+        );
+      }
+
       return;
     }
+
     state = next;
   }
 
-  void _safeUpdate(DeliverySessionState Function(DeliverySessionState) fn) {
-    if (!mounted) {
-      if (kDebugMode) debugPrint('🛑 [DSE] update skipped (unmounted)');
-      return;
-    }
-    state = fn(state);
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // Public API
-  // NOTE: `enteredByEmail` now carries the WhatsApp number (E.164)
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Ensure / resume session
+  // ─────────────────────────────────────────────
 
   Future<void> ensureActive({
-    required String enteredByName,
-    required String enteredByEmail, // ← WA number
+    String? enteredByName,
+    String? enteredByEmail,
     required String source,
     String? storeId,
   }) => _withKeepAlive(() async {
     final tenantId = ref.read(tenantIdProvider);
-    final cleanSrc = source.trim();
-    final cleanStore = (storeId ?? '').trim();
 
-    if (!state.isActive) {
-      final open = await svc.findOpen(
-        tenantId: tenantId,
-        enteredByEmail: enteredByEmail,
-      );
-      if (!mounted) return;
+    final session = await svc.ensureSession(
+      tenantId: tenantId,
+      source: source,
+      storeId: storeId,
+    );
 
-      if (open != null) {
-        _safeSet(
-          DeliverySessionState(
-            deliveryId: open.deliveryId,
-            enteredByName: _resolveName(
-              open.enteredByName,
-              enteredByName,
-              enteredByEmail,
-            ),
-            enteredByEmail: open.enteredByEmail,
-            sources: _dedup([
-              ...open.sources,
-              if (cleanSrc.isNotEmpty) cleanSrc,
-            ]),
-            // prefer provided context, otherwise carry what was in temp
-            lastStoreId: cleanStore.isNotEmpty ? cleanStore : open.lastStoreId,
-            lastSource: cleanSrc.isNotEmpty ? cleanSrc : open.lastSource,
-          ),
-        );
-        debugPrint('🔄 Resumed delivery → ${state.deliveryId}');
-      } else {
-        final id = await svc.newDeliveryId(tenantId);
-        if (!mounted) return;
-        _safeSet(
-          DeliverySessionState(
-            deliveryId: id,
-            enteredByName: _resolveName(null, enteredByName, enteredByEmail),
-            enteredByEmail: enteredByEmail,
-            sources: cleanSrc.isEmpty ? const [] : [cleanSrc],
-            lastStoreId: cleanStore.isNotEmpty ? cleanStore : null,
-            lastSource: cleanSrc.isNotEmpty ? cleanSrc : null,
-          ),
-        );
-        debugPrint('📦 Started new delivery → $id');
-      }
-    } else {
-      if (cleanSrc.isNotEmpty && !state.sources.contains(cleanSrc)) {
-        _safeUpdate(
-          (s) => s.copyWith(sources: _dedup([...s.sources, cleanSrc])),
-        );
-      }
-      _safeUpdate(
-        (s) => s.copyWith(
-          lastStoreId: cleanStore.isNotEmpty ? cleanStore : s.lastStoreId,
-          lastSource: cleanSrc.isNotEmpty ? cleanSrc : s.lastSource,
-          enteredByName: _resolveName(
-            s.enteredByName,
-            enteredByName,
-            enteredByEmail,
-          ),
-        ),
-      );
+    if (!mounted) {
+      return;
     }
 
-    // persist temp & local (now always carrying latest context)
-    final id = state.deliveryId;
-    if (id != null && id.isNotEmpty) {
-      await svc.upsertTemp(
-        tenantId: tenantId,
-        deliveryId: id,
-        enteredByEmail: enteredByEmail,
-        enteredByName: state.enteredByName ?? enteredByEmail,
-        sources: state.sources,
-        lastStoreId: state.lastStoreId,
-        lastSource: state.lastSource,
+    _safeSet(session);
+
+    await svc.persistLocal(session);
+
+    if (kDebugMode) {
+      debugPrint(
+        '📦 Delivery active → '
+        '${session.deliveryId}',
       );
     }
-    if (mounted) await svc.persistLocal(state);
   });
+
+  // ─────────────────────────────────────────────
+  // Source/context updates
+  // ─────────────────────────────────────────────
 
   Future<void> addSource(String source) => _withKeepAlive(() async {
-    final s = source.trim();
-    if (s.isEmpty || state.sources.contains(s)) return;
-    _safeUpdate((st) => st.copyWith(sources: _dedup([...st.sources, s])));
-    if (mounted) await svc.persistLocal(state);
-  });
+    final cleanSource = source.trim();
 
-  Future<DeliveryReviewSummary?> review(WidgetRef widgetRef) async {
-    final tenantId = ref.read(tenantIdProvider);
-    return svc.buildReviewSummary(
-      ref: widgetRef,
-      tenantId: tenantId,
-      state: state,
-    );
-  }
+    final deliveryId = state.deliveryId?.trim() ?? '';
 
-  Future<bool> end({bool autoRestart = false}) => _withKeepAlive(() async {
-    if (!mounted) return false;
-
-    final tenantId = ref.read(tenantIdProvider);
-    final batches = await ref.read(batchRecordsStreamProvider(tenantId).future);
-    if (!mounted) return false;
-
-    final linked = batches
-        .where((b) => (b.deliveryId ?? '').trim() == (state.deliveryId ?? ''))
-        .toList();
-
-    final mergedSources = _dedup([
-      ...state.sources,
-      ...linked.map((b) => (b.source ?? '').trim()),
-    ]);
-
-    final valid =
-        (state.deliveryId ?? '').isNotEmpty &&
-        (state.enteredByEmail ?? '').isNotEmpty &&
-        mergedSources.isNotEmpty &&
-        linked.isNotEmpty &&
-        tenantId.isNotEmpty;
-
-    if (!valid) {
-      debugPrint(
-        '⚠️ Incomplete delivery; aborting save. '
-        'deliveryId=${state.deliveryId} linked=${linked.length} '
-        'sources=${mergedSources.length} contact=${state.enteredByEmail?.isNotEmpty == true}',
-      );
-      return false;
+    if (cleanSource.isEmpty || deliveryId.isEmpty) {
+      return;
     }
 
-    final resolvedName = _resolveName(
-      state.enteredByName,
-      null,
-      state.enteredByEmail!,
-    );
+    final tenantId = ref.read(tenantIdProvider);
 
-    final record = DeliveryRecord.fromBatches(
-      linked,
-      state.deliveryId!,
-      enteredByName: resolvedName,
-      enteredByEmail: state.enteredByEmail!, // WA number
-      sources: mergedSources,
-    );
-
-    final result = await svc.saveRecord(tenantId: tenantId, record: record);
-    if (!mounted) return false;
-
-    await svc.finalizeTemp(
+    final updated = await svc.updateSession(
       tenantId: tenantId,
-      deliveryId: state.deliveryId!,
-      batchesCount: linked.length,
+      deliveryId: deliveryId,
+      source: cleanSource,
     );
-    if (!mounted) return false;
 
-    await svc.clearLocal();
-
-    final name = state.enteredByName;
-    final contact = state.enteredByEmail;
-    _safeSet(const DeliverySessionState());
-
-    if (autoRestart && contact != null) {
-      await ensureActive(
-        enteredByName: _resolveName(name, null, contact),
-        enteredByEmail: contact,
-        source: '',
-      );
+    if (!mounted) {
+      return;
     }
 
-    return result == SaveResult.saved || result == SaveResult.alreadySaved;
+    _safeSet(updated);
+
+    await svc.persistLocal(updated);
   });
 
   Future<void> rememberLastUsed({String? lastStoreId, String? lastSource}) =>
       _withKeepAlive(() async {
-        if (!mounted || !state.isActive) return;
+        final deliveryId = state.deliveryId?.trim() ?? '';
+
+        if (deliveryId.isEmpty) {
+          return;
+        }
+
+        final cleanStore = lastStoreId?.trim();
+
+        final cleanSource = lastSource?.trim();
+
+        if ((cleanStore == null || cleanStore.isEmpty) &&
+            (cleanSource == null || cleanSource.isEmpty)) {
+          return;
+        }
+
         final tenantId = ref.read(tenantIdProvider);
 
-        final newLastStore = (lastStoreId ?? '').trim();
-        final newLastSource = (lastSource ?? '').trim();
-
-        _safeUpdate(
-          (s) => s.copyWith(
-            lastStoreId: newLastStore.isNotEmpty ? newLastStore : s.lastStoreId,
-            lastSource: newLastSource.isNotEmpty ? newLastSource : s.lastSource,
-          ),
-        );
-
-        if (!mounted) return;
-        await svc.updateLastPrefs(
+        final updated = await svc.updateSession(
           tenantId: tenantId,
-          deliveryId: state.deliveryId!,
-          lastStoreId: newLastStore.isNotEmpty ? newLastStore : null,
-          lastSource: newLastSource.isNotEmpty ? newLastSource : null,
+          deliveryId: deliveryId,
+          storeId: cleanStore?.isNotEmpty == true ? cleanStore : null,
+          source: cleanSource?.isNotEmpty == true ? cleanSource : null,
         );
+
+        if (!mounted) {
+          return;
+        }
+
+        _safeSet(updated);
+
+        await svc.persistLocal(updated);
       });
 
-  // ─────────────────────────────────────────────────────────────
-  // Internals
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Review
+  // ─────────────────────────────────────────────
+
+  Future<DeliveryReviewSummary?> review([WidgetRef? _]) async {
+    final deliveryId = state.deliveryId?.trim() ?? '';
+
+    if (deliveryId.isEmpty) {
+      return null;
+    }
+
+    final tenantId = ref.read(tenantIdProvider);
+
+    return svc.reviewSession(tenantId: tenantId, deliveryId: deliveryId);
+  }
+
+  // ─────────────────────────────────────────────
+  // Finalize
+  // ─────────────────────────────────────────────
+
+  Future<bool> end({bool autoRestart = false}) => _withKeepAlive(() async {
+    final deliveryId = state.deliveryId?.trim() ?? '';
+
+    if (deliveryId.isEmpty) {
+      return false;
+    }
+
+    final tenantId = ref.read(tenantIdProvider);
+
+    final previousSource = state.lastSource;
+
+    final previousStore = state.lastStoreId;
+
+    final DeliveryRecord record;
+
+    try {
+      record = await svc.finalizeSession(
+        tenantId: tenantId,
+        deliveryId: deliveryId,
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint(
+          '❌ Delivery finalize failed: '
+          '$e\n$st',
+        );
+      }
+
+      return false;
+    }
+
+    if (!mounted) {
+      return false;
+    }
+
+    await svc.clearLocal();
+
+    _safeSet(const DeliverySessionState());
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ Delivery finalized → '
+        '${record.deliveryId}',
+      );
+    }
+
+    if (autoRestart) {
+      final source = previousSource?.trim() ?? '';
+
+      final store = previousStore?.trim();
+
+      await ensureActive(
+        source: source,
+        storeId: store?.isNotEmpty == true ? store : null,
+      );
+    }
+
+    return true;
+  });
+
+  // ─────────────────────────────────────────────
+  // Restore
+  // ─────────────────────────────────────────────
 
   Future<void> _restore() => _withKeepAlive(() async {
     final tenantId = ref.read(tenantIdProvider);
 
-    // 1) Try local cache first
-    final local = await svc.restoreLocal();
-    if (!mounted) return;
-
-    if (local != null && local.isActive) {
-      _safeSet(local);
-      debugPrint('♻️ Session restored (local) → ${local.deliveryId}');
-      return;
-    }
-
-    // 2) Fallback to server-side open session, keyed by WA number
     try {
-      // Use the session-backed snapshot instead of refetching
-      final user = ref.read(currentUserValueProvider);
-      if (!mounted) return;
+      // Local state is only a UX hint.
+      final local = await svc.restoreLocal();
 
-      final waNumber = (user?.phoneNumber ?? '').trim();
-      final displayName = (user?.displayName ?? '').trim();
-
-      if (waNumber.isEmpty) {
-        debugPrint(
-          '📭 _restore: no WA number available, skipping server restore',
-        );
+      if (!mounted) {
         return;
       }
 
-      final open = await svc.findOpen(
-        tenantId: tenantId,
-        enteredByEmail: waNumber, // WA number used as key
-      );
-      if (!mounted) return;
+      // Backend remains authoritative.
+      final open = await svc.getOpenSession(tenantId);
+
+      if (!mounted) {
+        return;
+      }
 
       if (open != null) {
-        _safeUpdate(
-          (s) => s.copyWith(
-            deliveryId: open.deliveryId,
-            enteredByName: _resolveName(
-              open.enteredByName,
-              displayName,
-              waNumber,
-            ),
-            enteredByEmail: open.enteredByEmail,
-            sources: _dedup(open.sources),
-            lastStoreId: open.lastStoreId,
-            lastSource: open.lastSource,
-          ),
-        );
+        _safeSet(open);
 
-        if (mounted) {
-          await svc.persistLocal(state);
-          debugPrint('🔄 Session restored (firestore) → ${open.deliveryId}');
+        await svc.persistLocal(open);
+
+        if (kDebugMode) {
+          debugPrint(
+            '🔄 Delivery restored '
+            'from API → '
+            '${open.deliveryId}',
+          );
         }
-      } else {
-        debugPrint('📭 No cached or open delivery session found.');
+
+        return;
+      }
+
+      // Backend says there is no open session.
+      // Do not resurrect stale local state.
+      if (local != null) {
+        await svc.clearLocal();
+      }
+
+      _safeSet(const DeliverySessionState());
+
+      if (kDebugMode) {
+        debugPrint('📭 No open delivery session.');
       }
     } catch (e, st) {
-      debugPrint('❌ _restore failed: $e\n$st');
+      if (kDebugMode) {
+        debugPrint(
+          '❌ Delivery restore failed: '
+          '$e\n$st',
+        );
+      }
     }
   });
-
-  List<String> _dedup(List<String> src) =>
-      src.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
-
-  String _resolveName(
-    String? candidate,
-    String? fallbackName,
-    String contactId,
-  ) {
-    final c = (candidate ?? '').trim();
-    if (c.isNotEmpty) return c;
-    final f = (fallbackName ?? '').trim();
-    if (f.isNotEmpty) return f;
-    return contactId.trim();
-  }
 }

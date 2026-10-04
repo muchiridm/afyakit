@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'package:afyakit/features/inventory/records/issues/extensions/issue_type_x.dart';
-import 'package:afyakit/features/inventory/records/issues/providers/grouped_cart_provider.dart';
+import 'package:afyakit/features/inventory/records/cart/grouped_cart_provider.dart';
 
 import 'package:afyakit/shared/utils/resolvers/resolve_location_name.dart';
 
 import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/form/issue_form_state.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_controller.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_state.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';

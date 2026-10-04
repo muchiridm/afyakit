@@ -9,10 +9,10 @@ import 'package:afyakit/core/home/models/staff_feature_def.dart';
 import 'package:afyakit/core/home/registry/home_registry.dart';
 import 'package:afyakit/core/hq/tenants/models/feature_keys.dart';
 
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
-import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
-import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -126,32 +126,29 @@ class StaffFeaturesPanel extends ConsumerWidget {
     final key = _featureKeyText(feature);
 
     switch (key) {
-      case FeatureKeys.healthMetrics:
+      case FeatureKeys.clinical:
         return 10;
 
-      case FeatureKeys.clinical:
+      case FeatureKeys.messaging:
         return 20;
 
-      case FeatureKeys.messaging:
+      case FeatureKeys.retail:
         return 30;
 
-      case FeatureKeys.retail:
+      case FeatureKeys.insurance:
         return 40;
 
-      case FeatureKeys.insurance:
+      case FeatureKeys.inventory:
         return 50;
 
-      case FeatureKeys.inventory:
+      case FeatureKeys.rider:
         return 60;
 
-      case FeatureKeys.rider:
+      case FeatureKeys.reporting:
         return 70;
 
-      case FeatureKeys.reporting:
-        return 80;
-
       case FeatureKeys.hq:
-        return 90;
+        return 80;
 
       default:
         return _fallbackGroupRank(feature);
@@ -166,8 +163,11 @@ class StaffFeaturesPanel extends ConsumerWidget {
     ].join(' ').toLowerCase();
 
     if (_containsAny(haystack, const [
-      'health metrics',
+      'clinical',
+      'health profile',
+      'health profiles',
       'health metric',
+      'health metrics',
       'vital signs',
       'vitals',
       'blood pressure',
@@ -177,20 +177,12 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'bmi',
       'oxygen saturation',
       'spo2',
-    ])) {
-      return 10;
-    }
-
-    if (_containsAny(haystack, const [
-      'clinical',
-      'patient',
-      'patients',
       'prescription',
       'prescriptions',
       'doctor',
       'consult',
     ])) {
-      return 20;
+      return 10;
     }
 
     if (_containsAny(haystack, const [
@@ -210,7 +202,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'email',
       'inbox',
     ])) {
-      return 30;
+      return 20;
     }
 
     if (_containsAny(haystack, const [
@@ -231,7 +223,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'cart',
       'checkout',
     ])) {
-      return 40;
+      return 30;
     }
 
     if (_containsAny(haystack, const [
@@ -247,7 +239,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'policy',
       'policies',
     ])) {
-      return 50;
+      return 40;
     }
 
     if (_containsAny(haystack, const [
@@ -267,7 +259,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'consumable',
       'equipment',
     ])) {
-      return 60;
+      return 50;
     }
 
     if (_containsAny(haystack, const [
@@ -276,7 +268,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'dispatch',
       'courier',
     ])) {
-      return 70;
+      return 60;
     }
 
     if (_containsAny(haystack, const [
@@ -288,7 +280,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'export',
       'exports',
     ])) {
-      return 80;
+      return 70;
     }
 
     if (_containsAny(haystack, const [
@@ -305,7 +297,7 @@ class StaffFeaturesPanel extends ConsumerWidget {
       'permission',
       'permissions',
     ])) {
-      return 90;
+      return 80;
     }
 
     return 100;
@@ -444,7 +436,7 @@ class _ActionChip extends StatelessWidget {
   }
 
   Future<void> _handleTap(BuildContext context) async {
-    if (action.featureKey == FeatureKeys.healthMetrics) {
+    if (_isHealthMetricsAction) {
       await _openHealthMetrics(context);
       return;
     }
@@ -454,6 +446,7 @@ class _ActionChip extends StatelessWidget {
         context: context,
         forceProfilePickerMode: scope == HomeScope.staff,
       );
+
       return;
     }
 
@@ -461,6 +454,7 @@ class _ActionChip extends StatelessWidget {
 
     if (destination == null) {
       SnackService.showError('🚧 ${action.label} is not wired yet.');
+
       return;
     }
 
@@ -469,29 +463,34 @@ class _ActionChip extends StatelessWidget {
     ).push<void>(MaterialPageRoute<void>(builder: destination));
   }
 
+  bool get _isHealthMetricsAction {
+    return action.featureKey == FeatureKeys.clinical &&
+        action.label.trim().toLowerCase().contains('health metric');
+  }
+
   bool get _isPrescriptionsAction {
     return action.featureKey == FeatureKeys.clinical &&
         action.label.trim().toLowerCase().contains('prescription');
   }
 
   Future<void> _openHealthMetrics(BuildContext context) async {
-    final patient = await Navigator.of(context).push<Profile>(
+    final profile = await Navigator.of(context).push<Profile>(
       MaterialPageRoute<Profile>(
         builder: (_) => const ProfilesScreen(
           allowExplicitContactLink: true,
           selectionMode: true,
-          selectionTitle: 'Select patient for health metrics',
+          selectionTitle: 'Select health profile',
         ),
       ),
     );
 
-    if (patient == null || !context.mounted) {
+    if (profile == null || !context.mounted) {
       return;
     }
 
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => HealthMetricsDashboardScreen(initialPatient: patient),
+        builder: (_) => HealthMetricsDashboardScreen(initialProfile: profile),
       ),
     );
   }

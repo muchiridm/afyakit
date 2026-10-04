@@ -39,7 +39,7 @@ class HomeStaffBody extends StatelessWidget {
     return homeVerticalStack([
       const HomeHeader(
         entry: EntryMode.staff,
-        showDeliveryBanner: false,
+        showDeliveryBanner: true,
         showHomeButton: false,
       ),
       HomeDashboardTwoColumnLayout(

@@ -19,7 +19,7 @@ import 'package:afyakit/core/hq/domains/services/domain_tenant_resolver.dart';
 import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
 import 'package:afyakit/shared/debug/riverpod_logger.dart';
 
-final authEmulatorEnabledProvider = Provider<bool>((_) => false);
+final authEmulatorEnabledProvider = Provider((_) => false);
 
 final class BootLog {
   static void d(String message) => debugPrint('🚀 $message');
@@ -45,6 +45,7 @@ Future<void> bootstrapAndRun({
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+
       _installGlobalErrorHandlers();
 
       BootLog.d('Initializing Firebase…');
@@ -53,7 +54,14 @@ Future<void> bootstrapAndRun({
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      // Native platforms use the Dart background handler.
+      // Web background messaging is handled by
+      // web/firebase-messaging-sw.js.
+      if (!kIsWeb) {
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
+      }
 
       final bool usingAuthEmulator = await _configureAuthForDev();
 
@@ -91,6 +99,7 @@ Future<void> bootstrapAndRun({
     },
     (Object error, StackTrace stackTrace) {
       BootLog.e('ZoneError: $error');
+
       debugPrintStack(stackTrace: stackTrace);
     },
   );
@@ -111,6 +120,7 @@ void _installGlobalErrorHandlers() {
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stackTrace) {
     BootLog.e('PlatformDispatcherError: $error');
+
     debugPrintStack(stackTrace: stackTrace);
 
     return true;

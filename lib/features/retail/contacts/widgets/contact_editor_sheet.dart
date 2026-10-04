@@ -36,11 +36,11 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
 
   bool _editing = false;
   bool _isInsurancePayer = false;
-  bool _creatingSelfPatient = false;
-  bool _creatingLinkedPatient = false;
-  bool _openingLinkedPatient = false;
-  bool _selfPatientCreated = false;
-  bool _linkedPatientCreated = false;
+  bool _creatingSelfProfile = false;
+  bool _creatingLinkedProfile = false;
+  bool _openingLinkedProfile = false;
+  bool _selfProfileCreated = false;
+  bool _linkedProfileCreated = false;
 
   late _ContactKind _kind;
 
@@ -182,8 +182,8 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       contactType: widget.initial?.contactType,
       accountNumber: account.isEmpty ? null : account,
       isInsurancePayer: _isInsurancePayer,
-      linkedPatients:
-          widget.initial?.linkedPatients ?? const <ContactLinkedPatient>[],
+      linkedProfiles:
+          widget.initial?.linkedProfiles ?? const <ContactLinkedProfile>[],
     );
   }
 
@@ -236,35 +236,35 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     );
   }
 
-  String _relationshipLabel(ContactPatientRelationship value) {
+  String _relationshipLabel(ContactProfileRelationship value) {
     switch (value) {
-      case ContactPatientRelationship.self:
+      case ContactProfileRelationship.self:
         return 'Self';
-      case ContactPatientRelationship.child:
+      case ContactProfileRelationship.child:
         return 'Child';
-      case ContactPatientRelationship.spouse:
+      case ContactProfileRelationship.spouse:
         return 'Spouse';
-      case ContactPatientRelationship.parent:
+      case ContactProfileRelationship.parent:
         return 'Parent';
-      case ContactPatientRelationship.guardian:
+      case ContactProfileRelationship.guardian:
         return 'Guardian';
-      case ContactPatientRelationship.insurance:
+      case ContactProfileRelationship.insurance:
         return 'Insurance';
-      case ContactPatientRelationship.other:
+      case ContactProfileRelationship.other:
         return 'Other';
     }
   }
 
-  bool _hasSelfPatientLink(ZohoContact contact) {
-    return contact.linkedPatients.any(
-      (p) => p.relationship == ContactPatientRelationship.self,
+  bool _hasSelfProfileLink(ZohoContact contact) {
+    return contact.linkedProfiles.any(
+      (p) => p.relationship == ContactProfileRelationship.self,
     );
   }
 
-  bool _canOfferCreateSelfPatient(ZohoContact contact) {
+  bool _canOfferCreateSelfProfile(ZohoContact contact) {
     if (!_isExisting) return false;
-    if (_selfPatientCreated) return false;
-    if (_creatingSelfPatient) return true;
+    if (_selfProfileCreated) return false;
+    if (_creatingSelfProfile) return true;
 
     final contactId = contact.contactId.trim();
     if (contactId.isEmpty) return false;
@@ -276,13 +276,13 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       return false;
     }
 
-    if (_hasSelfPatientLink(contact)) return false;
+    if (_hasSelfProfileLink(contact)) return false;
 
-    final name = _patientNameFromContact(contact);
+    final name = _profileNameFromContact(contact);
     return name.isNotEmpty;
   }
 
-  String _patientNameFromContact(ZohoContact contact) {
+  String _profileNameFromContact(ZohoContact contact) {
     final title = contact.title.trim();
     if (title.isNotEmpty && title.toLowerCase() != 'contact') return title;
 
@@ -297,11 +297,11 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     return '';
   }
 
-  Future<void> _createSelfPatientFromContact(ZohoContact contact) async {
-    if (!_canOfferCreateSelfPatient(contact)) return;
+  Future<void> _createSelfProfileFromContact(ZohoContact contact) async {
+    if (!_canOfferCreateSelfProfile(contact)) return;
 
     final contactId = contact.contactId.trim();
-    final name = _patientNameFromContact(contact);
+    final name = _profileNameFromContact(contact);
 
     if (contactId.isEmpty || name.isEmpty) return;
 
@@ -329,7 +329,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
 
     if (confirm != true || !mounted) return;
 
-    setState(() => _creatingSelfPatient = true);
+    setState(() => _creatingSelfProfile = true);
 
     try {
       final input = ProfileUpsertInput(
@@ -350,8 +350,8 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       if (!mounted) return;
 
       setState(() {
-        _creatingSelfPatient = false;
-        _selfPatientCreated = true;
+        _creatingSelfProfile = false;
+        _selfProfileCreated = true;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -360,7 +360,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() => _creatingSelfPatient = false);
+      setState(() => _creatingSelfProfile = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to create self patient: $e')),
@@ -368,14 +368,14 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     }
   }
 
-  Future<void> _addLinkedPatientForContact(
+  Future<void> _addLinkedProfileForContact(
     ZohoContact contact, {
     ProfileContactRelationship relationship = ProfileContactRelationship.child,
   }) async {
     final contactId = contact.contactId.trim();
     if (contactId.isEmpty) return;
 
-    setState(() => _creatingLinkedPatient = true);
+    setState(() => _creatingLinkedProfile = true);
 
     try {
       final input = await showDialog<ProfileUpsertInput>(
@@ -389,7 +389,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       );
 
       if (input == null || !mounted) {
-        if (mounted) setState(() => _creatingLinkedPatient = false);
+        if (mounted) setState(() => _creatingLinkedProfile = false);
         return;
       }
 
@@ -398,8 +398,8 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       if (!mounted) return;
 
       setState(() {
-        _creatingLinkedPatient = false;
-        _linkedPatientCreated = true;
+        _creatingLinkedProfile = false;
+        _linkedProfileCreated = true;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -412,7 +412,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() => _creatingLinkedPatient = false);
+      setState(() => _creatingLinkedProfile = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to create linked patient: $e')),
@@ -420,29 +420,29 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     }
   }
 
-  Future<void> _openLinkedPatientEditor(ContactLinkedPatient link) async {
-    final patientId = link.patientId.trim();
-    if (patientId.isEmpty) return;
+  Future<void> _openLinkedProfileEditor(ContactLinkedProfile link) async {
+    final profileId = link.profileId.trim();
+    if (profileId.isEmpty) return;
 
-    setState(() => _openingLinkedPatient = true);
+    setState(() => _openingLinkedProfile = true);
 
     try {
       final service = ref.read(profilesServiceProvider);
-      final patient = await service.get(patientId);
+      final profile = await service.get(profileId);
 
       if (!mounted) return;
 
-      setState(() => _openingLinkedPatient = false);
+      setState(() => _openingLinkedProfile = false);
 
       final input = await showDialog<ProfileUpsertInput>(
         context: context,
         builder: (_) =>
-            ProfileFormDialog(initial: patient, allowExplicitContactLink: true),
+            ProfileFormDialog(initial: profile, allowExplicitContactLink: true),
       );
 
       if (input == null || !mounted) return;
 
-      await service.update(patient.profileId, input);
+      await service.update(profile.profileId, input);
 
       if (!mounted) return;
 
@@ -456,7 +456,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() => _openingLinkedPatient = false);
+      setState(() => _openingLinkedProfile = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to open patient profile: $e')),
@@ -464,12 +464,12 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     }
   }
 
-  Widget _selfPatientActionCard(BuildContext context, ZohoContact contact) {
+  Widget _selfProfileActionCard(BuildContext context, ZohoContact contact) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    final hasSelf = _hasSelfPatientLink(contact);
-    final canCreate = _canOfferCreateSelfPatient(contact);
+    final hasSelf = _hasSelfProfileLink(contact);
+    final canCreate = _canOfferCreateSelfProfile(contact);
 
     if (hasSelf) {
       return Container(
@@ -495,7 +495,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
       );
     }
 
-    if (_selfPatientCreated) {
+    if (_selfProfileCreated) {
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
@@ -540,24 +540,24 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
           ),
           const SizedBox(width: 10),
           FilledButton.icon(
-            onPressed: _creatingSelfPatient
+            onPressed: _creatingSelfProfile
                 ? null
-                : () => _createSelfPatientFromContact(contact),
-            icon: _creatingSelfPatient
+                : () => _createSelfProfileFromContact(contact),
+            icon: _creatingSelfProfile
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add),
-            label: Text(_creatingSelfPatient ? 'Creating…' : 'Create self'),
+            label: Text(_creatingSelfProfile ? 'Creating…' : 'Create self'),
           ),
         ],
       ),
     );
   }
 
-  Widget _addLinkedPatientActionCard(
+  Widget _addLinkedProfileActionCard(
     BuildContext context,
     ZohoContact contact,
   ) {
@@ -582,7 +582,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _linkedPatientCreated
+              _linkedProfileCreated
                   ? 'Linked patient created. Refresh this contact to see it.'
                   : 'Add a dependent or another patient linked to this contact.',
               style: theme.textTheme.bodyMedium,
@@ -590,32 +590,32 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
-            onPressed: _creatingLinkedPatient
+            onPressed: _creatingLinkedProfile
                 ? null
-                : () => _addLinkedPatientForContact(contact),
-            icon: _creatingLinkedPatient
+                : () => _addLinkedProfileForContact(contact),
+            icon: _creatingLinkedProfile
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add),
-            label: Text(_creatingLinkedPatient ? 'Opening…' : 'Add profile'),
+            label: Text(_creatingLinkedProfile ? 'Opening…' : 'Add profile'),
           ),
         ],
       ),
     );
   }
 
-  Widget _linkedPatientsSection(BuildContext context, ZohoContact contact) {
-    final linked = contact.linkedPatients;
+  Widget _linkedProfilesSection(BuildContext context, ZohoContact contact) {
+    final linked = contact.linkedProfiles;
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
     return Column(
       children: [
-        _sectionLabel(context, 'Linked patients'),
+        _sectionLabel(context, 'Linked health profiles'),
         const SizedBox(height: 6),
         if (linked.isEmpty)
           Container(
@@ -626,7 +626,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Text(
-              'No linked patients yet.',
+              'No linked health profiles yet.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -647,28 +647,28 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      p.relationship == ContactPatientRelationship.insurance
+                      p.relationship == ContactProfileRelationship.insurance
                           ? Icons.verified_user_outlined
                           : Icons.personal_injury_outlined,
                       color: p.isActive
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
                     ),
-                    title: Text(p.patientDisplayName),
+                    title: Text(p.profileDisplayName),
                     subtitle: Text(
-                      '${p.patientId} • ${_relationshipLabel(p.relationship)}'
+                      '${p.profileId} • ${_relationshipLabel(p.relationship)}'
                       '${p.isActive ? '' : ' • inactive'}',
                     ),
-                    trailing: _openingLinkedPatient
+                    trailing: _openingLinkedProfile
                         ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.chevron_right_rounded),
-                    onTap: _openingLinkedPatient
+                    onTap: _openingLinkedProfile
                         ? null
-                        : () => _openLinkedPatientEditor(p),
+                        : () => _openLinkedProfileEditor(p),
                   ),
                   if (p != linked.last) const Divider(height: 1),
                 ],
@@ -676,9 +676,9 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
             ),
           ),
         const SizedBox(height: 8),
-        _selfPatientActionCard(context, contact),
+        _selfProfileActionCard(context, contact),
         const SizedBox(height: 8),
-        _addLinkedPatientActionCard(context, contact),
+        _addLinkedProfileActionCard(context, contact),
         const SizedBox(height: 16),
       ],
     );
@@ -773,8 +773,8 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
     final contactType = (c?.contactType ?? '').trim();
     final status = (c?.status ?? '').trim();
     final personId = (c?.personContact?.contactPersonId ?? '').trim();
-    final linkedCount = c?.activeLinkedPatientCount ?? 0;
-    final insuranceLinkedCount = c?.activeInsuranceLinkedPatientCount ?? 0;
+    final linkedCount = c?.activeLinkedProfileCount ?? 0;
+    final insuranceLinkedCount = c?.activeInsuranceLinkedProfileCount ?? 0;
 
     return SafeArea(
       child: Padding(
@@ -800,7 +800,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      if (c != null) _linkedPatientsSection(context, c),
+                      if (c != null) _linkedProfilesSection(context, c),
 
                       _sectionLabel(context, 'Basics'),
                       const SizedBox(height: 6),
@@ -976,7 +976,7 @@ class _ContactEditorSheetState extends ConsumerState<ContactEditorSheet> {
                               ),
                               _debugRow(label: 'status', value: status),
                               _debugRow(
-                                label: 'linkedPatients',
+                                label: 'linkedProfiles',
                                 value: '$linkedCount',
                               ),
                               _debugRow(

@@ -102,7 +102,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
         meta.expiryDate != null ||
         meta.deliveryAddress != null ||
         meta.patientSnapshot != null ||
-        (meta.resolvedPatientId ?? '').trim().isNotEmpty ||
+        (meta.resolvedProfileId ?? '').trim().isNotEmpty ||
         (meta.resolvedMembershipId ?? '').trim().isNotEmpty ||
         (meta.resolvedPrescriptionId ?? '').trim().isNotEmpty;
   }

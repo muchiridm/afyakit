@@ -25,11 +25,10 @@ class ZohoQuote {
     this.notes,
     this.terms,
     this.deliveryAddress,
-    this.patientId,
+    this.profileId,
     this.patientSnapshot,
     this.membershipId,
     this.prescriptionId,
-    this.claimPackId,
     this.lineItems = const <ZohoQuoteLineItem>[],
   });
 
@@ -55,10 +54,10 @@ class ZohoQuote {
 
   final SalesDocumentAddress? deliveryAddress;
 
-  /// Patient receiving care or medicine.
+  /// Canonical Health Profile for the person receiving care or medicine.
   ///
   /// This is separate from [customerId], which identifies the payer/customer.
-  final String? patientId;
+  final String? profileId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
   /// Insurance membership, meaningful only for insurance payment.
@@ -66,12 +65,6 @@ class ZohoQuote {
 
   /// Patient prescription linked to this quote.
   final String? prescriptionId;
-
-  /// Backward-compatible only.
-  ///
-  /// Claim packs are created or linked when an insurance quote is converted
-  /// to an invoice, not while creating the quote.
-  final String? claimPackId;
 
   final List<ZohoQuoteLineItem> lineItems;
 
@@ -98,8 +91,8 @@ class ZohoQuote {
   }
 
   bool get hasPatientContext {
-    final String direct = (patientId ?? '').trim();
-    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
+    final String direct = (profileId ?? '').trim();
+    final String snapshotId = (patientSnapshot?.profileId ?? '').trim();
 
     return direct.isNotEmpty || snapshotId.isNotEmpty;
   }
@@ -115,11 +108,6 @@ class ZohoQuote {
     return resolvedPrescriptionId != null;
   }
 
-  /// Backward-compatible only.
-  bool get hasClaimPackContext {
-    return resolvedClaimPackId != null;
-  }
-
   bool get hasRequiredInsuranceQuoteContext {
     return isPrivateUse &&
         isInsurancePayment &&
@@ -128,11 +116,11 @@ class ZohoQuote {
         hasPrescriptionContext;
   }
 
-  String? get resolvedPatientId {
-    final String direct = (patientId ?? '').trim();
+  String? get resolvedProfileId {
+    final String direct = (profileId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
+    final String snapshotId = (patientSnapshot?.profileId ?? '').trim();
     return snapshotId.isEmpty ? null : snapshotId;
   }
 
@@ -146,12 +134,6 @@ class ZohoQuote {
 
   String? get resolvedPrescriptionId {
     final String direct = (prescriptionId ?? '').trim();
-    return direct.isEmpty ? null : direct;
-  }
-
-  /// Backward-compatible only.
-  String? get resolvedClaimPackId {
-    final String direct = (claimPackId ?? '').trim();
     return direct.isEmpty ? null : direct;
   }
 
@@ -226,9 +208,8 @@ class ZohoQuote {
       json['patient_snapshot'] ?? json['patientSnapshot'],
     );
 
-    final String? patientId =
-        _asCleanOrNull(json['patient_id'] ?? json['patientId']) ??
-        patientSnapshot?.patientId;
+    final String? profileId =
+        _asCleanOrNull(json['profile_id']) ?? patientSnapshot?.profileId;
 
     final String? membershipId =
         _asCleanOrNull(json['membership_id'] ?? json['membershipId']) ??
@@ -236,10 +217,6 @@ class ZohoQuote {
 
     final String? prescriptionId = _asCleanOrNull(
       json['prescription_id'] ?? json['prescriptionId'],
-    );
-
-    final String? claimPackId = _asCleanOrNull(
-      json['claim_pack_id'] ?? json['claimPackId'],
     );
 
     final Object? rawLines = json['line_items'] ?? json['lineItems'];
@@ -275,11 +252,10 @@ class ZohoQuote {
       notes: notes,
       terms: terms,
       deliveryAddress: deliveryAddress,
-      patientId: patientId,
+      profileId: profileId,
       patientSnapshot: patientSnapshot,
       membershipId: membershipId,
       prescriptionId: prescriptionId,
-      claimPackId: claimPackId,
       lineItems: lines,
     );
   }
@@ -315,11 +291,10 @@ class ZohoQuote {
       if (safeDeliveryAddress != null)
         'delivery_address': safeDeliveryAddress.toJson(),
 
-      'patient_id': patientId,
+      'profile_id': profileId,
       'patient_snapshot': patientSnapshot?.toJson(),
       'membership_id': membershipId,
       'prescription_id': prescriptionId,
-      'claim_pack_id': claimPackId,
       'line_items': lineItems
           .map((ZohoQuoteLineItem item) => item.toJson())
           .toList(growable: false),
@@ -350,16 +325,14 @@ class ZohoQuote {
     bool clearTerms = false,
     SalesDocumentAddress? deliveryAddress,
     bool clearDeliveryAddress = false,
-    String? patientId,
-    bool clearPatientId = false,
+    String? profileId,
+    bool clearProfileId = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     bool clearPatientSnapshot = false,
     String? membershipId,
     bool clearMembershipId = false,
     String? prescriptionId,
     bool clearPrescriptionId = false,
-    String? claimPackId,
-    bool clearClaimPackId = false,
     List<ZohoQuoteLineItem>? lineItems,
   }) {
     final QuotePurchaseContext nextPurchaseContext =
@@ -397,7 +370,7 @@ class ZohoQuote {
       notes: clearNotes ? null : (notes ?? this.notes),
       terms: clearTerms ? null : (terms ?? this.terms),
       deliveryAddress: nextDeliveryAddress,
-      patientId: clearPatientId ? null : (patientId ?? this.patientId),
+      profileId: clearProfileId ? null : (profileId ?? this.profileId),
       patientSnapshot: clearPatientSnapshot
           ? null
           : (patientSnapshot ?? this.patientSnapshot),
@@ -407,7 +380,6 @@ class ZohoQuote {
       prescriptionId: clearPrescriptionId
           ? null
           : (prescriptionId ?? this.prescriptionId),
-      claimPackId: clearClaimPackId ? null : (claimPackId ?? this.claimPackId),
       lineItems: lineItems ?? this.lineItems,
     );
   }
@@ -417,14 +389,14 @@ class ZohoQuote {
       final SalesDocumentPatientSnapshot parsed =
           SalesDocumentPatientSnapshot.fromJson(raw);
 
-      return parsed.patientId.trim().isEmpty ? null : parsed;
+      return parsed.profileId.trim().isEmpty ? null : parsed;
     }
 
     if (raw is Map) {
       final SalesDocumentPatientSnapshot parsed =
           SalesDocumentPatientSnapshot.fromJson(raw.cast<String, dynamic>());
 
-      return parsed.patientId.trim().isEmpty ? null : parsed;
+      return parsed.profileId.trim().isEmpty ? null : parsed;
     }
 
     return null;

@@ -9,7 +9,7 @@ import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_quick_actio
 import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
-import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
 
 class MemberHomeQuickActions extends ConsumerWidget {
@@ -96,7 +96,7 @@ class MemberHomeQuickActions extends ConsumerWidget {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => HealthMetricsDashboardScreen(
-          initialPatient: patient,
+          initialProfile: patient,
           profilePickerContactId: normalizedContactId,
           memberMode: true,
         ),

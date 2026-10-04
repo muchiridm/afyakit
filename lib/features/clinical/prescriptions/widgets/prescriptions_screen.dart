@@ -316,7 +316,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
 
     await controller.upload(
       tenantId: tenantId,
-      patientId: profileId,
+      profileId: profileId,
       file: PickedPrescriptionFile(
         fileName: file.name,
         extension: file.extension ?? 'jpg',
@@ -382,7 +382,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
 
     if (updated == null) {
       final error = ref
-          .read(prescriptionsControllerProvider(prescription.patientId))
+          .read(prescriptionsControllerProvider(prescription.profileId))
           .error;
 
       _showSnack(context, error ?? 'Failed to update prescription status.');
@@ -465,7 +465,7 @@ class _PrescriptionTile extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             [
-              'Patient: ${prescription.patientId}',
+              'Patient: ${prescription.profileId}',
               'Status: ${prescription.status.label}',
               if (prescription.prescribedOn != null)
                 'Prescribed: ${prescription.prescribedOn}',

@@ -31,10 +31,10 @@ class ProfileDetailsScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ProfileDetailsScreen> createState() =>
-      _PatientDetailsScreenState();
+      _ProfileDetailsScreenState();
 }
 
-class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
+class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   String? get _contactScope {
     final id = widget.contactId?.trim();
     if (id == null || id.isEmpty) return null;
@@ -56,13 +56,13 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     return ref.watch(profilesControllerProvider(_scope));
   }
 
-  Profile get _patient {
-    final patientId = widget.profile.profileId.trim();
+  Profile get _currentProfile {
+    final profileId = widget.profile.profileId.trim();
     final state = _state;
 
-    for (final patient in state.items) {
-      if (patient.profileId.trim() == patientId) {
-        return patient;
+    for (final profile in state.items) {
+      if (profile.profileId.trim() == profileId) {
+        return profile;
       }
     }
 
@@ -79,11 +79,11 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     });
   }
 
-  Future<void> _openEditDialog(Profile patient) async {
+  Future<void> _openEditDialog(Profile profile) async {
     final input = await showDialog<ProfileUpsertInput>(
       context: context,
       builder: (_) => ProfileFormDialog(
-        initial: patient,
+        initial: profile,
         allowExplicitContactLink: widget.allowExplicitContactLink,
       ),
     );
@@ -91,32 +91,32 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await _controller.update(patient.profileId, input);
+      await _controller.update(profile.profileId, input);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Patient profile updated')));
+      ).showSnackBar(const SnackBar(content: Text('Health Profile updated')));
     } catch (_) {
       if (!mounted) return;
       _showErrorFromState();
     }
   }
 
-  Future<void> _deletePatient(Profile patient) async {
+  Future<void> _deleteProfile(Profile profile) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(
           widget.allowExplicitContactLink
-              ? 'Delete patient profile'
-              : 'Remove patient profile',
+              ? 'Delete Health Profile'
+              : 'Remove Health Profile',
         ),
         content: Text(
           widget.allowExplicitContactLink
-              ? 'Delete ${patient.fullName}?'
-              : 'Remove ${patient.fullName} from your linked profiles?',
+              ? 'Delete ${profile.fullName}?'
+              : 'Remove ${profile.fullName} from your linked profiles?',
         ),
         actions: [
           TextButton(
@@ -134,7 +134,7 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await _controller.remove(patient.profileId);
+      await _controller.remove(profile.profileId);
 
       if (!mounted) return;
 
@@ -142,8 +142,8 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         SnackBar(
           content: Text(
             widget.allowExplicitContactLink
-                ? 'Patient profile deleted'
-                : 'Patient profile removed',
+                ? 'Health Profile deleted'
+                : 'Health Profile removed',
           ),
         ),
       );
@@ -164,11 +164,11 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final patient = _patient;
+    final profile = _currentProfile;
     final state = _state;
 
     return AppPage(
-      title: patient.fullName,
+      title: profile.fullName,
       showBack: true,
       maxWidth: AppLayout.contentMaxWidth,
       padding: AppLayout.pagePadding,
@@ -182,7 +182,7 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.isSaving ? null : () => _openEditDialog(patient),
+            onPressed: state.isSaving ? null : () => _openEditDialog(profile),
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit'),
           ),
@@ -194,14 +194,14 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _PatientHeaderCard(patient: patient),
+                _ProfileHeaderCard(profile: profile),
                 const SizedBox(height: AppShape.gap14),
-                _PatientDemographicsCard(patient: patient),
+                _ProfileDemographicsCard(profile: profile),
                 const SizedBox(height: AppShape.gap14),
-                _PatientLinkedContactsCard(patient: patient),
-                if ((patient.notes ?? '').trim().isNotEmpty) ...[
+                _ProfileLinkedContactsCard(profile: profile),
+                if ((profile.notes ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: AppShape.gap14),
-                  _PatientNotesCard(notes: patient.notes!.trim()),
+                  _ProfileNotesCard(notes: profile.notes!.trim()),
                 ],
                 const SizedBox(height: AppShape.gap24),
                 Align(
@@ -209,12 +209,12 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                   child: TextButton.icon(
                     onPressed: state.isSaving
                         ? null
-                        : () => _deletePatient(patient),
+                        : () => _deleteProfile(profile),
                     icon: const Icon(Icons.delete_outline),
                     label: Text(
                       widget.allowExplicitContactLink
-                          ? 'Delete patient profile'
-                          : 'Remove patient profile',
+                          ? 'Delete Health Profile'
+                          : 'Remove Health Profile',
                     ),
                   ),
                 ),
@@ -227,10 +227,10 @@ class _PatientDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   }
 }
 
-class _PatientHeaderCard extends StatelessWidget {
-  const _PatientHeaderCard({required this.patient});
+class _ProfileHeaderCard extends StatelessWidget {
+  const _ProfileHeaderCard({required this.profile});
 
-  final Profile patient;
+  final Profile profile;
 
   @override
   Widget build(BuildContext context) {
@@ -241,19 +241,19 @@ class _PatientHeaderCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(radius: 28, child: Text(_initials(patient.fullName))),
+          CircleAvatar(radius: 28, child: Text(_initials(profile.fullName))),
           const SizedBox(width: AppShape.gap14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  patient.fullName,
+                  profile.fullName,
                   style: t.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 SelectableText(
-                  patient.profileId,
+                  profile.profileId,
                   style: t.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -265,14 +265,14 @@ class _PatientHeaderCard extends StatelessWidget {
                   runSpacing: AppShape.gap8,
                   children: [
                     _StatusChip(
-                      label: patient.isActive ? 'Active' : 'Inactive',
-                      active: patient.isActive,
+                      label: profile.isActive ? 'Active' : 'Inactive',
+                      active: profile.isActive,
                     ),
-                    if (patient.relationship != null)
+                    if (profile.relationship != null)
                       Chip(
                         visualDensity: VisualDensity.compact,
                         label: Text(
-                          ProfilesLabels.relationship(patient.relationship!),
+                          ProfilesLabels.relationship(profile.relationship!),
                         ),
                       ),
                   ],
@@ -299,10 +299,10 @@ class _PatientHeaderCard extends StatelessWidget {
   }
 }
 
-class _PatientDemographicsCard extends StatelessWidget {
-  const _PatientDemographicsCard({required this.patient});
+class _ProfileDemographicsCard extends StatelessWidget {
+  const _ProfileDemographicsCard({required this.profile});
 
-  final Profile patient;
+  final Profile profile;
 
   @override
   Widget build(BuildContext context) {
@@ -311,13 +311,13 @@ class _PatientDemographicsCard extends StatelessWidget {
       icon: Icons.badge_outlined,
       child: Column(
         children: [
-          _InfoRow(label: 'Date of birth', value: patient.dob),
-          _InfoRow(label: 'Gender', value: _genderLabel(patient.gender)),
-          _InfoRow(label: 'Phone', value: patient.phone),
-          _InfoRow(label: 'Email', value: patient.email),
-          _InfoRow(label: 'National ID', value: patient.nationalId),
-          _InfoRow(label: 'Primary contact', value: patient.contactDisplayName),
-          _InfoRow(label: 'Contact ID', value: patient.contactId),
+          _InfoRow(label: 'Date of birth', value: profile.dob),
+          _InfoRow(label: 'Gender', value: _genderLabel(profile.gender)),
+          _InfoRow(label: 'Phone', value: profile.phone),
+          _InfoRow(label: 'Email', value: profile.email),
+          _InfoRow(label: 'National ID', value: profile.nationalId),
+          _InfoRow(label: 'Primary contact', value: profile.contactDisplayName),
+          _InfoRow(label: 'Contact ID', value: profile.contactId),
         ],
       ),
     );
@@ -335,14 +335,14 @@ class _PatientDemographicsCard extends StatelessWidget {
   }
 }
 
-class _PatientLinkedContactsCard extends StatelessWidget {
-  const _PatientLinkedContactsCard({required this.patient});
+class _ProfileLinkedContactsCard extends StatelessWidget {
+  const _ProfileLinkedContactsCard({required this.profile});
 
-  final Profile patient;
+  final Profile profile;
 
   @override
   Widget build(BuildContext context) {
-    final links = patient.linkedContacts;
+    final links = profile.linkedContacts;
 
     return AppCard(
       title: 'Linked contacts',
@@ -392,8 +392,8 @@ class _LinkedContactTile extends StatelessWidget {
   }
 }
 
-class _PatientNotesCard extends StatelessWidget {
-  const _PatientNotesCard({required this.notes});
+class _ProfileNotesCard extends StatelessWidget {
+  const _ProfileNotesCard({required this.notes});
 
   final String notes;
 

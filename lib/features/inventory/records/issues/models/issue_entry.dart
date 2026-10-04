@@ -1,3 +1,5 @@
+// lib/features/inventory/records/issues/models/issue_entry.dart
+
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 
 class IssueEntry {

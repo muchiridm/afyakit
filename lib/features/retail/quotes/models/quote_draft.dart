@@ -22,11 +22,10 @@ class QuoteDraft {
     this.paymentContext = QuotePaymentContext.directPay,
     this.fulfilmentMethod = QuoteFulfilmentMethod.delivery,
     this.deliveryAddress,
-    this.patientId,
+    this.profileId,
     this.patientSnapshot,
     this.membershipId,
     this.prescriptionId,
-    this.claimPackId,
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
@@ -49,10 +48,10 @@ class QuoteDraft {
 
   final SalesDocumentAddress? deliveryAddress;
 
-  /// Person receiving care or medicine.
+  /// Canonical Health Profile for the person receiving care or medicine.
   ///
   /// This remains separate from [contactId], which identifies the payer.
-  final String? patientId;
+  final String? profileId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
   /// Insurance membership context.
@@ -64,12 +63,6 @@ class QuoteDraft {
   ///
   /// Required for insurance and optional for direct pay.
   final String? prescriptionId;
-
-  /// Backward-compatible only.
-  ///
-  /// Claim packs are no longer created or managed at quote stage.
-  /// They are created or linked when an insurance quote becomes an invoice.
-  final String? claimPackId;
 
   final String? currencyCode;
 
@@ -115,11 +108,11 @@ class QuoteDraft {
     return isPrivateUse && effectivePaymentContext.requiresPrescription;
   }
 
-  String? get resolvedPatientId {
-    final String direct = (patientId ?? '').trim();
+  String? get resolvedProfileId {
+    final String direct = (profileId ?? '').trim();
     if (direct.isNotEmpty) return direct;
 
-    final String snapshotId = (patientSnapshot?.patientId ?? '').trim();
+    final String snapshotId = (patientSnapshot?.profileId ?? '').trim();
     return snapshotId.isEmpty ? null : snapshotId;
   }
 
@@ -136,20 +129,11 @@ class QuoteDraft {
     return direct.isEmpty ? null : direct;
   }
 
-  /// Backward-compatible only.
-  String? get resolvedClaimPackId {
-    final String direct = (claimPackId ?? '').trim();
-    return direct.isEmpty ? null : direct;
-  }
-
-  bool get hasPatientContext => resolvedPatientId != null;
+  bool get hasPatientContext => resolvedProfileId != null;
 
   bool get hasInsuranceContext => resolvedMembershipId != null;
 
   bool get hasPrescriptionContext => resolvedPrescriptionId != null;
-
-  /// Backward-compatible only.
-  bool get hasClaimPackContext => resolvedClaimPackId != null;
 
   bool get hasRequiredInsuranceQuoteContext {
     return isPrivateUse &&
@@ -205,16 +189,14 @@ class QuoteDraft {
     QuoteFulfilmentMethod? fulfilmentMethod,
     SalesDocumentAddress? deliveryAddress,
     bool clearDeliveryAddress = false,
-    String? patientId,
-    bool clearPatientId = false,
+    String? profileId,
+    bool clearProfileId = false,
     SalesDocumentPatientSnapshot? patientSnapshot,
     bool clearPatientSnapshot = false,
     String? membershipId,
     bool clearMembershipId = false,
     String? prescriptionId,
     bool clearPrescriptionId = false,
-    String? claimPackId,
-    bool clearClaimPackId = false,
     List<QuoteLineDraft>? lines,
     bool clearLines = false,
     String? currencyCode,
@@ -247,7 +229,7 @@ class QuoteDraft {
       paymentContext: nextPaymentContext,
       fulfilmentMethod: nextFulfilmentMethod,
       deliveryAddress: nextDeliveryAddress,
-      patientId: clearPatientId ? null : (patientId ?? this.patientId),
+      profileId: clearProfileId ? null : (profileId ?? this.profileId),
       patientSnapshot: clearPatientSnapshot
           ? null
           : (patientSnapshot ?? this.patientSnapshot),
@@ -257,7 +239,6 @@ class QuoteDraft {
       prescriptionId: clearPrescriptionId
           ? null
           : (prescriptionId ?? this.prescriptionId),
-      claimPackId: clearClaimPackId ? null : (claimPackId ?? this.claimPackId),
       lines: clearLines ? const <QuoteLineDraft>[] : (lines ?? this.lines),
       currencyCode: clearCurrencyCode
           ? null
@@ -320,26 +301,24 @@ class QuoteDraft {
 
   QuoteDraft clearPatientContext() {
     return copyWith(
-      clearPatientId: true,
+      clearProfileId: true,
       clearPatientSnapshot: true,
       clearMembershipId: true,
       clearPrescriptionId: true,
-      clearClaimPackId: true,
     );
   }
 
   QuoteDraft withPatientSnapshot(SalesDocumentPatientSnapshot snapshot) {
     final bool patientChanged =
-        resolvedPatientId != null && resolvedPatientId != snapshot.patientId;
+        resolvedProfileId != null && resolvedProfileId != snapshot.profileId;
 
     return copyWith(
-      patientId: snapshot.patientId,
+      profileId: snapshot.profileId,
       patientSnapshot: snapshot,
       membershipId: snapshot.membershipId,
       purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: effectivePaymentContext,
       clearPrescriptionId: patientChanged,
-      clearClaimPackId: patientChanged,
     );
   }
 
@@ -349,19 +328,6 @@ class QuoteDraft {
     return copyWith(
       prescriptionId: clean.isEmpty ? null : clean,
       clearPrescriptionId: clean.isEmpty,
-      clearClaimPackId: true,
-    );
-  }
-
-  /// Backward-compatible only.
-  ///
-  /// New quote creation should not select or manage claim packs.
-  QuoteDraft withClaimPackId(String? claimPackId) {
-    final String clean = (claimPackId ?? '').trim();
-
-    return copyWith(
-      claimPackId: clean.isEmpty ? null : clean,
-      clearClaimPackId: clean.isEmpty,
     );
   }
 
@@ -376,7 +342,6 @@ class QuoteDraft {
     return copyWith(
       paymentContext: QuotePaymentContext.directPay,
       clearMembershipId: true,
-      clearClaimPackId: true,
     );
   }
 
@@ -440,11 +405,10 @@ class QuoteDraft {
       deliveryAddress: quote.fulfilmentMethod.isDelivery
           ? quote.deliveryAddress
           : null,
-      patientId: quote.resolvedPatientId,
+      profileId: quote.resolvedProfileId,
       patientSnapshot: quote.patientSnapshot,
       membershipId: quote.resolvedMembershipId,
       prescriptionId: quote.resolvedPrescriptionId,
-      claimPackId: quote.resolvedClaimPackId,
       currencyCode: quote.currencyCode,
       lines: hydratedLines,
     );

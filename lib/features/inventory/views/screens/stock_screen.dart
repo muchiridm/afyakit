@@ -1,9 +1,9 @@
 // lib/features/src/inventory_view/screens/stock_screen.dart
 
 import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_controller.dart';
-import 'package:afyakit/features/inventory/records/issues/controllers/cart/multi_cart_state.dart';
-import 'package:afyakit/features/inventory/records/issues/widgets/cart_drawer.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_controller.dart';
+import 'package:afyakit/features/inventory/records/cart/controllers/multi_cart_state.dart';
+import 'package:afyakit/features/inventory/records/cart/widgets/cart_drawer.dart';
 import 'package:afyakit/features/inventory/views/controllers/inventory_view_controller.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
 import 'package:afyakit/features/inventory/views/widgets/inventory_browser_components/inventory_browser.dart';

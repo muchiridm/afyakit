@@ -289,7 +289,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       MaterialPageRoute<void>(
         builder: (_) => InsuranceClaimDetailScreen(
           claimPackId: claimPackId,
-          patientId: invoice.resolvedPatientId,
+          profileId: invoice.resolvedProfileId,
         ),
       ),
     );

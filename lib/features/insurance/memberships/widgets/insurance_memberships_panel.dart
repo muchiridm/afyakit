@@ -9,12 +9,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class InsuranceMembershipsPanel extends ConsumerStatefulWidget {
   const InsuranceMembershipsPanel({
     super.key,
-    required this.patientId,
-    this.patientDisplayName,
+    required this.profileId,
+    this.profileDisplayName,
   });
 
-  final String patientId;
-  final String? patientDisplayName;
+  final String profileId;
+  final String? profileDisplayName;
 
   @override
   ConsumerState<InsuranceMembershipsPanel> createState() =>
@@ -30,22 +30,22 @@ class _InsuranceMembershipsPanelState
     Future<void>.microtask(() {
       ref
           .read(insuranceMembershipsControllerProvider.notifier)
-          .loadForPatient(widget.patientId);
+          .loadForProfile(widget.profileId);
     });
   }
 
   Future<void> _reload() {
     return ref
         .read(insuranceMembershipsControllerProvider.notifier)
-        .loadForPatient(widget.patientId);
+        .loadForProfile(widget.profileId);
   }
 
   Future<void> _openCreateDialog() async {
     final input = await showDialog<InsuranceMembershipUpsertInput>(
       context: context,
       builder: (_) => InsuranceMembershipFormDialog(
-        patientId: widget.patientId,
-        patientDisplayName: widget.patientDisplayName,
+        profileId: widget.profileId,
+        profileDisplayName: widget.profileDisplayName,
       ),
     );
 
@@ -75,8 +75,8 @@ class _InsuranceMembershipsPanelState
       context: context,
       builder: (_) => InsuranceMembershipFormDialog(
         initial: membership,
-        patientId: widget.patientId,
-        patientDisplayName: widget.patientDisplayName,
+        profileId: widget.profileId,
+        profileDisplayName: widget.profileDisplayName,
       ),
     );
 
@@ -216,8 +216,8 @@ class _InsuranceMembershipTile extends StatelessWidget {
       membership.payerLabel,
       if ((membership.scheme ?? '').trim().isNotEmpty)
         membership.scheme!.trim(),
-      if ((membership.policyNumber ?? '').trim().isNotEmpty)
-        'Policy: ${membership.policyNumber!.trim()}',
+      if ((membership.policyNo ?? '').trim().isNotEmpty)
+        'Policy: ${membership.policyNo!.trim()}',
     ];
 
     return Card.outlined(

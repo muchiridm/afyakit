@@ -245,8 +245,8 @@ class ProfileLinkRequest {
 
     return ProfileLinkRequest(
       requestId: _readRequiredString(json, 'request_id'),
-      profileId: _readRequiredString(json, 'patient_id'),
-      profileDisplayName: _readRequiredString(json, 'patient_display_name'),
+      profileId: _readRequiredString(json, 'profile_id'),
+      profileDisplayName: _readRequiredString(json, 'profile_display_name'),
       requestedByUid: _readRequiredString(json, 'requested_by_uid'),
       requestedByContactId: _readNullableString(
         json,

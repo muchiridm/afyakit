@@ -13,7 +13,7 @@ import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
-import 'package:afyakit/features/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
@@ -38,37 +38,38 @@ class MemberFeaturesPanel extends ConsumerWidget {
 
     final tenantProfile = ref.watch(tenantProfileProvider).valueOrNull;
 
-    final bool healthMetricsEnabled =
-        tenantProfile?.has(FeatureKeys.healthMetrics) == true;
+    final bool clinicalEnabled =
+        tenantProfile?.has(FeatureKeys.clinical) == true;
 
     final List<Widget> actions = <Widget>[
-      if (healthMetricsEnabled)
+      if (clinicalEnabled) ...[
         HomeActionChip(
           icon: Icons.monitor_heart_outlined,
           label: 'My Health Metrics',
           onTap: () => _openHealthMetrics(context, contactId: contactId),
         ),
-      HomeActionChip(
-        icon: Icons.people_alt_outlined,
-        label: 'My Profiles',
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => ProfilesScreen(
-                contactId: contactId,
-                allowExplicitContactLink: false,
+        HomeActionChip(
+          icon: Icons.people_alt_outlined,
+          label: 'My Profiles',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ProfilesScreen(
+                  contactId: contactId,
+                  allowExplicitContactLink: false,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      HomeActionChip(
-        icon: Icons.description_outlined,
-        label: 'My Prescriptions',
-        onTap: () {
-          PrescriptionsScreen.open(context: context, contactId: contactId);
-        },
-      ),
+            );
+          },
+        ),
+        HomeActionChip(
+          icon: Icons.description_outlined,
+          label: 'My Prescriptions',
+          onTap: () {
+            PrescriptionsScreen.open(context: context, contactId: contactId);
+          },
+        ),
+      ],
       HomeActionChip(
         icon: Icons.location_on_outlined,
         label: 'Delivery Addresses',
@@ -159,6 +160,7 @@ class MemberFeaturesPanel extends ConsumerWidget {
           content: Text('Your account is not linked to a contact.'),
         ),
       );
+
       return;
     }
 
@@ -173,12 +175,14 @@ class MemberFeaturesPanel extends ConsumerWidget {
       ),
     );
 
-    if (profile == null || !context.mounted) return;
+    if (profile == null || !context.mounted) {
+      return;
+    }
 
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => HealthMetricsDashboardScreen(
-          initialPatient: profile,
+          initialProfile: profile,
           profilePickerContactId: normalizedContactId,
           memberMode: true,
         ),

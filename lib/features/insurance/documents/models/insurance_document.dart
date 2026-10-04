@@ -99,7 +99,7 @@ extension InsuranceDocumentStatusX on InsuranceDocumentStatus {
 class InsuranceDocument {
   const InsuranceDocument({
     required this.documentId,
-    required this.patientId,
+    required this.profileId,
     this.claimPackId,
     required this.documentType,
     required this.fileName,
@@ -125,7 +125,7 @@ class InsuranceDocument {
 
   final String documentId;
 
-  final String patientId;
+  final String profileId;
   final String? claimPackId;
 
   final InsuranceDocumentType documentType;
@@ -167,7 +167,7 @@ class InsuranceDocument {
   factory InsuranceDocument.fromJson(Map<String, Object?> json) {
     return InsuranceDocument(
       documentId: _s(json['document_id']),
-      patientId: _s(json['patient_id']),
+      profileId: _s(json['profile_id']),
       claimPackId: _sn(json['claim_pack_id']),
       documentType: InsuranceDocumentTypeX.fromWire(json['document_type']),
       fileName: _s(json['file_name']),
@@ -195,7 +195,7 @@ class InsuranceDocument {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'document_id': documentId,
-      'patient_id': patientId,
+      'profile_id': profileId,
       'claim_pack_id': claimPackId,
       'document_type': documentType.wire,
       'file_name': fileName,

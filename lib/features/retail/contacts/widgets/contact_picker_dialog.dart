@@ -223,7 +223,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
   String _subtitleFor(ZohoContact c) {
     final parts = <String?>[
       (c.accountNumber ?? '').trim().isEmpty ? null : c.accountNumber,
-      c.linkedPatientsSummary.trim().isEmpty ? null : c.linkedPatientsSummary,
+      c.linkedProfilesSummary.trim().isEmpty ? null : c.linkedProfilesSummary,
       (c.contactType ?? '').trim().isEmpty ? null : c.contactType,
       c.bestPhone.trim().isEmpty ? null : c.bestPhone,
     ].whereType<String>().take(3).join(' • ');
@@ -291,7 +291,7 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
               final c = _items[i];
               final subtitle = _subtitleFor(c);
               final title = c.displayName.trim();
-              final linkedCount = c.activeLinkedPatientCount;
+              final linkedCount = c.activeLinkedProfileCount;
 
               return ListTile(
                 title: Text(title.isEmpty ? 'Contact' : title),

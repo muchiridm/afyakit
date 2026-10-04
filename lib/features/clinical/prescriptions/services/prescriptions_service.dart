@@ -36,17 +36,17 @@ class PrescriptionsService {
   FirebaseStorage get storage => _storage ?? FirebaseStorage.instance;
 
   Future<List<Prescription>> list({
-    String? patientId,
+    String? profileId,
     bool? isActive,
     PrescriptionStatus? status,
     int perPage = 50,
     int page = 1,
   }) async {
-    final pid = _nullable(patientId);
+    final pid = _nullable(profileId);
 
     final uri = pid != null
-        ? routes.clinicalPatientPrescriptionsList(
-            patientId: pid,
+        ? routes.clinicalProfilePrescriptionsList(
+            profileId: pid,
             isActive: isActive,
             status: status?.wireName,
             perPage: perPage,
@@ -66,83 +66,87 @@ class PrescriptionsService {
   }
 
   Future<Prescription> get({
-    required String patientId,
+    required String profileId,
     required String prescriptionId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
     final rxid = _requiredId(prescriptionId, 'prescriptionId');
 
     final response = await api.getUri<Object?>(
-      routes.clinicalPatientPrescriptionGet(
-        patientId: pid,
+      routes.clinicalProfilePrescriptionGet(
+        profileId: pid,
         prescriptionId: rxid,
       ),
     );
 
     final body = _asMap(response.data);
+
     return _readPrescription(body['prescription']);
   }
 
   Future<Prescription> create(PrescriptionCreateInput input) async {
-    final pid = _requiredId(input.patientId, 'patientId');
+    final pid = _requiredId(input.profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalPatientPrescriptionCreate(pid),
+      routes.clinicalProfilePrescriptionCreate(pid),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
+
     return _readPrescription(body['prescription']);
   }
 
   Future<Prescription> approve({
-    required String patientId,
+    required String profileId,
     required String prescriptionId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
     final rxid = _requiredId(prescriptionId, 'prescriptionId');
 
     final response = await api.patchUri<Object?>(
-      routes.clinicalPatientPrescriptionApprove(
-        patientId: pid,
+      routes.clinicalProfilePrescriptionApprove(
+        profileId: pid,
         prescriptionId: rxid,
       ),
     );
 
     final body = _asMap(response.data);
+
     return _readPrescription(body['prescription']);
   }
 
   Future<Prescription> update({
-    required String patientId,
+    required String profileId,
     required String prescriptionId,
     required PrescriptionUpdateInput input,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
     final rxid = _requiredId(prescriptionId, 'prescriptionId');
 
     final response = await api.putUri<Object?>(
-      routes.clinicalPatientPrescriptionUpdate(
-        patientId: pid,
+      routes.clinicalProfilePrescriptionUpdate(
+        profileId: pid,
         prescriptionId: rxid,
       ),
       data: input.toJson(),
     );
 
     final body = _asMap(response.data);
+
     return _readPrescription(body['prescription']);
   }
 
   Future<void> remove({
-    required String patientId,
+    required String profileId,
     required String prescriptionId,
   }) async {
-    final pid = _requiredId(patientId, 'patientId');
+    final pid = _requiredId(profileId, 'profileId');
     final rxid = _requiredId(prescriptionId, 'prescriptionId');
 
     await api.deleteUri<Object?>(
-      routes.clinicalPatientPrescriptionDelete(
-        patientId: pid,
+      routes.clinicalProfilePrescriptionDelete(
+        profileId: pid,
         prescriptionId: rxid,
       ),
     );
@@ -150,28 +154,31 @@ class PrescriptionsService {
 
   Future<Prescription> uploadAndCreate({
     required String tenantId,
-    required String patientId,
+    required String profileId,
     required PickedPrescriptionFile file,
     String? note,
     String? prescribedOn,
   }) async {
     final cleanTenantId = _requiredId(tenantId, 'tenantId');
-    final cleanPatientId = _requiredId(patientId, 'patientId');
+
+    final cleanProfileId = _requiredId(profileId, 'profileId');
 
     final uploadId = PrescriptionStoragePaths.newUploadId();
+
     final ext = PrescriptionStoragePaths.cleanExt(file.extension);
+
     final contentType = PrescriptionStoragePaths.contentTypeForExt(ext);
 
     final originalPath = PrescriptionStoragePaths.originalPath(
       tenantId: cleanTenantId,
-      patientId: cleanPatientId,
+      profileId: cleanProfileId,
       uploadId: uploadId,
       ext: ext,
     );
 
     final thumbPath = PrescriptionStoragePaths.thumbnailPath(
       tenantId: cleanTenantId,
-      patientId: cleanPatientId,
+      profileId: cleanProfileId,
       uploadId: uploadId,
     );
 
@@ -179,7 +186,7 @@ class PrescriptionsService {
       contentType: contentType,
       customMetadata: <String, String>{
         'tenant_id': cleanTenantId,
-        'patient_id': cleanPatientId,
+        'profile_id': cleanProfileId,
         'upload_id': uploadId,
         'original_file_name': file.fileName,
         'document_type': 'prescription',
@@ -190,7 +197,7 @@ class PrescriptionsService {
 
     return create(
       PrescriptionCreateInput(
-        patientId: cleanPatientId,
+        profileId: cleanProfileId,
         fileName: file.fileName,
         storagePath: originalPath,
         originalStoragePath: originalPath,
@@ -207,6 +214,7 @@ class PrescriptionsService {
 
   Future<String> downloadUrl(String storagePath) async {
     final path = _requiredId(storagePath, 'storagePath');
+
     return storage.ref(path).getDownloadURL();
   }
 
@@ -221,7 +229,9 @@ class PrescriptionsService {
   }
 
   static Map<String, Object?> _asMap(Object? value) {
-    if (value is Map<String, Object?>) return value;
+    if (value is Map<String, Object?>) {
+      return value;
+    }
 
     if (value is Map) {
       return value.map(
@@ -233,7 +243,9 @@ class PrescriptionsService {
   }
 
   static List<Map<String, Object?>> _asListOfMaps(Object? value) {
-    if (value is! List) return const <Map<String, Object?>>[];
+    if (value is! List) {
+      return const <Map<String, Object?>>[];
+    }
 
     return value
         .whereType<Map>()
@@ -257,7 +269,11 @@ class PrescriptionsService {
 
   static String? _nullable(String? value) {
     final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
+
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
     return trimmed;
   }
 }

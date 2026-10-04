@@ -89,15 +89,15 @@ class _QuoteEditorDetailsSheetState
     return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
   }
 
-  String? get _patientId {
-    return _clean(_profile?.profileId) ?? _clean(_draft.resolvedPatientId);
+  String? get _profileId {
+    return _clean(_profile?.profileId) ?? _clean(_draft.resolvedProfileId);
   }
 
   bool get _requiresInsurance {
     return _paymentContext == QuotePaymentContext.insurance;
   }
 
-  ProfilesScope get _memberPatientScope {
+  ProfilesScope get _memberProfileScope {
     final String contactId = _memberContactId;
 
     return ProfilesScope(
@@ -115,12 +115,12 @@ class _QuoteEditorDetailsSheetState
 
     final SalesDocumentPatientSnapshot? snapshot =
         widget.initial.patientSnapshot;
-    final String? snapshotPatientId = _clean(snapshot?.patientId);
+    final String? snapshotProfileId = _clean(snapshot?.profileId);
 
-    if (snapshotPatientId != null) {
+    if (snapshotProfileId != null) {
       _profile = Profile(
-        profileId: snapshotPatientId,
-        fullName: _clean(snapshot?.fullName) ?? snapshotPatientId,
+        profileId: snapshotProfileId,
+        fullName: _clean(snapshot?.fullName) ?? snapshotProfileId,
         dob: _clean(snapshot?.dob),
         isActive: true,
       );
@@ -138,9 +138,9 @@ class _QuoteEditorDetailsSheetState
       Future<void>.microtask(_loadLinkedProfiles);
     }
 
-    final String? patientId = _patientId;
-    if (patientId != null) {
-      Future<void>.microtask(() => _loadPrescriptions(patientId));
+    final String? profileId = _profileId;
+    if (profileId != null) {
+      Future<void>.microtask(() => _loadPrescriptions(profileId));
     }
   }
 
@@ -161,17 +161,17 @@ class _QuoteEditorDetailsSheetState
 
   Future<void> _loadLinkedProfiles() async {
     final ProfilesController controller = ref.read(
-      profilesControllerProvider(_memberPatientScope).notifier,
+      profilesControllerProvider(_memberProfileScope).notifier,
     );
 
     controller.setIsActive(true);
     await controller.load();
   }
 
-  Future<void> _loadPrescriptions(String patientId) {
+  Future<void> _loadPrescriptions(String profileId) {
     return ref
-        .read(prescriptionsControllerProvider(patientId).notifier)
-        .load(profileId: patientId, isActive: true);
+        .read(prescriptionsControllerProvider(profileId).notifier)
+        .load(profileId: profileId, isActive: true);
   }
 
   void _hydrateInitialSelections({
@@ -203,9 +203,9 @@ class _QuoteEditorDetailsSheetState
 
         if (_profile == null && membership != null) {
           _profile = Profile(
-            profileId: membership.patientId,
+            profileId: membership.profileId,
             fullName:
-                _clean(membership.patientDisplayName) ?? membership.patientId,
+                _clean(membership.profileDisplayName) ?? membership.profileId,
             isActive: true,
           );
         }
@@ -241,12 +241,12 @@ class _QuoteEditorDetailsSheetState
     return null;
   }
 
-  Profile? _findLoadedProfileById(String? patientId) {
-    final String? id = _clean(patientId);
+  Profile? _findLoadedProfileById(String? profileId) {
+    final String? id = _clean(profileId);
     if (id == null || !_isMemberScoped) return null;
 
     final ProfilesState state = ref.read(
-      profilesControllerProvider(_memberPatientScope),
+      profilesControllerProvider(_memberProfileScope),
     );
 
     for (final Profile profile in state.items) {
@@ -256,11 +256,11 @@ class _QuoteEditorDetailsSheetState
     return null;
   }
 
-  Set<String>? _allowedPatientIdsForMemberships() {
+  Set<String>? _allowedProfileIdsForMemberships() {
     if (!_isMemberScoped) return null;
 
     final ProfilesState state = ref.watch(
-      profilesControllerProvider(_memberPatientScope),
+      profilesControllerProvider(_memberProfileScope),
     );
 
     return state.items
@@ -311,12 +311,12 @@ class _QuoteEditorDetailsSheetState
 
   void _setMembership(InsuranceMembership membership) {
     final Profile profile =
-        _findLoadedProfileById(membership.patientId) ??
+        _findLoadedProfileById(membership.profileId) ??
         _profile ??
         Profile(
-          profileId: membership.patientId,
+          profileId: membership.profileId,
           fullName:
-              _clean(membership.patientDisplayName) ?? membership.patientId,
+              _clean(membership.profileDisplayName) ?? membership.profileId,
           isActive: true,
         );
 
@@ -334,7 +334,7 @@ class _QuoteEditorDetailsSheetState
       );
     });
 
-    _loadPrescriptions(membership.patientId);
+    _loadPrescriptions(membership.profileId);
   }
 
   void _setPrescription(Prescription? prescription) {
@@ -355,9 +355,9 @@ class _QuoteEditorDetailsSheetState
   }
 
   Future<void> _uploadPrescription() async {
-    final String? patientId = _patientId;
+    final String? profileId = _profileId;
 
-    if (patientId == null) {
+    if (profileId == null) {
       _snack('Select a profile first.');
       return;
     }
@@ -385,12 +385,12 @@ class _QuoteEditorDetailsSheetState
     setState(() => _uploadingPrescription = true);
 
     try {
-      final provider = prescriptionsControllerProvider(patientId);
+      final provider = prescriptionsControllerProvider(profileId);
       final PrescriptionsController controller = ref.read(provider.notifier);
 
       await controller.upload(
         tenantId: widget.tenantId.trim(),
-        patientId: patientId,
+        profileId: profileId,
         file: PickedPrescriptionFile(
           fileName: file.name,
           extension: file.extension ?? 'jpg',
@@ -543,7 +543,7 @@ class _QuoteEditorDetailsSheetState
   }
 
   bool get _profileComplete {
-    return _draft.isCompany || _patientId != null;
+    return _draft.isCompany || _profileId != null;
   }
 
   bool get _paymentComplete {
@@ -600,8 +600,8 @@ class _QuoteEditorDetailsSheetState
 
   SalesDocumentPatientSnapshot _snapshotFromProfile(Profile profile) {
     return SalesDocumentPatientSnapshot(
-      patientId: profile.profileId,
-      patientNo: profile.profileId,
+      profileId: profile.profileId,
+      patientNo: null,
       fullName: profile.fullName,
       dob: profile.dob,
       gender: profile.gender?.name,
@@ -613,15 +613,15 @@ class _QuoteEditorDetailsSheetState
     InsuranceMembership membership, {
     required Profile patient,
   }) {
-    final String patientId = membership.patientId.trim();
+    final String profileId = membership.profileId.trim();
 
     return SalesDocumentPatientSnapshot(
-      patientId: patientId,
-      patientNo: _clean(membership.patientNo) ?? patientId,
+      profileId: profileId,
+      patientNo: _clean(membership.patientNo),
       fullName:
           _clean(patient.fullName) ??
-          _clean(membership.patientDisplayName) ??
-          patientId,
+          _clean(membership.profileDisplayName) ??
+          profileId,
       dob: patient.dob,
       gender: patient.gender?.name,
       relationship: patient.relationship?.name,
@@ -654,17 +654,17 @@ class _QuoteEditorDetailsSheetState
 
   @override
   Widget build(BuildContext context) {
-    final String? patientId = _patientId;
+    final String? profileId = _profileId;
 
-    final PrescriptionsState prescriptionState = patientId == null
+    final PrescriptionsState prescriptionState = profileId == null
         ? const PrescriptionsState()
-        : ref.watch(prescriptionsControllerProvider(patientId));
+        : ref.watch(prescriptionsControllerProvider(profileId));
 
     final InsuranceMembershipsState membershipsState = ref.watch(
       insuranceMembershipsControllerProvider,
     );
 
-    final Set<String>? allowedPatientIds = _allowedPatientIdsForMemberships();
+    final Set<String>? allowedProfileIds = _allowedProfileIdsForMemberships();
 
     _hydrateInitialSelections(
       memberships: membershipsState.items,
@@ -672,8 +672,8 @@ class _QuoteEditorDetailsSheetState
     );
 
     final int membershipCount = membershipsState.visibleActiveCount(
-      patientId: patientId,
-      allowedPatientIds: allowedPatientIds,
+      profileId: profileId,
+      allowedProfileIds: allowedProfileIds,
     );
 
     final double membershipPickerHeight = _membershipPickerHeight(
@@ -771,8 +771,8 @@ class _QuoteEditorDetailsSheetState
               child: InsuranceMembershipPickerCard(
                 initialMembershipId:
                     _membership?.membershipId ?? _draft.resolvedMembershipId,
-                patientId: patientId,
-                allowedPatientIds: allowedPatientIds,
+                profileId: profileId,
+                allowedProfileIds: allowedProfileIds,
                 title: _isMemberScoped
                     ? 'Your insurance memberships'
                     : 'Insurance memberships',
@@ -799,17 +799,17 @@ class _QuoteEditorDetailsSheetState
               ? 'Required for an insurance quote.'
               : 'Optional for a direct-pay quote.',
           child: PrescriptionPickerCard(
-            patientId: patientId,
+            profileId: profileId,
             prescriptions: prescriptionState.items,
             selectedPrescriptionId:
                 _prescription?.prescriptionId ?? _draft.resolvedPrescriptionId,
             busy: prescriptionState.busy || _uploadingPrescription,
             error: prescriptionState.error,
             requiredForClaim: _requiresInsurance,
-            onRefresh: patientId == null
+            onRefresh: profileId == null
                 ? null
-                : () => _loadPrescriptions(patientId),
-            onUpload: patientId == null ? null : _uploadPrescription,
+                : () => _loadPrescriptions(profileId),
+            onUpload: profileId == null ? null : _uploadPrescription,
             onChanged: _setPrescription,
           ),
         ),
@@ -944,13 +944,13 @@ class _QuoteEditorDetailsSheetState
   }
 
   void _pickProfileResult(Profile profile) {
-    final String? previousPatientId = _clean(_draft.resolvedPatientId);
-    final String nextPatientId = profile.profileId.trim();
+    final String? previousProfileId = _clean(_draft.resolvedProfileId);
+    final String nextProfileId = profile.profileId.trim();
 
     setState(() {
       _profile = profile;
 
-      if (previousPatientId != null && previousPatientId != nextPatientId) {
+      if (previousProfileId != null && previousProfileId != nextProfileId) {
         _membership = null;
         _prescription = null;
       }
@@ -960,15 +960,15 @@ class _QuoteEditorDetailsSheetState
         paymentContext: _paymentContext,
         patientSnapshot: _snapshotFromProfile(profile),
         clearMembershipId:
-            previousPatientId != null && previousPatientId != nextPatientId,
+            previousProfileId != null && previousProfileId != nextProfileId,
         clearPrescriptionId:
-            previousPatientId != null && previousPatientId != nextPatientId,
+            previousProfileId != null && previousProfileId != nextProfileId,
         clearPrescriptionLabel:
-            previousPatientId != null && previousPatientId != nextPatientId,
+            previousProfileId != null && previousProfileId != nextProfileId,
       );
     });
 
-    _loadPrescriptions(nextPatientId);
+    _loadPrescriptions(nextProfileId);
   }
 }
 

@@ -36,34 +36,32 @@ class ZohoInvoicesService {
     String? q,
     String? accountNumber,
     String? customerId,
-
-    String? patientId,
+    String? profileId,
     String? patientNo,
     String? claimPackId,
     String? membershipId,
     String? prescriptionId,
   }) async {
-    final String qq = (q ?? '').trim();
-    final String acct = (accountNumber ?? '').trim();
-    final String cid = (customerId ?? '').trim();
-
-    final String pid = (patientId ?? '').trim();
-    final String pno = (patientNo ?? '').trim();
-    final String claimId = (claimPackId ?? '').trim();
-    final String mid = (membershipId ?? '').trim();
-    final String rxid = (prescriptionId ?? '').trim();
+    final String search = (q ?? '').trim();
+    final String account = (accountNumber ?? '').trim();
+    final String customer = (customerId ?? '').trim();
+    final String profile = (profileId ?? '').trim();
+    final String patientNumber = (patientNo ?? '').trim();
+    final String claimPack = (claimPackId ?? '').trim();
+    final String membership = (membershipId ?? '').trim();
+    final String prescription = (prescriptionId ?? '').trim();
 
     final Uri uri = routes.retailListInvoices(
       limit: limit,
       page: page,
-      q: qq.isEmpty ? null : qq,
-      accountNumber: acct.isEmpty ? null : acct,
-      customerId: cid.isEmpty ? null : cid,
-      patientId: pid.isEmpty ? null : pid,
-      patientNo: pno.isEmpty ? null : pno,
-      claimPackId: claimId.isEmpty ? null : claimId,
-      membershipId: mid.isEmpty ? null : mid,
-      prescriptionId: rxid.isEmpty ? null : rxid,
+      q: search.isEmpty ? null : search,
+      accountNumber: account.isEmpty ? null : account,
+      customerId: customer.isEmpty ? null : customer,
+      profileId: profile.isEmpty ? null : profile,
+      patientNo: patientNumber.isEmpty ? null : patientNumber,
+      claimPackId: claimPack.isEmpty ? null : claimPack,
+      membershipId: membership.isEmpty ? null : membership,
+      prescriptionId: prescription.isEmpty ? null : prescription,
     );
 
     final Response<dynamic> res = await api.getUri(uri);

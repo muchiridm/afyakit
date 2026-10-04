@@ -205,13 +205,13 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
         ? _requiredInsurancePayerContact(payerContact)
         : state.contact;
 
-    final String? previousPatientId = state.resolvedPatientId;
-    final String? nextPatientId = _clean(patientSnapshot.patientId);
+    final String? previousProfileId = state.resolvedProfileId;
+    final String? nextProfileId = _clean(patientSnapshot.profileId);
 
     final bool patientChanged =
-        previousPatientId != null &&
-        nextPatientId != null &&
-        previousPatientId != nextPatientId;
+        previousProfileId != null &&
+        nextProfileId != null &&
+        previousProfileId != nextProfileId;
 
     state = state.copyWith(
       purchaseContext: QuotePurchaseContext.privateUse,

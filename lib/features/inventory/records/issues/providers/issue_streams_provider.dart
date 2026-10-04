@@ -1,46 +1,38 @@
-import 'package:flutter/foundation.dart' show debugPrint;
+// lib/features/inventory/records/issues/providers/issue_streams_provider.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/shared/utils/firestore_instance.dart';
+
 import 'package:afyakit/features/inventory/records/issues/models/issue_record.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
-import 'package:afyakit/features/inventory/records/issues/services/issue_service.dart';
 
-/// Bundle used to identify a single issue in a tenant.
+/// Identifies a single issue within a tenant.
 typedef IssueKey = ({String tenantId, String issueId});
 
-/// 🔹 Kick a one-time backfill per tenant (idempotent).
-/// It writes missing `brand` and `expiry` into issue_entries and then
-/// sets a marker so it never runs again for this tenant.
-final _brandExpiryBackfillTriggerProvider = FutureProvider.family<void, String>(
-  (ref, tenantId) async {
-    try {
-      final svc = IssueService(tenantId);
-      await svc.runBrandExpiryBackfillIfNeeded(); // idempotent
-    } catch (e, st) {
-      debugPrint('↯ backfill trigger failed for $tenantId → $e\n$st');
-    }
-  },
-);
+/// ─────────────────────────────────────────────
+/// 1. Live issue list
+/// ─────────────────────────────────────────────
 
-/// 1) Live list of issues for a tenant (newest → oldest)
 final issuesStreamProvider = StreamProvider.family
     .autoDispose<List<IssueRecord>, String>((ref, tenantId) {
-      // 🔸 Ensure the backfill runs once in the background (idempotent).
-      ref.watch(_brandExpiryBackfillTriggerProvider(tenantId));
-
       final q = db
           .collection('tenants')
           .doc(tenantId)
           .collection('issue_records')
-          .orderBy('dateRequested', descending: true);
+          .orderBy('dateRequestedTs', descending: true);
 
       return q.snapshots().map(
-        (snap) =>
-            snap.docs.map((d) => IssueRecord.fromMap(d.id, d.data())).toList(),
+        (snap) => snap.docs
+            .map((doc) => IssueRecord.fromMap(doc.id, doc.data()))
+            .toList(),
       );
     });
 
-/// 2) Live single issue document
+/// ─────────────────────────────────────────────
+/// 2. Live single issue
+/// ─────────────────────────────────────────────
+
 final issueDocStreamProvider = StreamProvider.family
     .autoDispose<IssueRecord?, IssueKey>((ref, key) {
       final docRef = db
@@ -49,15 +41,19 @@ final issueDocStreamProvider = StreamProvider.family
           .collection('issue_records')
           .doc(key.issueId);
 
-      return docRef.snapshots().map(
-        (s) => s.exists ? IssueRecord.fromMap(s.id, s.data()!) : null,
-      );
+      return docRef.snapshots().map((snapshot) {
+        if (!snapshot.exists) {
+          return null;
+        }
+
+        return IssueRecord.fromMap(snapshot.id, snapshot.data()!);
+      });
     });
 
-/// 3) Live entries (subcollection) for a single issue
-///
-/// These entry docs should already contain *all* denormalized SKU info:
-/// itemName, itemGroup, strength, packSize, **brand**, and optionally expiry.
+/// ─────────────────────────────────────────────
+/// 3. Live issue entries
+/// ─────────────────────────────────────────────
+
 final issueEntriesStreamProvider = StreamProvider.family
     .autoDispose<List<IssueEntry>, IssueKey>((ref, key) {
       final col = db
@@ -68,25 +64,33 @@ final issueEntriesStreamProvider = StreamProvider.family
           .collection('issue_entries');
 
       return col.snapshots().map(
-        (qs) => qs.docs.map((e) => IssueEntry.fromMap(e.id, e.data())).toList(),
+        (snapshot) => snapshot.docs
+            .map((doc) => IssueEntry.fromMap(doc.id, doc.data()))
+            .toList(),
       );
     });
 
-/// 4) Combined provider: glue doc + entries into one IssueRecord (no extra reads)
+/// ─────────────────────────────────────────────
+/// 4. Full issue = record + entries
+/// ─────────────────────────────────────────────
+
 final issueFullProvider = Provider.family
     .autoDispose<AsyncValue<IssueRecord?>, IssueKey>((ref, key) {
-      final docAsync = ref.watch(issueDocStreamProvider(key));
+      final issueAsync = ref.watch(issueDocStreamProvider(key));
+
       final entriesAsync = ref.watch(issueEntriesStreamProvider(key));
 
-      if (docAsync.isLoading || entriesAsync.isLoading) {
+      if (issueAsync.isLoading || entriesAsync.isLoading) {
         return const AsyncLoading();
       }
-      if (docAsync.hasError) {
+
+      if (issueAsync.hasError) {
         return AsyncError(
-          docAsync.error!,
-          docAsync.stackTrace ?? StackTrace.current,
+          issueAsync.error!,
+          issueAsync.stackTrace ?? StackTrace.current,
         );
       }
+
       if (entriesAsync.hasError) {
         return AsyncError(
           entriesAsync.error!,
@@ -94,9 +98,13 @@ final issueFullProvider = Provider.family
         );
       }
 
-      final issue = docAsync.value;
-      if (issue == null) return const AsyncData<IssueRecord?>(null);
+      final issue = issueAsync.value;
+
+      if (issue == null) {
+        return const AsyncData<IssueRecord?>(null);
+      }
 
       final entries = entriesAsync.value ?? const <IssueEntry>[];
+
       return AsyncData<IssueRecord?>(issue.copyWith(entries: entries));
     });

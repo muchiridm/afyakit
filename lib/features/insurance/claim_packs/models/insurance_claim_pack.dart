@@ -69,7 +69,7 @@ extension InsuranceClaimPackStatusX on InsuranceClaimPackStatus {
 class InsuranceClaimPack {
   const InsuranceClaimPack({
     required this.claimPackId,
-    required this.patientId,
+    required this.profileId,
     required this.membershipId,
     this.invoiceId,
     this.invoiceNumber,
@@ -104,7 +104,7 @@ class InsuranceClaimPack {
 
   final String claimPackId;
 
-  final String patientId;
+  final String profileId;
   final String membershipId;
 
   final String? invoiceId;
@@ -157,7 +157,7 @@ class InsuranceClaimPack {
   factory InsuranceClaimPack.fromJson(Map<String, Object?> json) {
     return InsuranceClaimPack(
       claimPackId: _s(json['claim_pack_id']),
-      patientId: _s(json['patient_id']),
+      profileId: _s(json['profile_id']),
       membershipId: _s(json['membership_id']),
       invoiceId: _sn(json['invoice_id']),
       invoiceNumber: _sn(json['invoice_number']),
@@ -194,7 +194,7 @@ class InsuranceClaimPack {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'claim_pack_id': claimPackId,
-      'patient_id': patientId,
+      'profile_id': profileId,
       'membership_id': membershipId,
       'invoice_id': invoiceId,
       'invoice_number': invoiceNumber,
