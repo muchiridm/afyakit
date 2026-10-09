@@ -13,10 +13,12 @@ class NotificationBootstrap extends StatefulWidget {
   const NotificationBootstrap({
     super.key,
     required this.user,
+    required this.appId,
     required this.child,
   });
 
   final AuthUser user;
+  final String appId;
   final Widget child;
 
   @override
@@ -34,6 +36,9 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   String? _registrationKey;
 
   bool _initialising = false;
+  bool _registrationPending = false;
+
+  String get _appId => widget.appId.trim().toLowerCase();
 
   @override
   void initState() {
@@ -47,7 +52,8 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   void didUpdateWidget(covariant NotificationBootstrap oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (_userRegistrationChanged(oldWidget.user, widget.user)) {
+    if (_registrationKeyFor(oldWidget.user, oldWidget.appId) !=
+        _registrationKeyFor(widget.user, widget.appId)) {
       _scheduleRegistration();
     }
   }
@@ -67,9 +73,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   void _scheduleRegistration() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       unawaited(_initialise());
     });
@@ -77,12 +81,18 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   Future<void> _initialise() async {
     if (_initialising) {
+      _registrationPending = true;
       return;
     }
 
-    final registrationKey = _registrationKeyFor(widget.user);
+    final registrationKey = _registrationKeyFor(widget.user, widget.appId);
 
     if (_registrationKey == registrationKey && _registeredToken != null) {
+      return;
+    }
+
+    if (_appId.isEmpty) {
+      debugPrint('⚠️ Notification registration skipped: empty appId');
       return;
     }
 
@@ -98,11 +108,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
           status == AuthorizationStatus.provisional;
 
       if (!allowed) {
-        debugPrint(
-          '🔕 Notifications not authorised: '
-          '${status.name}',
-        );
-
+        debugPrint('🔕 Notifications not authorised: ${status.name}');
         return;
       }
 
@@ -110,11 +116,22 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
       if (token == null) {
         debugPrint('🔕 Firebase Messaging returned no token.');
+        return;
+      }
 
+      if (!mounted) return;
+
+      // Do not register stale session/app context if
+      // the selected application changed during
+      // the asynchronous permission/token requests.
+      if (registrationKey != _registrationKeyFor(widget.user, widget.appId)) {
+        _registrationPending = true;
         return;
       }
 
       await _registerToken(token, registrationKey: registrationKey);
+
+      if (!mounted) return;
 
       await _tokenSubscription?.cancel();
 
@@ -124,7 +141,6 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
         },
         onError: (Object error, StackTrace stack) {
           debugPrint('💥 FCM token refresh error: $error');
-
           debugPrintStack(stackTrace: stack);
         },
       );
@@ -132,28 +148,41 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
       debugPrint(
         '🔔 Notification device registered '
         'tenant=${widget.user.tenantId} '
+        'app=$_appId '
         'uid=${widget.user.uid}',
       );
     } catch (error, stackTrace) {
-      debugPrint(
-        '💥 Notification registration failed: '
-        '$error',
-      );
-
+      debugPrint('💥 Notification registration failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     } finally {
       _initialising = false;
+
+      if (_registrationPending && mounted) {
+        _registrationPending = false;
+        _scheduleRegistration();
+      }
     }
   }
 
   Future<void> _registerToken(String token, {String? registrationKey}) async {
     final cleanToken = token.trim();
 
-    if (cleanToken.isEmpty) {
+    if (cleanToken.isEmpty || _appId.isEmpty) {
       return;
     }
 
-    await _service.registerDevice(user: widget.user, token: cleanToken);
+    // The current NotificationService still writes
+    // tenant-level device registrations.
+    //
+    // We will add the explicit appId argument when
+    // updating notification_service.dart next.
+    await _service.registerDevice(
+      user: widget.user,
+      appId: _appId,
+      token: cleanToken,
+    );
+
+    if (!mounted) return;
 
     _registeredToken = cleanToken;
 
@@ -164,15 +193,16 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   Future<void> _registerRefreshedToken(String token) async {
     try {
-      await _registerToken(token);
+      final registrationKey = _registrationKeyFor(widget.user, widget.appId);
 
-      debugPrint('🔔 Refreshed notification token registered.');
-    } catch (error, stackTrace) {
+      await _registerToken(token, registrationKey: registrationKey);
+
       debugPrint(
-        '💥 Failed to register refreshed FCM token: '
-        '$error',
+        '🔔 Refreshed notification token registered '
+        'app=$_appId',
       );
-
+    } catch (error, stackTrace) {
+      debugPrint('💥 Failed to register refreshed FCM token: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -185,11 +215,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
       _handleForegroundMessage,
       onError: (Object error, StackTrace stack) {
-        debugPrint(
-          '💥 Foreground FCM listener error: '
-          '$error',
-        );
-
+        debugPrint('💥 Foreground FCM listener error: $error');
         debugPrintStack(stackTrace: stack);
       },
     );
@@ -197,11 +223,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleNotificationTap,
       onError: (Object error, StackTrace stack) {
-        debugPrint(
-          '💥 Notification-open listener error: '
-          '$error',
-        );
-
+        debugPrint('💥 Notification-open listener error: $error');
         debugPrintStack(stackTrace: stack);
       },
     );
@@ -209,56 +231,74 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
     unawaited(_handleInitialMessage());
   }
 
+  bool _matchesActiveApp(RemoteMessage message) {
+    final messageTenant = _value(message.data['tenantId']).toLowerCase();
+
+    final messageApp = _value(message.data['appId']).toLowerCase();
+
+    if (messageTenant.isNotEmpty &&
+        messageTenant != widget.user.tenantId.trim().toLowerCase()) {
+      return false;
+    }
+
+    if (messageApp.isNotEmpty && messageApp != _appId) {
+      return false;
+    }
+
+    // Legacy notifications without appId remain
+    // compatible during the migration.
+    // Backend application isolation must still
+    // be enforced before sending.
+    return true;
+  }
+
   void _handleForegroundMessage(RemoteMessage message) {
+    if (!_matchesActiveApp(message)) {
+      debugPrint('🔕 Ignored notification for another application.');
+      return;
+    }
+
     final type = _value(message.data['type']);
 
     debugPrint(
       '🔔 Foreground notification '
-      'type=$type',
+      'type=$type app=$_appId',
     );
 
     switch (type) {
       case 'chat_message':
-        if (_conversationId(message).isEmpty) {
-          return;
-        }
+        if (_conversationId(message).isEmpty) return;
 
         unawaited(showForegroundNotification(message));
-
         return;
 
       case 'activity':
-        if (!_hasActivityEntity(message)) {
-          return;
-        }
+        if (!_hasActivityEntity(message)) return;
 
         unawaited(showForegroundNotification(message));
-
         return;
 
       default:
-        debugPrint(
-          'ℹ️ Unsupported foreground '
-          'notification type=$type',
-        );
+        debugPrint('ℹ️ Unsupported foreground notification type=$type');
         return;
     }
   }
 
   Future<void> _handleInitialMessage() async {
-    final message = await FirebaseMessaging.instance.getInitialMessage();
+    try {
+      final message = await FirebaseMessaging.instance.getInitialMessage();
 
-    if (message == null || !mounted) {
-      return;
+      if (message == null || !mounted) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        _handleNotificationTap(message);
+      });
+    } catch (error, stackTrace) {
+      debugPrint('💥 Failed to load initial FCM message: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-
-      _handleNotificationTap(message);
-    });
   }
 
   // ─────────────────────────────────────────────
@@ -266,6 +306,11 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   // ─────────────────────────────────────────────
 
   void _handleNotificationTap(RemoteMessage message) {
+    if (!_matchesActiveApp(message)) {
+      debugPrint('🔕 Ignored notification tap for another application.');
+      return;
+    }
+
     final type = _value(message.data['type']);
 
     switch (type) {
@@ -278,10 +323,7 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
         return;
 
       default:
-        debugPrint(
-          'ℹ️ Unsupported notification tap '
-          'type=$type',
-        );
+        debugPrint('ℹ️ Unsupported notification tap type=$type');
         return;
     }
   }
@@ -289,52 +331,36 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   void _handleChatTap(RemoteMessage message) {
     final conversationId = _conversationId(message);
 
-    if (conversationId.isEmpty) {
-      return;
-    }
+    if (conversationId.isEmpty) return;
 
-    debugPrint(
-      '💬 Open chat notification: '
-      '$conversationId',
-    );
+    debugPrint('💬 Open chat notification: $conversationId');
 
-    // TODO: navigate to conversation.
+    // TODO: Navigate to the conversation.
   }
 
   void _handleActivityTap(RemoteMessage message) {
     final entityType = _value(message.data['entityType']);
-
     final entityId = _value(message.data['entityId']);
 
-    if (entityType.isEmpty || entityId.isEmpty) {
-      return;
-    }
+    if (entityType.isEmpty || entityId.isEmpty) return;
 
     debugPrint(
       '🔔 Open activity notification '
-      'entityType=$entityType '
-      'entityId=$entityId',
+      'entityType=$entityType entityId=$entityId',
     );
 
-    // TODO: route using the same entity contract
-    // used by Latest Activity.
+    // TODO: Route using the Latest Activity
+    // entity navigation contract.
   }
 
   // ─────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────
 
-  bool _userRegistrationChanged(AuthUser previous, AuthUser current) {
-    return previous.uid != current.uid ||
-        previous.tenantId != current.tenantId ||
-        previous.isStaffResolved != current.isStaffResolved ||
-        previous.contactId != current.contactId ||
-        previous.accountNumber != current.accountNumber;
-  }
-
-  String _registrationKeyFor(AuthUser user) {
+  String _registrationKeyFor(AuthUser user, String appId) {
     return [
-      user.tenantId,
+      user.tenantId.trim().toLowerCase(),
+      appId.trim().toLowerCase(),
       user.uid,
       user.isStaffResolved,
       user.contactId ?? '',
@@ -356,7 +382,5 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
+  Widget build(BuildContext context) => widget.child;
 }

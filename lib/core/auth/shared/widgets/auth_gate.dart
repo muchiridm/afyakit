@@ -1,3 +1,5 @@
+// lib/core/auth/shared/widgets/auth_gate.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +16,9 @@ import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/shared/widgets/onboarding_gate.dart';
 
 import 'package:afyakit/core/capabilities/feature_keys.dart';
+
+import 'package:afyakit/core/notifications/notification_bootstrap.dart';
+
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/home/widgets/guest/guest_health_landing.dart';
@@ -78,7 +83,8 @@ class AuthGate extends ConsumerWidget {
           LoginStep.nameEntry,
           hint: user.isCompany == true
               ? 'Add your company name to finish setup.'
-              : 'Add your name to finish setup.',
+              : 'Add your name. '
+                    'We’ll use it to complete your account.',
         );
 
       case OnboardingNeed.none:
@@ -93,6 +99,11 @@ class AuthGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
+
+    // The currently selected application.
+    // No hard-coded app identifiers.
+    final appId = ref.watch(appIdProvider);
+
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
@@ -151,7 +162,18 @@ class AuthGate extends ConsumerWidget {
         // authenticated application.
 
         if (need == OnboardingNeed.none) {
-          return const HomeShell();
+          // Resolve staff roles for the active app.
+          //
+          // This does not substitute for server-side
+          // app-membership authorisation.
+          user.forApp(appId);
+
+          return NotificationBootstrap(
+            key: ValueKey<String>('notifications:${user.uid}:$tenantId:$appId'),
+            user: user.forApp(appId),
+            appId: appId,
+            child: const HomeShell(),
+          );
         }
 
         // Preserve the required onboarding step.
@@ -176,6 +198,7 @@ class AuthGate extends ConsumerWidget {
 
           data: (profile) {
             final name = profile.displayName.trim();
+
             final appName = name.isNotEmpty ? name : profile.id;
 
             final features = profile.features;
@@ -203,9 +226,8 @@ class AuthGate extends ConsumerWidget {
 
             // 5. Clinical.
             //
-            // AfyaTracker-style healthcare experience.
-            // Health Tracking is no longer a
-            // separate capability.
+            // AfyaTracker-style healthcare
+            // experience.
 
             if (clinicalEnabled) {
               return GuestHealthLanding(
