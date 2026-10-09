@@ -69,7 +69,7 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
   }
 
   Future<void> _createUserFlow(String tenantId) async {
-    final input = await showCreateTenantUserDialog(context);
+    final input = await _showCreateTenantUserDialog(context);
 
     if (input == null) {
       return;
@@ -641,7 +641,7 @@ class _CreateTenantUserInput {
   final String? displayName;
 }
 
-Future<_CreateTenantUserInput?> showCreateTenantUserDialog(
+Future<_CreateTenantUserInput?> _showCreateTenantUserDialog(
   BuildContext context,
 ) async {
   final phoneCtl = TextEditingController();

@@ -87,10 +87,12 @@ class MemberLatestActivityPanel extends ConsumerWidget {
       ),
     );
 
-    final entries = ActivityFeedAdapter.fromFeed(
-      activityAsync.valueOrNull ?? const [],
-      onTapForActivity: (activity) => _onTapForActivity(context, activity),
-    )..sort((a, b) => b.date.compareTo(a.date));
+    final List<ActivityEntry> entries = <ActivityEntry>[
+      ...ActivityFeedAdapter.fromFeed(
+        activityAsync.valueOrNull ?? const [],
+        onTapForActivity: (activity) => _onTapForActivity(context, activity),
+      ),
+    ]..sort((a, b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,

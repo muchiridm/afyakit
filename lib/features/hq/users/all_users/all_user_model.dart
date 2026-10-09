@@ -5,10 +5,20 @@ import 'package:afyakit/shared/utils/utils.dart';
 
 class AllUserMembership {
   final String tenantId;
+
+  /// Legacy tenant-level summary. Not authoritative for app access.
   final String role;
   final bool active;
   final String? email;
   final String? status;
+
+  /// Canonical app memberships.
+  /// Example: {"dawapap": "active", "occuwell": "disabled"}
+  final Map<String, String> appMembershipsByApp;
+
+  /// Canonical staff roles, scoped to each app.
+  /// Example: {"dawapap": ["admin"], "occuwell": []}
+  final Map<String, List<String>> staffRolesByApp;
 
   const AllUserMembership({
     required this.tenantId,
@@ -16,6 +26,8 @@ class AllUserMembership {
     required this.active,
     this.email,
     this.status,
+    this.appMembershipsByApp = const {},
+    this.staffRolesByApp = const {},
   });
 
   factory AllUserMembership.fromJson(JsonObj j) {
@@ -28,7 +40,54 @@ class AllUserMembership {
       active: activeRaw is bool ? activeRaw : (status ?? 'active') == 'active',
       email: _s(j['email']),
       status: status,
+      appMembershipsByApp: _readAppMemberships(j['appMembershipsByApp']),
+      staffRolesByApp: _readAppStaffRoles(j['staffRolesByApp']),
     );
+  }
+
+  /// Whether this user belongs to a particular application.
+  bool hasAppMembership(String appId) {
+    return appMembershipsByApp.containsKey(appId.trim().toLowerCase());
+  }
+
+  /// Whether the membership is active.
+  bool hasActiveAppMembership(String appId) {
+    return active &&
+        appMembershipsByApp[appId.trim().toLowerCase()] == 'active';
+  }
+
+  /// Staff roles for one application only.
+  List<String> rolesForApp(String appId) {
+    return List<String>.unmodifiable(
+      staffRolesByApp[appId.trim().toLowerCase()] ?? const <String>[],
+    );
+  }
+
+  /// Effective application staff roles.
+  ///
+  /// A disabled tenant account or application membership
+  /// never grants staff authority.
+  List<String> effectiveRolesForApp(String appId) {
+    if (!hasActiveAppMembership(appId)) {
+      return const <String>[];
+    }
+
+    return rolesForApp(appId);
+  }
+
+  /// No app-specific staff role means ordinary member.
+  String accessLevelForApp(String appId) {
+    if (!hasActiveAppMembership(appId)) {
+      return 'none';
+    }
+
+    final roles = rolesForApp(appId);
+
+    if (roles.contains('owner')) return 'owner';
+    if (roles.contains('admin')) return 'admin';
+    if (roles.contains('manager')) return 'manager';
+
+    return roles.isEmpty ? 'member' : roles.first;
   }
 
   JsonObj toJson() => <String, Object?>{
@@ -37,6 +96,11 @@ class AllUserMembership {
     'active': active,
     if (email != null) 'email': email,
     if (status != null) 'status': status,
+    'appMembershipsByApp': appMembershipsByApp.map(
+      (appId, appStatus) =>
+          MapEntry(appId, <String, Object?>{'status': appStatus}),
+    ),
+    'staffRolesByApp': staffRolesByApp,
   };
 }
 
@@ -189,6 +253,51 @@ List<AllUserMembership> _readMemberships(Object? v) {
   }
 
   return const <AllUserMembership>[];
+}
+
+Map<String, String> _readAppMemberships(Object? raw) {
+  if (raw is! Map) return const <String, String>{};
+
+  final result = <String, String>{};
+
+  raw.forEach((key, value) {
+    final appId = key.toString().trim().toLowerCase();
+
+    if (appId.isEmpty || value is! Map) return;
+
+    final status = _s(value['status'])?.trim().toLowerCase();
+
+    if (status == 'active' || status == 'disabled') {
+      result[appId] = status!;
+    }
+  });
+
+  return result;
+}
+
+Map<String, List<String>> _readAppStaffRoles(Object? raw) {
+  if (raw is! Map) {
+    return const <String, List<String>>{};
+  }
+
+  final result = <String, List<String>>{};
+
+  raw.forEach((key, value) {
+    final appId = key.toString().trim().toLowerCase();
+
+    if (appId.isEmpty || value is! List) return;
+
+    final roles = value
+        .whereType<String>()
+        .map((role) => role.trim().toLowerCase())
+        .where((role) => role.isNotEmpty)
+        .toSet()
+        .toList();
+
+    result[appId] = roles;
+  });
+
+  return result;
 }
 
 String _norm(String s) => s.trim().toLowerCase();

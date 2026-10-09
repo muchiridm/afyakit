@@ -1,5 +1,7 @@
-// lib/hq/users/all_users/widgets/user_editor_screen.dart
+// lib/features/hq/users/all_users/widgets/user_editor_screen.dart
 
+import 'package:afyakit/app/models/app_profile.dart';
+import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/user_editor_controller.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
@@ -27,119 +29,206 @@ class UserEditorScreen extends ConsumerWidget {
       initialUser: initialUser,
     );
 
-    final state = ref.watch(userEditorControllerProvider(args));
+    final provider = userEditorControllerProvider(args);
+    final state = ref.watch(provider);
+    final ctrl = ref.read(provider.notifier);
 
-    final ctrl = ref.read(userEditorControllerProvider(args).notifier);
+    final appsAsync = ref.watch(
+      hqAppProfilesProvider(tenantId.trim().toLowerCase()),
+    );
 
     final busy = state.saving || state.deleting;
+    final loading = state.loadingMemberships;
+    final selectedApp = state.appId.trim();
+
+    final apps = appsAsync.asData?.value;
+    final selectedIsRegistered =
+        apps?.any(
+          (app) => app.id.trim().toLowerCase() == selectedApp && app.active,
+        ) ??
+        false;
+
+    final canEdit =
+        !busy &&
+        !loading &&
+        state.hasAccess &&
+        state.tenantAccountActive &&
+        selectedIsRegistered;
+
+    final canSave = canEdit;
+    final canRemove = canEdit && state.appMembershipExists;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit tenant access'),
+        title: const Text('Edit application access'),
         actions: [
           IconButton(
-            tooltip: 'Remove access',
+            tooltip: 'Disable selected app access',
             icon: const Icon(Icons.person_remove_alt_1),
-            onPressed: busy
+            onPressed: !canRemove
                 ? null
                 : () async {
-                    final sure =
+                    final confirmed =
                         await showDialog<bool>(
                           context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Remove tenant access'),
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Disable application access?'),
                             content: Text(
-                              'Remove this user\'s access to "${state.tenantId}"?',
+                              'Disable this user\'s access to '
+                              '"${state.appId}"?\n\n'
+                              'Only this application will be affected. '
+                              'The tenant account and access to other '
+                              'applications will remain unchanged.',
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(false),
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(false),
                                 child: const Text('Cancel'),
                               ),
                               FilledButton(
                                 style: FilledButton.styleFrom(
                                   backgroundColor: Colors.red,
                                 ),
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Remove'),
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(true),
+                                child: const Text('Disable access'),
                               ),
                             ],
                           ),
                         ) ??
                         false;
 
-                    if (!sure) {
-                      return;
-                    }
+                    if (!confirmed) return;
 
-                    final ok = await ctrl.removeAccess();
+                    final success = await ctrl.removeAccess();
 
-                    if (ok && context.mounted) {
+                    if (success && context.mounted) {
                       Navigator.of(context).pop(true);
                     }
                   },
           ),
         ],
       ),
-      body: AbsorbPointer(
-        absorbing: busy,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _TenantCard(tenantId: state.tenantId, hasAccess: state.hasAccess),
-            const SizedBox(height: 16),
-            _UidSection(uid: state.uid),
-            const SizedBox(height: 16),
-            _AccessLevelPicker(
-              value: state.level,
-              onChanged: ctrl.setAccessLevel,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _TenantCard(
+            tenantId: state.tenantId,
+            hasAccess: state.hasAccess,
+            active: state.tenantAccountActive,
+          ),
+          const SizedBox(height: 16),
+
+          _UidSection(uid: state.uid),
+          const SizedBox(height: 16),
+
+          _AppSelector(
+            appsAsync: appsAsync,
+            selectedAppId: selectedApp,
+            enabled: !busy && !loading,
+            onChanged: ctrl.setAppId,
+            onRefresh: () => ref.invalidate(
+              hqAppProfilesProvider(tenantId.trim().toLowerCase()),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (!state.hasAccess && !loading)
+            const _NoticeCard(
+              icon: Icons.warning_amber_outlined,
+              message:
+                  'This user does not have a tenant account. '
+                  'Application access cannot be assigned yet.',
+            ),
+
+          if (state.hasAccess && !state.tenantAccountActive && !loading)
+            const _NoticeCard(
+              icon: Icons.lock_outline,
+              message:
+                  'The tenant account is disabled. '
+                  'Enable the tenant account before assigning '
+                  'application access.',
+            ),
+
+          if (selectedApp.isEmpty)
+            const _NoticeCard(
+              icon: Icons.apps_outlined,
+              message:
+                  'Select an application to view and edit '
+                  'its membership and staff roles.',
+            )
+          else if (selectedIsRegistered) ...[
+            _ApplicationAccessCard(
+              appId: selectedApp,
+              enabled: canEdit,
+              membershipActive: state.active,
+              membershipExists: state.appMembershipExists,
+              role: state.level,
+              onMembershipChanged: ctrl.setActive,
+              onRoleChanged: ctrl.setAccessLevel,
             ),
             const SizedBox(height: 12),
-            _PatchPreviewCard(roles: ctrl.patchRolesPreview),
-            const SizedBox(height: 12),
-            _TenantEmailReadOnly(email: state.tenantEmail),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              subtitle: const Text(
-                'If inactive, user remains in the tenant but is blocked.',
-              ),
-              value: state.active,
-              onChanged: ctrl.setActive,
+
+            _AccessPreviewCard(
+              appId: selectedApp,
+              active: state.active,
+              roles: ctrl.patchRolesPreview,
             ),
-            const SizedBox(height: 24),
-            _MembershipsCard(
-              loading: state.loadingMemberships,
-              memberships: state.allMemberships,
-              tenantId: state.tenantId,
-              onRefresh: () => ctrl.refreshMemberships(force: true),
+          ] else
+            const _NoticeCard(
+              icon: Icons.error_outline,
+              message:
+                  'The selected application is unavailable '
+                  'or inactive. Select an active application.',
             ),
-          ],
-        ),
+
+          const SizedBox(height: 16),
+
+          _TenantEmailReadOnly(email: state.tenantEmail),
+          const SizedBox(height: 24),
+
+          _MembershipsCard(
+            loading: loading,
+            memberships: state.allMemberships,
+            tenantId: state.tenantId,
+            apps: apps ?? const <AppProfile>[],
+            onRefresh: () {
+              // ignore: discarded_futures
+              ctrl.refreshMemberships(force: true);
+            },
+          ),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      final ok = await ctrl.save();
+          child: FilledButton.icon(
+            onPressed: !canSave
+                ? null
+                : () async {
+                    final success = await ctrl.save();
 
-                      if (!ok) {
-                        SnackService.showError('❌ Save failed');
+                    if (!success) return;
 
-                        return;
-                      }
-
-                      if (context.mounted) {
-                        Navigator.of(context).pop(true);
-                      }
-                    },
-              child: Text(state.saving ? 'Saving…' : 'Save'),
+                    if (context.mounted) {
+                      SnackService.showInfo('Application access saved.');
+                      Navigator.of(context).pop(true);
+                    }
+                  },
+            icon: busy
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(
+              state.saving
+                  ? 'Saving…'
+                  : state.deleting
+                  ? 'Updating…'
+                  : 'Save application access',
             ),
           ),
         ),
@@ -149,28 +238,31 @@ class UserEditorScreen extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────
-// UI
+// Tenant summary
 // ─────────────────────────────────────────────
 
 class _TenantCard extends StatelessWidget {
-  const _TenantCard({required this.tenantId, required this.hasAccess});
+  const _TenantCard({
+    required this.tenantId,
+    required this.hasAccess,
+    required this.active,
+  });
 
   final String tenantId;
   final bool hasAccess;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Icon(Icons.apartment_outlined),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,8 +275,16 @@ class _TenantCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    hasAccess ? 'Access exists.' : 'No access yet.',
-                    style: TextStyle(color: Colors.grey.shade700),
+                    !hasAccess
+                        ? 'No tenant account'
+                        : active
+                        ? 'Tenant account active'
+                        : 'Tenant account disabled',
+                    style: TextStyle(
+                      color: active
+                          ? Colors.green.shade700
+                          : Colors.orange.shade800,
+                    ),
                   ),
                 ],
               ),
@@ -196,6 +296,10 @@ class _TenantCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────
+// User UID
+// ─────────────────────────────────────────────
+
 class _UidSection extends StatelessWidget {
   const _UidSection({required this.uid});
 
@@ -203,99 +307,261 @@ class _UidSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('User UID', style: textTheme.labelSmall),
+        Text('User UID', style: theme.labelSmall),
         const SizedBox(height: 4),
-        SelectableText(
-          uid,
-          style: textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Read-only global Firebase uid.',
-          style: textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-        ),
+        SelectableText(uid, style: theme.bodyMedium),
+        const SizedBox(height: 4),
+        Text('Read-only Firebase user identifier.', style: theme.bodySmall),
       ],
     );
   }
 }
 
-class _AccessLevelPicker extends StatelessWidget {
-  const _AccessLevelPicker({required this.value, required this.onChanged});
+// ─────────────────────────────────────────────
+// Registered application selector
+// ─────────────────────────────────────────────
 
-  final AccessLevel value;
-  final ValueChanged<AccessLevel> onChanged;
+class _AppSelector extends StatelessWidget {
+  const _AppSelector({
+    required this.appsAsync,
+    required this.selectedAppId,
+    required this.enabled,
+    required this.onChanged,
+    required this.onRefresh,
+  });
+
+  final AsyncValue<List<AppProfile>> appsAsync;
+  final String selectedAppId;
+  final bool enabled;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return InputDecorator(
-      decoration: const InputDecoration(
-        labelText: 'Access level',
-        border: OutlineInputBorder(),
-        helperText:
-            'Staff access is controlled only by staffRoles. Member sends no staff role.',
+    return appsAsync.when(
+      loading: () => const InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Application',
+          border: OutlineInputBorder(),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Loading applications…'),
+          ],
+        ),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: AccessLevel.values.map((level) {
-          final selected = value == level;
-
-          return ChoiceChip(
-            label: Text(level.label),
-            selected: selected,
-            onSelected: (_) => onChanged(level),
+      error: (error, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Failed to load applications: $error')),
+              TextButton(onPressed: onRefresh, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      ),
+      data: (apps) {
+        final sorted = List<AppProfile>.from(apps)
+          ..sort(
+            (a, b) => a.displayName.toLowerCase().compareTo(
+              b.displayName.toLowerCase(),
+            ),
           );
-        }).toList(),
-      ),
+
+        final selectedExists = sorted.any(
+          (app) => app.id.trim().toLowerCase() == selectedAppId,
+        );
+
+        return DropdownButtonFormField<String>(
+          key: ValueKey(selectedAppId),
+          initialValue: selectedExists && selectedAppId.isNotEmpty
+              ? selectedAppId
+              : null,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Application',
+            helperText:
+                'Select the application whose access you want to manage.',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.apps_outlined),
+          ),
+          hint: const Text('Select application'),
+          items: sorted.map((app) {
+            final appId = app.id.trim().toLowerCase();
+
+            return DropdownMenuItem<String>(
+              value: appId,
+              enabled: app.active,
+              child: Text(
+                app.active
+                    ? '${app.displayName} ($appId)'
+                    : '${app.displayName} ($appId) — inactive',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: !enabled
+              ? null
+              : (value) {
+                  if (value != null) {
+                    onChanged(value);
+                  }
+                },
+        );
+      },
     );
   }
 }
 
-class _PatchPreviewCard extends StatelessWidget {
-  const _PatchPreviewCard({required this.roles});
+// ─────────────────────────────────────────────
+// Application access editor
+// ─────────────────────────────────────────────
 
-  final List<String> roles;
+class _ApplicationAccessCard extends StatelessWidget {
+  const _ApplicationAccessCard({
+    required this.appId,
+    required this.enabled,
+    required this.membershipActive,
+    required this.membershipExists,
+    required this.role,
+    required this.onMembershipChanged,
+    required this.onRoleChanged,
+  });
+
+  final String appId;
+  final bool enabled;
+  final bool membershipActive;
+  final bool membershipExists;
+  final AccessLevel role;
+  final ValueChanged<bool> onMembershipChanged;
+  final ValueChanged<AccessLevel> onRoleChanged;
 
   @override
   Widget build(BuildContext context) {
-    final rolesText = roles.isEmpty ? '[]' : roles.toString();
-
     return Card(
       elevation: 0,
-      color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: DefaultTextStyle(
-          style: TextStyle(color: Colors.grey.shade800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Backend patch preview',
-                style: TextStyle(fontWeight: FontWeight.w600),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Application access — $appId',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              membershipExists
+                  ? 'Existing application membership'
+                  : 'No application membership assigned yet',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Divider(height: 24),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Application membership active'),
+              subtitle: const Text(
+                'Controls access to this application only. '
+                'Other applications are unaffected.',
               ),
-              const SizedBox(height: 8),
-              Text('staffRoles: $rolesText'),
-              const SizedBox(height: 6),
-              Text(
-                roles.isEmpty
-                    ? 'Member/client access. No staff role will be sent.'
-                    : 'Staff role: ${roles.first}.',
-                style: TextStyle(color: Colors.grey.shade700),
+              value: membershipActive,
+              onChanged: enabled ? onMembershipChanged : null,
+            ),
+            const SizedBox(height: 12),
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Application role',
+                helperText:
+                    'Member has no staff role. Manager, Admin and '
+                    'Owner apply only to this application.',
+                border: OutlineInputBorder(),
               ),
-            ],
-          ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AccessLevel.values.map((level) {
+                  return ChoiceChip(
+                    label: Text(level.label),
+                    selected: role == level,
+                    onSelected: enabled && membershipActive
+                        ? (_) => onRoleChanged(level)
+                        : null,
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// Access preview
+// ─────────────────────────────────────────────
+
+class _AccessPreviewCard extends StatelessWidget {
+  const _AccessPreviewCard({
+    required this.appId,
+    required this.active,
+    required this.roles,
+  });
+
+  final String appId;
+  final bool active;
+  final List<String> roles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.grey.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Application access preview',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text('Application: $appId'),
+            Text('Membership: ${active ? 'active' : 'disabled'}'),
+            Text('Staff roles: ${roles.toString()}'),
+            const SizedBox(height: 8),
+            Text(
+              active
+                  ? 'Changes will apply only to $appId.'
+                  : 'Disabling membership also clears staff '
+                        'roles for $appId.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Read-only email
+// ─────────────────────────────────────────────
 
 class _TenantEmailReadOnly extends StatelessWidget {
   const _TenantEmailReadOnly({required this.email});
@@ -310,41 +576,67 @@ class _TenantEmailReadOnly extends StatelessWidget {
       decoration: const InputDecoration(
         labelText: 'Tenant email',
         border: OutlineInputBorder(),
-        helperText:
-            'Read-only. Email comes from tenant auth-user source-of-truth data.',
+        helperText: 'Read-only. Retrieved from the tenant auth-user record.',
       ),
       child: Text(value.isEmpty ? '—' : value),
     );
   }
 }
 
+// ─────────────────────────────────────────────
+// Notice
+// ─────────────────────────────────────────────
+
+class _NoticeCard extends StatelessWidget {
+  const _NoticeCard({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(icon),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Existing memberships summary
+// ─────────────────────────────────────────────
+
 class _MembershipsCard extends StatelessWidget {
   const _MembershipsCard({
     required this.loading,
     required this.memberships,
     required this.tenantId,
+    required this.apps,
     required this.onRefresh,
   });
 
   final bool loading;
-
   final Map<String, AllUserMembership> memberships;
-
   final String tenantId;
-
+  final List<AppProfile> apps;
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     final entries = memberships.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
 
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -352,84 +644,115 @@ class _MembershipsCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Text(
-                  'Tenant memberships',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                const Expanded(
+                  child: Text(
+                    'Existing memberships',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
-                const Spacer(),
                 IconButton(
-                  tooltip: 'Refresh this user',
+                  tooltip: 'Refresh memberships',
+                  onPressed: loading ? null : onRefresh,
                   icon: loading
                       ? const SizedBox(
-                          width: 16,
-                          height: 16,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.refresh, size: 18),
-                  onPressed: loading ? null : onRefresh,
+                      : const Icon(Icons.refresh),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            if (loading && entries.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(8),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  'No tenants yet.',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              )
+            if (entries.isEmpty)
+              const Text('No tenant memberships found.')
             else
-              Column(
-                children: entries.map((entry) {
-                  final rowTenantId = entry.key;
+              ...entries.map((entry) {
+                final membership = entry.value;
+                final isCurrentTenant = entry.key == tenantId;
 
-                  final membership = entry.value;
+                final appIds = <String>{
+                  ...membership.appMembershipsByApp.keys,
+                  ...membership.staffRolesByApp.keys,
+                }.toList()..sort();
 
-                  final role = membership.role.trim().isEmpty
-                      ? '—'
-                      : membership.role.trim();
-
-                  final email = membership.email?.trim();
-
-                  final subtitle = email == null || email.isEmpty
-                      ? 'Role: $role'
-                      : 'Role: $role · $email';
-
-                  final isCurrentTenant = rowTenantId == tenantId;
-
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      rowTenantId,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isCurrentTenant
-                            ? Colors.blueGrey.shade900
-                            : null,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading: Icon(
+                        membership.active
+                            ? Icons.check_circle_outline
+                            : Icons.block_outlined,
+                        color: membership.active ? Colors.green : Colors.orange,
+                      ),
+                      title: Text(
+                        entry.key,
+                        style: TextStyle(
+                          fontWeight: isCurrentTenant
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Tenant account: '
+                        '${membership.active ? 'active' : 'disabled'}',
                       ),
                     ),
-                    subtitle: Text(subtitle),
-                    trailing: Icon(
-                      membership.active ? Icons.check_circle : Icons.cancel,
-                      size: 18,
-                      color: membership.active
-                          ? Colors.green
-                          : Colors.orangeAccent,
-                    ),
-                  );
-                }).toList(),
-              ),
+                    if (appIds.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 16, bottom: 8),
+                        child: Text('No app memberships assigned.'),
+                      )
+                    else
+                      ...appIds.map((appId) {
+                        final matchingApps = apps.where(
+                          (app) => app.id == appId,
+                        );
+                        final name = matchingApps.isEmpty
+                            ? appId
+                            : matchingApps.first.displayName;
+
+                        final active = membership.hasActiveAppMembership(appId);
+                        final exists = membership.hasAppMembership(appId);
+                        final roles = membership.effectiveRolesForApp(appId);
+
+                        final status = !exists
+                            ? 'No membership'
+                            : active
+                            ? 'Active'
+                            : 'Disabled';
+
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 16),
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              active
+                                  ? Icons.check_circle
+                                  : Icons.cancel_outlined,
+                              size: 18,
+                              color: active ? Colors.green : Colors.grey,
+                            ),
+                            title: Text('$name ($appId)'),
+                            subtitle: Text(
+                              '$status · '
+                              '${!active
+                                  ? 'No effective role'
+                                  : roles.isEmpty
+                                  ? 'Member'
+                                  : roles.join(', ')}',
+                            ),
+                          ),
+                        );
+                      }),
+                    const Divider(),
+                  ],
+                );
+              }),
           ],
         ),
       ),

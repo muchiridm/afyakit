@@ -420,6 +420,101 @@ class AllUsersService {
     return _userFromResponse(response);
   }
 
+  /// Enable or disable a user's membership in one application.
+  ///
+  /// PUT /api/:tenantId/auth/users/:uid/apps/:appId/membership
+  Future<void> setAppMembership({
+    required String tenantId,
+    required String uid,
+    required String appId,
+    required bool active,
+  }) async {
+    final cleanTenant = _requireId(tenantId, 'tenantId');
+    final cleanUid = _requireId(uid, 'uid');
+    final cleanApp = _requireId(appId, 'appId').toLowerCase();
+
+    final tenantRoutes = _tenantRoutes(cleanTenant);
+    final base = tenantRoutes.updateUser(cleanUid);
+
+    final uri = base.replace(
+      path: '${base.path}/apps/${Uri.encodeComponent(cleanApp)}/membership',
+    );
+
+    final response = await dio.putUri(
+      uri,
+      data: <String, Object?>{'status': active ? 'active' : 'disabled'},
+      options: Options(contentType: Headers.jsonContentType),
+    );
+
+    if (!_ok(response)) {
+      _bad(response, 'Update application membership');
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ $_tag App membership updated: '
+        'tenant=$cleanTenant app=$cleanApp uid=$cleanUid '
+        'active=$active',
+      );
+    }
+  }
+
+  /// Set staff roles for one application only.
+  ///
+  /// PUT /api/:tenantId/auth/users/:uid/apps/:appId/staff-roles
+  ///
+  /// An empty list means ordinary member access.
+  Future<void> setAppStaffRoles({
+    required String tenantId,
+    required String uid,
+    required String appId,
+    required List<String> staffRoles,
+  }) async {
+    final cleanTenant = _requireId(tenantId, 'tenantId');
+    final cleanUid = _requireId(uid, 'uid');
+    final cleanApp = _requireId(appId, 'appId').toLowerCase();
+
+    final allowedRoles = <String>{'manager', 'admin', 'owner'};
+
+    final roles = staffRoles
+        .map((role) => role.trim().toLowerCase())
+        .toSet()
+        .toList();
+
+    if (roles.any((role) => !allowedRoles.contains(role))) {
+      throw ArgumentError.value(
+        staffRoles,
+        'staffRoles',
+        'Unsupported application staff role',
+      );
+    }
+
+    final tenantRoutes = _tenantRoutes(cleanTenant);
+    final base = tenantRoutes.updateUser(cleanUid);
+
+    final uri = base.replace(
+      path: '${base.path}/apps/${Uri.encodeComponent(cleanApp)}/staff-roles',
+    );
+
+    final response = await dio.putUri(
+      uri,
+      data: <String, Object?>{'staffRoles': roles},
+      options: Options(contentType: Headers.jsonContentType),
+    );
+
+    if (!_ok(response)) {
+      _bad(response, 'Update application staff roles');
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ $_tag App staff roles updated: '
+        'tenant=$cleanTenant app=$cleanApp uid=$cleanUid '
+        'roles=$roles',
+      );
+    }
+  }
+
   /// PATCH /api/:tenantId/auth/users/:uid
   Future<Map<String, Object?>> updateTenantUser({
     required String tenantId,

@@ -1,17 +1,17 @@
-// lib/hq/users/all_users/controllers/user_editor_controller.dart
+// lib/features/hq/users/all_users/controllers/user_editor_controller.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
+import 'package:afyakit/features/hq/users/all_users/all_users_service.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/all_users_controller.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
-/// UI access levels.
-///
-/// Backend rule:
-/// - Staff access is driven ONLY by staffRoles.
-/// - Do NOT send legacy `type`.
+// ─────────────────────────────────────────────
+// Application access levels
+// ─────────────────────────────────────────────
+
 enum AccessLevel {
   member,
   manager,
@@ -31,24 +31,16 @@ enum AccessLevel {
     }
   }
 
+  /// Retained for compatibility with existing UI.
+  /// This is descriptive only, not a tenant-wide role.
   String get membershipRole {
-    switch (this) {
-      case AccessLevel.member:
-        return 'client';
-      case AccessLevel.manager:
-        return 'manager';
-      case AccessLevel.admin:
-        return 'admin';
-      case AccessLevel.owner:
-        return 'owner';
-    }
+    return this == AccessLevel.member ? 'client' : name;
   }
 
-  /// Tenant auth-user patch staffRoles.
+  /// Canonical application-scoped staff roles.
   ///
-  /// [] means normal member/client.
-  /// manager/admin/owner are explicit staff roles.
-  List<String> get staffRolesForTenantAuthUser {
+  /// An empty list means ordinary app membership.
+  List<String> get staffRolesForApp {
     switch (this) {
       case AccessLevel.member:
         return const <String>[];
@@ -61,31 +53,29 @@ enum AccessLevel {
     }
   }
 
-  static AccessLevel fromMembershipRole(String? roleRaw) {
-    final role = (roleRaw ?? '').trim().toLowerCase();
+  /// Compatibility getter for the existing UI.
+  ///
+  /// Never send this through the tenant-wide PATCH.
+  List<String> get staffRolesForTenantAuthUser => staffRolesForApp;
 
-    switch (role) {
+  static AccessLevel fromMembershipRole(String? raw) {
+    switch ((raw ?? '').trim().toLowerCase()) {
       case 'owner':
         return AccessLevel.owner;
-
       case 'admin':
         return AccessLevel.admin;
-
       case 'manager':
-        return AccessLevel.manager;
-
-      // Historical display fallback only.
-      // "staff" is no longer an assignable access level.
       case 'staff':
         return AccessLevel.manager;
-
-      case 'client':
-      case 'member':
       default:
         return AccessLevel.member;
     }
   }
 }
+
+// ─────────────────────────────────────────────
+// Provider arguments
+// ─────────────────────────────────────────────
 
 @immutable
 class UserEditorArgs {
@@ -93,40 +83,47 @@ class UserEditorArgs {
     required this.tenantId,
     required this.uid,
     this.initialUser,
+    this.appId,
   });
 
   final String tenantId;
   final String uid;
+  final String? appId;
   final AllUser? initialUser;
 
   String get cleanTenantId => tenantId.trim();
-
   String get cleanUid => uid.trim();
+  String get cleanAppId => (appId ?? '').trim().toLowerCase();
 
-  /// Used as a Riverpod `.family` key.
   @override
   bool operator ==(Object other) {
     return other is UserEditorArgs &&
         other.cleanTenantId == cleanTenantId &&
-        other.cleanUid == cleanUid;
+        other.cleanUid == cleanUid &&
+        other.cleanAppId == cleanAppId;
   }
 
   @override
-  int get hashCode => Object.hash(cleanTenantId, cleanUid);
+  int get hashCode => Object.hash(cleanTenantId, cleanUid, cleanAppId);
 }
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
 
 @immutable
 class UserEditorState {
   const UserEditorState({
     required this.tenantId,
     required this.uid,
+    this.appId = '',
     this.initialUser,
     this.loadingMemberships = false,
     this.saving = false,
     this.deleting = false,
     this.didInitialPrefill = false,
     this.level = AccessLevel.member,
-    this.active = true,
+    this.active = false,
     this.tenantEmail,
     this.hasAccess = false,
     this.allMemberships = const <String, AllUserMembership>{},
@@ -134,6 +131,10 @@ class UserEditorState {
 
   final String tenantId;
   final String uid;
+
+  /// Application currently being edited.
+  final String appId;
+
   final AllUser? initialUser;
 
   final bool loadingMemberships;
@@ -141,15 +142,32 @@ class UserEditorState {
   final bool deleting;
   final bool didInitialPrefill;
 
+  /// Selected application's staff role.
   final AccessLevel level;
+
+  /// Selected application's membership status.
+  /// Not the tenant account status.
   final bool active;
+
   final String? tenantEmail;
+
+  /// Whether the tenant auth_user record exists.
   final bool hasAccess;
 
-  /// tenantId -> membership.
+  /// tenantId -> tenant membership, including app data.
   final Map<String, AllUserMembership> allMemberships;
 
+  bool get hasSelectedApp => appId.trim().isNotEmpty;
+
+  AllUserMembership? get tenantMembership => allMemberships[tenantId];
+
+  bool get tenantAccountActive => tenantMembership?.active ?? false;
+
+  bool get appMembershipExists =>
+      tenantMembership?.hasAppMembership(appId) ?? false;
+
   UserEditorState copyWith({
+    String? appId,
     bool? loadingMemberships,
     bool? saving,
     bool? deleting,
@@ -164,6 +182,7 @@ class UserEditorState {
     return UserEditorState(
       tenantId: tenantId,
       uid: uid,
+      appId: appId ?? this.appId,
       initialUser: initialUser,
       loadingMemberships: loadingMemberships ?? this.loadingMemberships,
       saving: saving ?? this.saving,
@@ -178,10 +197,18 @@ class UserEditorState {
   }
 }
 
+// ─────────────────────────────────────────────
+// Provider
+// ─────────────────────────────────────────────
+
 final userEditorControllerProvider = StateNotifierProvider.autoDispose
     .family<UserEditorController, UserEditorState, UserEditorArgs>((ref, args) {
       return UserEditorController(ref, args);
     });
+
+// ─────────────────────────────────────────────
+// Controller
+// ─────────────────────────────────────────────
 
 class UserEditorController extends StateNotifier<UserEditorState> {
   UserEditorController(this.ref, UserEditorArgs args)
@@ -189,6 +216,7 @@ class UserEditorController extends StateNotifier<UserEditorState> {
         UserEditorState(
           tenantId: args.cleanTenantId,
           uid: args.cleanUid,
+          appId: args.cleanAppId,
           initialUser: args.initialUser,
         ),
       ) {
@@ -199,11 +227,15 @@ class UserEditorController extends StateNotifier<UserEditorState> {
   final Ref ref;
 
   String get _tenantId => state.tenantId.trim();
-
   String get _uid => state.uid.trim();
+  String get _appId => state.appId.trim().toLowerCase();
+
+  // ───────────────────────────────────────────
+  // Initialisation
+  // ───────────────────────────────────────────
 
   Future<void> init() async {
-    if (_tenantId.isEmpty || _uid.isEmpty) {
+    if (_tenantId.isEmpty || _uid.isEmpty || !mounted) {
       return;
     }
 
@@ -211,24 +243,65 @@ class UserEditorController extends StateNotifier<UserEditorState> {
 
     if (initialMemberships.isNotEmpty) {
       _applyMembershipsToState(initialMemberships, allowPrefill: true);
+    }
 
+    // Fetch the authoritative membership state.
+    await refreshMemberships(force: true);
+  }
+
+  // ───────────────────────────────────────────
+  // Application selection
+  // ───────────────────────────────────────────
+
+  /// Called by the application selector in the UI.
+  ///
+  /// The UI must supply an app registered under
+  /// the selected tenant.
+  void setAppId(String appId) {
+    if (!mounted || state.saving || state.deleting) {
       return;
     }
 
-    await refreshMemberships(force: false);
+    final clean = appId.trim().toLowerCase();
+
+    if (clean.isNotEmpty &&
+        !RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(clean)) {
+      SnackService.showError('Invalid application ID');
+      return;
+    }
+
+    if (clean == _appId) return;
+
+    state = state.copyWith(
+      appId: clean,
+      level: AccessLevel.member,
+      active: false,
+      didInitialPrefill: false,
+    );
+
+    _prefillSelectedApp();
   }
 
   void setAccessLevel(AccessLevel level) {
-    if (!mounted) return;
+    if (!mounted || state.saving || state.deleting) {
+      return;
+    }
 
     state = state.copyWith(level: level);
   }
 
+  /// Enable/disable only the selected application.
   void setActive(bool value) {
-    if (!mounted) return;
+    if (!mounted || state.saving || state.deleting) {
+      return;
+    }
 
     state = state.copyWith(active: value);
   }
+
+  // ───────────────────────────────────────────
+  // Membership loading
+  // ───────────────────────────────────────────
 
   Future<void> refreshMemberships({bool force = true}) async {
     if (_tenantId.isEmpty || _uid.isEmpty || !mounted) {
@@ -240,36 +313,23 @@ class UserEditorController extends StateNotifier<UserEditorState> {
     try {
       final allUsers = ref.read(allUsersControllerProvider.notifier);
 
-      final Map<String, AllUserMembership> memberships;
-
       if (force) {
         await allUsers.refreshMembershipsForUid(_uid);
-
-        if (!mounted) return;
-
-        memberships = await allUsers.fetchMemberships(_uid);
-
-        if (!mounted) return;
-      } else {
-        memberships = await allUsers.fetchMemberships(_uid);
-
         if (!mounted) return;
       }
 
-      _applyMembershipsToState(
-        memberships,
-        allowPrefill: !state.didInitialPrefill,
-      );
+      final memberships = await allUsers.fetchMemberships(_uid);
+
+      if (!mounted) return;
+
+      _applyMembershipsToState(memberships, allowPrefill: true);
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint(
-          '🧨 UserEditor.refreshMemberships '
-          'failed: $e\n$st',
-        );
+        debugPrint('UserEditor.refreshMemberships failed: $e\n$st');
       }
 
       if (mounted) {
-        SnackService.showError('❌ Failed to refresh memberships: $e');
+        SnackService.showError('Failed to refresh memberships: $e');
       }
     } finally {
       if (mounted) {
@@ -285,19 +345,17 @@ class UserEditorController extends StateNotifier<UserEditorState> {
       return const <String, AllUserMembership>{};
     }
 
-    final out = <String, AllUserMembership>{};
+    final result = <String, AllUserMembership>{};
 
     for (final membership in user.memberships) {
       final tenantId = membership.tenantId.trim();
 
-      if (tenantId.isEmpty) {
-        continue;
+      if (tenantId.isNotEmpty) {
+        result[tenantId] = membership;
       }
-
-      out[tenantId] = membership;
     }
 
-    return out;
+    return result;
   }
 
   void _applyMembershipsToState(
@@ -308,112 +366,159 @@ class UserEditorController extends StateNotifier<UserEditorState> {
 
     final tenantMembership = memberships[_tenantId];
 
-    final hasAccess = tenantMembership != null;
-
-    var next = state.copyWith(
-      hasAccess: hasAccess,
-      allMemberships: memberships,
-    );
-
-    if (allowPrefill && !next.didInitialPrefill && tenantMembership != null) {
-      final email = tenantMembership.email?.trim();
-
-      next = next.copyWith(
-        level: AccessLevel.fromMembershipRole(tenantMembership.role),
-        active: tenantMembership.active,
-        tenantEmail: email == null || email.isEmpty ? null : email,
-        tenantEmailSet: true,
-        didInitialPrefill: true,
-      );
-    } else if ((next.tenantEmail ?? '').isEmpty && tenantMembership != null) {
-      final email = tenantMembership.email?.trim();
-
-      if (email != null && email.isNotEmpty) {
-        next = next.copyWith(tenantEmail: email, tenantEmailSet: true);
-      }
-    }
-
-    state = next;
-  }
-
-  Map<String, Object?> _buildPatchFromForm() {
-    return <String, Object?>{
-      'staffRoles': state.level.staffRolesForTenantAuthUser,
-      'status': state.active ? 'active' : 'disabled',
-    };
-  }
-
-  void _patchLocalTargetMembership() {
-    if (!mounted) return;
-
-    final current = state.allMemberships[_tenantId];
-
-    final updated = AllUserMembership(
-      tenantId: _tenantId,
-      role: state.level.membershipRole,
-      active: state.active,
-      status: state.active ? 'active' : 'disabled',
-      email: state.tenantEmail ?? current?.email,
-    );
-
-    final nextMemberships = Map<String, AllUserMembership>.from(
-      state.allMemberships,
-    );
-
-    nextMemberships[_tenantId] = updated;
+    final email = tenantMembership?.email?.trim();
 
     state = state.copyWith(
-      hasAccess: true,
-      allMemberships: nextMemberships,
+      hasAccess: tenantMembership != null,
+      allMemberships: memberships,
+      tenantEmail: email == null || email.isEmpty ? null : email,
+      tenantEmailSet: true,
+    );
+
+    if (allowPrefill) {
+      _prefillSelectedApp();
+    }
+  }
+
+  void _prefillSelectedApp() {
+    if (!mounted || _appId.isEmpty) return;
+
+    final tenantMembership = state.allMemberships[_tenantId];
+
+    final appActive = tenantMembership?.hasActiveAppMembership(_appId) ?? false;
+
+    final role = tenantMembership == null
+        ? AccessLevel.member
+        : AccessLevel.fromMembershipRole(
+            tenantMembership.accessLevelForApp(_appId),
+          );
+
+    state = state.copyWith(
+      level: role,
+      active: appActive,
       didInitialPrefill: true,
     );
   }
 
+  // ───────────────────────────────────────────
+  // Save selected app access
+  // ───────────────────────────────────────────
+
   Future<bool> save() async {
+    if (!mounted || state.saving || state.deleting) {
+      return false;
+    }
+
     if (_tenantId.isEmpty || _uid.isEmpty) {
-      SnackService.showError('❌ Missing tenant or uid');
-
+      SnackService.showError('Missing tenant or user ID');
       return false;
     }
 
-    if (state.saving || state.deleting) {
+    if (_appId.isEmpty) {
+      SnackService.showError('Select an application before saving.');
       return false;
     }
+
+    if (state.loadingMemberships) {
+      SnackService.showError('Wait for memberships to finish loading.');
+      return false;
+    }
+
+    if (!state.hasAccess) {
+      SnackService.showError('User does not have a tenant account.');
+      return false;
+    }
+
+    if (state.active && !state.tenantAccountActive) {
+      SnackService.showError(
+        'Enable the tenant account before '
+        'enabling application access.',
+      );
+      return false;
+    }
+
+    final targetActive = state.active;
+    final targetRoles = targetActive
+        ? state.level.staffRolesForApp
+        : const <String>[];
+
+    final current = state.tenantMembership;
+    final wasActive = current?.hasActiveAppMembership(_appId) ?? false;
+    final oldRoles = current?.rolesForApp(_appId) ?? const <String>[];
 
     state = state.copyWith(saving: true);
 
+    var changedMembership = false;
+    var changedRoles = false;
+
     try {
-      final allUsers = ref.read(allUsersControllerProvider.notifier);
+      final svc = await ref.read(allUsersServiceProvider.future);
 
-      final patch = _buildPatchFromForm();
+      if (targetActive) {
+        // Staff roles require active app membership.
+        if (!wasActive) {
+          await svc.setAppMembership(
+            tenantId: _tenantId,
+            uid: _uid,
+            appId: _appId,
+            active: true,
+          );
+          changedMembership = true;
+        }
 
-      final result = await allUsers.updateTenantUser(
-        tenantId: _tenantId,
-        uid: _uid,
-        patch: patch,
-      );
-
-      if (result == null) {
-        return false;
+        if (!listEquals(oldRoles, targetRoles)) {
+          await svc.setAppStaffRoles(
+            tenantId: _tenantId,
+            uid: _uid,
+            appId: _appId,
+            staffRoles: targetRoles,
+          );
+          changedRoles = true;
+        }
+      } else if (wasActive || oldRoles.isNotEmpty) {
+        // Disabling an app also clears its staff roles.
+        await svc.setAppMembership(
+          tenantId: _tenantId,
+          uid: _uid,
+          appId: _appId,
+          active: false,
+        );
+        changedMembership = true;
       }
 
-      if (!mounted) {
-        return true;
-      }
+      if (!mounted) return true;
 
-      _patchLocalTargetMembership();
+      await refreshMemberships(force: true);
+
+      if (kDebugMode) {
+        debugPrint(
+          'UserEditor.save: '
+          'tenant=$_tenantId '
+          'app=$_appId '
+          'uid=$_uid '
+          'active=$targetActive '
+          'roles=$targetRoles '
+          'membershipChanged=$changedMembership '
+          'rolesChanged=$changedRoles',
+        );
+      }
 
       return true;
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint(
-          '🧨 UserEditor.save failed: '
-          '$e\n$st',
-        );
+        debugPrint('UserEditor.save failed: $e\n$st');
       }
 
       if (mounted) {
-        SnackService.showError('❌ Failed to save: $e');
+        SnackService.showError(
+          'Application access could not be fully '
+          'saved. Refresh to verify the current '
+          'permissions. $e',
+        );
+
+        // The first API operation may have succeeded.
+        // Reload rather than pretending it was rolled back.
+        await refreshMemberships(force: true);
       }
 
       return false;
@@ -424,43 +529,50 @@ class UserEditorController extends StateNotifier<UserEditorState> {
     }
   }
 
+  // ───────────────────────────────────────────
+  // Disable selected app access
+  // ───────────────────────────────────────────
+
+  /// Does not delete the tenant auth_user.
+  ///
+  /// Does not affect other applications.
   Future<bool> removeAccess() async {
-    if (_tenantId.isEmpty || _uid.isEmpty) {
+    if (!mounted || state.saving || state.deleting) {
       return false;
     }
 
-    if (state.saving || state.deleting) {
+    if (_tenantId.isEmpty || _uid.isEmpty || _appId.isEmpty) {
+      SnackService.showError('Select a tenant, user and application.');
       return false;
     }
 
     state = state.copyWith(deleting: true);
 
     try {
-      final allUsers = ref.read(allUsersControllerProvider.notifier);
+      final svc = await ref.read(allUsersServiceProvider.future);
 
-      await allUsers.deleteTenantUser(tenantId: _tenantId, uid: _uid);
+      await svc.setAppMembership(
+        tenantId: _tenantId,
+        uid: _uid,
+        appId: _appId,
+        active: false,
+      );
 
-      if (!mounted) {
-        return true;
-      }
+      if (!mounted) return true;
 
-      final nextMemberships = Map<String, AllUserMembership>.from(
-        state.allMemberships,
-      )..remove(_tenantId);
+      state = state.copyWith(active: false, level: AccessLevel.member);
 
-      _applyMembershipsToState(nextMemberships, allowPrefill: false);
+      await refreshMemberships(force: true);
 
       return true;
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint(
-          '🧨 UserEditor.removeAccess '
-          'failed: $e\n$st',
-        );
+        debugPrint('UserEditor.removeAccess failed: $e\n$st');
       }
 
       if (mounted) {
-        SnackService.showError('❌ Failed to remove access: $e');
+        SnackService.showError('Failed to disable app access: $e');
+        await refreshMemberships(force: true);
       }
 
       return false;
@@ -471,5 +583,10 @@ class UserEditorController extends StateNotifier<UserEditorState> {
     }
   }
 
-  List<String> get patchRolesPreview => state.level.staffRolesForTenantAuthUser;
+  // ───────────────────────────────────────────
+  // Preview
+  // ───────────────────────────────────────────
+
+  List<String> get patchRolesPreview =>
+      state.active ? state.level.staffRolesForApp : const <String>[];
 }
