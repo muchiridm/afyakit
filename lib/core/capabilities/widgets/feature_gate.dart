@@ -25,7 +25,7 @@ class FeatureGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Provider returns `true` while loading (see tenant_feature_providers.dart),
     // so we rarely need loading here — but keep it as a hook.
-    final enabled = ref.watch(isFeatureEnabledProvider(featureKey));
+    final enabled = ref.watch(isTenantFeatureEnabledProvider(featureKey));
 
     if (enabled) return child;
     return fallback ?? loading ?? const SizedBox.shrink();

@@ -24,7 +24,7 @@ class HealthMetricsService {
     final pid = _requiredId(profileId, 'profileId');
 
     final response = await api.getUri<Object?>(
-      routes.clinicalProfileHealthMetricsList(
+      routes.recordsProfileHealthMetricsList(
         pid,
         type: type?.key,
         isActive: isActive,
@@ -50,7 +50,7 @@ class HealthMetricsService {
     int page = 1,
   }) async {
     final response = await api.getUri<Object?>(
-      routes.clinicalHealthMetricsList(
+      routes.recordsHealthMetricsList(
         profileId: _nullable(profileId),
         type: type?.key,
         isActive: isActive,
@@ -75,7 +75,7 @@ class HealthMetricsService {
     final mid = _requiredId(metricId, 'metricId');
 
     final response = await api.getUri<Object?>(
-      routes.clinicalProfileHealthMetricGet(profileId: pid, metricId: mid),
+      routes.recordsProfileHealthMetricGet(profileId: pid, metricId: mid),
     );
 
     final body = _asMap(response.data);
@@ -87,7 +87,7 @@ class HealthMetricsService {
     final profileId = _requiredId(input.profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileHealthMetricCreate(profileId),
+      routes.recordsProfileHealthMetricCreate(profileId),
       data: input.toJson(),
     );
 
@@ -106,7 +106,7 @@ class HealthMetricsService {
     final mid = _requiredId(metricId, 'metricId');
 
     final response = await api.putUri<Object?>(
-      routes.clinicalProfileHealthMetricUpdate(profileId: pid, metricId: mid),
+      routes.recordsProfileHealthMetricUpdate(profileId: pid, metricId: mid),
       data: input.toJson(),
     );
 
@@ -124,7 +124,7 @@ class HealthMetricsService {
     final mid = _requiredId(metricId, 'metricId');
 
     await api.deleteUri<Object?>(
-      routes.clinicalProfileHealthMetricDelete(profileId: pid, metricId: mid),
+      routes.recordsProfileHealthMetricDelete(profileId: pid, metricId: mid),
     );
   }
 

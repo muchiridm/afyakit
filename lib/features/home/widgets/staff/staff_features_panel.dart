@@ -10,9 +10,9 @@ import 'package:afyakit/features/home/registry/home_registry.dart';
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
-import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 
 import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';

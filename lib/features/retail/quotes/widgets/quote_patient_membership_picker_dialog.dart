@@ -1,8 +1,8 @@
 // lib/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart
 
-import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';

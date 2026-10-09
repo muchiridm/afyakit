@@ -58,22 +58,24 @@ class ActivityFeedService {
         });
   }
 
-  /// Member activity associated with a contact ID.
+  /// Member activity associated with a contact ID
+  /// within one application.
   ///
-  /// This subscription is logged separately from the staff feed.
   /// Contact identifiers are deliberately excluded from logs.
   Stream<List<ActivityFeedRecord>> watchContactActivity({
     required String tenantId,
+    required String appId,
     required String contactId,
     int limit = 20,
   }) {
     debugPrint(
       '🔍 [activity][MEMBER-CONTACT] '
-      'tenant=$tenantId limit=$limit '
+      'tenant=$tenantId app=$appId limit=$limit '
       'subscription started',
     );
 
     return _collection(tenantId)
+        .where('app_id', isEqualTo: appId)
         .where('contact_id', isEqualTo: contactId)
         .orderBy('occurred_at', descending: true)
         .limit(limit)
@@ -82,7 +84,7 @@ class ActivityFeedService {
           debugPrint(
             '✅ [activity][MEMBER-CONTACT] '
             'received=${snap.docs.length} '
-            'tenant=$tenantId',
+            'tenant=$tenantId app=$appId',
           );
 
           return snap.docs
@@ -92,7 +94,7 @@ class ActivityFeedService {
         .handleError((Object error, StackTrace stack) {
           debugPrint(
             '❌ [activity][MEMBER-CONTACT] '
-            'tenant=$tenantId '
+            'tenant=$tenantId app=$appId '
             'error=$error',
           );
 
@@ -100,21 +102,24 @@ class ActivityFeedService {
         });
   }
 
-  /// Member activity associated with an account number.
+  /// Member activity associated with an account number
+  /// within one application.
   ///
   /// Account numbers are deliberately excluded from logs.
   Stream<List<ActivityFeedRecord>> watchAccountActivity({
     required String tenantId,
+    required String appId,
     required String accountNumber,
     int limit = 20,
   }) {
     debugPrint(
       '🔍 [activity][MEMBER-ACCOUNT] '
-      'tenant=$tenantId limit=$limit '
+      'tenant=$tenantId app=$appId limit=$limit '
       'subscription started',
     );
 
     return _collection(tenantId)
+        .where('app_id', isEqualTo: appId)
         .where('account_number', isEqualTo: accountNumber)
         .orderBy('occurred_at', descending: true)
         .limit(limit)
@@ -123,7 +128,7 @@ class ActivityFeedService {
           debugPrint(
             '✅ [activity][MEMBER-ACCOUNT] '
             'received=${snap.docs.length} '
-            'tenant=$tenantId',
+            'tenant=$tenantId app=$appId',
           );
 
           return snap.docs
@@ -133,7 +138,7 @@ class ActivityFeedService {
         .handleError((Object error, StackTrace stack) {
           debugPrint(
             '❌ [activity][MEMBER-ACCOUNT] '
-            'tenant=$tenantId '
+            'tenant=$tenantId app=$appId '
             'error=$error',
           );
 

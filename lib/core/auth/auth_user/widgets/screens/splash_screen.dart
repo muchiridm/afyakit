@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/app_identity.dart';
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/branding/providers/app_logo_providers.dart';
 
 class SplashScreen extends ConsumerWidget {

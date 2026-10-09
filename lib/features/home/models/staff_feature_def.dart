@@ -59,7 +59,7 @@ class StaffFeatureDef {
 
     // 1) Tenant feature gate
     if (enabledByTenantFeature) {
-      final enabled = ref.watch(isModuleEnabledProvider(featureKey));
+      final enabled = ref.watch(isTenantModuleEnabledProvider(featureKey));
       if (!enabled) return false;
     }
 

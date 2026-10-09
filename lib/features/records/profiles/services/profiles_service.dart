@@ -1,10 +1,10 @@
-// lib/features/clinical/profiles/profiles_service.dart
+// lib/features/records/profiles/services/profiles_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final profilesServiceProvider = Provider<ProfilesService>((ref) {
@@ -17,7 +17,6 @@ final profilesServiceProvider = Provider<ProfilesService>((ref) {
 final profilesServiceReadyProvider =
     FutureProvider.autoDispose<ProfilesService>((ref) async {
       final api = await ref.watch(afyakitClientFutureProvider.future);
-
       final routes = ref.afyakitRoutes;
 
       return ProfilesService(api: api, routes: routes);
@@ -30,7 +29,7 @@ class ProfilesService {
   final AfyaKitRoutes routes;
 
   // ─────────────────────────────────────────────
-  // Profiles
+  // Health Profiles
   // ─────────────────────────────────────────────
 
   Future<List<Profile>> list({
@@ -41,7 +40,7 @@ class ProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final uri = routes.clinicalProfilesList(
+    final uri = routes.recordsProfilesList(
       search: _nullable(search),
       contactId: _nullable(contactId),
       relationship: relationship?.name,
@@ -51,7 +50,6 @@ class ProfilesService {
     );
 
     final response = await api.getUri<Object?>(uri);
-
     final body = _asMap(response.data);
 
     return _readProfiles(body['profiles']);
@@ -60,7 +58,7 @@ class ProfilesService {
   Future<Profile> get(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
 
-    final response = await api.getUri<Object?>(routes.clinicalProfileGet(id));
+    final response = await api.getUri<Object?>(routes.recordsProfileGet(id));
 
     final body = _asMap(response.data);
 
@@ -69,7 +67,7 @@ class ProfilesService {
 
   Future<Profile> create(ProfileUpsertInput input) async {
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileCreate(),
+      routes.recordsProfileCreate(),
       data: input.toJson(),
     );
 
@@ -82,7 +80,7 @@ class ProfilesService {
     final id = _requiredId(profileId, 'profileId');
 
     final response = await api.putUri<Object?>(
-      routes.clinicalProfileUpdate(id),
+      routes.recordsProfileUpdate(id),
       data: input.toJson(),
     );
 
@@ -94,7 +92,7 @@ class ProfilesService {
   Future<void> delete(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
 
-    await api.deleteUri<Object?>(routes.clinicalProfileDelete(id));
+    await api.deleteUri<Object?>(routes.recordsProfileDelete(id));
   }
 
   Future<void> remove(String profileId) {
@@ -102,7 +100,7 @@ class ProfilesService {
   }
 
   // ─────────────────────────────────────────────
-  // Member profile linking
+  // Member Profile Linking
   // ─────────────────────────────────────────────
 
   Future<Profile> linkToSelf(
@@ -112,7 +110,7 @@ class ProfilesService {
     final id = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileLinkSelf(id),
+      routes.recordsProfileLinkSelf(id),
       data: input.toJson(),
     );
 
@@ -122,7 +120,7 @@ class ProfilesService {
   }
 
   // ─────────────────────────────────────────────
-  // Staff direct profile-contact links
+  // Staff Profile-Contact Links
   // ─────────────────────────────────────────────
 
   Future<Profile> linkContact(
@@ -132,7 +130,7 @@ class ProfilesService {
     final id = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileLinkedContactCreate(id),
+      routes.recordsProfileLinkedContactCreate(id),
       data: input.toJson(),
     );
 
@@ -146,11 +144,10 @@ class ProfilesService {
     required String contactId,
   }) async {
     final pid = _requiredId(profileId, 'profileId');
-
     final cid = _requiredId(contactId, 'contactId');
 
     final response = await api.deleteUri<Object?>(
-      routes.clinicalProfileLinkedContactDelete(profileId: pid, contactId: cid),
+      routes.recordsProfileLinkedContactDelete(profileId: pid, contactId: cid),
     );
 
     final body = _asMap(response.data);
@@ -159,7 +156,7 @@ class ProfilesService {
   }
 
   // ─────────────────────────────────────────────
-  // Profile link requests
+  // Profile Link Requests
   // ─────────────────────────────────────────────
 
   Future<ProfileLinkRequest> createLinkRequest(
@@ -169,7 +166,7 @@ class ProfilesService {
     final id = _requiredId(profileId, 'profileId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileLinkRequestCreate(id),
+      routes.recordsProfileLinkRequestCreate(id),
       data: input.toJson(),
     );
 
@@ -184,7 +181,7 @@ class ProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final uri = routes.clinicalProfileLinkRequestsList(
+    final uri = routes.recordsProfileLinkRequestsList(
       status: status?.wire,
       profileId: _nullable(profileId),
       perPage: perPage,
@@ -192,7 +189,6 @@ class ProfilesService {
     );
 
     final response = await api.getUri<Object?>(uri);
-
     final body = _asMap(response.data);
 
     return _readLinkRequests(body['requests']);
@@ -205,7 +201,7 @@ class ProfilesService {
     final id = _requiredId(requestId, 'requestId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileLinkRequestApprove(id),
+      routes.recordsProfileLinkRequestApprove(id),
       data: input.toJson(),
     );
 
@@ -221,7 +217,7 @@ class ProfilesService {
     final id = _requiredId(requestId, 'requestId');
 
     final response = await api.postUri<Object?>(
-      routes.clinicalProfileLinkRequestReject(id),
+      routes.recordsProfileLinkRequestReject(id),
       data: input.toJson(),
     );
 
@@ -231,7 +227,7 @@ class ProfilesService {
   }
 
   // ─────────────────────────────────────────────
-  // Helpers
+  // Response Helpers
   // ─────────────────────────────────────────────
 
   static Profile _readProfile(Object? value) {

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/branding/services/branding_storage.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 

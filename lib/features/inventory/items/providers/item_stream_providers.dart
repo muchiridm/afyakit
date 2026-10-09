@@ -1,4 +1,4 @@
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/features/inventory/items/models/items/consumable_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/equipment_item.dart';
 import 'package:afyakit/features/inventory/items/models/items/medication_item.dart';

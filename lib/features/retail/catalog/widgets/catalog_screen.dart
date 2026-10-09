@@ -2,7 +2,7 @@
 
 import 'dart:async';
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';

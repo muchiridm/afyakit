@@ -7,7 +7,7 @@ import 'package:afyakit/core/capabilities/feature_registry.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
 import 'package:afyakit/core/tenancy/models/tenant_status_x.dart';
 import 'package:afyakit/features/hq/tenants/controllers/tenant_profile_state.dart';
-import 'package:afyakit/features/hq/tenants/providers/hq_tenants_provider.dart';
+import 'package:afyakit/features/hq/tenants/providers/hq_tenant_providers.dart';
 import 'package:afyakit/features/hq/tenants/services/tenant_service.dart';
 
 final tenantProfileEditorInputProvider = Provider<TenantProfile?>(

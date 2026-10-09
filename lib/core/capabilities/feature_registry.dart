@@ -1,5 +1,3 @@
-// lib/core/capabilities/feature_registry.dart
-
 import 'package:flutter/material.dart';
 
 import 'feature_keys.dart';
@@ -38,7 +36,9 @@ abstract final class FeatureRegistry {
       key: FeatureKeys.core,
       label: 'Core',
       icon: Icons.apps_rounded,
-      description: 'Shared application services.',
+      description:
+          'Core application services, including identity, '
+          'health profiles, records, metrics and documents.',
     ),
 
     FeatureDef(
@@ -63,18 +63,8 @@ abstract final class FeatureRegistry {
       label: 'Clinical',
       icon: Icons.medical_information_rounded,
       description:
-          'Health profiles, metrics, encounters, '
-          'prescriptions and clinical records.',
-    ),
-
-    FeatureDef(
-      key: FeatureKeys.healthTracking,
-      label: 'Health Tracking',
-      icon: Icons.monitor_heart_rounded,
-      description:
-          'Personal health journeys, health metrics, '
-          'record uploads and patient-controlled access.',
-      requires: [FeatureKeys.clinical],
+          'Clinical encounters, consultations, diagnoses, '
+          'treatment and prescriptions.',
     ),
 
     FeatureDef(
@@ -84,7 +74,6 @@ abstract final class FeatureRegistry {
       description:
           'Laboratory tests, imaging, physiological testing, '
           'diagnostic requests, results and reports.',
-      requires: [FeatureKeys.clinical],
     ),
 
     FeatureDef(
@@ -92,9 +81,8 @@ abstract final class FeatureRegistry {
       label: 'Pharmacy',
       icon: Icons.local_pharmacy_rounded,
       description:
-          'Pharmacy services, dispensing and '
-          'medicine-specific workflows.',
-      requires: [FeatureKeys.clinical],
+          'Prescription verification, dispensing, '
+          'medication orders and pharmacy services.',
     ),
 
     FeatureDef(
@@ -104,7 +92,6 @@ abstract final class FeatureRegistry {
       description:
           'Employer programmes, screening campaigns, '
           'health surveillance and fitness certification.',
-      requires: [FeatureKeys.clinical],
     ),
 
     FeatureDef(

@@ -1,3 +1,5 @@
+// lib/core/storage/profile_storage_access.dart
+
 import 'package:afyakit/core/api/afyakit/client.dart';
 
 /// Uses existing collection URIs so no route-provider changes are required.
@@ -8,7 +10,9 @@ final class ProfileStorageAccess {
     if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) {
       throw ArgumentError('Active appId is required');
     }
-    return uri.replace(queryParameters: {...uri.queryParameters, 'appId': appId});
+    return uri.replace(
+      queryParameters: {...uri.queryParameters, 'appId': appId},
+    );
   }
 
   static Uri _endpoint(Uri collection, String suffix) => collection.replace(

@@ -33,6 +33,12 @@ class AppProfileLoader {
 
       final raw = snapshot.data() ?? const <String, dynamic>{};
 
+      debugPrint(
+        '🧩 [app-profile-raw] '
+        'tenant=$tenantId app=$appId '
+        'features=${raw['features']}',
+      );
+
       final profile = AppProfile.fromFirestore(appId, raw);
 
       if (!profile.active) {

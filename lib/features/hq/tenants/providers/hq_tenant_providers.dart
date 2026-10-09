@@ -1,4 +1,4 @@
-// lib/features/hq/tenants/providers/hq_tenants_provider.dart
+// lib/features/hq/tenants/providers/hq_tenant_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';

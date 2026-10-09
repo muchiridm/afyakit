@@ -2,7 +2,7 @@
 
 import 'dart:convert';
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';

@@ -6,10 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
 
-import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
-import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
 
 class MemberHomeQuickActions extends ConsumerWidget {

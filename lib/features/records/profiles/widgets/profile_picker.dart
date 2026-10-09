@@ -1,7 +1,7 @@
-// lib/features/clinical/profiles/widgets/profile_picker.dart
+// lib/features/records/profiles/widgets/profile_picker.dart
 
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 import 'package:flutter/material.dart';
 
 Future<Profile?> showProfilePickerScreen({

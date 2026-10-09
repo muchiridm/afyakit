@@ -1,6 +1,6 @@
-// lib/core/home/activities/feed/activity_feed_providers.dart
+// lib/features/home/activities/feed/activity_feed_providers.dart
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,13 +26,21 @@ class MemberActivityScope {
 
   String? get cleanContactId {
     final id = contactId?.trim();
-    if (id == null || id.isEmpty) return null;
+
+    if (id == null || id.isEmpty) {
+      return null;
+    }
+
     return id;
   }
 
   String? get cleanAccountNumber {
     final value = accountNumber?.trim();
-    if (value == null || value.isEmpty) return null;
+
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
     return value;
   }
 
@@ -55,7 +63,6 @@ final staffActivityFeedProvider =
     StreamProvider.autoDispose<List<ActivityFeedRecord>>((ref) {
       final tenantId = ref.watch(tenantIdProvider);
       final appId = ref.watch(appIdProvider);
-
       final service = ref.watch(activityFeedServiceProvider);
 
       return service.watchStaffActivity(
@@ -74,12 +81,15 @@ final memberActivityFeedProvider = StreamProvider.autoDispose
       }
 
       final tenantId = ref.watch(tenantIdProvider);
+      final appId = ref.watch(appIdProvider);
       final service = ref.watch(activityFeedServiceProvider);
 
       final contactId = scope.cleanContactId;
+
       if (contactId != null) {
         return service.watchContactActivity(
           tenantId: tenantId,
+          appId: appId,
           contactId: contactId,
           limit: scope.limit,
         );
@@ -87,6 +97,7 @@ final memberActivityFeedProvider = StreamProvider.autoDispose
 
       return service.watchAccountActivity(
         tenantId: tenantId,
+        appId: appId,
         accountNumber: scope.cleanAccountNumber!,
         limit: scope.limit,
       );

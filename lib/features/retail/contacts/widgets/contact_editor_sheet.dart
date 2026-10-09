@@ -1,12 +1,12 @@
 // lib/features/retail/contacts/widgets/contact_editor_sheet.dart
 
-import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_form_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/services/profiles_service.dart';
 
 import '../models/zoho_contact.dart';
 import 'contact_sheet_models.dart';

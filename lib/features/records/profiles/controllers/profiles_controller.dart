@@ -1,8 +1,8 @@
-// lib/features/clinical/profiles/controllers/profiles_controller.dart
+// lib/features/records/profiles/controllers/profiles_controller.dart
 
-import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/services/profiles_service.dart';
+import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/services/profiles_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

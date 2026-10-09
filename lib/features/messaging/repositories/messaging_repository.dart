@@ -44,11 +44,14 @@ class MessagingRepository {
 
   Stream<List<ChatConversation>> watchMemberConversations({
     required String tenantId,
+    required String appId,
     required String memberUid,
   }) {
+    final String app = _requireValue(appId, 'appId');
     final String uid = _requireValue(memberUid, 'memberUid');
 
     return _conversationsRef(tenantId)
+        .where('app_id', isEqualTo: app)
         .where('member.uid', isEqualTo: uid)
         .orderBy('updatedAt', descending: true)
         .snapshots()
@@ -81,13 +84,22 @@ class MessagingRepository {
 
   Stream<ChatConversation?> watchConversation({
     required String tenantId,
+    required String appId,
     required String conversationId,
   }) {
+    final String app = _requireValue(appId, 'appId');
+
     return _conversationRef(
       tenantId: tenantId,
       conversationId: conversationId,
     ).snapshots().map((snapshot) {
       if (!snapshot.exists) {
+        return null;
+      }
+
+      final data = snapshot.data();
+
+      if (data == null || data['app_id']?.toString().trim() != app) {
         return null;
       }
 
@@ -97,16 +109,34 @@ class MessagingRepository {
 
   Stream<List<ChatMessage>> watchMessages({
     required String tenantId,
+    required String appId,
     required String conversationId,
   }) {
-    return _messagesRef(tenantId: tenantId, conversationId: conversationId)
-        .orderBy('createdAt')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map(ChatMessage.fromDocument)
-              .toList(growable: false),
-        );
+    final String app = _requireValue(appId, 'appId');
+
+    return _conversationRef(
+      tenantId: tenantId,
+      conversationId: conversationId,
+    ).snapshots().asyncExpand((snapshot) {
+      if (!snapshot.exists) {
+        return Stream<List<ChatMessage>>.value(const <ChatMessage>[]);
+      }
+
+      final data = snapshot.data();
+
+      if (data == null || data['app_id']?.toString().trim() != app) {
+        return Stream<List<ChatMessage>>.value(const <ChatMessage>[]);
+      }
+
+      return _messagesRef(tenantId: tenantId, conversationId: conversationId)
+          .orderBy('createdAt')
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map(ChatMessage.fromDocument)
+                .toList(growable: false),
+          );
+    });
   }
 
   /// Create a conversation under the active application.
@@ -176,12 +206,14 @@ class MessagingRepository {
 
   Future<void> sendMemberMessage({
     required String tenantId,
+    required String appId,
     required String conversationId,
     required AuthUser user,
     required String text,
   }) async {
     await _sendMessage(
       tenantId: tenantId,
+      appId: appId,
       conversationId: conversationId,
       senderUid: user.uid,
       senderName: user.computedDisplayName,
@@ -193,12 +225,14 @@ class MessagingRepository {
 
   Future<void> sendStaffMessage({
     required String tenantId,
+    required String appId,
     required String conversationId,
     required AuthUser user,
     required String text,
   }) async {
     await _sendMessage(
       tenantId: tenantId,
+      appId: appId,
       conversationId: conversationId,
       senderUid: user.uid,
       senderName: user.computedDisplayName,
@@ -209,6 +243,7 @@ class MessagingRepository {
 
   Future<void> _sendMessage({
     required String tenantId,
+    required String appId,
     required String conversationId,
     required String senderUid,
     required String senderName,
@@ -216,6 +251,8 @@ class MessagingRepository {
     required String text,
     ChatMemberSnapshot? member,
   }) async {
+    final String app = _requireValue(appId, 'appId');
+
     final DocumentReference<Map<String, dynamic>> conversationRef =
         _conversationRef(tenantId: tenantId, conversationId: conversationId);
 
@@ -230,6 +267,14 @@ class MessagingRepository {
 
       if (!conversationSnapshot.exists) {
         throw StateError('This conversation no longer exists.');
+      }
+
+      final data = conversationSnapshot.data();
+
+      if (data == null || data['app_id']?.toString().trim() != app) {
+        throw StateError(
+          'This conversation does not belong to the active app.',
+        );
       }
 
       final ChatConversation conversation = ChatConversation.fromDocument(
@@ -289,10 +334,12 @@ class MessagingRepository {
 
   Future<void> markMemberConversationRead({
     required String tenantId,
+    required String appId,
     required String conversationId,
   }) async {
     await _updateExistingConversation(
       tenantId: tenantId,
+      appId: appId,
       conversationId: conversationId,
       values: <String, dynamic>{'memberUnreadCount': 0},
     );
@@ -300,10 +347,12 @@ class MessagingRepository {
 
   Future<void> markStaffConversationRead({
     required String tenantId,
+    required String appId,
     required String conversationId,
   }) async {
     await _updateExistingConversation(
       tenantId: tenantId,
+      appId: appId,
       conversationId: conversationId,
       values: <String, dynamic>{'staffUnreadCount': 0},
     );
@@ -311,6 +360,7 @@ class MessagingRepository {
 
   Future<void> setConversationStatus({
     required String tenantId,
+    required String appId,
     required String conversationId,
     required ChatConversationStatus status,
     required AuthUser user,
@@ -333,6 +383,7 @@ class MessagingRepository {
 
     await _updateExistingConversation(
       tenantId: tenantId,
+      appId: appId,
       conversationId: conversationId,
       values: values,
     );
@@ -340,9 +391,12 @@ class MessagingRepository {
 
   Future<void> _updateExistingConversation({
     required String tenantId,
+    required String appId,
     required String conversationId,
     required Map<String, dynamic> values,
   }) async {
+    final String app = _requireValue(appId, 'appId');
+
     final DocumentReference<Map<String, dynamic>> reference = _conversationRef(
       tenantId: tenantId,
       conversationId: conversationId,
@@ -353,6 +407,12 @@ class MessagingRepository {
 
     if (!snapshot.exists) {
       return;
+    }
+
+    final data = snapshot.data();
+
+    if (data == null || data['app_id']?.toString().trim() != app) {
+      throw StateError('This conversation does not belong to the active app.');
     }
 
     await reference.update(<String, dynamic>{

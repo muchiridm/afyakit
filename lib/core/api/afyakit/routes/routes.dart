@@ -9,6 +9,7 @@ part 'routes_auth.dart';
 part 'routes_inventory.dart';
 part 'routes_misc.dart';
 part 'routes_retail.dart';
+part 'routes_records.dart';
 part 'routes_clinical.dart';
 part 'routes_insurance.dart';
 

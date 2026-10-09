@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
@@ -93,7 +93,6 @@ class AuthGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tenantId = ref.watch(tenantIdProvider);
-
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
@@ -117,10 +116,10 @@ class AuthGate extends ConsumerWidget {
       // Session available
       // ─────────────────────────────────────────
       data: (user) {
-        // 1. Unauthenticated visitor.
+        // 1. Unauthenticated visitors.
         //
         // HomeShell selects the appropriate
-        // guest experience for the current app.
+        // guest experience for the active app.
 
         if (user == null) {
           return const HomeShell();
@@ -128,10 +127,8 @@ class AuthGate extends ConsumerWidget {
 
         // 2. Account restrictions.
         //
-        // Inactive accounts must not enter
-        // the authenticated application or
-        // bypass restrictions through public
-        // landing pages.
+        // Inactive accounts cannot enter the
+        // authenticated application.
 
         if (!_isActive(user)) {
           return Blocked(
@@ -143,49 +140,25 @@ class AuthGate extends ConsumerWidget {
           );
         }
 
-        // 3. Determine onboarding requirements.
+        // 3. Onboarding requirements.
         //
-        // The backend session is the source
-        // of truth for user verification
-        // and profile completeness.
+        // The backend session determines
+        // verification and account completeness.
 
         final need = OnboardingGate.need(user);
 
-        // ─────────────────────────────────────
-        // Fully authenticated and onboarded
-        // ─────────────────────────────────────
-        //
-        // IMPORTANT:
-        //
-        // A user who has completed onboarding
-        // must enter the authenticated app.
-        //
-        // Do not route them through the
-        // public catalogue or guest landing.
-        //
-        // This prevents the previous missing
-        // transition from authenticated
-        // session to member/staff experience.
+        // Fully onboarded users enter the
+        // authenticated application.
 
         if (need == OnboardingNeed.none) {
           return const HomeShell();
         }
 
-        // ─────────────────────────────────────
-        // Incomplete onboarding
-        // ─────────────────────────────────────
-        //
-        // Preserve the required next step.
-        //
-        // OnboardingGate.forceStep schedules
-        // the state update after the frame
-        // and avoids interrupting active
-        // OTP/email verification flows.
-
+        // Preserve the required onboarding step.
         _prepareOnboarding(ref, user, need);
 
         // ─────────────────────────────────────
-        // Application-specific public experience
+        // Application-specific guest experience
         // ─────────────────────────────────────
 
         final appProfileAsync = ref.watch(appProfileProvider);
@@ -203,51 +176,60 @@ class AuthGate extends ConsumerWidget {
 
           data: (profile) {
             final name = profile.displayName.trim();
-
             final appName = name.isNotEmpty ? name : profile.id;
 
             final features = profile.features;
-
-            final pharmacyEnabled = features.enabled(FeatureKeys.pharmacy);
-
-            final healthTrackingEnabled = features.enabled(
-              FeatureKeys.healthTracking,
-            );
 
             final occupationalHealthEnabled = features.enabled(
               FeatureKeys.occupationalHealth,
             );
 
-            // 4. Pharmacy.
+            final clinicalEnabled = features.enabled(FeatureKeys.clinical);
+
+            final pharmacyEnabled = features.enabled(FeatureKeys.pharmacy);
+
+            // 4. Occupational Health.
             //
-            // Allow public catalogue browsing
-            // without removing the pending
-            // onboarding requirement.
+            // OccHealth is independent of Clinical.
+            // Core Records are available by default.
+
+            if (occupationalHealthEnabled) {
+              return GuestHealthLanding(
+                appName: appName,
+                occupationalHealthEnabled: true,
+                onGetStarted: () => _openLogin(context, appName),
+              );
+            }
+
+            // 5. Clinical.
+            //
+            // AfyaTracker-style healthcare experience.
+            // Health Tracking is no longer a
+            // separate capability.
+
+            if (clinicalEnabled) {
+              return GuestHealthLanding(
+                appName: appName,
+                occupationalHealthEnabled: false,
+                onGetStarted: () => _openLogin(context, appName),
+              );
+            }
+
+            // 6. Pharmacy.
+            //
+            // DawaPap provides catalogue browsing
+            // without requiring Clinical.
+            //
+            // Pending onboarding remains enforced.
 
             if (pharmacyEnabled) {
               return const CatalogScreen();
             }
 
-            // 5. Health tracking.
+            // 7. Other applications.
             //
-            // Occupational Health modifies
-            // the guest experience when both
-            // capabilities are enabled.
-
-            if (healthTrackingEnabled) {
-              return GuestHealthLanding(
-                appName: appName,
-                occupationalHealthEnabled: occupationalHealthEnabled,
-                onGetStarted: () {
-                  _openLogin(context, appName);
-                },
-              );
-            }
-
-            // 6. No public guest experience.
-            //
-            // Continue the required
-            // onboarding step directly.
+            // Continue onboarding directly if
+            // no public landing is configured.
 
             return _login(appName);
           },

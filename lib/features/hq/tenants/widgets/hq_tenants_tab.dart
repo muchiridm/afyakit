@@ -11,7 +11,7 @@ import 'package:afyakit/features/hq/apps/widgets/app_profiles_screen.dart';
 
 import 'package:afyakit/features/hq/tenants/controllers/tenant_profile_controller.dart'
     show tenantProfileEditorInputProvider;
-import 'package:afyakit/features/hq/tenants/providers/hq_tenants_provider.dart';
+import 'package:afyakit/features/hq/tenants/providers/hq_tenant_providers.dart';
 import 'package:afyakit/features/hq/tenants/widgets/tenant_profile_editor.dart';
 
 class HqTenantsTab extends ConsumerWidget {

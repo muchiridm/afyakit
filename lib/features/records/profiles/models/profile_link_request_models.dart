@@ -1,4 +1,4 @@
-// lib/features/clinical/profiles/models/profile_link_request_models.dart
+// lib/features/records/profiles/models/profile_link_request_models.dart
 
 import 'package:flutter/foundation.dart';
 

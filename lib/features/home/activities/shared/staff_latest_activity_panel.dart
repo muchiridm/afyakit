@@ -10,7 +10,7 @@ import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart'
 import 'package:afyakit/features/home/activities/shared/latest_activity_panel.dart';
 import 'package:afyakit/features/home/models/activity_entry.dart';
 
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
@@ -55,12 +55,14 @@ class StaffLatestActivityPanel extends ConsumerWidget {
 
     final locations = <InventoryLocation>[...stores, ...dispensaries];
 
-    final List<ActivityEntry> entries = ActivityFeedAdapter.fromFeed(
-      activityAsync.valueOrNull ?? const [],
-      onTapForActivity: (activity) => _onTapForActivity(context, activity),
-      subtitleForActivity: (activity) =>
-          _subtitleForActivity(activity, locations),
-    )..sort((a, b) => b.date.compareTo(a.date));
+    final List<ActivityEntry> entries = <ActivityEntry>[
+      ...ActivityFeedAdapter.fromFeed(
+        activityAsync.valueOrNull ?? const [],
+        onTapForActivity: (activity) => _onTapForActivity(context, activity),
+        subtitleForActivity: (activity) =>
+            _subtitleForActivity(activity, locations),
+      ),
+    ]..sort((a, b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,

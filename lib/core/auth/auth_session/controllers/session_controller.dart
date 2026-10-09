@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 
 import 'package:afyakit/core/auth/auth_session/services/auth_service.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';

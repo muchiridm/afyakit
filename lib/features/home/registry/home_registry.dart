@@ -1,24 +1,29 @@
-// lib/core/home/registry/home_registry.dart
+// lib/features/home/registry/home_registry.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/app/providers/app_profile_providers.dart';
+
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/features/home/models/staff_feature_def.dart';
-import 'package:afyakit/features/admin/widgets/admin_dashboard_screen.dart';
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/feature_registry.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen.dart';
-import 'package:afyakit/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/admin/widgets/admin_dashboard_screen.dart';
+import 'package:afyakit/features/home/models/staff_feature_def.dart';
+
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
+
 import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
 import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';
 import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
+
+import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
@@ -30,41 +35,77 @@ enum HomeScope { staff, member }
 final class HomeRegistry {
   const HomeRegistry._();
 
+  // ─────────────────────────────────────────────
+  // Feature tiles
+  // ─────────────────────────────────────────────
+
   static List<StaffFeatureDef> featureTiles(
     WidgetRef ref,
     AuthUser user, {
     required HomeScope scope,
   }) {
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    final appProfile = ref.watch(appProfileProvider).valueOrNull;
 
-    return FeatureRegistry.features
-        .map(
-          (feature) => StaffFeatureDef(
-            featureKey: feature.key,
-            destination: feature.entry,
-          ),
-        )
-        .where((definition) => _isVisibleForTenant(profile, definition))
-        .where((definition) => _isAllowedForScope(ref, user, definition, scope))
-        .where(
-          (definition) =>
-              _hasVisibleFeatureContent(ref, user, definition, scope),
-        )
-        .toList(growable: false);
+    final actions = _visibleActions(ref, user, scope);
+
+    final tiles = <StaffFeatureDef>[];
+
+    for (final feature in FeatureRegistry.features) {
+      // Admin is permission-controlled, not capability-controlled.
+      if (feature.key == FeatureKeys.hq) continue;
+
+      final definition = StaffFeatureDef(
+        featureKey: feature.key,
+        destination: feature.entry,
+      );
+
+      if (!_isVisibleForApp(appProfile, definition)) continue;
+
+      if (!_isAllowedForScope(ref, user, definition, scope)) {
+        continue;
+      }
+
+      final hasActions = actions.any(
+        (action) => action.featureKey == feature.key,
+      );
+
+      if (definition.destination == null && !hasActions) {
+        continue;
+      }
+
+      tiles.add(definition);
+    }
+
+    // HQ remains available to authorised staff regardless
+    // of the active application's configured capabilities.
+    if (scope == HomeScope.staff && user.canAccessAdminPanel) {
+      tiles.add(
+        const StaffFeatureDef(
+          featureKey: FeatureKeys.hq,
+          labelOverride: 'Admin',
+          iconOverride: Icons.admin_panel_settings,
+          destination: _admin,
+          allowed: _canAccessAdmin,
+          enabledByTenantFeature: false,
+        ),
+      );
+    }
+
+    return List<StaffFeatureDef>.unmodifiable(tiles);
   }
+
+  // ─────────────────────────────────────────────
+  // Quick actions
+  // ─────────────────────────────────────────────
 
   static List<StaffFeatureDef> quickActions(
     WidgetRef ref,
     AuthUser user, {
     required HomeScope scope,
   }) {
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
-    final actions = _actionsForScope(scope);
-
-    return actions
-        .where((definition) => _isVisibleForTenant(profile, definition))
-        .where((definition) => _isAllowedForScope(ref, user, definition, scope))
-        .toList(growable: false);
+    return List<StaffFeatureDef>.unmodifiable(
+      _visibleActions(ref, user, scope),
+    );
   }
 
   static List<StaffFeatureDef> actionsFor(
@@ -73,31 +114,32 @@ final class HomeRegistry {
     String featureKey, {
     required HomeScope scope,
   }) {
-    final normalizedKey = featureKey.trim().toLowerCase();
+    final key = featureKey.trim().toLowerCase();
 
-    return quickActions(ref, user, scope: scope)
-        .where(
-          (action) => action.featureKey.trim().toLowerCase() == normalizedKey,
-        )
-        .toList(growable: false);
-  }
-
-  static bool _hasVisibleFeatureContent(
-    WidgetRef ref,
-    AuthUser user,
-    StaffFeatureDef definition,
-    HomeScope scope,
-  ) {
-    if (definition.destination != null) {
-      return true;
+    if (key.isEmpty) {
+      return const <StaffFeatureDef>[];
     }
 
-    return actionsFor(
-      ref,
-      user,
-      definition.featureKey,
-      scope: scope,
-    ).isNotEmpty;
+    return List<StaffFeatureDef>.unmodifiable(
+      _visibleActions(
+        ref,
+        user,
+        scope,
+      ).where((action) => action.featureKey.trim().toLowerCase() == key),
+    );
+  }
+
+  static List<StaffFeatureDef> _visibleActions(
+    WidgetRef ref,
+    AuthUser user,
+    HomeScope scope,
+  ) {
+    final appProfile = ref.watch(appProfileProvider).valueOrNull;
+
+    return _actionsForScope(scope)
+        .where((action) => _isVisibleForApp(appProfile, action))
+        .where((action) => _isAllowedForScope(ref, user, action, scope))
+        .toList(growable: false);
   }
 
   static List<StaffFeatureDef> _actionsForScope(HomeScope scope) {
@@ -107,24 +149,29 @@ final class HomeRegistry {
     };
   }
 
+  // ─────────────────────────────────────────────
+  // Staff quick actions
+  // ─────────────────────────────────────────────
+
   static const List<StaffFeatureDef> _staffQuickActions = [
-    // ─────────────────────────────────────────────
-    // Clinical
-    // ─────────────────────────────────────────────
+    // Core Records
     StaffFeatureDef(
-      featureKey: FeatureKeys.clinical,
-      labelOverride: 'Health Metrics',
-      iconOverride: Icons.monitor_heart_outlined,
-      destination: _healthMetrics,
-      allowed: _requireStaff,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.clinical,
+      featureKey: FeatureKeys.core,
       labelOverride: 'Health Profiles',
       iconOverride: Icons.people_alt_outlined,
       destination: _healthProfiles,
       allowed: _requireStaff,
     ),
+
+    StaffFeatureDef(
+      featureKey: FeatureKeys.core,
+      labelOverride: 'Health Metrics',
+      iconOverride: Icons.monitor_heart_outlined,
+      destination: _healthMetrics,
+      allowed: _requireStaff,
+    ),
+
+    // Clinical
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'Prescriptions',
@@ -132,59 +179,57 @@ final class HomeRegistry {
       allowed: _requireStaff,
     ),
 
-    // ─────────────────────────────────────────────
     // Retail
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Contacts',
       iconOverride: Icons.people_alt_outlined,
       destination: _contacts,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
       iconOverride: Icons.apps,
       destination: _catalog,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _quotes,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Invoices and Payments',
       iconOverride: Icons.receipt_outlined,
       destination: _invoices,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
 
-    // ─────────────────────────────────────────────
     // Insurance
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.insurance,
       labelOverride: 'Insurance Memberships',
       iconOverride: Icons.verified_user_outlined,
       destination: _insuranceMemberships,
-      allowedRef: _allowInsuranceForTenant,
+      allowedRef: _allowInsuranceForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.insurance,
       labelOverride: 'Insurance Claims',
       iconOverride: Icons.assignment_outlined,
       destination: _insuranceClaims,
-      allowedRef: _allowInsuranceForTenant,
+      allowedRef: _allowInsuranceForApp,
     ),
 
-    // ─────────────────────────────────────────────
     // Inventory
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock In',
@@ -192,6 +237,7 @@ final class HomeRegistry {
       destination: _stockIn,
       allowed: _requireStaff,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock Out',
@@ -199,13 +245,15 @@ final class HomeRegistry {
       destination: _stockOut,
       allowed: _requireStaff,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
-      labelOverride: 'Records',
+      labelOverride: 'Inventory Records',
       iconOverride: Icons.history,
-      destination: _records,
+      destination: _inventoryRecords,
       allowed: _requireStaff,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock Report',
@@ -214,9 +262,7 @@ final class HomeRegistry {
       allowed: _requireStaff,
     ),
 
-    // ─────────────────────────────────────────────
-    // Admin
-    // ─────────────────────────────────────────────
+    // Platform administration
     StaffFeatureDef(
       featureKey: FeatureKeys.hq,
       labelOverride: 'Admin',
@@ -227,24 +273,29 @@ final class HomeRegistry {
     ),
   ];
 
+  // ─────────────────────────────────────────────
+  // Member quick actions
+  // ─────────────────────────────────────────────
+
   static const List<StaffFeatureDef> _memberQuickActions = [
-    // ─────────────────────────────────────────────
-    // Clinical
-    // ─────────────────────────────────────────────
+    // Core Records
     StaffFeatureDef(
-      featureKey: FeatureKeys.clinical,
-      labelOverride: 'My Health Metrics',
-      iconOverride: Icons.monitor_heart_outlined,
-      destination: _healthMetrics,
-      allowedRef: _allowMemberClinical,
-    ),
-    StaffFeatureDef(
-      featureKey: FeatureKeys.clinical,
+      featureKey: FeatureKeys.core,
       labelOverride: 'My Profiles',
       iconOverride: Icons.people_alt_outlined,
       destination: _myProfiles,
-      allowedRef: _allowMemberClinical,
+      allowed: _requireMember,
     ),
+
+    StaffFeatureDef(
+      featureKey: FeatureKeys.core,
+      labelOverride: 'My Health Metrics',
+      iconOverride: Icons.monitor_heart_outlined,
+      destination: _healthMetrics,
+      allowed: _requireMember,
+    ),
+
+    // Clinical
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'My Prescriptions',
@@ -252,135 +303,112 @@ final class HomeRegistry {
       allowedRef: _allowMemberClinical,
     ),
 
-    // ─────────────────────────────────────────────
     // Retail
-    // ─────────────────────────────────────────────
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'Catalog',
       iconOverride: Icons.apps,
       destination: _catalog,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Quotes',
       iconOverride: Icons.request_quote_outlined,
       destination: _myQuotes,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
+
     StaffFeatureDef(
       featureKey: FeatureKeys.retail,
       labelOverride: 'My Invoices and Payments',
       iconOverride: Icons.receipt_outlined,
       destination: _myInvoices,
-      allowedRef: _allowRetailForTenant,
+      allowedRef: _allowRetailForApp,
     ),
   ];
 
-  static Widget _healthMetrics(BuildContext _) {
-    return const HealthMetricsDashboardScreen();
-  }
+  // ─────────────────────────────────────────────
+  // Destinations
+  // ─────────────────────────────────────────────
 
-  static Widget _stockIn(BuildContext _) {
-    return const StockScreen(mode: InventoryMode.stockIn);
-  }
+  static Widget _healthProfiles(BuildContext _) =>
+      const ProfilesScreen(allowExplicitContactLink: true);
 
-  static Widget _stockOut(BuildContext _) {
-    return const StockScreen(mode: InventoryMode.stockOut);
-  }
+  static Widget _myProfiles(BuildContext _) => const ProfilesScreen();
 
-  static Widget _records(BuildContext _) {
-    return const RecordsDashboardScreen();
-  }
+  static Widget _healthMetrics(BuildContext _) =>
+      const HealthMetricsDashboardScreen();
 
-  static Widget _stockReport(BuildContext _) {
-    return const StockReportScreen();
-  }
+  static Widget _contacts(BuildContext _) => const ContactsScreen();
 
-  static Widget _admin(BuildContext _) {
-    return const AdminDashboardScreen();
-  }
+  static Widget _catalog(BuildContext _) => const CatalogScreen();
 
-  static Widget _contacts(BuildContext _) {
-    return const ContactsScreen();
-  }
+  static Widget _quotes(BuildContext _) => const QuotesListScreen();
 
-  static Widget _catalog(BuildContext _) {
-    return const CatalogScreen();
-  }
+  static Widget _invoices(BuildContext _) => const InvoicesListScreen();
 
-  static Widget _quotes(BuildContext _) {
-    return const QuotesListScreen();
-  }
+  static Widget _myQuotes(BuildContext _) =>
+      const QuotesListScreen(scope: RetailDocScope.mine);
 
-  static Widget _invoices(BuildContext _) {
-    return const InvoicesListScreen();
-  }
+  static Widget _myInvoices(BuildContext _) =>
+      const InvoicesListScreen(scope: RetailDocScope.mine);
 
-  static Widget _healthProfiles(BuildContext _) {
-    return const ProfilesScreen(allowExplicitContactLink: true);
-  }
+  static Widget _insuranceMemberships(BuildContext _) =>
+      const InsuranceMembershipsScreen();
 
-  static Widget _insuranceMemberships(BuildContext _) {
-    return const InsuranceMembershipsScreen();
-  }
+  static Widget _insuranceClaims(BuildContext _) =>
+      const InsuranceClaimsScreen();
 
-  static Widget _insuranceClaims(BuildContext _) {
-    return const InsuranceClaimsScreen();
-  }
+  static Widget _stockIn(BuildContext _) =>
+      const StockScreen(mode: InventoryMode.stockIn);
 
-  static Widget _myProfiles(BuildContext _) {
-    return const ProfilesScreen();
-  }
+  static Widget _stockOut(BuildContext _) =>
+      const StockScreen(mode: InventoryMode.stockOut);
 
-  static Widget _myQuotes(BuildContext _) {
-    return const QuotesListScreen(scope: RetailDocScope.mine);
-  }
+  static Widget _inventoryRecords(BuildContext _) =>
+      const RecordsDashboardScreen();
 
-  static Widget _myInvoices(BuildContext _) {
-    return const InvoicesListScreen(scope: RetailDocScope.mine);
-  }
+  static Widget _stockReport(BuildContext _) => const StockReportScreen();
 
-  static bool _requireStaff(AuthUser user) {
-    return user.isStaff;
-  }
+  static Widget _admin(BuildContext _) => const AdminDashboardScreen();
 
-  static bool _canAccessAdmin(AuthUser user) {
-    return user.canAccessAdminPanel;
-  }
+  // ─────────────────────────────────────────────
+  // Access checks
+  // ─────────────────────────────────────────────
 
-  static bool _allowRetailForTenant(WidgetRef ref, AuthUser _) {
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+  static bool _requireStaff(AuthUser user) => user.isStaff;
+
+  static bool _requireMember(AuthUser user) => !user.isStaffResolved;
+
+  static bool _canAccessAdmin(AuthUser user) => user.canAccessAdminPanel;
+
+  static bool _allowRetailForApp(WidgetRef ref, AuthUser _) {
+    final profile = ref.watch(appProfileProvider).valueOrNull;
 
     return profile?.features.enabled(FeatureKeys.retail) == true;
   }
 
-  static bool _allowInsuranceForTenant(WidgetRef ref, AuthUser user) {
-    if (!user.isStaff) {
-      return false;
-    }
+  static bool _allowInsuranceForApp(WidgetRef ref, AuthUser user) {
+    if (!user.isStaff) return false;
 
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    final profile = ref.watch(appProfileProvider).valueOrNull;
 
     return profile?.features.enabled(FeatureKeys.insurance) == true;
   }
 
   static bool _allowMemberClinical(WidgetRef ref, AuthUser user) {
-    if (user.isStaffResolved) {
-      return false;
-    }
+    if (!_requireMember(user)) return false;
 
-    final accountNumber = (user.accountNumber ?? '').trim();
-
-    if (accountNumber.isEmpty) {
-      return false;
-    }
-
-    final profile = ref.watch(tenantProfileProvider).valueOrNull;
+    final profile = ref.watch(appProfileProvider).valueOrNull;
 
     return profile?.features.enabled(FeatureKeys.clinical) == true;
   }
+
+  // ─────────────────────────────────────────────
+  // Scope visibility
+  // ─────────────────────────────────────────────
 
   static bool _isAllowedForScope(
     WidgetRef ref,
@@ -389,27 +417,10 @@ final class HomeRegistry {
     HomeScope scope,
   ) {
     if (scope == HomeScope.member) {
-      final featureKey = definition.featureKey;
-
-      if (featureKey == FeatureKeys.inventory) return false;
-      if (featureKey == FeatureKeys.insurance) return false;
-      if (featureKey == FeatureKeys.reporting) return false;
-      if (featureKey == FeatureKeys.messaging) return false;
-      if (featureKey == FeatureKeys.hq) return false;
-      if (featureKey == FeatureKeys.rider) return false;
-      if (featureKey == FeatureKeys.backup) return false;
-
-      if (featureKey == FeatureKeys.clinical) {
-        final label = definition.label.trim().toLowerCase();
-
-        final isAllowedClinicalAction =
-            definition.destination == _healthMetrics ||
-            definition.destination == _myProfiles ||
-            label == 'my prescriptions';
-
-        if (!isAllowedClinicalAction) {
-          return false;
-        }
+      // Only explicitly defined member actions are exposed.
+      // A general feature entry is not sufficient.
+      if (!_memberQuickActions.contains(definition)) {
+        return false;
       }
     }
 
@@ -428,21 +439,32 @@ final class HomeRegistry {
     return true;
   }
 
-  static bool _isVisibleForTenant(dynamic profile, StaffFeatureDef definition) {
+  // ─────────────────────────────────────────────
+  // Application capability visibility
+  // ─────────────────────────────────────────────
+
+  static bool _isVisibleForApp(dynamic profile, StaffFeatureDef definition) {
+    // HQ is permission-controlled rather than app-configured.
     if (definition.enabledByTenantFeature == false) {
       return true;
     }
 
+    final key = definition.featureKey.trim().toLowerCase();
+
+    if (key.isEmpty) {
+      return false;
+    }
+
+    // Core Records is mandatory.
+    if (key == FeatureKeys.core) {
+      return true;
+    }
+
+    // Optional capabilities require an active app profile.
     if (profile == null) {
       return false;
     }
 
-    final featureKey = definition.featureKey.trim();
-
-    if (featureKey.isEmpty) {
-      return false;
-    }
-
-    return profile.features.enabled(featureKey);
+    return profile.features.enabled(key);
   }
 }

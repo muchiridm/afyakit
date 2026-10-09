@@ -1,15 +1,15 @@
-// lib/features/clinical/profiles/widgets/profiles_screen.dart
+// lib/features/records/profiles/widgets/profiles_screen.dart
 
-import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_form_dialog.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_payer_link_dialog.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_form_dialog.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_payer_link_dialog.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_details_screen.dart';
+import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/widgets/profile_details_screen.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';

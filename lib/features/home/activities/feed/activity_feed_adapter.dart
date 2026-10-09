@@ -1,5 +1,3 @@
-// lib/core/home/activities/feed/activity_feed_adapter.dart
-
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart';
@@ -18,8 +16,12 @@ typedef ActivityFeedTitleBuilder =
 typedef ActivityFeedSubtitleBuilder =
     String? Function(ActivityFeedRecord activity);
 
-class ActivityFeedAdapter {
+abstract final class ActivityFeedAdapter {
   const ActivityFeedAdapter._();
+
+  // ─────────────────────────────────────────
+  // Feed conversion
+  // ─────────────────────────────────────────
 
   static List<ActivityEntry> fromFeed(
     List<ActivityFeedRecord> items, {
@@ -27,96 +29,132 @@ class ActivityFeedAdapter {
     ActivityFeedTitleBuilder? titleForActivity,
     ActivityFeedSubtitleBuilder? subtitleForActivity,
   }) {
-    return items.map((activity) {
-      final customTitle = titleForActivity?.call(activity)?.trim();
+    return List<ActivityEntry>.unmodifiable(
+      items.map((activity) {
+        final customTitle = titleForActivity?.call(activity)?.trim();
 
-      final customSubtitle = subtitleForActivity?.call(activity)?.trim();
+        final customSubtitle = subtitleForActivity?.call(activity)?.trim();
 
-      final String resolvedTitle = _hasText(customTitle)
-          ? customTitle!
-          : _title(activity);
+        final title = _hasText(customTitle) ? customTitle! : _title(activity);
 
-      final String resolvedSubtitle = _hasText(customSubtitle)
-          ? customSubtitle!
-          : _subtitle(activity) ?? _fallbackSubtitle(activity);
+        final subtitle = _hasText(customSubtitle)
+            ? customSubtitle!
+            : _subtitle(activity) ?? 'Activity recorded';
 
-      final statusPresentation = _statusPresentation(activity);
+        final status = _statusPresentation(activity);
 
-      return ActivityEntry(
-        date: activity.occurredAt,
-        widget: ActivityEventTile(
-          icon: _iconForType(activity.type),
-          title: resolvedTitle,
-          subtitle: resolvedSubtitle,
-          timestamp: activityTimestampLabel(date: activity.occurredAt),
-          statusLabel: statusPresentation?.label,
-          statusColor: statusPresentation?.color,
-          onTap: onTapForActivity?.call(activity),
-        ),
-      );
-    }).toList();
+        return ActivityEntry(
+          date: activity.occurredAt,
+          widget: ActivityEventTile(
+            icon: _iconForType(activity.type),
+            title: title,
+            subtitle: subtitle,
+            timestamp: activityTimestampLabel(date: activity.occurredAt),
+            statusLabel: status?.label,
+            statusColor: status?.color,
+            onTap: onTapForActivity?.call(activity),
+          ),
+        );
+      }),
+    );
   }
 
-  // ─────────────────────────────────────────────
-  // Titles
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────
+  // Event titles
+  // ─────────────────────────────────────────
 
   static String _title(ActivityFeedRecord activity) {
-    switch (activity.type) {
-      case 'inventory_issue_created':
-        return _issueTitle(
-          activity,
-          transfer: 'Transfer request created',
-          dispose: 'Disposal request created',
-          dispense: 'Dispense request created',
-          fallback: 'Issue request created',
-        );
+    return switch (activity.type.trim().toLowerCase()) {
+      // Core Records — current and legacy event names
+      'health_profile_created' ||
+      'profile_created' ||
+      'patient_created' => 'Health profile created',
 
-      case 'inventory_issue_approved':
-        return _issueTitle(
-          activity,
-          transfer: 'Transfer request approved',
-          dispose: 'Disposal request approved',
-          dispense: 'Dispense request approved',
-          fallback: 'Issue request approved',
-        );
+      'health_profile_updated' ||
+      'profile_updated' ||
+      'patient_updated' => 'Health profile updated',
 
-      case 'inventory_issue_rejected':
-        return _issueTitle(
-          activity,
-          transfer: 'Transfer request rejected',
-          dispose: 'Disposal request rejected',
-          dispense: 'Dispense request rejected',
-          fallback: 'Issue request rejected',
-        );
+      'health_profile_deleted' ||
+      'profile_deleted' ||
+      'patient_deactivated' => 'Health profile updated',
 
-      case 'inventory_issue_cancelled':
-        return 'Issue request cancelled';
+      'health_profile_linked' ||
+      'profile_linked' ||
+      'patient_linked' => 'Health profile linked',
 
-      case 'inventory_issue_issued':
-        return 'Stock issued';
+      'health_profile_unlinked' ||
+      'profile_unlinked' ||
+      'patient_delinked' => 'Health profile unlinked',
 
-      case 'inventory_issue_received':
-        return 'Stock received';
+      'health_profile_link_request_created' ||
+      'profile_link_request_created' ||
+      'patient_link_request_created' => 'Profile link requested',
 
-      case 'inventory_issue_disposed':
-        return 'Items disposed';
+      'health_profile_link_request_approved' ||
+      'profile_link_request_approved' ||
+      'patient_link_request_approved' => 'Profile link approved',
 
-      case 'inventory_issue_partially_disposed':
-        return 'Items partially disposed';
+      'health_profile_link_request_rejected' ||
+      'profile_link_request_rejected' ||
+      'patient_link_request_rejected' => 'Profile link rejected',
 
-      case 'inventory_issue_dispensed':
-        return 'Items dispensed';
+      'health_profile_link_request_cancelled' ||
+      'profile_link_request_cancelled' ||
+      'patient_link_request_cancelled' => 'Profile link request cancelled',
 
-      case 'inventory_issue_partially_dispensed':
-        return 'Items partially dispensed';
+      'health_metric_created' => 'Health metric recorded',
+      'health_metric_updated' => 'Health metric updated',
+      'health_metric_deleted' => 'Health metric removed',
 
-      case 'inventory_delivery_recorded':
-        return 'Delivery recorded';
+      // Retail
+      'contact_created' => 'Contact created',
+      'contact_updated' => 'Contact updated',
+      'contact_deleted' => 'Contact deleted',
 
-      default:
-        return activity.title;
-    }
+      // Inventory
+      'inventory_issue_created' => _issueTitle(
+        activity,
+        transfer: 'Transfer request created',
+        dispose: 'Disposal request created',
+        dispense: 'Dispense request created',
+        fallback: 'Issue request created',
+      ),
+
+      'inventory_issue_approved' => _issueTitle(
+        activity,
+        transfer: 'Transfer request approved',
+        dispose: 'Disposal request approved',
+        dispense: 'Dispense request approved',
+        fallback: 'Issue request approved',
+      ),
+
+      'inventory_issue_rejected' => _issueTitle(
+        activity,
+        transfer: 'Transfer request rejected',
+        dispose: 'Disposal request rejected',
+        dispense: 'Dispense request rejected',
+        fallback: 'Issue request rejected',
+      ),
+
+      'inventory_issue_cancelled' => 'Issue request cancelled',
+
+      'inventory_issue_issued' => 'Stock issued',
+
+      'inventory_issue_received' => 'Stock received',
+
+      'inventory_issue_disposed' => 'Items disposed',
+
+      'inventory_issue_partially_disposed' => 'Items partially disposed',
+
+      'inventory_issue_dispensed' => 'Items dispensed',
+
+      'inventory_issue_partially_dispensed' => 'Items partially dispensed',
+
+      'inventory_delivery_recorded' => 'Delivery recorded',
+
+      // All other events use their backend-provided titles.
+      _ => _hasText(activity.title) ? activity.title.trim() : 'Activity',
+    };
   }
 
   static String _issueTitle(
@@ -126,30 +164,31 @@ class ActivityFeedAdapter {
     required String dispense,
     required String fallback,
   }) {
-    final haystack = <String>[
+    final description = [
       activity.title,
       activity.subtitle ?? '',
       activity.entity.label ?? '',
     ].join(' ').toLowerCase();
 
-    if (haystack.contains('dispose')) {
+    if (description.contains('dispose') || description.contains('disposal')) {
       return dispose;
     }
 
-    if (haystack.contains('dispense')) {
+    if (description.contains('dispense') ||
+        description.contains('dispensing')) {
       return dispense;
     }
 
-    if (haystack.contains('transfer')) {
+    if (description.contains('transfer')) {
       return transfer;
     }
 
     return fallback;
   }
 
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────
   // Subtitles
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────
 
   static String? _subtitle(ActivityFeedRecord activity) {
     final subtitle = activity.subtitle?.trim();
@@ -161,24 +200,12 @@ class ActivityFeedAdapter {
     final label = activity.entity.label?.trim();
 
     if (_hasText(label)) {
-      switch (activity.entity.type) {
-        case ActivityEntityType.quote:
-          return 'Quote $label';
-
-        case ActivityEntityType.invoice:
-          return 'Invoice $label';
-
-        case ActivityEntityType.payment:
-          return 'Ref: $label';
-
-        case ActivityEntityType.patient:
-        case ActivityEntityType.contact:
-        case ActivityEntityType.patientLinkRequest:
-        case ActivityEntityType.inventoryIssue:
-        case ActivityEntityType.inventoryDelivery:
-        case ActivityEntityType.unknown:
-          return label;
-      }
+      return switch (activity.entity.type) {
+        ActivityEntityType.quote => 'Quote $label',
+        ActivityEntityType.invoice => 'Invoice $label',
+        ActivityEntityType.payment => 'Ref: $label',
+        _ => label,
+      };
     }
 
     final status = activity.status?.trim();
@@ -187,28 +214,14 @@ class ActivityFeedAdapter {
       return status;
     }
 
+    // Do not expose raw member/contact identifiers
+    // merely to populate an activity subtitle.
     return null;
   }
 
-  static String _fallbackSubtitle(ActivityFeedRecord activity) {
-    final contactId = activity.contactId?.trim();
-
-    if (_hasText(contactId)) {
-      return contactId!;
-    }
-
-    final accountNumber = activity.accountNumber?.trim();
-
-    if (_hasText(accountNumber)) {
-      return accountNumber!;
-    }
-
-    return 'Activity recorded';
-  }
-
-  // ─────────────────────────────────────────────
-  // Status
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────
+  // Status presentation
+  // ─────────────────────────────────────────
 
   static _ActivityStatusPresentation? _statusPresentation(
     ActivityFeedRecord activity,
@@ -219,8 +232,8 @@ class ActivityFeedAdapter {
       return null;
     }
 
-    // Reuse the issue domain's existing status model so
-    // Latest Activity matches IssueDetailsScreen exactly.
+    // Reuse the inventory domain's existing
+    // status labels and colours.
     if (activity.entity.type == ActivityEntityType.inventoryIssue) {
       final status = _issueStatusFromName(rawStatus!);
 
@@ -232,17 +245,21 @@ class ActivityFeedAdapter {
       }
     }
 
-    // For non-issue activities we currently avoid inventing
-    // a new colour system. They can opt into status presentation
-    // later using their own domain status adapters.
     return null;
   }
 
   static IssueStatus? _issueStatusFromName(String value) {
-    final normalized = value.trim().replaceAll('_', '').toLowerCase();
+    final normalized = value
+        .trim()
+        .replaceAll('_', '')
+        .replaceAll('-', '')
+        .toLowerCase();
 
     for (final status in IssueStatus.values) {
-      final candidate = status.name.replaceAll('_', '').toLowerCase();
+      final candidate = status.name
+          .replaceAll('_', '')
+          .replaceAll('-', '')
+          .toLowerCase();
 
       if (candidate == normalized) {
         return status;
@@ -252,64 +269,80 @@ class ActivityFeedAdapter {
     return null;
   }
 
-  // ─────────────────────────────────────────────
-  // Icons
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────
+  // Event icons
+  // ─────────────────────────────────────────
 
   static IconData _iconForType(String type) {
-    switch (type) {
-      case 'contact_created':
-      case 'contact_updated':
-      case 'contact_deleted':
-        return Icons.person_outline;
+    final event = type.trim().toLowerCase();
 
-      case 'patient_created':
-      case 'patient_updated':
-      case 'patient_linked':
-      case 'patient_delinked':
-      case 'patient_deactivated':
-      case 'patient_link_request_created':
-      case 'patient_link_request_approved':
-      case 'patient_link_request_rejected':
-      case 'patient_link_request_cancelled':
-        return Icons.personal_injury_outlined;
-
-      case 'quote_created':
-      case 'quote_updated':
-      case 'quote_sent':
-      case 'quote_marked_sent':
-      case 'quote_converted_to_invoice':
-        return Icons.request_quote_outlined;
-
-      case 'invoice_created':
-      case 'invoice_updated':
-      case 'invoice_sent':
-      case 'invoice_marked_sent':
-        return Icons.receipt_long_outlined;
-
-      case 'payment_recorded':
-      case 'payment_updated':
-      case 'payment_deleted':
-        return Icons.payments_outlined;
-
-      case 'inventory_issue_created':
-      case 'inventory_issue_approved':
-      case 'inventory_issue_rejected':
-      case 'inventory_issue_cancelled':
-      case 'inventory_issue_issued':
-      case 'inventory_issue_received':
-      case 'inventory_issue_disposed':
-      case 'inventory_issue_partially_disposed':
-      case 'inventory_issue_dispensed':
-      case 'inventory_issue_partially_dispensed':
-        return Icons.inventory_2_outlined;
-
-      case 'inventory_delivery_recorded':
-        return Icons.local_shipping_outlined;
-
-      default:
-        return Icons.notifications_none;
+    // Core Records
+    if (event.startsWith('health_profile_') ||
+        event.startsWith('profile_') ||
+        event.startsWith('patient_')) {
+      return Icons.folder_shared_outlined;
     }
+
+    if (event.startsWith('health_metric_')) {
+      return Icons.monitor_heart_outlined;
+    }
+
+    if (event.startsWith('health_document_') ||
+        event.startsWith('record_document_')) {
+      return Icons.description_outlined;
+    }
+
+    // Clinical
+    if (event.startsWith('prescription_')) {
+      return Icons.medication_outlined;
+    }
+
+    if (event.startsWith('clinical_')) {
+      return Icons.medical_information_outlined;
+    }
+
+    // Insurance
+    if (event.startsWith('insurance_')) {
+      return Icons.verified_user_outlined;
+    }
+
+    // Retail
+    if (event.startsWith('contact_')) {
+      return Icons.person_outline;
+    }
+
+    if (event.startsWith('quote_')) {
+      return Icons.request_quote_outlined;
+    }
+
+    if (event.startsWith('invoice_')) {
+      return Icons.receipt_long_outlined;
+    }
+
+    if (event.startsWith('payment_')) {
+      return Icons.payments_outlined;
+    }
+
+    // Inventory
+    if (event.startsWith('inventory_delivery_')) {
+      return Icons.local_shipping_outlined;
+    }
+
+    if (event.startsWith('inventory_')) {
+      return Icons.inventory_2_outlined;
+    }
+
+    // Occupational Health
+    if (event.startsWith('occupational_')) {
+      return Icons.health_and_safety_outlined;
+    }
+
+    // Diagnostics
+    if (event.startsWith('diagnostic_')) {
+      return Icons.biotech_outlined;
+    }
+
+    return Icons.notifications_none;
   }
 
   static bool _hasText(String? value) {

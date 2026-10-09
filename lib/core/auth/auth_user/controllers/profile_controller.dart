@@ -1,6 +1,6 @@
 // lib/core/auth/auth_user/controllers/profile_controller.dart
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 // lib/core/auth/auth_user/controllers/profile_controller.dart
 

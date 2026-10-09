@@ -1,9 +1,9 @@
-// lib/features/clinical/profiles/widgets/profile_form_dialog.dart
+// lib/features/records/profiles/widgets/profile_form_dialog.dart
 
-import 'package:afyakit/features/clinical/profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/profiles/models/profile_models.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 
