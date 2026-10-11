@@ -52,7 +52,7 @@ class ContactsScreen extends ConsumerWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add),
-            label: const Text('Add customer'),
+            label: const Text('Add contact'),
           ),
         ),
       ],
@@ -134,7 +134,7 @@ class ContactsScreen extends ConsumerWidget {
           title: hasQuery ? 'No results' : 'No customers yet',
           subtitle: hasQuery
               ? 'Try a different search.'
-              : 'Add your first customer to start creating quotes.',
+              : 'No contacts are registered in this application yet.',
           actionLabel: hasQuery ? 'Clear search' : 'Add customer',
           onAction: () {
             if (hasQuery) {
@@ -150,7 +150,7 @@ class ContactsScreen extends ConsumerWidget {
 
     return SliverToBoxAdapter(
       child: AppCard(
-        title: hasQuery ? 'Results ($count)' : 'Customers ($count)',
+        title: hasQuery ? 'Results ($count)' : 'Contacts ($count)',
         icon: Icons.people_alt_outlined,
         child: Column(
           children: [

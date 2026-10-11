@@ -1,7 +1,7 @@
 // lib/features/retail/invoices/widgets/invoice_detail_screen.dart
 
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claim_detail_screen.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_action_controller.dart';
 import 'package:afyakit/features/retail/invoices/controllers/invoice_controller.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';

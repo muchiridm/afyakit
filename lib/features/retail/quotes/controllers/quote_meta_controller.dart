@@ -1,8 +1,8 @@
 // lib/features/retail/quotes/controllers/quote_meta_controller.dart
 
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';

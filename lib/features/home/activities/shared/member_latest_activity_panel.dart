@@ -11,7 +11,7 @@ import 'package:afyakit/features/home/models/activity_entry.dart';
 
 import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 
-import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/records/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';

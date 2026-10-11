@@ -1,11 +1,13 @@
-// lib/core/home/widgets/staff/home_staff_body.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/capabilities/feature_keys.dart';
+
 import 'package:afyakit/features/home/activities/shared/staff_activity_history_screen.dart';
 import 'package:afyakit/features/home/activities/shared/staff_latest_activity_panel.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/registry/home_registry.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_header.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_shared.dart';
 import 'package:afyakit/features/home/widgets/staff/staff_features_panel.dart';
@@ -14,7 +16,7 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 
-class HomeStaffBody extends StatelessWidget {
+class HomeStaffBody extends ConsumerWidget {
   const HomeStaffBody({super.key, required this.user});
 
   final AuthUser? user;
@@ -35,7 +37,17 @@ class HomeStaffBody extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = user;
+
+    final retailEnabled =
+        currentUser != null &&
+        HomeRegistry.featureTiles(
+          ref,
+          currentUser,
+          scope: HomeScope.staff,
+        ).any((feature) => feature.featureKey == FeatureKeys.retail);
+
     return homeVerticalStack([
       const HomeHeader(
         entry: EntryMode.staff,
@@ -45,6 +57,7 @@ class HomeStaffBody extends StatelessWidget {
       HomeDashboardTwoColumnLayout(
         leading: const StaffFeaturesPanel(),
         trailing: _StaffMainColumn(
+          retailEnabled: retailEnabled,
           onSearch: (query) => _openCatalog(context, q: query),
           onBrowseCatalog: (query) =>
               _openCatalog(context, q: query, autofocus: query.trim().isEmpty),
@@ -57,27 +70,30 @@ class HomeStaffBody extends StatelessWidget {
 
 class _StaffMainColumn extends StatelessWidget {
   const _StaffMainColumn({
+    required this.retailEnabled,
     required this.onSearch,
     required this.onBrowseCatalog,
   });
 
+  final bool retailEnabled;
   final void Function(String query) onSearch;
   final void Function(String query) onBrowseCatalog;
 
   @override
   Widget build(BuildContext context) {
     return homeVerticalStack([
-      HomeSection(
-        title: 'Search',
-        icon: Icons.search_rounded,
-        child: HomeCatalogSearchHero(
-          autofocus: false,
-          hintText: 'Search medicines, brands, patients or customers',
-          footerText: 'Search the catalogue',
-          onSearch: onSearch,
-          onBrowse: onBrowseCatalog,
+      if (retailEnabled)
+        HomeSection(
+          title: 'Search',
+          icon: Icons.search_rounded,
+          child: HomeCatalogSearchHero(
+            autofocus: false,
+            hintText: 'Search medicines, brands, patients or customers',
+            footerText: 'Search the catalogue',
+            onSearch: onSearch,
+            onBrowse: onBrowseCatalog,
+          ),
         ),
-      ),
       QuietHomePanel(
         child: StaffLatestActivityPanel(
           onTitleTap: () => Navigator.of(context).push(

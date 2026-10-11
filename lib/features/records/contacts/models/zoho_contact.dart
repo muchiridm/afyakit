@@ -182,11 +182,13 @@ class ZohoContact {
     this.lastModifiedTime,
     this.isInsurancePayer = false,
     this.linkedProfiles = const <ContactLinkedProfile>[],
+    this.appIds = const <String>[],
   });
 
   final String contactId;
   final String displayName;
   final String? companyName;
+  final List<String> appIds;
   final PersonContact? personContact;
   final String? status;
 
@@ -464,6 +466,18 @@ class ZohoContact {
 
     final acct = (accountNumberRaw ?? '').trim();
 
+    final rawAppIds = j['app_ids'];
+
+    final appIds = rawAppIds is List
+        ? List<String>.unmodifiable(
+            rawAppIds
+                .whereType<String>()
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toSet(),
+          )
+        : const <String>[];
+
     return ZohoContact(
       contactId: id,
       displayName: derived,
@@ -479,6 +493,7 @@ class ZohoContact {
       lastModifiedTime: lastModifiedTime,
       isInsurancePayer: isInsurancePayer,
       linkedProfiles: _readLinkedProfiles(j),
+      appIds: appIds,
     );
   }
 
@@ -611,6 +626,7 @@ class ZohoContact {
     DateTime? lastModifiedTime,
     bool? isInsurancePayer,
     List<ContactLinkedProfile>? linkedProfiles,
+    List<String>? appIds,
   }) {
     return ZohoContact(
       contactId: contactId ?? this.contactId,
@@ -627,6 +643,7 @@ class ZohoContact {
       lastModifiedTime: lastModifiedTime ?? this.lastModifiedTime,
       isInsurancePayer: isInsurancePayer ?? this.isInsurancePayer,
       linkedProfiles: linkedProfiles ?? this.linkedProfiles,
+      appIds: appIds ?? this.appIds,
     );
   }
 }

@@ -4,8 +4,8 @@ import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widget
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/contacts/widgets/contact_picker_dialog.dart';
+import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
 
 class ProfileFormDialog extends StatefulWidget {
   const ProfileFormDialog({

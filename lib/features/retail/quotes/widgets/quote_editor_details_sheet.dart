@@ -14,8 +14,8 @@ import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_s
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';

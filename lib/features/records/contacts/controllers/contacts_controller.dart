@@ -2,31 +2,45 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/contacts/providers/zoho_contacts_providers.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/zoho_contact.dart';
+
 import '../services/zoho_contacts_service.dart';
+
 import '../widgets/contact_editor_sheet.dart';
+
 import '../widgets/contact_sheet_models.dart';
 
 class ContactsState {
   const ContactsState({
     this.loadingList = false,
+
     this.loadingDetail = false,
+
     this.saving = false,
+
     this.error,
+
     this.search = '',
+
     this.items = const <ZohoContact>[],
   });
 
   final bool loadingList;
+
   final bool loadingDetail;
+
   final bool saving;
+
   final String? error;
 
   final String search;
+
   final List<ZohoContact> items;
 
   bool get busy => loadingList || loadingDetail || saving;
@@ -35,18 +49,28 @@ class ContactsState {
 
   ContactsState copyWith({
     bool? loadingList,
+
     bool? loadingDetail,
+
     bool? saving,
+
     Object? error = _unset,
+
     String? search,
+
     List<ZohoContact>? items,
   }) {
     return ContactsState(
       loadingList: loadingList ?? this.loadingList,
+
       loadingDetail: loadingDetail ?? this.loadingDetail,
+
       saving: saving ?? this.saving,
+
       error: identical(error, _unset) ? this.error : error as String?,
+
       search: search ?? this.search,
+
       items: items ?? this.items,
     );
   }
@@ -69,6 +93,7 @@ class ContactsController extends StateNotifier<ContactsState> {
   Timer? _debounce;
 
   int _token = 0;
+
   int _refreshSeq = 0;
 
   bool get _alive => mounted;
@@ -76,13 +101,18 @@ class ContactsController extends StateNotifier<ContactsState> {
   @override
   void dispose() {
     _token++;
+
     _debounce?.cancel();
+
     _debounce = null;
+
     super.dispose();
   }
 
   // ─────────────────────────────────────────────
+
   // Search + list refresh
+
   // ─────────────────────────────────────────────
 
   void setSearch(String v) {
@@ -91,11 +121,14 @@ class ContactsController extends StateNotifier<ContactsState> {
     state = state.copyWith(search: v, error: null);
 
     _debounce?.cancel();
+
     final myToken = _token;
 
     _debounce = Timer(const Duration(milliseconds: 350), () {
       if (!_alive) return;
+
       if (myToken != _token) return;
+
       refresh();
     });
   }
@@ -104,31 +137,39 @@ class ContactsController extends StateNotifier<ContactsState> {
     if (!_alive) return;
 
     final seq = ++_refreshSeq;
+
     final myToken = _token;
 
     state = state.copyWith(loadingList: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
+
       final q = state.search.trim();
 
       final accountNumber = (_ref.read(zohoContactsAccountScopeProvider) ?? '')
           .trim();
+
       final scopedAccount = accountNumber.isEmpty ? null : accountNumber;
 
       final items = await svc.list(
         search: q.isEmpty ? null : q,
+
         accountNumber: scopedAccount,
       );
 
       if (!_alive) return;
+
       if (myToken != _token) return;
+
       if (seq != _refreshSeq) return;
 
       state = state.copyWith(loadingList: false, items: items);
     } catch (e) {
       if (!_alive) return;
+
       if (myToken != _token) return;
+
       if (seq != _refreshSeq) return;
 
       state = state.copyWith(loadingList: false, error: e.toString());
@@ -136,13 +177,18 @@ class ContactsController extends StateNotifier<ContactsState> {
   }
 
   // ─────────────────────────────────────────────
-  // CRUD
+
+  // Contact creation, updates and app membership removal
+
   // ─────────────────────────────────────────────
 
   Future<void> create(ZohoContact input) async {
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     debugPrint('[FE][ContactsController.create] ENTERED');
+
     debugPrint('[FE][ContactsController.create] mounted=$_alive');
+
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     if (!_alive) {
@@ -152,51 +198,67 @@ class ContactsController extends StateNotifier<ContactsState> {
     final myToken = _token;
 
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     debugPrint('[FE][ContactsController.create] START');
+
     debugPrint(
       '[FE][ContactsController.create] displayName=${input.displayName}',
     );
+
     debugPrint(
       '[FE][ContactsController.create] companyName=${input.companyName}',
     );
+
     debugPrint(
       '[FE][ContactsController.create] accountNumber=${input.accountNumber}',
     );
+
     debugPrint(
       '[FE][ContactsController.create] contactType=${input.contactType}',
     );
+
     debugPrint(
       '[FE][ContactsController.create] isInsurancePayer=${input.isInsurancePayer}',
     );
+
     debugPrint(
       '[FE][ContactsController.create] person=${input.personContact?.personName}',
     );
+
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     state = state.copyWith(saving: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
+
       final created = await svc.create(input);
 
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
       debugPrint('[FE][ContactsController.create] CREATED');
+
       debugPrint(
         '[FE][ContactsController.create] contactId=${created.contactId}',
       );
+
       debugPrint(
         '[FE][ContactsController.create] displayName=${created.displayName}',
       );
+
       debugPrint(
         '[FE][ContactsController.create] accountNumber=${created.accountNumber}',
       );
+
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       if (!_alive) return;
+
       if (myToken != _token) return;
 
       state = state.copyWith(
         saving: false,
+
         items: <ZohoContact>[created, ...state.items],
       );
 
@@ -209,9 +271,13 @@ class ContactsController extends StateNotifier<ContactsState> {
       debugPrint('[FE][ContactsController.create] refresh complete');
     } catch (e, st) {
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
       debugPrint('[FE][ContactsController.create] FAILED');
+
       debugPrint('[FE][ContactsController.create] error=$e');
+
       debugPrint('[FE][ContactsController.create] stack=$st');
+
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       if (_alive && myToken == _token) {
@@ -224,15 +290,18 @@ class ContactsController extends StateNotifier<ContactsState> {
 
   Future<void> update(String contactId, ZohoContact input) async {
     if (!_alive) return;
+
     final myToken = _token;
 
     state = state.copyWith(saving: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
+
       final updated = await svc.updateFromModel(contactId, input);
 
       if (!_alive) return;
+
       if (myToken != _token) return;
 
       final next = state.items
@@ -244,24 +313,31 @@ class ContactsController extends StateNotifier<ContactsState> {
       unawaited(refresh());
     } catch (e) {
       if (!_alive) return;
+
       if (myToken != _token) return;
 
       state = state.copyWith(saving: false, error: e.toString());
+
       rethrow;
     }
   }
 
-  Future<void> delete(String contactId) async {
+  /// Unenrol a shared Zoho contact from the current app only.
+  /// The Zoho contact and its other app memberships remain intact.
+  Future<void> removeFromApp(String contactId) async {
     if (!_alive) return;
+
     final myToken = _token;
 
     state = state.copyWith(saving: true, error: null);
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
-      await svc.delete(contactId);
+
+      await svc.removeAppMembership(contactId);
 
       if (!_alive) return;
+
       if (myToken != _token) return;
 
       final next = state.items
@@ -275,81 +351,111 @@ class ContactsController extends StateNotifier<ContactsState> {
       }
     } catch (e) {
       if (!_alive) return;
+
       if (myToken != _token) return;
 
       state = state.copyWith(saving: false, error: e.toString());
+
       rethrow;
     }
   }
 
   // ─────────────────────────────────────────────
+
+  /// Compatibility for any older controller callers.
+  @Deprecated('Use removeFromApp() instead')
+  Future<void> delete(String contactId) => removeFromApp(contactId);
+
   // UI flows
+
   // ─────────────────────────────────────────────
 
   Future<void> openCreateFlow(BuildContext context) async {
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     debugPrint('[FE][ContactsController.openCreateFlow] CALLED');
+
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     final res = await _openSheet(context, initial: null);
 
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     debugPrint('[FE][ContactsController.openCreateFlow] SHEET RETURNED');
+
     debugPrint('[FE][ContactsController.openCreateFlow] result=$res');
+
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     if (res == null) {
       debugPrint(
         '[FE][ContactsController.openCreateFlow] cancelled/null result',
       );
+
       return;
     }
 
     await res.when(
       saveRequested: (draft) async {
         debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
         debugPrint('[FE][ContactsController.openCreateFlow] saveRequested');
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] displayName=${draft.displayName}',
         );
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] companyName=${draft.companyName}',
         );
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] accountNumber=${draft.accountNumber}',
         );
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] contactType=${draft.contactType}',
         );
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] isInsurancePayer=${draft.isInsurancePayer}',
         );
+
         debugPrint(
           '[FE][ContactsController.openCreateFlow] person=${draft.personContact?.personName}',
         );
+
         debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
         if (draft.displayName.trim().isEmpty) {
           debugPrint(
             '[FE][ContactsController.openCreateFlow] blocked: empty displayName',
           );
+
           _snack(context, 'Display name is required', isError: true);
+
           return;
         }
 
         try {
           await create(draft);
+
           _snack(context, 'Contact created');
         } catch (e, st) {
           debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
           debugPrint('[FE][ContactsController.openCreateFlow] CREATE FAILED');
+
           debugPrint('[FE][ContactsController.openCreateFlow] error=$e');
+
           debugPrint('[FE][ContactsController.openCreateFlow] stack=$st');
+
           debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
           _snack(context, 'Failed to create contact: $e', isError: true);
         }
       },
+
       deleteRequested: (_) async {
         debugPrint(
           '[FE][ContactsController.openCreateFlow] unexpected deleteRequested from create flow',
@@ -360,9 +466,11 @@ class ContactsController extends StateNotifier<ContactsState> {
 
   Future<void> openExistingFlow(
     BuildContext context,
+
     ZohoContact contact,
   ) async {
     final detailed = await _loadDetailedContact(context, contact.contactId);
+
     if (detailed == null) return;
 
     if (!_alive) return;
@@ -374,31 +482,41 @@ class ContactsController extends StateNotifier<ContactsState> {
     state = state.copyWith(items: next);
 
     final res = await _openSheet(context, initial: detailed);
+
     if (res == null) return;
 
     await res.when(
       saveRequested: (draft) async {
         if (draft.displayName.trim().isEmpty) {
           _snack(context, 'Display name is required', isError: true);
+
           return;
         }
 
         try {
           await update(detailed.contactId, draft);
+
           _snack(context, 'Contact updated');
         } catch (_) {
           _snack(context, 'Failed to update contact', isError: true);
         }
       },
+
       deleteRequested: (contactId) async {
-        final ok = await _confirmDelete(context, detailed.displayName);
+        final ok = await _confirmRemoveFromApp(context, detailed.displayName);
+
         if (ok != true) return;
 
         try {
-          await delete(contactId);
-          _snack(context, 'Contact deleted');
+          await removeFromApp(contactId);
+
+          _snack(context, 'Contact removed from this app');
         } catch (_) {
-          _snack(context, 'Failed to delete contact', isError: true);
+          _snack(
+            context,
+            'Failed to remove contact from this app',
+            isError: true,
+          );
         }
       },
     );
@@ -406,9 +524,11 @@ class ContactsController extends StateNotifier<ContactsState> {
 
   Future<ZohoContact?> _loadDetailedContact(
     BuildContext context,
+
     String contactId,
   ) async {
     if (!_alive) return null;
+
     if (state.saving) return null;
 
     final myToken = _token;
@@ -417,37 +537,48 @@ class ContactsController extends StateNotifier<ContactsState> {
 
     try {
       final svc = await _ref.read(zohoContactsServiceProvider.future);
+
       final detailed = await svc.get(contactId);
 
       if (!_alive) return null;
+
       if (myToken != _token) return null;
 
       state = state.copyWith(loadingDetail: false);
+
       return detailed;
     } catch (e) {
       if (!_alive) return null;
+
       if (myToken != _token) return null;
 
       state = state.copyWith(loadingDetail: false, error: e.toString());
+
       _snack(context, 'Failed to load contact details', isError: true);
+
       return null;
     }
   }
 
   Future<ContactSheetResult?> _openSheet(
     BuildContext context, {
+
     required ZohoContact? initial,
   }) {
     return showModalBottomSheet<ContactSheetResult>(
       context: context,
+
       isScrollControlled: true,
+
       showDragHandle: true,
+
       builder: (_) => ContactEditorSheet(initial: initial),
     );
   }
 
   void _snack(BuildContext context, String msg, {bool isError = false}) {
     if (!context.mounted) return;
+
     final bg = isError ? Theme.of(context).colorScheme.error : null;
 
     ScaffoldMessenger.of(
@@ -455,24 +586,36 @@ class ContactsController extends StateNotifier<ContactsState> {
     ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
   }
 
-  Future<bool?> _confirmDelete(BuildContext context, String displayName) {
+  Future<bool?> _confirmRemoveFromApp(
+    BuildContext context,
+    String displayName,
+  ) {
     final label = displayName.trim().isEmpty
         ? 'this contact'
         : '"$displayName"';
 
     return showDialog<bool>(
       context: context,
+
       builder: (_) => AlertDialog(
-        title: const Text('Delete contact?'),
-        content: Text('This will delete $label in Zoho.'),
+        title: const Text('Remove contact from this app?'),
+
+        content: Text(
+          'Remove $label from this application? The shared Zoho contact and '
+          'its membership in other applications will remain unchanged.',
+        ),
+
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
+
             child: const Text('Cancel'),
           ),
+
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -481,4 +624,5 @@ class ContactsController extends StateNotifier<ContactsState> {
 }
 
 /// Tiny helper to avoid analyzer warnings without importing package:pedantic.
+
 void unawaited(Future<void> f) {}
