@@ -47,6 +47,37 @@ class AppMembership {
   };
 }
 
+/// A verified address for a single app; never a Firebase Auth identity.
+
+@immutable
+class AppEmail {
+  const AppEmail({required this.emailLower, this.verifiedAt});
+
+  final String emailLower;
+  final String? verifiedAt;
+
+  bool get verified => true;
+
+  static AppEmail? tryParse(Object? raw) {
+    if (raw is! Map || raw['verified'] != true) return null;
+
+    final email = (raw['emailLower'] ?? '').toString().trim().toLowerCase();
+
+    if (email.isEmpty || !email.contains('@')) return null;
+
+    return AppEmail(
+      emailLower: email,
+      verifiedAt: raw['verifiedAt']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'emailLower': emailLower,
+    'verified': true,
+    if (verifiedAt != null) 'verifiedAt': verifiedAt,
+  };
+}
+
 @immutable
 class AuthUser {
   const AuthUser({
@@ -59,20 +90,12 @@ class AuthUser {
     this.lastName,
     this.displayName,
     this.avatarUrl,
-    this.email,
-    this.emailLower,
-    this.emailPendingLower,
-    this.emailPendingAt,
-    this.emailVerificationRequestedAt,
     this.phoneHistory = const [],
-    this.emailHistory = const [],
     this.phoneVerified = false,
     this.phoneVerifiedAt,
     this.phoneClaimed = false,
     this.phoneClaimedAt,
     this.phoneSatisfied,
-    this.emailVerified = false,
-    this.emailVerifiedAt,
     this.isCompany = false,
     this.companyName,
     this.accountNumber,
@@ -86,6 +109,7 @@ class AuthUser {
     List<StaffRole> staffRoles = const [],
     this.staffRolesByApp = const {},
     this.appMembershipsByApp = const {},
+    this.emailsByApp = const {},
     this.activeAppId,
     this.recoveryRequired = false,
     this.disabledAt,
@@ -103,20 +127,12 @@ class AuthUser {
   final String? lastName;
   final String? displayName;
   final String? avatarUrl;
-  final String? email;
-  final String? emailLower;
-  final String? emailPendingLower;
-  final String? emailPendingAt;
-  final String? emailVerificationRequestedAt;
   final List<String> phoneHistory;
-  final List<String> emailHistory;
   final bool phoneVerified;
   final String? phoneVerifiedAt;
   final bool phoneClaimed;
   final String? phoneClaimedAt;
   final bool? phoneSatisfied;
-  final bool emailVerified;
-  final String? emailVerifiedAt;
   final bool isCompany;
   final String? companyName;
 
@@ -153,6 +169,12 @@ class AuthUser {
   /// Canonical application membership by app.
   /// A user may belong to multiple apps. Membership does not imply staff access.
   final Map<String, AppMembership> appMembershipsByApp;
+  final Map<String, AppEmail> emailsByApp;
+
+  AppEmail? emailForApp(String appId) =>
+      emailsByApp[appId.trim().toLowerCase()];
+  String? get activeAppEmailLower =>
+      activeAppId == null ? null : emailForApp(activeAppId!)?.emailLower;
 
   /// Client context, set by the active-app providers, never trusted from JSON.
   final String? activeAppId;
@@ -178,6 +200,19 @@ class AuthUser {
       throw ArgumentError.value(appId, 'appId', 'Invalid app ID');
     }
     return copyWith(activeAppId: clean);
+  }
+
+  static Map<String, AppEmail> _parseAppEmails(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, AppEmail>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final appId = (entry.key as String).trim().toLowerCase();
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) continue;
+      final email = AppEmail.tryParse(entry.value);
+      if (email != null) result[appId] = email;
+    }
+    return Map<String, AppEmail>.unmodifiable(result);
   }
 
   static Map<String, AppMembership> _parseAppMemberships(Object? raw) {
@@ -359,37 +394,11 @@ class AuthUser {
     );
   }
 
-  bool get hasVerifiedEmail {
-    final el = (emailLower ?? '').trim();
-    final e = (email ?? '').trim();
-    return emailVerified == true && (el.isNotEmpty || e.isNotEmpty);
-  }
-
-  bool get hasPendingEmail => (emailPendingLower ?? '').trim().isNotEmpty;
-  String? get bestVerifiedEmailLower {
-    final el = (emailLower ?? '').trim().toLowerCase();
-    if (el.isNotEmpty) return el;
-    final e = (email ?? '').trim().toLowerCase();
-    return e.isNotEmpty ? e : null;
-  }
-
-  String? get bestEmailForDisplay {
-    final verified = bestVerifiedEmailLower;
-    if (verified != null) return verified;
-    final pending = (emailPendingLower ?? '').trim().toLowerCase();
-    return pending.isNotEmpty ? pending : null;
-  }
-
-  bool get needsEmailVerificationResolved => hasPendingEmail;
-  bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
-  bool get needsEmailVerification => needsEmailVerificationResolved;
-  String? get bestEmailLower {
-    final v = bestVerifiedEmailLower;
-    if (v != null) return v;
-    final p = (emailPendingLower ?? '').trim().toLowerCase();
-    return p.isNotEmpty ? p : null;
-  }
-
+  bool get hasVerifiedEmail => activeAppEmailLower != null;
+  String? get bestVerifiedEmailLower => activeAppEmailLower;
+  String? get bestEmailForDisplay => activeAppEmailLower;
+  String? get bestEmailLower => activeAppEmailLower;
+  bool get hasEmail => hasVerifiedEmail;
   bool get isDisabled => status == UserStatus.disabled;
   bool get hasRecoveryRequirement => recoveryRequired == true;
   factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
@@ -403,19 +412,8 @@ class AuthUser {
     final staffRoles = _normalizeStaffRoles(json['staffRoles']);
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
-    final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
     final recoveryRequired = _bool(json['recoveryRequired']);
-    final emailRaw = _optStr(json['email']);
-    final emailLowerRaw = _optStr(json['emailLower']);
-    final email = emailRaw?.toLowerCase();
-    final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
-    final pendingRaw = _optStr(json['emailPendingLower']);
-    final emailPendingLower = pendingRaw?.toLowerCase();
-    final emailPendingAt = _optStr(json['emailPendingAt']);
-    final emailVerificationRequestedAt = _optStr(
-      json['emailVerificationRequestedAt'],
-    );
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
         ? null
@@ -456,20 +454,12 @@ class AuthUser {
       lastName: _optStr(json['lastName']),
       displayName: _optStr(json['displayName']),
       avatarUrl: _optStr(json['avatarUrl']),
-      email: email,
-      emailLower: emailLower,
-      emailPendingLower: emailPendingLower,
-      emailPendingAt: emailPendingAt,
-      emailVerificationRequestedAt: emailVerificationRequestedAt,
       phoneHistory: _normalizeStringList(json['phoneHistory']),
-      emailHistory: _normalizeStringList(json['emailHistory']),
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,
       phoneClaimedAt: _optStr(json['phoneClaimedAt']),
       phoneSatisfied: phoneSatisfied,
-      emailVerified: emailVerified,
-      emailVerifiedAt: _optStr(json['emailVerifiedAt']),
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
       accountNumber: accountNumber,
@@ -483,6 +473,7 @@ class AuthUser {
       staffRoles: staffRoles,
       staffRolesByApp: _parseAppRoles(json['staffRolesByApp']),
       appMembershipsByApp: _parseAppMemberships(json['appMembershipsByApp']),
+      emailsByApp: _parseAppEmails(json['emailsByApp']),
       recoveryRequired: recoveryRequired,
       disabledAt: _optStr(json['disabledAt']),
       disabledReason: _optStr(json['disabledReason']),
@@ -502,20 +493,12 @@ class AuthUser {
     String? lastName,
     String? displayName,
     String? avatarUrl,
-    String? email,
-    String? emailLower,
-    String? emailPendingLower,
-    String? emailPendingAt,
-    String? emailVerificationRequestedAt,
     List<String>? phoneHistory,
-    List<String>? emailHistory,
     bool? phoneVerified,
     String? phoneVerifiedAt,
     bool? phoneClaimed,
     String? phoneClaimedAt,
     bool? phoneSatisfied,
-    bool? emailVerified,
-    String? emailVerifiedAt,
     bool? isCompany,
     String? companyName,
     String? accountNumber,
@@ -529,6 +512,7 @@ class AuthUser {
     List<StaffRole>? staffRoles,
     Map<String, List<StaffRole>>? staffRolesByApp,
     Map<String, AppMembership>? appMembershipsByApp,
+    Map<String, AppEmail>? emailsByApp,
     String? activeAppId,
     bool? recoveryRequired,
     String? disabledAt,
@@ -547,21 +531,12 @@ class AuthUser {
       lastName: lastName ?? this.lastName,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
-      email: email ?? this.email,
-      emailLower: emailLower ?? this.emailLower,
-      emailPendingLower: emailPendingLower ?? this.emailPendingLower,
-      emailPendingAt: emailPendingAt ?? this.emailPendingAt,
-      emailVerificationRequestedAt:
-          emailVerificationRequestedAt ?? this.emailVerificationRequestedAt,
       phoneHistory: phoneHistory ?? this.phoneHistory,
-      emailHistory: emailHistory ?? this.emailHistory,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
       phoneClaimed: phoneClaimed ?? this.phoneClaimed,
       phoneClaimedAt: phoneClaimedAt ?? this.phoneClaimedAt,
       phoneSatisfied: phoneSatisfied ?? this.phoneSatisfied,
-      emailVerified: emailVerified ?? this.emailVerified,
-      emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
       isCompany: isCompany ?? this.isCompany,
       companyName: companyName ?? this.companyName,
       accountNumber: accountNumber ?? this.accountNumber,
@@ -577,6 +552,7 @@ class AuthUser {
       staffRoles: staffRoles ?? legacyStaffRoles,
       staffRolesByApp: staffRolesByApp ?? this.staffRolesByApp,
       appMembershipsByApp: appMembershipsByApp ?? this.appMembershipsByApp,
+      emailsByApp: emailsByApp ?? this.emailsByApp,
       activeAppId: activeAppId ?? this.activeAppId,
       recoveryRequired: recoveryRequired ?? this.recoveryRequired,
       disabledAt: disabledAt ?? this.disabledAt,
@@ -597,21 +573,12 @@ class AuthUser {
     if (lastName != null) 'lastName': lastName,
     if (displayName != null) 'displayName': displayName,
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
-    if (email != null) 'email': email,
-    if (emailLower != null) 'emailLower': emailLower,
-    if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
-    if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
-    if (emailVerificationRequestedAt != null)
-      'emailVerificationRequestedAt': emailVerificationRequestedAt,
     if (phoneHistory.isNotEmpty) 'phoneHistory': phoneHistory,
-    if (emailHistory.isNotEmpty) 'emailHistory': emailHistory,
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,
     if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
     if (phoneSatisfied != null) 'phoneSatisfied': phoneSatisfied,
-    if (emailVerified) 'emailVerified': true,
-    if (emailVerifiedAt != null) 'emailVerifiedAt': emailVerifiedAt,
     if (isCompany) 'isCompany': true,
     if (companyName != null) 'companyName': companyName,
     if (accountNumber != null) 'accountNumber': accountNumber,
@@ -627,6 +594,9 @@ class AuthUser {
     'staffRolesByApp': staffRolesByApp.map(
       (appId, roles) =>
           MapEntry(appId, roles.map((r) => r.wire).toList(growable: false)),
+    ),
+    'emailsByApp': emailsByApp.map(
+      (appId, email) => MapEntry(appId, email.toMap()),
     ),
     'appMembershipsByApp': appMembershipsByApp.map(
       (appId, membership) => MapEntry(appId, membership.toMap()),

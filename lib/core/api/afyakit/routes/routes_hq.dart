@@ -136,6 +136,14 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
   Uri fetchUserMemberships(String uid) =>
       _uriCore('hq/users/${_seg(uid)}/memberships');
 
+  /// POST /api/hq/users/:uid/email-change/start
+  Uri startTenantEmailChange(String uid) =>
+      _uriCore('hq/users/${_seg(uid)}/email-change/start');
+
+  /// POST /api/hq/users/:uid/email-change/verify
+  Uri verifyTenantEmailChange(String uid) =>
+      _uriCore('hq/users/${_seg(uid)}/email-change/verify');
+
   Uri deleteGlobalUser(String uid) => _uriCore('hq/users/${_seg(uid)}');
 
   // ═════════════════════════════════════════════

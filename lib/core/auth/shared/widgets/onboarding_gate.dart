@@ -10,23 +10,44 @@ enum OnboardingNeed { phone, email, name, none }
 
 class OnboardingGate {
   static OnboardingNeed need(AuthUser user) {
-    if (user.isPhoneSatisfiedResolved != true) return OnboardingNeed.phone;
+    // Phone verification is shared across all applications.
+    if (!user.isPhoneSatisfiedResolved) {
+      return OnboardingNeed.phone;
+    }
 
-    final hasEmail = user.hasEmail;
-    final verified = user.emailVerified == true;
-    if (!(hasEmail && verified)) return OnboardingNeed.email;
+    // Email verification belongs to the selected application.
+    final appId = user.activeAppId?.trim().toLowerCase();
 
-    // name rules
-    final dn = (user.displayName ?? '').trim();
-    if (dn.isEmpty) return OnboardingNeed.name;
+    if (appId == null || appId.isEmpty) {
+      return OnboardingNeed.email;
+    }
 
-    if (user.isCompany == true) {
-      final cn = (user.companyName ?? '').trim();
-      if (cn.isEmpty) return OnboardingNeed.name;
+    final appEmail = user.emailsByApp[appId];
+
+    if (appEmail == null || !appEmail.verified) {
+      return OnboardingNeed.email;
+    }
+
+    // Name requirements remain shared within the tenant.
+    final displayName = (user.displayName ?? '').trim();
+
+    if (displayName.isEmpty) {
+      return OnboardingNeed.name;
+    }
+
+    if (user.isCompany) {
+      final companyName = (user.companyName ?? '').trim();
+
+      if (companyName.isEmpty) {
+        return OnboardingNeed.name;
+      }
     } else {
-      final fn = (user.firstName ?? '').trim();
-      final ln = (user.lastName ?? '').trim();
-      if (fn.isEmpty || ln.isEmpty) return OnboardingNeed.name;
+      final firstName = (user.firstName ?? '').trim();
+      final lastName = (user.lastName ?? '').trim();
+
+      if (firstName.isEmpty || lastName.isEmpty) {
+        return OnboardingNeed.name;
+      }
     }
 
     return OnboardingNeed.none;
@@ -35,15 +56,18 @@ class OnboardingGate {
   static void forceStep(WidgetRef ref, LoginStep step, {String? hint}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctrl = ref.read(loginControllerProvider.notifier);
-      final st = ref.read(loginControllerProvider);
+      final state = ref.read(loginControllerProvider);
 
-      if (st.busy) return;
+      if (state.busy) return;
 
       final inPhoneFlow =
-          st.step == LoginStep.phone || st.step == LoginStep.otp;
+          state.step == LoginStep.phone || state.step == LoginStep.otp;
+
       final inEmailFlow =
-          st.step == LoginStep.emailEntry || st.step == LoginStep.emailOtp;
-      final inNameFlow = st.step == LoginStep.nameEntry;
+          state.step == LoginStep.emailEntry ||
+          state.step == LoginStep.emailOtp;
+
+      final inNameFlow = state.step == LoginStep.nameEntry;
 
       if (step == LoginStep.phone && inPhoneFlow) return;
       if (step == LoginStep.emailEntry && inEmailFlow) return;

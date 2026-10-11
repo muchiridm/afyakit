@@ -126,15 +126,19 @@ final deliveryAddressByIdProvider = Provider.autoDispose
 String? _userLabel(AuthUser? user) {
   if (user == null) return null;
 
+  // Prefer the user's display name.
   final displayName = (user.displayName ?? '').trim();
   if (displayName.isNotEmpty) return displayName;
 
-  final email = (user.email ?? '').trim();
-  if (email.isNotEmpty) return email;
+  // Use only the verified email of the active application.
+  final appEmail = (user.activeAppEmailLower ?? '').trim();
+  if (appEmail.isNotEmpty) return appEmail;
 
+  // Phone number is shared globally across applications.
   final phone = (user.phoneNumber ?? '').trim();
   if (phone.isNotEmpty) return phone;
 
+  // Tenant account number remains available as a fallback.
   final accountNumber = (user.accountNumber ?? '').trim();
   if (accountNumber.isNotEmpty) return accountNumber;
 

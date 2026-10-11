@@ -1,14 +1,13 @@
-// lib/hq/users/all_users/widgets/hq_all_users_tab.dart
-
-import 'package:afyakit/features/hq/shell/hq_controller.dart';
+import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
+import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/shell/hq_controller.dart';
 import 'package:afyakit/features/hq/tenants/providers/hq_tenant_providers.dart';
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/all_users_controller.dart';
 import 'package:afyakit/features/hq/users/all_users/widgets/user_editor_screen.dart';
 import 'package:afyakit/features/hq/users/all_users/widgets/user_row_tile.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,47 +19,102 @@ class HqAllUsersTab extends ConsumerStatefulWidget {
 }
 
 class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
-  final TextEditingController _searchCtl = TextEditingController();
+  static const _allTenants = '__all__';
+  static const _noTenant = '__no_tenant__';
+
+  final _searchController = TextEditingController();
+  final _selectedAppIds = <String>{};
+
+  String? _appFilterTenantId;
 
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       ref.read(allUsersControllerProvider.notifier).load();
     });
   }
 
   @override
   void dispose() {
-    _searchCtl.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<bool?> _openEditorUid({
-    required String tenantId,
-    required String uid,
-    AllUser? initialUser,
-  }) {
-    return Navigator.of(context).push<bool>(
+  void _selectTenant(String value) {
+    final controller = ref.read(allUsersControllerProvider.notifier);
+    final hqController = ref.read(hqControllerProvider.notifier);
+
+    setState(() {
+      _selectedAppIds.clear();
+      _appFilterTenantId = value == _allTenants || value == _noTenant
+          ? null
+          : value;
+    });
+
+    if (value == _allTenants) {
+      hqController.setTargetTenant(null);
+      controller.setUserFilter(mode: AllUsersFilterMode.all);
+    } else if (value == _noTenant) {
+      hqController.setTargetTenant(null);
+      controller.setUserFilter(mode: AllUsersFilterMode.noTenant);
+    } else {
+      hqController.setTargetTenant(value);
+      controller.setUserFilter(
+        mode: AllUsersFilterMode.tenant,
+        tenantId: value,
+      );
+    }
+  }
+
+  void _toggleApp(String appId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedAppIds.add(appId);
+      } else {
+        _selectedAppIds.remove(appId);
+      }
+    });
+  }
+
+  List<AllUser> _filterUsers(
+    List<AllUser> users,
+    String tenantId,
+    Set<String> selectedApps,
+  ) {
+    if (selectedApps.isEmpty || tenantId.isEmpty) {
+      return users;
+    }
+
+    final controller = ref.read(allUsersControllerProvider.notifier);
+
+    return users.where((user) {
+      final memberships = controller.membershipsForUser(user);
+
+      return memberships.any(
+        (membership) =>
+            membership.tenantId.trim().toLowerCase() == tenantId &&
+            selectedApps.every(membership.hasAppMembership),
+      );
+    }).toList();
+  }
+
+  Future<void> _openEditor(
+    String tenantId,
+    AllUser user, {
+    String? appId,
+  }) async {
+    final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => UserEditorScreen(
           tenantId: tenantId,
-          userUid: uid,
-          initialUser: initialUser,
+          userUid: user.id,
+          initialUser: user,
+          initialAppId: appId,
         ),
       ),
-    );
-  }
-
-  Future<void> _openEditor({
-    required String tenantId,
-    required AllUser user,
-  }) async {
-    final changed = await _openEditorUid(
-      tenantId: tenantId,
-      uid: user.id,
-      initialUser: user,
     );
 
     if (changed == true && mounted) {
@@ -68,74 +122,128 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
     }
   }
 
-  Future<void> _createUserFlow(String tenantId) async {
-    final input = await _showCreateTenantUserDialog(context);
+  Future<void> _createUser(String tenantId) async {
+    final phoneController = TextEditingController();
+    final nameController = TextEditingController();
 
-    if (input == null) {
-      return;
-    }
+    try {
+      final confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('New tenant user'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      hintText: '+2547…',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Display name (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Create'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
 
-    final ctrl = ref.read(allUsersControllerProvider.notifier);
+      if (!confirmed || !mounted) return;
 
-    final uid = await ctrl.createTenantUser(
-      tenantId: tenantId,
-      phoneNumber: input.phoneNumber,
-      displayName: input.displayName,
-    );
+      final phone = phoneController.text.trim();
+      final name = nameController.text.trim();
 
-    if (uid == null || uid.trim().isEmpty) {
-      return;
-    }
+      if (phone.isEmpty) {
+        SnackService.showError('Phone number is required');
+        return;
+      }
 
-    final createdUid = uid.trim();
+      final controller = ref.read(allUsersControllerProvider.notifier);
 
-    await ctrl.refresh();
+      final uid = await controller.createTenantUser(
+        tenantId: tenantId,
+        phoneNumber: phone,
+        displayName: name.isEmpty ? null : name,
+      );
 
-    final latest = ref.read(allUsersControllerProvider);
+      if (uid == null || uid.trim().isEmpty || !mounted) return;
 
-    final maybeUser = _findUserById(latest.items, createdUid);
+      await controller.refresh();
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) return;
 
-    final changed = await _openEditorUid(
-      tenantId: tenantId,
-      uid: createdUid,
-      initialUser: maybeUser,
-    );
+      final users = ref.read(allUsersControllerProvider).items;
+      AllUser? createdUser;
 
-    if (changed == true && mounted) {
-      await ctrl.refresh();
+      for (final user in users) {
+        if (user.id == uid.trim()) {
+          createdUser = user;
+          break;
+        }
+      }
+
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => UserEditorScreen(
+            tenantId: tenantId,
+            userUid: uid.trim(),
+            initialUser: createdUser,
+          ),
+        ),
+      );
+
+      if (changed == true && mounted) {
+        await controller.refresh();
+      }
+    } finally {
+      phoneController.dispose();
+      nameController.dispose();
     }
   }
 
-  Future<void> _deleteUnassignedUserFlow(AllUser user) async {
-    final label = _userLabel(user);
+  Future<void> _deleteUnassignedUser(AllUser user) async {
+    final label = user.displayName?.trim().isNotEmpty == true
+        ? user.displayName!
+        : user.phoneNumber ?? user.id;
 
-    final sure =
+    final confirmed =
         await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             title: const Text('Delete global user?'),
             content: Text(
-              'Delete "$label" permanently?\n\n'
-              'This should only be used for users with no tenant access. '
-              'Firebase Auth and the global users/{uid} record will be deleted.\n\n'
-              'UID:\n${user.id}',
+              'Permanently delete "$label"?\n\n'
+              'This action is allowed only when the user has no '
+              'tenant account or membership.\n\n'
+              'UID: ${user.id}',
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop(false);
-                },
+                onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () {
-                  Navigator.of(ctx).pop(true);
-                },
+                onPressed: () => Navigator.pop(dialogContext, true),
                 child: const Text('Delete'),
               ),
             ],
@@ -143,214 +251,207 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
         ) ??
         false;
 
-    if (!sure) {
-      return;
-    }
+    if (!confirmed || !mounted) return;
 
-    final ctrl = ref.read(allUsersControllerProvider.notifier);
+    final controller = ref.read(allUsersControllerProvider.notifier);
+    final deleted = await controller.deleteGlobalUser(user.id);
 
-    final ok = await ctrl.deleteGlobalUser(user.id);
-
-    if (!ok) {
-      return;
-    }
-
-    await ctrl.refresh();
-  }
-
-  AllUser? _findUserById(List<AllUser> users, String uid) {
-    for (final user in users) {
-      if (user.id == uid) {
-        return user;
-      }
-    }
-
-    return null;
-  }
-
-  String _userLabel(AllUser user) {
-    final name = (user.displayName ?? '').trim();
-
-    if (name.isNotEmpty) {
-      return name;
-    }
-
-    final phone = (user.phoneNumber ?? '').trim();
-
-    if (phone.isNotEmpty) {
-      return phone;
-    }
-
-    final email = (user.email ?? user.emailLower).trim();
-
-    if (email.isNotEmpty) {
-      return email;
-    }
-
-    return user.id;
-  }
-
-  String _emptyText({
-    required AllUsersFilterMode mode,
-    required String selectedTenant,
-  }) {
-    switch (mode) {
-      case AllUsersFilterMode.all:
-        return 'No users found';
-
-      case AllUsersFilterMode.noTenant:
-        return 'No users without tenant access found';
-
-      case AllUsersFilterMode.tenant:
-        return 'No users found for $selectedTenant';
-    }
-  }
-
-  void _applyFilter({required AllUsersFilterMode mode, String? tenantId}) {
-    final hqCtrl = ref.read(hqControllerProvider.notifier);
-
-    final usersCtrl = ref.read(allUsersControllerProvider.notifier);
-
-    switch (mode) {
-      case AllUsersFilterMode.all:
-        hqCtrl.setTargetTenant(null);
-
-        usersCtrl.setUserFilter(mode: AllUsersFilterMode.all);
-
-        SnackService.showInfo('Showing all users');
-
-        return;
-
-      case AllUsersFilterMode.noTenant:
-        hqCtrl.setTargetTenant(null);
-
-        usersCtrl.setUserFilter(mode: AllUsersFilterMode.noTenant);
-
-        SnackService.showInfo('Showing users without tenant access');
-
-        return;
-
-      case AllUsersFilterMode.tenant:
-        final cleanTenantId = tenantId?.trim();
-
-        if (cleanTenantId == null || cleanTenantId.isEmpty) {
-          hqCtrl.setTargetTenant(null);
-
-          usersCtrl.setUserFilter(mode: AllUsersFilterMode.all);
-
-          SnackService.showInfo('Showing all users');
-
-          return;
-        }
-
-        hqCtrl.setTargetTenant(cleanTenantId);
-
-        usersCtrl.setUserFilter(
-          mode: AllUsersFilterMode.tenant,
-          tenantId: cleanTenantId,
-        );
-
-        SnackService.showInfo('Target tenant: $cleanTenantId');
-
-        return;
+    if (deleted && mounted) {
+      await controller.refresh();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(allUsersControllerProvider);
+    final controller = ref.read(allUsersControllerProvider.notifier);
 
-    final usersCtrl = ref.read(allUsersControllerProvider.notifier);
+    final selectedTenant = (ref.watch(hqTargetTenantIdProvider) ?? '')
+        .trim()
+        .toLowerCase();
 
-    final selectedTenant = (ref.watch(hqTargetTenantIdProvider) ?? '').trim();
+    final isTenantMode =
+        state.filterMode == AllUsersFilterMode.tenant &&
+        selectedTenant.isNotEmpty;
 
-    final tenantsAsync = ref.watch(hqTenantsProvider);
+    final isNoTenantMode = state.filterMode == AllUsersFilterMode.noTenant;
 
-    final filterMode = state.filterMode;
+    final filterValue = isTenantMode
+        ? selectedTenant
+        : isNoTenantMode
+        ? _noTenant
+        : _allTenants;
 
-    final hasTenantFilter =
-        filterMode == AllUsersFilterMode.tenant && selectedTenant.isNotEmpty;
+    // Prevent app selections from a previous tenant being applied
+    // if another HQ screen changes the target tenant.
+    final effectiveSelectedApps =
+        _appFilterTenantId == selectedTenant && isTenantMode
+        ? _selectedAppIds
+        : <String>{};
 
-    final isNoTenantFilter = filterMode == AllUsersFilterMode.noTenant;
-
-    final mirrored = (state.targetTenantId ?? '').trim();
-
-    if (filterMode == AllUsersFilterMode.tenant && selectedTenant != mirrored) {
+    if (_appFilterTenantId != (isTenantMode ? selectedTenant : null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-
-        usersCtrl.setUserFilter(
-          mode: selectedTenant.isEmpty
-              ? AllUsersFilterMode.all
-              : AllUsersFilterMode.tenant,
-          tenantId: selectedTenant.isEmpty ? null : selectedTenant,
-        );
+        if (!mounted) return;
+        setState(() {
+          _selectedAppIds.clear();
+          _appFilterTenantId = isTenantMode ? selectedTenant : null;
+        });
       });
     }
 
-    if (_searchCtl.text != state.search) {
-      _searchCtl.value = _searchCtl.value.copyWith(text: state.search);
+    if (isTenantMode && state.targetTenantId != selectedTenant) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref
+            .read(allUsersControllerProvider.notifier)
+            .setUserFilter(
+              mode: AllUsersFilterMode.tenant,
+              tenantId: selectedTenant,
+            );
+      });
     }
+
+    final tenantsAsync = ref.watch(hqTenantsProvider);
+    final appsAsync = isTenantMode
+        ? ref.watch(hqAppProfilesProvider(selectedTenant))
+        : null;
+
+    final visibleUsers = _filterUsers(
+      state.items,
+      selectedTenant,
+      effectiveSelectedApps,
+    );
+
+    if (_searchController.text != state.search) {
+      _searchController.value = _searchController.value.copyWith(
+        text: state.search,
+        selection: TextSelection.collapsed(offset: state.search.length),
+      );
+    }
+
+    final theme = Theme.of(context);
 
     return Scaffold(
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _UserFilterDropdown(
-                  tenantsAsync: tenantsAsync,
-                  filterMode: filterMode,
-                  selectedTenant: selectedTenant,
-                  onRetryTenants: () {
-                    ref.invalidate(hqTenantsProvider);
+                Text('Filter users', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+
+                tenantsAsync.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (error, _) => Row(
+                    children: [
+                      const Expanded(child: Text('Unable to load tenants')),
+                      TextButton(
+                        onPressed: () => ref.invalidate(hqTenantsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                  data: (tenants) {
+                    final sorted = List<TenantProfile>.from(tenants)
+                      ..sort((a, b) => a.id.compareTo(b.id));
+
+                    final values = sorted
+                        .map((tenant) => tenant.id.trim().toLowerCase())
+                        .toSet();
+
+                    return DropdownButtonFormField<String>(
+                      key: ValueKey(filterValue),
+                      initialValue:
+                          values.contains(filterValue) ||
+                              filterValue == _allTenants ||
+                              filterValue == _noTenant
+                          ? filterValue
+                          : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tenant',
+                        prefixIcon: Icon(Icons.apartment_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: _allTenants,
+                          child: Text('All tenants'),
+                        ),
+                        const DropdownMenuItem(
+                          value: _noTenant,
+                          child: Text('No tenant'),
+                        ),
+                        ...sorted.map(
+                          (tenant) => DropdownMenuItem(
+                            value: tenant.id.trim().toLowerCase(),
+                            child: Text(
+                              tenant.id,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) _selectTenant(value);
+                      },
+                    );
                   },
-                  onChanged: _applyFilter,
+                ),
+
+                if (isTenantMode && appsAsync != null) ...[
+                  const SizedBox(height: 14),
+                  _ApplicationCheckboxes(
+                    appsAsync: appsAsync,
+                    selectedIds: effectiveSelectedApps,
+                    onToggle: _toggleApp,
+                    onClear: () => setState(_selectedAppIds.clear),
+                    onRetry: () =>
+                        ref.invalidate(hqAppProfilesProvider(selectedTenant)),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _searchController,
+                  onChanged: controller.setSearch,
+                  decoration: InputDecoration(
+                    hintText: 'Search name, phone or email',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: state.search.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              controller.setSearch('');
+                            },
+                          ),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
 
                 const SizedBox(height: 12),
-
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _searchCtl,
-                        onChanged: usersCtrl.setSearch,
-                        keyboardType: TextInputType.text,
-                        decoration: InputDecoration(
-                          hintText: 'Search by phone, email, or name…',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: state.search.isEmpty
-                              ? null
-                              : IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    _searchCtl.clear();
-
-                                    usersCtrl.setSearch('');
-                                  },
-                                ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                      child: Text(
+                        '${visibleUsers.length} of '
+                        '${state.items.length} loaded users',
+                        style: theme.textTheme.bodySmall,
                       ),
                     ),
-
-                    const SizedBox(width: 12),
-
                     IconButton(
-                      tooltip: 'Refresh tenants',
+                      tooltip: 'Refresh users',
+                      onPressed: state.loading
+                          ? null
+                          : () => controller.refresh(),
                       icon: const Icon(Icons.refresh),
-                      onPressed: () {
-                        ref.invalidate(hqTenantsProvider);
-                      },
                     ),
                   ],
                 ),
@@ -358,13 +459,13 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
             ),
           ),
 
-          _UserFilterBanner(mode: filterMode, selectedTenant: selectedTenant),
+          const Divider(height: 1),
 
           Expanded(
             child: RefreshIndicator(
-              onRefresh: usersCtrl.refresh,
+              onRefresh: controller.refresh,
               child: Builder(
-                builder: (_) {
+                builder: (context) {
                   if (state.loading && state.items.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -373,45 +474,46 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
                     return Center(child: Text('Error: ${state.error}'));
                   }
 
-                  if (state.items.isEmpty) {
-                    return Center(
-                      child: Text(
-                        _emptyText(
-                          mode: filterMode,
-                          selectedTenant: selectedTenant,
+                  if (visibleUsers.isEmpty) {
+                    return ListView(
+                      children: [
+                        const SizedBox(height: 100),
+                        Center(
+                          child: Text(
+                            effectiveSelectedApps.isNotEmpty
+                                ? 'No matching users in loaded results.'
+                                : 'No users found.',
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   }
 
                   return ListView.separated(
-                    itemCount: state.items.length,
+                    itemCount: visibleUsers.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) {
-                      final user = state.items[index];
+                    itemBuilder: (context, index) {
+                      final user = visibleUsers[index];
 
                       return UserRowTile(
                         user: user,
-                        memberships: usersCtrl.membershipsForUser(user),
+                        memberships: controller.membershipsForUser(user),
                         onTap: () async {
-                          if (hasTenantFilter) {
+                          if (isTenantMode) {
                             await _openEditor(
-                              tenantId: selectedTenant,
-                              user: user,
+                              selectedTenant,
+                              user,
+                              appId: effectiveSelectedApps.length == 1
+                                  ? effectiveSelectedApps.single
+                                  : null,
                             );
-
-                            return;
+                          } else if (isNoTenantMode) {
+                            await _deleteUnassignedUser(user);
+                          } else {
+                            SnackService.showInfo(
+                              'Select a tenant to edit user access.',
+                            );
                           }
-
-                          if (isNoTenantFilter) {
-                            await _deleteUnassignedUserFlow(user);
-
-                            return;
-                          }
-
-                          SnackService.showError(
-                            'Pick a tenant first to edit access.',
-                          );
                         },
                       );
                     },
@@ -423,297 +525,101 @@ class _HqAllUsersTabState extends ConsumerState<HqAllUsersTab> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: !hasTenantFilter
-            ? () {
-                SnackService.showError(
-                  isNoTenantFilter
-                      ? 'Switch to a tenant before creating users.'
-                      : 'Pick a tenant first to create a tenant user.',
-                );
-              }
-            : () {
-                _createUserFlow(selectedTenant);
-              },
-        icon: const Icon(Icons.person_add),
+        onPressed: isTenantMode ? () => _createUser(selectedTenant) : null,
+        icon: const Icon(Icons.person_add_alt_1),
         label: const Text('New user'),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────
-// Local components
-// ─────────────────────────────────────────────
-
-class _UserFilterBanner extends StatelessWidget {
-  const _UserFilterBanner({required this.mode, required this.selectedTenant});
-
-  final AllUsersFilterMode mode;
-  final String selectedTenant;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          Icon(_icon, size: 18, color: Colors.grey.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(_text, style: TextStyle(color: Colors.grey.shade700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData get _icon {
-    switch (mode) {
-      case AllUsersFilterMode.all:
-        return Icons.people_alt_outlined;
-
-      case AllUsersFilterMode.noTenant:
-        return Icons.person_off_outlined;
-
-      case AllUsersFilterMode.tenant:
-        return Icons.filter_alt;
-    }
-  }
-
-  String get _text {
-    switch (mode) {
-      case AllUsersFilterMode.all:
-        return 'Showing all users. Pick a tenant to edit access or create tenant users.';
-
-      case AllUsersFilterMode.noTenant:
-        return 'Showing users with no tenant access. Tap a user to delete the global record.';
-
-      case AllUsersFilterMode.tenant:
-        return 'Filtering users by "$selectedTenant". '
-            'You can edit access and create users for this tenant.';
-    }
-  }
-}
-
-class _UserFilterDropdown extends StatelessWidget {
-  const _UserFilterDropdown({
-    required this.tenantsAsync,
-    required this.filterMode,
-    required this.selectedTenant,
-    required this.onChanged,
-    required this.onRetryTenants,
+class _ApplicationCheckboxes extends StatelessWidget {
+  const _ApplicationCheckboxes({
+    required this.appsAsync,
+    required this.selectedIds,
+    required this.onToggle,
+    required this.onClear,
+    required this.onRetry,
   });
 
-  static const String filterAll = '__all__';
-
-  static const String filterNoTenant = '__no_tenant__';
-
-  final AsyncValue<List<TenantProfile>> tenantsAsync;
-
-  final AllUsersFilterMode filterMode;
-
-  final String selectedTenant;
-
-  final void Function({required AllUsersFilterMode mode, String? tenantId})
-  onChanged;
-
-  final VoidCallback onRetryTenants;
-
-  String get _dropdownValue {
-    switch (filterMode) {
-      case AllUsersFilterMode.all:
-        return filterAll;
-
-      case AllUsersFilterMode.noTenant:
-        return filterNoTenant;
-
-      case AllUsersFilterMode.tenant:
-        return selectedTenant.isEmpty ? filterAll : selectedTenant;
-    }
-  }
+  final AsyncValue<List<AppProfile>> appsAsync;
+  final Set<String> selectedIds;
+  final void Function(String, bool) onToggle;
+  final VoidCallback onClear;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return tenantsAsync.when(
-      loading: () => InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'User list filter / target tenant',
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        child: const Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 10),
-            Text('Loading tenants…'),
-          ],
-        ),
+    final theme = Theme.of(context);
+
+    return appsAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (error, _) => Row(
+        children: [
+          const Expanded(child: Text('Unable to load applications')),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
-      error: (error, _) => InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'User list filter / target tenant',
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        child: Row(
+      data: (apps) {
+        if (apps.isEmpty) {
+          return const Text('No registered applications.');
+        }
+
+        final sorted = List<AppProfile>.from(apps)
+          ..sort(
+            (a, b) => a.displayName.toLowerCase().compareTo(
+              b.displayName.toLowerCase(),
+            ),
+          );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline, size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Text('Failed to load tenants: $error')),
-            const SizedBox(width: 10),
-            TextButton(onPressed: onRetryTenants, child: const Text('Retry')),
-          ],
-        ),
-      ),
-      data: (tenants) {
-        final options = List<TenantProfile>.from(tenants)
-          ..sort((a, b) {
-            final aId = a.id.trim().toLowerCase();
-
-            final bId = b.id.trim().toLowerCase();
-
-            return aId.compareTo(bId);
-          });
-
-        return DropdownButtonFormField<String>(
-          initialValue: _dropdownValue,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'User list filter / target tenant',
-            helperText:
-                'Show all users, users without tenant access, or users for one tenant.',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
-          items: [
-            const DropdownMenuItem<String>(
-              value: filterAll,
-              child: Text('All users'),
+            Row(
+              children: [
+                Text('Applications', style: theme.textTheme.titleSmall),
+                const Spacer(),
+                if (selectedIds.isNotEmpty)
+                  TextButton(onPressed: onClear, child: const Text('Clear')),
+              ],
             ),
-            const DropdownMenuItem<String>(
-              value: filterNoTenant,
-              child: Text('No tenant users'),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: sorted.map((app) {
+                final appId = app.id.trim().toLowerCase();
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => onToggle(appId, !selectedIds.contains(appId)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        value: selectedIds.contains(appId),
+                        onChanged: (checked) =>
+                            onToggle(appId, checked ?? false),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Text(
+                        app.active
+                            ? app.displayName
+                            : '${app.displayName} (inactive)',
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
-            ...options.map((tenant) {
-              final tenantId = tenant.id.trim().toLowerCase();
-
-              return DropdownMenuItem<String>(
-                value: tenantId,
-                child: Text(tenantId),
-              );
-            }),
+            Text(
+              selectedIds.isEmpty
+                  ? 'All tenant users'
+                  : 'Users in any selected application',
+              style: theme.textTheme.bodySmall,
+            ),
           ],
-          onChanged: (value) {
-            final next = (value ?? '').trim();
-
-            if (next == filterAll) {
-              onChanged(mode: AllUsersFilterMode.all);
-
-              return;
-            }
-
-            if (next == filterNoTenant) {
-              onChanged(mode: AllUsersFilterMode.noTenant);
-
-              return;
-            }
-
-            onChanged(mode: AllUsersFilterMode.tenant, tenantId: next);
-          },
         );
       },
     );
-  }
-}
-
-// ─────────────────────────────────────────────
-// Local dialog
-// ─────────────────────────────────────────────
-
-class _CreateTenantUserInput {
-  const _CreateTenantUserInput({required this.phoneNumber, this.displayName});
-
-  final String phoneNumber;
-  final String? displayName;
-}
-
-Future<_CreateTenantUserInput?> _showCreateTenantUserDialog(
-  BuildContext context,
-) async {
-  final phoneCtl = TextEditingController();
-
-  final nameCtl = TextEditingController();
-
-  try {
-    final ok =
-        await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Create user'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: phoneCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone number (E.164)',
-                    hintText: '+2547…',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: nameCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Display name (optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(false);
-                },
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(true);
-                },
-                child: const Text('Create'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!ok) {
-      return null;
-    }
-
-    final phone = phoneCtl.text.trim();
-
-    final name = nameCtl.text.trim();
-
-    if (phone.isEmpty) {
-      SnackService.showError('Phone number is required');
-
-      return null;
-    }
-
-    return _CreateTenantUserInput(
-      phoneNumber: phone,
-      displayName: name.isEmpty ? null : name,
-    );
-  } finally {
-    phoneCtl.dispose();
-    nameCtl.dispose();
   }
 }

@@ -3,19 +3,25 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'package:afyakit/app/providers/app_profile_providers.dart';
 
 import 'package:afyakit/core/auth/auth_session/services/auth_service.dart';
+
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 
 final sessionControllerProvider =
     StateNotifierProvider.family<
       SessionController,
+
       AsyncValue<AuthUser?>,
+
       String
     >((ref, tenantId) => SessionController(ref, tenantId));
 
@@ -26,21 +32,27 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   }
 
   final Ref ref;
+
   final String tenantId;
 
   StreamSubscription<fb.User?>? _sub;
 
   bool _initialized = false;
+
   bool _disposed = false;
 
   /// Prevent duplicate concurrent loadSession calls.
+
   Future<void>? _inflight;
 
   /// Track last successful backend session fetch (per controller/tenant).
+
   DateTime? _lastNetworkFetchAt;
 
   /// Allow fast refreshes without spamming the backend,
+
   /// but never cache the session indefinitely.
+
   static const Duration _sessionCacheTtl = Duration(seconds: 30);
 
   Future<AuthService> _svc() async =>
@@ -52,12 +64,16 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     _sub = fb.FirebaseAuth.instance.idTokenChanges().listen(
       (fbUser) async {
         // Background refresh (no loading flicker).
+
         await _syncFromFirebaseUser(
           fbUser,
+
           forceNetwork: false,
+
           showLoadingIfNeeded: false,
         );
       },
+
       onError: (Object err, StackTrace st) {
         if (kDebugMode) {
           debugPrint('⚠️ [session] idTokenChanges error: $err');
@@ -70,10 +86,13 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     );
 
     // Prime on startup (show loading once if first boot).
+
     unawaited(
       _syncFromFirebaseUser(
         fb.FirebaseAuth.instance.currentUser,
+
         forceNetwork: false,
+
         showLoadingIfNeeded: true,
       ),
     );
@@ -84,7 +103,9 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
     if (!_initialized) {
       _initialized = true;
+
       state = const AsyncValue.loading();
+
       return;
     }
 
@@ -133,8 +154,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       'phoneVerified=${u?.phoneVerified} '
       'phoneClaimed=${u?.phoneClaimed} '
       'phoneSatisfied=${u?.phoneSatisfied} '
-      'emailVerified=${u?.emailVerified} '
-      'emailLower="${u?.emailLower}" '
+      'appEmailVerified=${u?.activeAppEmailLower != null} '
       'isCompany=${u?.isCompany} '
       'firstName="${u?.firstName}" '
       'lastName="${u?.lastName}" '
@@ -152,7 +172,9 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
   Future<void> _syncFromFirebaseUser(
     fb.User? fbUser, {
+
     required bool forceNetwork,
+
     required bool showLoadingIfNeeded,
   }) async {
     if (_disposed) return;
@@ -160,7 +182,9 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     _inflight ??=
         _syncInternal(
           fbUser,
+
           forceNetwork: forceNetwork,
+
           showLoadingIfNeeded: showLoadingIfNeeded,
         ).whenComplete(() {
           _inflight = null;
@@ -171,7 +195,9 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
   Future<void> _syncInternal(
     fb.User? fbUser, {
+
     required bool forceNetwork,
+
     required bool showLoadingIfNeeded,
   }) async {
     if (_disposed) return;
@@ -182,6 +208,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       if (_disposed) return;
 
       state = const AsyncValue.data(null);
+
       return;
     }
 
@@ -191,6 +218,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       final svc = await _svc();
 
       // Prime a fresh Firebase ID token before calling the backend.
+
       try {
         await fbUser.getIdToken(true);
       } catch (e) {
@@ -203,16 +231,27 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       }
 
       // -------------------------------------------------------
+
       // CACHE FAST-PATH
+
       // -------------------------------------------------------
+
       //
+
       // Use cached session only when:
+
       // - network refresh is not forced
+
       // - cached UID matches Firebase UID
+
       // - the backend fetch is still within the TTL
+
       //
+
       // IMPORTANT:
+
       // Apply active app context before exposing the user
+
       // to HomeShell and other consumers.
 
       final cached = svc.currentUser;
@@ -224,6 +263,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
         if (_disposed) return;
 
         final appId = ref.read(appIdProvider);
+
         final appUser = cached.forApp(appId);
 
         state = AsyncValue.data(appUser);
@@ -234,12 +274,19 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       }
 
       // -------------------------------------------------------
+
       // NETWORK SESSION
+
       // -------------------------------------------------------
+
       //
+
       // Backend /auth/session/me is the source of truth.
+
       //
+
       // The backend returns staffRolesByApp.
+
       // The frontend resolves staffRoles for the active app.
 
       final fresh = await svc.loadSession();
@@ -249,6 +296,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       if (_disposed) return;
 
       final appId = ref.read(appIdProvider);
+
       final appUser = fresh.forApp(appId);
 
       state = AsyncValue.data(appUser);
@@ -273,6 +321,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       if (previousUser != null) {
         state = AsyncValue.data(previousUser);
+
         return;
       }
 
@@ -281,24 +330,32 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
   }
 
   /// Force a backend session reload.
+
   Future<void> refresh({bool forceNetwork = true}) async {
     await _syncFromFirebaseUser(
       fb.FirebaseAuth.instance.currentUser,
+
       forceNetwork: forceNetwork,
+
       showLoadingIfNeeded: false,
     );
   }
 
   Future<void> signInWithOtp({
     required String attemptId,
+
     required String code,
+
     String? firstName,
+
     String? lastName,
+
     String? companyName,
   }) async {
     if (_disposed) return;
 
     state = const AsyncValue.loading();
+
     _initialized = true;
 
     try {
@@ -306,13 +363,18 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       await svc.verifyOtpAndSignIn(
         attemptId: attemptId,
+
         code: code,
+
         firstName: firstName,
+
         lastName: lastName,
+
         companyName: companyName,
       );
 
       // After auth event, force network session reload.
+
       _lastNetworkFetchAt = null;
 
       await refresh(forceNetwork: true);
@@ -320,6 +382,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       if (_disposed) return;
 
       state = AsyncValue.error(err, st);
+
       rethrow;
     }
   }
@@ -328,6 +391,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     if (_disposed) return;
 
     state = const AsyncValue.loading();
+
     _initialized = true;
 
     try {
@@ -357,6 +421,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       if (_disposed) return;
 
       state = AsyncValue.error(err, st);
+
       rethrow;
     }
   }
@@ -380,6 +445,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     _disposed = true;
 
     _sub?.cancel();
+
     _sub = null;
 
     super.dispose();

@@ -1,25 +1,34 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/controllers/profile_controller.dart';
+
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
+
 import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
+
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
+
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
 import 'package:afyakit/shared/layout/app_header.dart';
+
 import 'package:afyakit/shared/layout/app_page.dart';
 
 class UserProfileEditorScreen extends ConsumerStatefulWidget {
   const UserProfileEditorScreen({super.key, this.user});
 
   /// If null → edit current logged-in user.
+
   /// If non-null → admin editing a specific user.
+
   final AuthUser? user;
 
   @override
@@ -34,6 +43,7 @@ class _UserProfileEditorScreenState
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileControllerProvider(widget.user).notifier).init();
     });
@@ -42,13 +52,17 @@ class _UserProfileEditorScreenState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(profileControllerProvider(widget.user));
+
     final ctrl = ref.read(profileControllerProvider(widget.user).notifier);
 
     if (state.loading && state.user == null) {
       return const AppPage(
         maxWidth: 720,
+
         scrollable: false,
+
         header: AppHeader(title: 'Profile'),
+
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -56,17 +70,25 @@ class _UserProfileEditorScreenState
     if (state.user == null) {
       return AppPage(
         maxWidth: 720,
+
         scrollable: false,
+
         header: const AppHeader(title: 'Profile'),
+
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+
             children: [
               const Text('⚠️ No user found.'),
+
               const SizedBox(height: 12),
+
               ElevatedButton.icon(
                 onPressed: () => ctrl.init(),
+
                 icon: const Icon(Icons.sync),
+
                 label: const Text('Retry'),
               ),
             ],
@@ -76,25 +98,39 @@ class _UserProfileEditorScreenState
     }
 
     final user = state.user!;
+
     final isAdminEditing = state.isAdminEditing;
+
     final title = isAdminEditing ? 'Edit User Profile' : 'My Profile';
 
     return AppPage(
       maxWidth: 720,
+
       scrollable: true,
+
       header: AppHeader(title: title),
+
       body: Padding(
         padding: const EdgeInsets.all(16),
+
         child: Column(
           children: [
             _buildHeaderBlock(context, user),
+
             const SizedBox(height: 24),
+
             _buildIdentitySection(user, state),
+
             const SizedBox(height: 24),
+
             _buildEditableSection(state),
+
             const SizedBox(height: 24),
+
             _RoleAndStoreSection(user: user, isAdminEditing: isAdminEditing),
+
             const SizedBox(height: 24),
+
             _buildSaveButton(context, ctrl, state),
           ],
         ),
@@ -104,17 +140,23 @@ class _UserProfileEditorScreenState
 
   Widget _buildHeaderBlock(BuildContext context, AuthUser user) {
     final display = user.displayLabel();
+
     final roleLabelText = staffRoleLabel(user);
 
     return Column(
       children: [
         _AvatarBlock(displayName: display, avatarUrl: user.avatarUrl),
+
         const SizedBox(height: 8),
+
         Row(
           mainAxisSize: MainAxisSize.min,
+
           children: [
             _RoleChip(label: roleLabelText),
+
             const SizedBox(width: 8),
+
             _RoleChip(label: user.status.label),
           ],
         ),
@@ -124,71 +166,95 @@ class _UserProfileEditorScreenState
 
   Widget _buildIdentitySection(AuthUser user, ProfileFormState state) {
     final phone = (user.phoneNumber ?? '').trim();
-    final bestEmail = user.bestEmailForDisplay;
-    final showPending = user.hasPendingEmail && !user.hasVerifiedEmail;
+
+    final appId = user.activeAppId?.trim().toLowerCase();
+
+    final appEmail = appId == null || appId.isEmpty
+        ? null
+        : user.emailForApp(appId)?.emailLower;
 
     final account = (user.accountNumber ?? '').trim();
+
     final hasAccount = account.isNotEmpty;
 
     return Card(
       elevation: 0,
+
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
       child: Padding(
         padding: const EdgeInsets.all(16),
+
         child: Column(
           children: [
             TextFormField(
               controller: state.phoneController,
+
               readOnly: true,
+
               decoration: const InputDecoration(
                 labelText: 'WhatsApp Number (identity)',
+
+                filled: true,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextFormField(
+              key: ValueKey('app-email-${appId ?? 'none'}'),
+              initialValue: appId == null || appId.isEmpty
+                  ? 'Application not selected'
+                  : appEmail ?? 'Not verified',
+              readOnly: true,
+              decoration: InputDecoration(
+                labelText: appId == null || appId.isEmpty
+                    ? 'Application email'
+                    : 'Verified email ($appId)',
                 filled: true,
               ),
             ),
             const SizedBox(height: 12),
-
-            if (bestEmail != null && bestEmail.trim().isNotEmpty) ...[
-              TextFormField(
-                initialValue: bestEmail,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: showPending
-                      ? 'Email (pending verification)'
-                      : 'Email (verified)',
-                  filled: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
 
             TextFormField(
               initialValue: user.tenantId,
+
               readOnly: true,
+
               decoration: const InputDecoration(
                 labelText: 'Tenant ID',
+
                 filled: true,
               ),
             ),
+
             const SizedBox(height: 12),
 
-            // ✅ Prefer tenant-scoped account number
+            // Account number remains tenant-scoped.
             TextFormField(
               initialValue: hasAccount ? account : '—',
+
               readOnly: true,
+
               decoration: const InputDecoration(
                 labelText: 'Account Number',
+
                 filled: true,
               ),
             ),
 
-            // Optional: keep UID as fallback only for legacy users (no account number)
+            // Show UID when no account number is available.
             if (!hasAccount) ...[
               const SizedBox(height: 12),
+
               TextFormField(
                 initialValue: user.uid,
+
                 readOnly: true,
+
                 decoration: const InputDecoration(
-                  labelText: 'User ID (legacy)',
+                  labelText: 'User ID',
+
                   filled: true,
                 ),
               ),
@@ -196,8 +262,9 @@ class _UserProfileEditorScreenState
 
             if (phone.isEmpty) ...[
               const SizedBox(height: 12),
+
               const Text(
-                '⚠️ Missing phoneNumber (legacy/dirty record). Admin should fix identity anchor.',
+                'Phone number is missing. Ask an administrator to update the global identity.',
               ),
             ],
           ],
@@ -209,18 +276,26 @@ class _UserProfileEditorScreenState
   Widget _buildEditableSection(ProfileFormState state) {
     return Card(
       elevation: 0,
+
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
       child: Padding(
         padding: const EdgeInsets.all(16),
+
         child: Form(
           key: _formKey,
+
           child: TextFormField(
             controller: state.nameController,
+
             decoration: const InputDecoration(
               labelText: 'Display Name',
+
               hintText: 'e.g. Dr. John Doe',
             ),
+
             textInputAction: TextInputAction.done,
+
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? 'Display name is required'
                 : null,
@@ -232,25 +307,34 @@ class _UserProfileEditorScreenState
 
   Widget _buildSaveButton(
     BuildContext context,
+
     ProfileController ctrl,
+
     ProfileFormState state,
   ) {
     final isBusy = state.loading;
+
     return SizedBox(
       width: double.infinity,
+
       child: ElevatedButton.icon(
         icon: isBusy
             ? const SizedBox(
                 width: 16,
+
                 height: 16,
+
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.save),
+
         label: const Text('Save Changes'),
+
         onPressed: isBusy
             ? null
             : () async {
                 if (!(_formKey.currentState?.validate() ?? false)) return;
+
                 await ctrl.save(context);
               },
       ),
@@ -259,21 +343,26 @@ class _UserProfileEditorScreenState
 }
 
 // ──────────────────────────────────────────────────────────────
+
 // Roles / stores / status section
+
 // ──────────────────────────────────────────────────────────────
 
 class _RoleAndStoreSection extends ConsumerWidget {
   const _RoleAndStoreSection({
     required this.user,
+
     required this.isAdminEditing,
   });
 
   final AuthUser user;
+
   final bool isAdminEditing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(profileControllerProvider(user));
+
     final ctrl = ref.read(profileControllerProvider(user).notifier);
 
     final storesAsync = ref.watch(
@@ -281,27 +370,37 @@ class _RoleAndStoreSection extends ConsumerWidget {
     );
 
     final effectiveStatus = state.statusOverride ?? user.status;
+
     final effectiveRoles = state.staffRoleOverrides ?? user.staffRoles;
 
     return Card(
       elevation: 0,
+
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
       child: Padding(
         padding: const EdgeInsets.all(16),
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+
           children: [
             Text(
               'Account Status',
+
               style: Theme.of(context).textTheme.titleSmall,
             ),
+
             const SizedBox(height: 8),
+
             if (isAdminEditing)
               DropdownButtonFormField<UserStatus>(
                 initialValue: effectiveStatus,
+
                 onChanged: (val) {
                   if (val != null) ctrl.setStatus(val);
                 },
+
                 items: UserStatus.values
                     .map(
                       (s) => DropdownMenuItem(value: s, child: Text(s.label)),
@@ -311,21 +410,32 @@ class _RoleAndStoreSection extends ConsumerWidget {
             else
               TextFormField(
                 initialValue: effectiveStatus.label,
+
                 readOnly: true,
+
                 decoration: const InputDecoration(filled: true),
               ),
+
             const SizedBox(height: 16),
+
             Text('Roles', style: Theme.of(context).textTheme.titleSmall),
+
             const SizedBox(height: 8),
+
             if (isAdminEditing)
               Wrap(
                 spacing: 8,
+
                 runSpacing: 4,
+
                 children: StaffRole.values.map((role) {
                   final selected = effectiveRoles.any((r) => r == role);
+
                   return FilterChip(
                     label: Text(role.label),
+
                     selected: selected,
+
                     onSelected: (_) => ctrl.toggleStaffRole(role),
                   );
                 }).toList(),
@@ -335,20 +445,30 @@ class _RoleAndStoreSection extends ConsumerWidget {
                 initialValue: effectiveRoles.isEmpty
                     ? 'Member'
                     : effectiveRoles.map((r) => r.label).join(', '),
+
                 readOnly: true,
+
                 decoration: const InputDecoration(filled: true),
               ),
+
             const SizedBox(height: 16),
+
             Text(
               'Assigned Stores',
+
               style: Theme.of(context).textTheme.titleSmall,
             ),
+
             const SizedBox(height: 8),
+
             storesAsync.when(
               loading: () => const LinearProgressIndicator(),
+
               error: (e, _) => Text('Error loading stores: $e'),
+
               data: (locations) {
                 final allStores = locations;
+
                 final effectiveStoreIds = state.storeOverrides ?? user.stores;
 
                 if (!isAdminEditing) {
@@ -356,11 +476,14 @@ class _RoleAndStoreSection extends ConsumerWidget {
                       .where((loc) => effectiveStoreIds.contains(loc.id))
                       .map((loc) => loc.name)
                       .toList();
+
                   return TextFormField(
                     initialValue: names.isEmpty
                         ? 'No stores assigned'
                         : names.join(', '),
+
                     readOnly: true,
+
                     decoration: const InputDecoration(filled: true),
                   );
                 }
@@ -371,12 +494,17 @@ class _RoleAndStoreSection extends ConsumerWidget {
 
                 return Wrap(
                   spacing: 8,
+
                   runSpacing: 4,
+
                   children: allStores.map((store) {
                     final selected = effectiveStoreIds.contains(store.id);
+
                     return FilterChip(
                       label: Text(store.name),
+
                       selected: selected,
+
                       onSelected: (_) => ctrl.toggleStore(store.id),
                     );
                   }).toList(),
@@ -391,24 +519,32 @@ class _RoleAndStoreSection extends ConsumerWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
+
 // Small UI atoms
+
 // ──────────────────────────────────────────────────────────────
 
 class _RoleChip extends StatelessWidget {
   const _RoleChip({required this.label});
+
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+
       decoration: BoxDecoration(
         color: Colors.indigo.shade50,
+
         borderRadius: BorderRadius.circular(6),
+
         border: Border.all(color: Colors.indigo.shade100),
       ),
+
       child: Text(
         label,
+
         style: Theme.of(
           context,
         ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -421,6 +557,7 @@ class _AvatarBlock extends StatelessWidget {
   const _AvatarBlock({required this.displayName, required this.avatarUrl});
 
   final String displayName;
+
   final String? avatarUrl;
 
   @override
@@ -431,25 +568,35 @@ class _AvatarBlock extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 48,
+
           backgroundColor: Colors.indigo.shade100,
+
           backgroundImage: (avatarUrl != null && avatarUrl!.trim().isNotEmpty)
               ? NetworkImage(avatarUrl!.trim())
               : null,
+
           child: (avatarUrl == null || avatarUrl!.trim().isEmpty)
               ? Text(
                   initials,
+
                   style: const TextStyle(
                     fontSize: 28,
+
                     fontWeight: FontWeight.bold,
+
                     color: Colors.indigo,
                   ),
                 )
               : null,
         ),
+
         const SizedBox(height: 12),
+
         Text(
           displayName.isNotEmpty ? displayName : 'Unnamed User',
+
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+
           textAlign: TextAlign.center,
         ),
       ],
