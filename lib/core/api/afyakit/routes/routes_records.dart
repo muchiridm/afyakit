@@ -1,3 +1,5 @@
+// lib/core/api/afyakit/routes/routes_records.dart
+
 part of 'routes.dart';
 
 /// Shared application records, independent of the Retail feature flag.
@@ -14,11 +16,14 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
 
   // ─────────────────────────────────────────────
+
   // Native Contacts pilot (Firestore, no Zoho required)
+
   // ─────────────────────────────────────────────
 
   Uri recordsNativeContactsList({int page = 1, int perPage = 50}) => _uri(
     'records/native-contacts',
+
     query: _recordsQuery(page: page, perPage: perPage),
   );
 
@@ -31,6 +36,7 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       _uri('records/native-contacts/${_seg(id)}');
 
   /// Remove app membership, never delete the canonical contact.
+
   Uri recordsNativeContactRemoveFromApp(String id) =>
       _uri('records/native-contacts/${_seg(id)}/membership');
 
@@ -435,6 +441,52 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       _uri('records/profiles/${_seg(profileId)}/documents/${_seg(documentId)}');
 
   // ─────────────────────────────────────────────
+
+  // Delivery addresses routes
+
+  // ─────────────────────────────────────────────
+
+  Uri recordsDeliveryAddressesList(
+    String contactId, {
+
+    bool includeArchived = false,
+  }) => _uri(
+    'records/delivery-addresses/contacts/${_seg(contactId)}',
+
+    query: includeArchived ? {'include_archived': 'true'} : null,
+  );
+
+  Uri recordsDeliveryAddressCreate(String contactId) =>
+      _uri('records/delivery-addresses/contacts/${_seg(contactId)}');
+
+  Uri recordsDeliveryAddressGet(String contactId, String addressId) => _uri(
+    'records/delivery-addresses/contacts/${_seg(contactId)}/${_seg(addressId)}',
+  );
+
+  Uri recordsDeliveryAddressUpdate(String contactId, String addressId) =>
+      recordsDeliveryAddressGet(contactId, addressId);
+
+  Uri recordsDeliveryAddressArchive(String contactId, String addressId) =>
+      recordsDeliveryAddressGet(contactId, addressId);
+
+  // ─────────────────────────────────────────────
+
+  // Member-owned Delivery Addresses: ownership resolved by backend UID.
+  Uri recordsMyDeliveryAddressesList({bool includeArchived = false}) => _uri(
+    'records/delivery-addresses/me',
+    query: includeArchived ? {'include_archived': 'true'} : null,
+  );
+
+  Uri recordsMyDeliveryAddressCreate() => _uri('records/delivery-addresses/me');
+
+  Uri recordsMyDeliveryAddressGet(String addressId) =>
+      _uri('records/delivery-addresses/me/${_seg(addressId)}');
+
+  Uri recordsMyDeliveryAddressUpdate(String addressId) =>
+      recordsMyDeliveryAddressGet(addressId);
+
+  Uri recordsMyDeliveryAddressArchive(String addressId) =>
+      recordsMyDeliveryAddressGet(addressId);
 
   // Shared query helpers
 

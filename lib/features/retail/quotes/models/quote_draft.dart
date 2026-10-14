@@ -1,7 +1,7 @@
 // lib/features/retail/quotes/models/quote_draft.dart
 
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
-import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';

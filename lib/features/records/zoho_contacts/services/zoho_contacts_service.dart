@@ -1,19 +1,12 @@
-// lib/features/retail/contacts/services/zoho_contacts_service.dart
+// lib/features/records/zoho_contacts/services/zoho_contacts_service.dart
 
 import 'package:afyakit/shared/utils/utils.dart';
-
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
-
+import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
-
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-
 import 'package:afyakit/core/api/afyakit/providers.dart';
-
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 final zohoContactsServiceProvider = FutureProvider<ZohoContactsService>((

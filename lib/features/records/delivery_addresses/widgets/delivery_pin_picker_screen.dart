@@ -9,7 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
 
 class DeliveryPinPickerScreen extends StatefulWidget {
   const DeliveryPinPickerScreen({

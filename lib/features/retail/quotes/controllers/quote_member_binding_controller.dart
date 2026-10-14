@@ -2,9 +2,9 @@
 
 import 'dart:async';
 
-import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/records/contacts/providers/zoho_contacts_providers.dart';
-import 'package:afyakit/features/records/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/zoho_contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/zoho_contacts/services/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';

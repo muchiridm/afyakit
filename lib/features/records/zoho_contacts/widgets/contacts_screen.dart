@@ -1,4 +1,4 @@
-// lib/features/retail/contacts/widgets/contacts_screen.dart
+// lib/features/records/zoho_contacts/widgets/contacts_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

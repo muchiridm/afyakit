@@ -1,4 +1,4 @@
-// lib/features/retail/contacts/providers/zoho_contacts_providers.dart
+// lib/features/records/zoho_contacts/providers/zoho_contacts_providers.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/records/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/zoho_contacts/services/zoho_contacts_service.dart';
 
 @immutable
 class ZohoMemberCustomerScope {

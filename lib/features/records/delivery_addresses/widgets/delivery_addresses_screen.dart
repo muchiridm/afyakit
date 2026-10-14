@@ -1,36 +1,71 @@
 // lib/features/delivery_addresses/widgets/delivery_addresses_screen.dart
 
-import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/delivery_addresses/controllers/delivery_address_controller.dart';
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
-import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
-import 'package:afyakit/features/delivery_addresses/widgets/delivery_pin_picker_screen.dart';
+import 'package:afyakit/features/records/delivery_addresses/controllers/delivery_address_controller.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_pin_picker_screen.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
+
 import 'package:afyakit/shared/layout/app_page.dart';
 
 class DeliveryAddressesScreen extends ConsumerWidget {
   const DeliveryAddressesScreen({
     super.key,
+
     required this.scope,
+
     this.pickerMode = false,
+
     this.memberMode = false,
   });
 
   final DeliveryAddressScope scope;
+
   final bool pickerMode;
+
   final bool memberMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(deliveryAddressStateProvider(scope));
+
     final controller = ref.read(
       deliveryAddressControllerProvider(scope).notifier,
     );
+
     final launcher = ref.read(deliveryNavigationLauncherProvider);
+
+    final canManageAddresses = memberMode
+        ? scope.isMemberScope
+        : scope.isUsable;
+
+    void addAddress() {
+      if (!canManageAddresses) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              memberMode
+                  ? 'Sign in to an active member account to manage your delivery addresses.'
+                  : 'Select a customer linked to a native Contact before adding an address.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      _showAddressSheet(context, scope: scope, existing: null);
+    }
 
     final ownerLabel = (scope.ownerLabel ?? '').trim();
 
@@ -44,41 +79,54 @@ class DeliveryAddressesScreen extends ConsumerWidget {
 
     return AppPage(
       title: title,
+
       showBack: true,
+
       maxWidth: AppLayout.contentMaxWidth,
+
       padding: AppLayout.pagePadding,
+
       scrollable: false,
+
       actions: [
         IconButton(
           tooltip: 'Add address',
-          onPressed: scope.isUsable
-              ? () => _showAddressSheet(context, scope: scope, existing: null)
-              : null,
+
+          onPressed: addAddress,
+
           icon: const Icon(Icons.add),
         ),
       ],
+
       fab: FloatingActionButton(
-        onPressed: scope.isUsable
-            ? () => _showAddressSheet(context, scope: scope, existing: null)
-            : null,
+        onPressed: addAddress,
+
         child: const Icon(Icons.add),
       ),
+
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+
         children: [
           if (memberMode && !pickerMode) ...[
             const _MemberDeliveryInfoCard(),
+
             const SizedBox(height: 12),
           ],
+
           Expanded(
             child: Builder(
               builder: (_) {
-                if (!scope.isUsable) {
-                  return const Center(
+                if (!canManageAddresses) {
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
+
                       child: Text(
-                        'Select a customer before managing delivery addresses.',
+                        memberMode
+                            ? 'Sign in to an active member account to manage your delivery addresses.'
+                            : 'Select a customer linked to a native Contact before managing delivery addresses.',
+
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -89,36 +137,65 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                if (state.error != null && state.items.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+
+                        children: [
+                          Text(state.error!, textAlign: TextAlign.center),
+
+                          const SizedBox(height: 12),
+
+                          OutlinedButton(
+                            onPressed: () => controller.refresh(),
+
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 if (!state.hasActiveItems) {
                   return _EmptyState(
                     pickerMode: pickerMode,
-                    onAddPressed: () => _showAddressSheet(
-                      context,
-                      scope: scope,
-                      existing: null,
-                    ),
+
+                    onAddPressed: addAddress,
                   );
                 }
 
                 return ListView.builder(
                   padding: EdgeInsets.zero,
+
                   itemCount: state.activeItems.length,
+
                   itemBuilder: (context, index) {
                     final address = state.activeItems[index];
 
                     return _AddressCard(
                       address: address,
+
                       pickerMode: pickerMode,
+
                       onSelect: pickerMode
                           ? () => Navigator.of(
                               context,
                             ).pop<DeliveryAddress>(address)
                           : null,
+
                       onEdit: () => _showAddressSheet(
                         context,
+
                         scope: scope,
+
                         existing: address,
                       ),
+
                       onNavigate: address.pinLocation == null
                           ? null
                           : () async {
@@ -126,11 +203,13 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                                 await launcher.navigateTo(address);
                               } catch (e) {
                                 if (!context.mounted) return;
+
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text(e.toString())),
                                 );
                               }
                             },
+
                       onSetDefault: () async {
                         await controller.setDefault(address.id);
 
@@ -139,6 +218,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                         final error = ref.read(
                           deliveryAddressErrorProvider(scope),
                         );
+
                         if (error == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -147,8 +227,10 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                           );
                         }
                       },
+
                       onArchive: () => _confirmArchive(
                         context,
+
                         onConfirm: () async {
                           await controller.archive(address.id);
 
@@ -157,6 +239,7 @@ class DeliveryAddressesScreen extends ConsumerWidget {
                           final error = ref.read(
                             deliveryAddressErrorProvider(scope),
                           );
+
                           if (error == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Address removed')),
@@ -177,35 +260,47 @@ class DeliveryAddressesScreen extends ConsumerWidget {
 
   void _showAddressSheet(
     BuildContext context, {
+
     required DeliveryAddressScope scope,
+
     DeliveryAddress? existing,
   }) {
     showModalBottomSheet<void>(
       context: context,
+
       isScrollControlled: true,
+
       useSafeArea: true,
+
       builder: (_) => _AddressFormSheet(scope: scope, existing: existing),
     );
   }
 
   Future<void> _confirmArchive(
     BuildContext context, {
+
     required Future<void> Function() onConfirm,
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
+
       builder: (_) => AlertDialog(
         title: const Text('Remove address?'),
+
         content: const Text(
           'This address will be archived and removed from the active list.',
         ),
+
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
+
             child: const Text('Cancel'),
           ),
+
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
+
             child: const Text('Remove'),
           ),
         ],
@@ -227,13 +322,18 @@ class _MemberDeliveryInfoCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
+
       child: Padding(
         padding: const EdgeInsets.all(14),
+
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
+
           children: [
             Icon(Icons.location_on_outlined, color: theme.colorScheme.primary),
+
             const SizedBox(width: 12),
+
             const Expanded(
               child: Text(
                 'Save home, work, and family delivery locations so they are '
@@ -251,20 +351,32 @@ class _MemberDeliveryInfoCard extends StatelessWidget {
 class _AddressCard extends StatelessWidget {
   const _AddressCard({
     required this.address,
+
     required this.pickerMode,
+
     required this.onEdit,
+
     required this.onNavigate,
+
     required this.onSetDefault,
+
     required this.onArchive,
+
     this.onSelect,
   });
 
   final DeliveryAddress address;
+
   final bool pickerMode;
+
   final VoidCallback? onSelect;
+
   final VoidCallback onEdit;
+
   final VoidCallback? onNavigate;
+
   final VoidCallback onSetDefault;
+
   final VoidCallback onArchive;
 
   @override
@@ -273,34 +385,46 @@ class _AddressCard extends StatelessWidget {
 
     final cardChild = Padding(
       padding: const EdgeInsets.all(12),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+
         children: [
           Row(
             children: [
               Expanded(
                 child: Text(
                   address.label,
+
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
+
               if (address.isDefault) const Chip(label: Text('Default')),
+
               if (pickerMode) ...[
                 const SizedBox(width: 8),
+
                 const Icon(Icons.chevron_right),
               ],
             ],
           ),
+
           const SizedBox(height: 6),
+
           Text(address.recipientDisplay),
+
           if (address.fullDisplay.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
+
             Text(address.fullDisplay),
           ],
+
           if (address.pinLocation != null) ...[
             const SizedBox(height: 6),
+
             Text(
               address.pinLocation!.placeName?.trim().isNotEmpty == true
                   ? 'Pin: ${address.pinLocation!.placeName}'
@@ -309,30 +433,44 @@ class _AddressCard extends StatelessWidget {
                         '${address.pinLocation!.longitude.toStringAsFixed(6)}',
             ),
           ],
+
           if ((address.instructions ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 6),
+
             Text('Instructions: ${address.instructions!.trim()}'),
           ],
+
           if (!pickerMode) ...[
             const SizedBox(height: 10),
+
             Wrap(
               spacing: 8,
+
               runSpacing: 8,
+
               children: [
                 TextButton.icon(
                   onPressed: onEdit,
+
                   icon: const Icon(Icons.edit_outlined),
+
                   label: const Text('Edit'),
                 ),
+
                 TextButton.icon(
                   onPressed: onNavigate,
+
                   icon: const Icon(Icons.navigation_outlined),
+
                   label: const Text('Navigate'),
                 ),
+
                 TextButton(
                   onPressed: address.isDefault ? null : onSetDefault,
+
                   child: const Text('Set Default'),
                 ),
+
                 TextButton(onPressed: onArchive, child: const Text('Remove')),
               ],
             ),
@@ -343,10 +481,13 @@ class _AddressCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+
       child: pickerMode
           ? InkWell(
               borderRadius: BorderRadius.circular(12),
+
               onTap: onSelect,
+
               child: cardChild,
             )
           : cardChild,
@@ -358,6 +499,7 @@ class _AddressFormSheet extends ConsumerStatefulWidget {
   const _AddressFormSheet({required this.scope, this.existing});
 
   final DeliveryAddressScope scope;
+
   final DeliveryAddress? existing;
 
   @override
@@ -368,14 +510,9 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _labelController;
+  late final TextEditingController _locationController;
   late final TextEditingController _recipientNameController;
   late final TextEditingController _recipientPhoneController;
-  late final TextEditingController _line1Controller;
-  late final TextEditingController _line2Controller;
-  late final TextEditingController _areaController;
-  late final TextEditingController _cityController;
-  late final TextEditingController _countyController;
-  late final TextEditingController _landmarkController;
   late final TextEditingController _instructionsController;
 
   late bool _isDefault;
@@ -386,26 +523,22 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   @override
   void initState() {
     super.initState();
-
     final existing = widget.existing;
-
     _labelController = TextEditingController(text: existing?.label ?? '');
+    _locationController = TextEditingController(
+      // Legacy address components are retained separately on edits.
+      // Do not concatenate them into line1: the API caps line1 at 250 chars.
+      text: existing?.line1 ?? '',
+    );
     _recipientNameController = TextEditingController(
       text: existing?.recipientName ?? '',
     );
     _recipientPhoneController = TextEditingController(
       text: existing?.recipientPhone ?? '',
     );
-    _line1Controller = TextEditingController(text: existing?.line1 ?? '');
-    _line2Controller = TextEditingController(text: existing?.line2 ?? '');
-    _areaController = TextEditingController(text: existing?.area ?? '');
-    _cityController = TextEditingController(text: existing?.city ?? '');
-    _countyController = TextEditingController(text: existing?.county ?? '');
-    _landmarkController = TextEditingController(text: existing?.landmark ?? '');
     _instructionsController = TextEditingController(
       text: existing?.instructions ?? '',
     );
-
     _isDefault = existing?.isDefault ?? false;
     _pinLocation = existing?.pinLocation;
   }
@@ -413,14 +546,9 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   @override
   void dispose() {
     _labelController.dispose();
+    _locationController.dispose();
     _recipientNameController.dispose();
     _recipientPhoneController.dispose();
-    _line1Controller.dispose();
-    _line2Controller.dispose();
-    _areaController.dispose();
-    _cityController.dispose();
-    _countyController.dispose();
-    _landmarkController.dispose();
     _instructionsController.dispose();
     super.dispose();
   }
@@ -428,11 +556,20 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
   @override
   Widget build(BuildContext context) {
     final busy = ref.watch(deliveryAddressBusyProvider(widget.scope));
+    final error = ref.watch(deliveryAddressErrorProvider(widget.scope));
     final controller = ref.read(
       deliveryAddressControllerProvider(widget.scope).notifier,
     );
-
-    final title = _isEdit ? 'Edit Address' : 'Add Address';
+    final existing = widget.existing;
+    final hasLegacyLocation =
+        existing != null &&
+        [
+          existing.line2,
+          existing.area,
+          existing.city,
+          existing.county,
+          existing.landmark,
+        ].any((value) => (value ?? '').trim().isNotEmpty);
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -454,7 +591,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      title,
+                      _isEdit ? 'Edit Address' : 'Add Address',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -462,50 +599,28 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
                     const SizedBox(height: 16),
                     _field(
                       controller: _labelController,
-                      label: 'Label',
-                      hint: 'Home, Office, Mum\'s place',
+                      label: 'Address label',
+                      hint: "Home, Office, Mum's place",
                       required: true,
+                      maxLength: 80,
                     ),
                     _field(
-                      controller: _recipientNameController,
-                      label: 'Recipient Name',
+                      controller: _locationController,
+                      label: 'Delivery location',
+                      hint: 'Estate, building, road or town',
                       required: true,
+                      maxLength: 250,
+                      maxLines: 2,
                     ),
-                    _field(
-                      controller: _recipientPhoneController,
-                      label: 'Recipient Phone',
-                      keyboardType: TextInputType.phone,
-                      required: true,
-                    ),
-                    _field(
-                      controller: _line1Controller,
-                      label: 'Address Line 1',
-                      hint: 'Building, house, road, street',
-                      required: true,
-                    ),
-                    _field(
-                      controller: _line2Controller,
-                      label: 'Address Line 2',
-                      hint: 'Apartment, floor, unit',
-                    ),
-                    _field(
-                      controller: _areaController,
-                      label: 'Area / Estate',
-                      required: true,
-                    ),
-                    _field(
-                      controller: _cityController,
-                      label: 'City / Town',
-                      required: true,
-                    ),
-                    _field(controller: _countyController, label: 'County'),
-                    _field(controller: _landmarkController, label: 'Landmark'),
-                    _field(
-                      controller: _instructionsController,
-                      label: 'Delivery Instructions',
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 4),
+                    if (hasLegacyLocation) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          'Other saved location details will be kept unchanged.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
                     _PinTile(
                       pinLocation: _pinLocation,
                       busy: busy,
@@ -514,15 +629,45 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
                           ? null
                           : () => setState(() => _pinLocation = null),
                     ),
+                    const SizedBox(height: 8),
+                    _field(
+                      controller: _recipientNameController,
+                      label: 'Recipient name',
+                      required: true,
+                      maxLength: 160,
+                    ),
+                    _field(
+                      controller: _recipientPhoneController,
+                      label: 'Recipient phone',
+                      keyboardType: TextInputType.phone,
+                      required: true,
+                      maxLength: 40,
+                    ),
+                    _field(
+                      controller: _instructionsController,
+                      label: 'Additional instructions (optional)',
+                      hint: 'Gate number, landmark, delivery directions',
+                      maxLines: 3,
+                      maxLength: 500,
+                    ),
                     SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
                       value: _isDefault,
                       onChanged: busy
                           ? null
                           : (value) => setState(() => _isDefault = value),
-                      title: const Text('Set as default'),
+                      title: const Text('Set as default address'),
                     ),
                     const SizedBox(height: 12),
+                    if (error != null) ...[
+                      Text(
+                        error,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FilledButton(
                       onPressed: busy ? null : () => _submit(controller),
                       child: busy
@@ -549,35 +694,30 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
         builder: (_) => DeliveryPinPickerScreen(initialPin: _pinLocation),
       ),
     );
-
     if (!mounted || picked == null) return;
-
-    setState(() {
-      _pinLocation = picked;
-    });
+    setState(() => _pinLocation = picked);
   }
 
   Future<void> _submit(DeliveryAddressController controller) async {
     if (!_formKey.currentState!.validate()) return;
-
+    final existing = widget.existing;
     final result = await controller.submitForm(
-      existing: widget.existing,
+      existing: existing,
       label: _labelController.text,
       recipientName: _recipientNameController.text,
       recipientPhone: _recipientPhoneController.text,
-      line1: _line1Controller.text,
-      line2: _line2Controller.text,
-      area: _areaController.text,
-      city: _cityController.text,
-      county: _countyController.text,
-      landmark: _landmarkController.text,
+      line1: _locationController.text,
+      // Older structured fields must survive editing through the new form.
+      line2: existing?.line2,
+      area: existing?.area,
+      city: existing?.city,
+      county: existing?.county,
+      landmark: existing?.landmark,
       instructions: _instructionsController.text,
       pinLocation: _pinLocation,
       isDefault: _isDefault,
     );
-
     if (!mounted) return;
-
     if (result != null) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -592,6 +732,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
     String? hint,
     TextInputType? keyboardType,
     int maxLines = 1,
+    int? maxLength,
     bool required = false,
   }) {
     return Padding(
@@ -600,14 +741,15 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
         controller: controller,
         keyboardType: keyboardType,
         maxLines: maxLines,
-        validator: required
-            ? (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Required';
-                }
-                return null;
-              }
-            : null,
+        maxLength: maxLength,
+        validator: (value) {
+          final input = (value ?? '').trim();
+          if (required && input.isEmpty) return 'Required';
+          if (maxLength != null && input.length > maxLength) {
+            return 'Maximum $maxLength characters';
+          }
+          return null;
+        },
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -621,14 +763,20 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
 class _PinTile extends StatelessWidget {
   const _PinTile({
     required this.pinLocation,
+
     required this.busy,
+
     required this.onPick,
+
     required this.onClear,
   });
 
   final DeliveryPinLocation? pinLocation;
+
   final bool busy;
+
   final VoidCallback onPick;
+
   final VoidCallback? onClear;
 
   @override
@@ -646,20 +794,28 @@ class _PinTile extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+
       child: ListTile(
         leading: const Icon(Icons.location_on_outlined),
+
         title: const Text('Pin location'),
+
         subtitle: Text(subtitle),
+
         trailing: Wrap(
           spacing: 8,
+
           children: [
             if (hasPin)
               TextButton(
                 onPressed: busy ? null : onClear,
+
                 child: const Text('Clear'),
               ),
+
             TextButton(
               onPressed: busy ? null : onPick,
+
               child: Text(hasPin ? 'Change' : 'Drop Pin'),
             ),
           ],
@@ -673,6 +829,7 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.pickerMode, required this.onAddPressed});
 
   final bool pickerMode;
+
   final VoidCallback onAddPressed;
 
   @override
@@ -680,20 +837,27 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
+
         child: Column(
           mainAxisSize: MainAxisSize.min,
+
           children: [
             Text(
               pickerMode
                   ? 'No delivery addresses yet.\nAdd one to continue.'
                   : 'No delivery addresses yet.\nTap + to add one.',
+
               textAlign: TextAlign.center,
             ),
+
             if (pickerMode) ...[
               const SizedBox(height: 12),
+
               FilledButton.icon(
                 onPressed: onAddPressed,
+
                 icon: const Icon(Icons.add),
+
                 label: const Text('Add Address'),
               ),
             ],

@@ -12,6 +12,7 @@ class NativeContact {
     this.verifiedPhone,
     this.mobile,
     this.email,
+    this.verifiedEmail,
     this.accountNumber,
     this.idNumber,
     this.isInsurancePayer = false,
@@ -27,10 +28,23 @@ class NativeContact {
 
   /// Read-only identity phone confirmed by AuthUser verification.
   final String? verifiedPhone;
+
+  /// Read-only verified login email for the current application.
+  ///
+  /// Supplied by the Native Contacts API from the canonical
+  /// AuthUser.emailsByApp entry for the server-authorised app.
+  ///
+  /// This is not a tenant-wide email and cannot be edited here.
+  final String? verifiedEmail;
+
+  /// General contact details, independently editable where authorised.
   final String? phone;
   final String? mobile;
   final String? email;
+
+  /// Canonical account number, assigned through the account workflow.
   final String? accountNumber;
+
   final String? idNumber;
   final bool isInsurancePayer;
 
@@ -46,6 +60,7 @@ class NativeContact {
     companyName: json['company_name']?.toString(),
     phone: json['phone']?.toString(),
     verifiedPhone: json['verified_phone']?.toString(),
+    verifiedEmail: json['verified_email']?.toString(),
     mobile: json['mobile']?.toString(),
     email: json['email']?.toString(),
     accountNumber: json['account_number']?.toString(),

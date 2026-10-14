@@ -1,4 +1,4 @@
-// lib/features/retail/contacts/widgets/contact_editor_sheet.dart
+// lib/features/records/zoho_contacts/widgets/contact_editor_sheet.dart
 
 import 'package:afyakit/features/records/profiles/widgets/profile_form_dialog.dart';
 import 'package:flutter/material.dart';

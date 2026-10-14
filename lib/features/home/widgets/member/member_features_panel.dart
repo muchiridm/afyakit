@@ -1,11 +1,13 @@
+// lib/features/home/widgets/member/member_features_panel.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/providers/app_feature_providers.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
-import 'package:afyakit/features/delivery_addresses/providers/delivery_address_providers.dart';
-import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
+import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
+import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_shared.dart';
 import 'package:afyakit/features/records/native_contacts/widgets/member_contact_screen.dart';
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';

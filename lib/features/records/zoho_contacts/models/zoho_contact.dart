@@ -1,4 +1,4 @@
-// lib/features/retail/contacts/models/zoho_contact.dart
+// lib/features/records/zoho_contacts/models/zoho_contact.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/shared/utils/utils.dart';

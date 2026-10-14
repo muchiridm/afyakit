@@ -2,7 +2,7 @@
 
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
 
 class DeliveryNavigationLauncher {
   Future<void> navigateTo(DeliveryAddress address) async {

@@ -1,5 +1,6 @@
 // lib/features/retail/quotes/widgets/quote_editor_details_sheet.dart
 
+import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
 import 'package:afyakit/features/records/profiles/models/profile_models.dart';
 import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
@@ -8,14 +9,14 @@ import 'package:afyakit/features/clinical/prescriptions/models/prescription_mode
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
 import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
-import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
-import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
+import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/records/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/records/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/zoho_contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
@@ -430,23 +431,29 @@ class _QuoteEditorDetailsSheetState
   }
 
   Future<void> _pickDeliveryLocation() async {
-    final bool authenticated = await widget.onEnsureAuthed();
+    final authenticated = await widget.onEnsureAuthed();
     if (!authenticated || !mounted) return;
 
-    final DeliveryAddressScope? scope = _deliveryAddressScope();
+    final scope = _deliveryAddressScope();
 
     if (scope == null || !scope.isUsable) {
-      _snack('Select a customer before choosing a delivery location.');
+      _snack(
+        widget.isStaffMode
+            ? 'This customer does not yet have a verified native Contact link.'
+            : 'Your delivery addresses are not available. Please try signing in again.',
+      );
       return;
     }
 
-    final DeliveryAddress? result = await Navigator.of(context)
-        .push<DeliveryAddress>(
-          MaterialPageRoute<DeliveryAddress>(
-            builder: (_) =>
-                DeliveryAddressesScreen(pickerMode: true, scope: scope),
-          ),
-        );
+    final result = await Navigator.of(context).push<DeliveryAddress>(
+      MaterialPageRoute<DeliveryAddress>(
+        builder: (_) => DeliveryAddressesScreen(
+          pickerMode: true,
+          memberMode: !widget.isStaffMode,
+          scope: scope,
+        ),
+      ),
+    );
 
     if (result == null || !mounted) return;
 
@@ -459,25 +466,19 @@ class _QuoteEditorDetailsSheetState
   }
 
   DeliveryAddressScope? _deliveryAddressScope() {
-    final String tenantId = widget.tenantId.trim();
-    final String accountNumber = (_draft.contact?.accountNumber ?? '').trim();
-    final String contactId = (_draft.contact?.contactId ?? '').trim();
-    final String customerName = (_draft.contact?.title ?? '').trim();
+    final tenantId = widget.tenantId.trim();
 
-    final String ownerUid = accountNumber.isNotEmpty
-        ? 'acct_$accountNumber'
-        : contactId.isNotEmpty
-        ? 'zoho_$contactId'
-        : '';
+    if (tenantId.isEmpty) return null;
 
-    if (tenantId.isEmpty || ownerUid.isEmpty) return null;
+    // Members use their authenticated identity.
+    // The backend resolves their native Contact through /me.
+    if (!widget.isStaffMode) {
+      return ref.read(currentUserDeliveryAddressScopeProvider);
+    }
 
-    return DeliveryAddressScope(
-      tenantId: tenantId,
-      ownerUid: ownerUid,
-      ownerAccountNumber: accountNumber.isEmpty ? null : accountNumber,
-      ownerLabel: customerName.isEmpty ? null : customerName,
-    );
+    // Staff must use a verified native Contact ID.
+    // A Zoho Contact ID must never be substituted here.
+    return null;
   }
 
   Future<void> _pickQuoteDate() async {
