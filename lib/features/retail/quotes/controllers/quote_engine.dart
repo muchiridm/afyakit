@@ -1,12 +1,10 @@
 // lib/features/retail/quotes/controllers/quote_engine.dart
-
 import 'dart:typed_data';
-
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
-import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
@@ -19,9 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QuoteEngine {
   QuoteEngine(this.ref);
-
   final Ref ref;
-
   QuoteLinesController get _linesCtl {
     return ref.read(quoteLinesControllerProvider.notifier);
   }
@@ -35,7 +31,6 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Session helpers ─────────────────────────
-
   bool isEditingId(String? id) {
     return _cleanNullable(id) != null;
   }
@@ -48,12 +43,9 @@ class QuoteEngine {
     final String previousEditing = _cleanNullable(prevEditingId) ?? '';
     final String previousLoaded = _cleanNullable(prevLoadedId) ?? '';
     final String next = nextEditingId.trim();
-
     final bool hadEditSession =
         previousEditing.isNotEmpty || previousLoaded.isNotEmpty;
-
     if (next.isEmpty && hadEditSession) return true;
-
     return next.isNotEmpty &&
         (previousEditing != next || previousLoaded != next);
   }
@@ -64,14 +56,11 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Quote loading ─────────────────────────
-
   Future<ZohoQuote> loadQuote(String quoteId) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     return (await _svc).get(id);
   }
 
@@ -79,13 +68,11 @@ class QuoteEngine {
     final List<ManualQuoteLine> lines = quote.lineItems
         .map(_manualLineFromZohoLine)
         .toList(growable: false);
-
     _linesCtl.replaceAll(lines);
   }
 
   ManualQuoteLine _manualLineFromZohoLine(ZohoQuoteLineItem line) {
     final String zohoLineId = _cleanNullable(line.lineItemId) ?? '';
-
     return ManualQuoteLine(
       manualId: zohoLineId.isNotEmpty ? 'z_$zohoLineId' : _manualLineId(),
       name: _cleanLineName(line.name),
@@ -99,9 +86,9 @@ class QuoteEngine {
 
   QuoteMetaState metaFromZoho(ZohoQuote quote) {
     final QuoteDraft draft = QuoteDraft.fromZohoQuote(quote);
-
     return QuoteMetaState(
-      contact: _contactFromQuote(quote),
+      zohoContactId: _cleanNullable(quote.customerId),
+      mappedCustomerName: _cleanNullable(quote.customerName),
       reference: _cleanNullable(draft.reference),
       customerNotes: _cleanNullable(draft.customerNotes),
       purchaseContext: quote.purchaseContext,
@@ -119,28 +106,7 @@ class QuoteEngine {
     );
   }
 
-  ZohoContact? _contactFromQuote(ZohoQuote quote) {
-    final String customerId = _cleanNullable(quote.customerId) ?? '';
-    final String customerName = _cleanNullable(quote.customerName) ?? '';
-
-    if (customerId.isEmpty && customerName.isEmpty) {
-      return null;
-    }
-
-    return ZohoContact.fromJson(<String, Object?>{
-      if (customerId.isNotEmpty) 'contact_id': customerId,
-      if (customerId.isNotEmpty) 'contactId': customerId,
-      'contact_type': 'customer',
-      'contactType': 'customer',
-      'display_name': customerName.isNotEmpty ? customerName : 'Customer',
-      'contact_name': customerName.isNotEmpty ? customerName : 'Customer',
-      'customer_name': customerName.isNotEmpty ? customerName : 'Customer',
-      'company_name': customerName.isNotEmpty ? customerName : 'Customer',
-    });
-  }
-
   // ───────────────────────── Validation ─────────────────────────
-
   String? validateForSubmitV2({
     required QuoteMetaState meta,
     required bool requirePrices,
@@ -150,41 +116,39 @@ class QuoteEngine {
       requirePrices: requirePrices,
       isEditing: isEditing,
     );
-
     if (lineError != null) {
       return lineError;
     }
 
-    if (!isEditing && meta.customerIdResolved.trim().isEmpty) {
-      return 'Please pick a customer';
+    if (!isEditing &&
+        (meta.customerIdResolved.isEmpty ||
+            (meta.isInsurancePayment &&
+                (meta.payer?.id ?? '').trim().isEmpty &&
+                (meta.contact?.contactId ?? '').trim().isEmpty))) {
+      return meta.isInsurancePayment
+          ? 'Please select an insurer with a verified accounting mapping'
+          : 'Please select a customer with a verified accounting mapping';
     }
-
     if (meta.quoteDate == null) {
       return 'Quote date is still loading';
     }
-
     if (meta.requiresPatient && !_hasPatientContext(meta)) {
       return 'Please select who the quote is for';
     }
-
     if (!meta.hasFulfilmentContext) {
       return meta.fulfilmentMethod.isDelivery
           ? 'Please select a delivery location'
           : 'Please select delivery or pickup';
     }
-
     if (meta.requiresMembership && !meta.hasInsuranceContext) {
       return 'Please select an insurance membership';
     }
-
     if (meta.requiresPrescription && !meta.hasPrescriptionContext) {
       return 'Please select or upload a prescription';
     }
-
     if (meta.isCompany && meta.isInsurancePayment) {
       return 'Insurance is only available for private-use quotes';
     }
-
     return null;
   }
 
@@ -195,29 +159,23 @@ class QuoteEngine {
     if (_lines.lines.isEmpty) {
       return isEditing ? 'Quote has no items' : 'Add at least one item';
     }
-
     final bool hasUnnamedManual = _lines.lines.whereType<ManualQuoteLine>().any(
       (ManualQuoteLine line) {
         return line.name.trim().isEmpty;
       },
     );
-
     if (hasUnnamedManual) {
       return 'Some items are missing a name. Please edit them.';
     }
-
     final int missingPrices = _lines.missingPriceLineCount;
-
     if (requirePrices && missingPrices > 0) {
       return '$missingPrices item(s) missing price.';
     }
-
     return null;
   }
 
   bool _hasPatientContext(QuoteMetaState meta) {
     final String profileId = _cleanNullable(meta.resolvedProfileId) ?? '';
-
     return profileId.isNotEmpty && meta.patientSnapshot != null;
   }
 
@@ -226,26 +184,24 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Payload building ─────────────────────────
-
   QuoteDraft buildPayloadDraftFromMeta({
     required QuoteMetaState meta,
     required bool requirePrices,
   }) {
-    final ZohoContact? contact = meta.contact;
-
-    final String customerId = _cleanNullable(contact?.contactId) ?? '';
-    final String customerName = _cleanNullable(contact?.title) ?? '';
-
+    final ZohoContact? contact = meta.contact; // historical editor display only
+    final String customerId = meta.customerIdResolved;
+    final String customerName = meta.displayContactName;
+    final String? nativeId = _cleanNullable(meta.nativeContactId);
     final QuotePaymentContext paymentContext = meta.isCompany
         ? QuotePaymentContext.directPay
         : meta.effectivePaymentContext;
-
     final SalesDocumentAddress? deliveryAddress =
         meta.fulfilmentMethod.isDelivery ? meta.deliveryAddress : null;
-
     return QuoteDraft(
       contact: contact,
       contactId: customerId.isEmpty ? null : customerId,
+      nativeContactId: nativeId,
+      accountNumber: null,
       contactName: customerName.isEmpty ? null : customerName,
       reference: _cleanNullable(meta.reference),
       customerNotes: _cleanNullable(meta.customerNotes),
@@ -286,13 +242,11 @@ class QuoteEngine {
     final String? description = _cleanNullable(line.effectiveDescription);
     final int quantity = _safeQty(line.qty);
     final num rate = requirePrices ? _safeRate(line.effectiveRate) : 0;
-
     final DiSalesTile tile = _toDiSalesTileFromCatalogLine(
       line,
       name: name,
       description: description,
     );
-
     return QuoteLineDraft(
       tile: tile,
       quantity: quantity,
@@ -311,14 +265,12 @@ class QuoteEngine {
     final String? description = _cleanNullable(line.description);
     final int quantity = _safeQty(line.qty);
     final num rate = requirePrices ? _safeRate(line.rate) : 0;
-
     final DiSalesTile tile = DiSalesTile.fallbackFromName(
       name: name,
       description: description,
       canonKey: line.manualId,
       groupKey: line.manualId,
     );
-
     return QuoteLineDraft(
       tile: tile,
       quantity: quantity,
@@ -330,7 +282,6 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Service calls ─────────────────────────
-
   Future<ZohoQuote> create(
     QuoteDraft payload, {
     DateTime? quoteDate,
@@ -417,7 +368,6 @@ class QuoteEngine {
   }
 
   // ───────────────────────── Mapping helpers ─────────────────────────
-
   static DiSalesTile _toDiSalesTileFromCatalogLine(
     CatalogQuoteLine line, {
     required String name,
@@ -425,7 +375,6 @@ class QuoteEngine {
   }) {
     final CatalogTile tile = line.tile;
     final String key = tile.id;
-
     return DiSalesTile(
       canonKey: key,
       groupKey: key,
@@ -456,7 +405,6 @@ class QuoteEngine {
   static int _safeQty(int value) {
     if (value < 1) return 1;
     if (value > 9999) return 9999;
-
     return value;
   }
 
@@ -464,7 +412,6 @@ class QuoteEngine {
     if (value.isNaN || value.isInfinite || value < 0) {
       return 0;
     }
-
     return value;
   }
 }

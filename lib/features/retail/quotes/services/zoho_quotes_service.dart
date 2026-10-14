@@ -1,11 +1,11 @@
 // lib/features/retail/quotes/services/zoho_quotes_service.dart
-
 import 'dart:typed_data';
-
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
@@ -23,24 +23,21 @@ final zohoQuotesServiceProvider = FutureProvider<ZohoQuotesService>((
 ) async {
   final String tenantId = ref.watch(tenantIdProvider);
   final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
+  final bool memberMode =
+      ref.watch(quoteContactPolicyProvider) == QuoteContactPolicy.memberScoped;
   final AfyaKitClient api = await ref.watch(afyakitClientFutureProvider.future);
-
-  return ZohoQuotesService(api: api, routes: routes);
+  return ZohoQuotesService(api: api, routes: routes, memberMode: memberMode);
 });
 
 class QuoteConversionResult {
   const QuoteConversionResult({required this.invoice, this.claimPackId});
-
   final JsonMap invoice;
   final String? claimPackId;
-
   factory QuoteConversionResult.fromJson(JsonMap json) {
     final Object? rawInvoice = json['invoice'];
-
     if (rawInvoice is! Map) {
       throw StateError('Unexpected response: missing "invoice"');
     }
-
     return QuoteConversionResult(
       invoice: rawInvoice.cast<String, dynamic>(),
       claimPackId: ZohoQuotesService.asCleanStringOrNull(
@@ -51,41 +48,56 @@ class QuoteConversionResult {
 }
 
 class ZohoQuotesService {
-  ZohoQuotesService({required this.api, required this.routes});
-
+  ZohoQuotesService({
+    required this.api,
+    required this.routes,
+    this.memberMode = false,
+  });
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
 
-  static final DateFormat _zohoDateFmt = DateFormat('yyyy-MM-dd');
+  /// UI-requested capacity. The backend independently validates access.
+  final bool memberMode;
 
+  /// Add member scope without removing existing route query parameters.
+  Uri _scopedUri(Uri uri, {bool? mine}) {
+    if (!(mine ?? memberMode)) return uri;
+    return uri.replace(
+      queryParameters: <String, String>{
+        ...uri.queryParameters,
+        'scope': 'mine',
+      },
+    );
+  }
+
+  static final DateFormat _zohoDateFmt = DateFormat('yyyy-MM-dd');
   Future<List<ZohoQuote>> list({
     int limit = 50,
     int page = 1,
     String? q,
     String? accountNumber,
     String? customerId,
+    bool? mine,
   }) async {
     final String query = (q ?? '').trim();
     final String account = (accountNumber ?? '').trim();
     final String customer = (customerId ?? '').trim();
-
-    final Uri uri = routes.retailListQuotes(
-      limit: limit,
-      page: page,
-      q: query.isEmpty ? null : query,
-      accountNumber: account.isEmpty ? null : account,
-      customerId: customer.isEmpty ? null : customer,
+    final Uri uri = _scopedUri(
+      routes.retailListQuotes(
+        limit: limit,
+        page: page,
+        q: query.isEmpty ? null : query,
+        accountNumber: account.isEmpty ? null : account,
+        customerId: customer.isEmpty ? null : customer,
+      ),
+      mine: mine,
     );
-
     final Response<dynamic> response = await api.getUri(uri);
-
     final JsonMap data = _asJsonMap(response.data);
     final Object? rawQuotes = data['quotes'];
-
     if (rawQuotes is! List) {
       return const <ZohoQuote>[];
     }
-
     return rawQuotes
         .whereType<Map>()
         .map((Map<dynamic, dynamic> map) {
@@ -94,51 +106,39 @@ class ZohoQuotesService {
         .toList(growable: false);
   }
 
-  Future<ZohoQuote> get(String quoteId) async {
+  Future<ZohoQuote> get(String quoteId, {bool? mine}) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
-    final Uri uri = routes.retailGetQuote(id);
+    final Uri uri = _scopedUri(routes.retailGetQuote(id), mine: mine);
     final Response<dynamic> response = await api.getUri(uri);
-
     final JsonMap data = _asJsonMap(response.data);
     final Object? rawQuote = data['quote'];
-
     if (rawQuote is Map) {
       return ZohoQuote.fromJson(rawQuote.cast<String, dynamic>());
     }
-
     throw StateError('Unexpected response: missing "quote"');
   }
 
-  Future<ZohoQuote?> getOrNull(String quoteId) async {
+  Future<ZohoQuote?> getOrNull(String quoteId, {bool? mine}) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       return null;
     }
-
-    final Uri uri = routes.retailGetQuote(id);
-
+    final Uri uri = _scopedUri(routes.retailGetQuote(id), mine: mine);
     try {
       final Response<dynamic> response = await api.getUri(uri);
-
       final JsonMap data = _asJsonMap(response.data);
       final Object? rawQuote = data['quote'];
-
       if (rawQuote is Map) {
         return ZohoQuote.fromJson(rawQuote.cast<String, dynamic>());
       }
-
       throw StateError('Unexpected response: missing "quote"');
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) {
         return null;
       }
-
       rethrow;
     }
   }
@@ -147,6 +147,7 @@ class ZohoQuotesService {
     QuoteDraft draft, {
     DateTime? quoteDate,
     DateTime? expiryDate,
+    bool? mine,
   }) async {
     final JsonMap body = _buildDraftPayload(
       draft,
@@ -157,18 +158,13 @@ class ZohoQuotesService {
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
-
-    final Uri uri = routes.retailCreateQuote();
-
+    final Uri uri = _scopedUri(routes.retailCreateQuote(), mine: mine);
     final Response<dynamic> response = await api.postUri(uri, data: body);
-
     final JsonMap data = _asJsonMap(response.data);
     final Object? rawQuote = data['quote'];
-
     if (rawQuote is Map) {
       return ZohoQuote.fromJson(rawQuote.cast<String, dynamic>());
     }
-
     throw StateError('Unexpected response: missing "quote"');
   }
 
@@ -179,11 +175,9 @@ class ZohoQuotesService {
     DateTime? expiryDate,
   }) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     final JsonMap body = _buildDraftPayload(
       draft,
       requireCustomer: false,
@@ -193,70 +187,54 @@ class ZohoQuotesService {
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
-
     final Uri uri = routes.retailUpdateQuote(id);
-
     final Response<dynamic> response = await api.putUri(uri, data: body);
-
     final JsonMap data = _asJsonMap(response.data);
     final Object? rawQuote = data['quote'];
-
     if (rawQuote is Map) {
       return ZohoQuote.fromJson(rawQuote.cast<String, dynamic>());
     }
-
     throw StateError('Unexpected response: missing "quote"');
   }
 
   Future<void> delete(String quoteId) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     await api.deleteUri(routes.retailDeleteQuote(id));
   }
 
-  Future<Uint8List> getPdf(String quoteId) async {
+  Future<Uint8List> getPdf(String quoteId, {bool? mine}) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     final Response<dynamic> response = await api.getUri(
-      routes.retailQuotePdf(id),
+      _scopedUri(routes.retailQuotePdf(id), mine: mine),
       options: Options(
         responseType: ResponseType.bytes,
         headers: const <String, String>{'Accept': 'application/pdf'},
       ),
     );
-
     final Object? data = response.data;
-
     if (data is Uint8List) {
       return data;
     }
-
     if (data is List<int>) {
       return Uint8List.fromList(data);
     }
-
     throw StateError('Expected PDF bytes but got ${data.runtimeType}');
   }
 
   Future<void> email(String quoteId, {ZohoEmailDraft? draft}) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     final Map<String, Object?> payload = _pruneEmailJson(
       draft?.toJson() ?? const <String, Object?>{},
     );
-
     await api.postUri(
       routes.retailSendQuote(id),
       data: payload.isEmpty ? null : payload,
@@ -265,11 +243,9 @@ class ZohoQuotesService {
 
   Future<void> markSent(String quoteId) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     await api.postUri(routes.retailMarkQuoteSent(id));
   }
 
@@ -277,7 +253,6 @@ class ZohoQuotesService {
     if (draft != null) {
       await email(quoteId, draft: draft);
     }
-
     await markSent(quoteId);
   }
 
@@ -295,15 +270,11 @@ class ZohoQuotesService {
     SalesDocumentAddress? deliveryAddress,
   }) async {
     final String id = quoteId.trim();
-
     if (id.isEmpty) {
       throw StateError('quoteId is empty');
     }
-
     final String? cleanMembershipId = asCleanStringOrNull(membershipId);
-
     final String? cleanPrescriptionId = asCleanStringOrNull(prescriptionId);
-
     final Map<String, Object?> body = <String, Object?>{
       if (invoiceDate != null)
         'invoice_date': _zohoDateFmt.format(_dateOnly(invoiceDate)),
@@ -316,12 +287,10 @@ class ZohoQuotesService {
       if (cleanMembershipId != null) 'membership_id': cleanMembershipId,
       if (cleanPrescriptionId != null) 'prescription_id': cleanPrescriptionId,
     };
-
     final Response<dynamic> response = await api.postUri(
       routes.retailConvertQuoteToInvoice(id),
       data: body.isEmpty ? null : body,
     );
-
     return QuoteConversionResult.fromJson(_asJsonMap(response.data));
   }
 
@@ -354,53 +323,47 @@ class ZohoQuotesService {
     DateTime? expiryDate,
   }) {
     final String customerId = draft.customerIdResolved.trim();
-
+    final String accountNumber = draft.accountNumberResolved.trim();
+    // Member direct-pay creation is scoped by the authenticated backend identity.
+    // Staff and insurance creation must supply a payer; backend enforces this.
     if (requireCustomer && customerId.isEmpty) {
-      throw StateError('Please select a customer before requesting a quote.');
+      throw StateError(
+        draft.isInsurancePayment
+            ? 'Please select an insurer with a verified Zoho mapping.'
+            : 'Please select a customer with a verified Zoho mapping.',
+      );
     }
-
     if (!draft.hasLines) {
       throw StateError(
         'Please add at least one item before requesting a quote.',
       );
     }
-
     final String? quoteDateValue = quoteDate == null
         ? null
         : _zohoDateFmt.format(_dateOnly(quoteDate));
-
     final String? expiryDateValue = expiryDate == null
         ? null
         : _zohoDateFmt.format(_dateOnly(expiryDate));
-
     if (requireQuoteDate && quoteDateValue == null) {
       throw StateError('Please select a quote date before requesting a quote.');
     }
-
     final String? profileId = asCleanStringOrNull(draft.resolvedProfileId);
-
     final String? membershipId = asCleanStringOrNull(
       draft.resolvedMembershipId,
     );
-
     final String? prescriptionId = asCleanStringOrNull(
       draft.resolvedPrescriptionId,
     );
-
     final QuotePaymentContext paymentContext = draft.effectivePaymentContext;
-
     if (draft.isCompany && paymentContext.isInsurance) {
       throw StateError('Insurance is only available for private-use quotes.');
     }
-
     if (requirePatient && profileId == null) {
       throw StateError('Please select who the quote is for.');
     }
-
     if (requirePatient && draft.patientSnapshot == null) {
       throw StateError('Please select who the quote is for.');
     }
-
     if (requireFulfilment && !draft.hasFulfilmentContext) {
       throw StateError(
         draft.fulfilmentMethod.isDelivery
@@ -408,34 +371,27 @@ class ZohoQuotesService {
             : 'Please select delivery or pickup.',
       );
     }
-
     if (draft.requiresDeliveryLocation &&
         draft.deliveryAddress?.isUsable != true) {
       throw StateError('Please select a delivery location.');
     }
-
     if (draft.requiresMembership && membershipId == null) {
       throw StateError('Please select an insurance membership.');
     }
-
     if (draft.requiresPrescription && prescriptionId == null) {
       throw StateError('Please select or upload a prescription.');
     }
-
     final String? reference = asCleanStringOrNull(draft.reference);
-
     final String? notes = asCleanStringOrNull(draft.customerNotes);
-
     final SalesDocumentAddress? deliveryAddress =
         draft.fulfilmentMethod.isDelivery ? draft.deliveryAddress : null;
-
     return <String, Object?>{
       // Keep existing backend field and values.
       'sale_context': draft.purchaseContext.apiValue,
       'payment_context': paymentContext.apiValue,
-
       'fulfilment_method': draft.fulfilmentMethod.apiValue,
-
+      if (accountNumber.isNotEmpty && customerId.isEmpty)
+        'account_number': accountNumber,
       if (customerId.isNotEmpty) 'customer_id': customerId,
       if (quoteDateValue != null) 'date': quoteDateValue,
       if (expiryDateValue != null) 'expiry_date': expiryDateValue,
@@ -454,14 +410,10 @@ class ZohoQuotesService {
           })
           .map((QuoteLineDraft line) {
             final String? lineItemId = asCleanStringOrNull(line.lineItemId);
-
             final String? itemId = asCleanStringOrNull(line.zohoItemId);
-
             final String? unit = asCleanStringOrNull(line.unit);
-
             final String name = _safeLineName(line);
             final String? description = _safeLineDescription(line);
-
             return <String, Object?>{
               if (lineItemId != null) 'line_item_id': lineItemId,
               if (itemId != null) 'item_id': itemId,
@@ -482,10 +434,8 @@ class ZohoQuotesService {
 
   static Map<String, Object?> _pruneEmailJson(Map<String, Object?> input) {
     final Map<String, Object?> output = <String, Object?>{...input};
-
     void removeEmptyList(String key) {
       final Object? value = output[key];
-
       if (value is List && value.isEmpty) {
         output.remove(key);
       }
@@ -495,11 +445,9 @@ class ZohoQuotesService {
     removeEmptyList('cc_mail_ids');
     removeEmptyList('bcc_mail_ids');
     removeEmptyList('contact_person_ids');
-
     output.removeWhere((String key, Object? value) {
       return value is String && value.trim().isEmpty;
     });
-
     return output;
   }
 
@@ -511,7 +459,6 @@ class ZohoQuotesService {
   static int _safeQty(int quantity) {
     if (quantity < 1) return 1;
     if (quantity > 9999) return 9999;
-
     return quantity;
   }
 
@@ -519,45 +466,35 @@ class ZohoQuotesService {
     if (rate.isNaN || rate.isInfinite || rate < 0) {
       return 0;
     }
-
     return rate;
   }
 
   static String _safeLineName(QuoteLineDraft line) {
     final String description = (line.description ?? '').trim();
-
     if (description.isNotEmpty) {
       return _truncate(description, 120);
     }
-
     final String title = line.tile.tileTitle.trim();
-
     if (title.isNotEmpty) {
       return _truncate(title, 120);
     }
-
     final String fallback = (line.tile.tileDesc ?? '').trim();
-
     return _truncate(fallback.isNotEmpty ? fallback : 'Item', 120);
   }
 
   static String? _safeLineDescription(QuoteLineDraft line) {
     final String description = (line.tile.tileDesc ?? '').trim();
-
     if (description.isEmpty) {
       return null;
     }
-
     return _truncate(description, 500);
   }
 
   static String _truncate(String value, int max) {
     final String text = value.trim();
-
     if (text.length <= max) {
       return text;
     }
-
     return text.substring(0, max - 1).trimRight();
   }
 
@@ -565,11 +502,9 @@ class ZohoQuotesService {
     if (value is Map<String, dynamic>) {
       return value;
     }
-
     if (value is Map) {
       return value.cast<String, dynamic>();
     }
-
     throw StateError('Expected JSON object but got ${value.runtimeType}');
   }
 }

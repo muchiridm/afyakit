@@ -17,7 +17,7 @@ import 'package:afyakit/features/inventory/locations/inventory_location_controll
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_details_screen.dart';
 
-import 'package:afyakit/features/records/zoho_contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';

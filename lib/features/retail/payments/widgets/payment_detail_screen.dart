@@ -1,5 +1,8 @@
 // lib/features/retail/payments/widgets/payment_detail_screen.dart
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
 import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dart';
 import 'package:afyakit/features/retail/payments/providers/payment_providers.dart';
@@ -8,8 +11,6 @@ import 'package:afyakit/features/retail/payments/widgets/payment_receipt_summary
 import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PaymentDetailScreen extends ConsumerStatefulWidget {
   const PaymentDetailScreen({
@@ -50,8 +51,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String invoiceId = _invoiceId;
-    final String paymentId = _paymentId;
+    final invoiceId = _invoiceId;
+    final paymentId = _paymentId;
 
     if (invoiceId.isEmpty || paymentId.isEmpty) {
       return AppPage(
@@ -107,7 +108,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required String invoiceId,
     required String paymentId,
   }) {
-    final bool busy = state.busy;
+    final busy = state.busy;
 
     return <Widget>[
       IconButton(
@@ -116,6 +117,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             ? null
             : () async {
                 await ctl.refresh();
+
+                if (!mounted) return;
 
                 _invalidateReceipt(invoiceId: invoiceId, paymentId: paymentId);
               },
@@ -129,6 +132,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   ctl.startNewPayment();
 
                   await PaymentEditorSheet.open(context, invoiceId: invoiceId);
+
+                  if (!mounted) return;
 
                   _invalidateReceipt(
                     invoiceId: invoiceId,
@@ -148,21 +153,22 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required PaymentReceiptVm vm,
   }) {
     final inv = vm.invoice;
-    final contact = vm.contact;
     final ZohoInvoicePayment payment = vm.payment;
 
-    final bool busy = paymentState.busy;
-    final bool canManage = widget.canManagePayments;
-    final String code = _currency(widget.currencyCode);
+    final busy = paymentState.busy;
+    final canManage = widget.canManagePayments;
 
-    final String customerTitle = _pickFirstNonEmpty(
-      contact?.title,
+    final code = _currency(widget.currencyCode);
+
+    // Customer identity comes from the invoice itself.
+    // No independent Zoho Contact lookup is required.
+    final customerTitle = _pickFirstNonEmpty(
       inv.customerName,
       widget.customerName,
       'Customer',
     );
 
-    final String invoiceLabel = _pickFirstNonEmpty(
+    final invoiceLabel = _pickFirstNonEmpty(
       inv.invoiceNumber,
       widget.invoiceNumber,
       widget.invoiceId,
@@ -170,13 +176,16 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     );
 
     final DateTime? invoiceDate = inv.date ?? widget.invoiceDate;
+
     final num? invoiceTotal = inv.total != 0 ? inv.total : widget.invoiceTotal;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (busy) const LinearProgressIndicator(minHeight: 2),
+
         InlineErrorCard(message: (paymentState.error ?? '').trim()),
+
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
           child: PaymentReceiptSummaryCard(
@@ -200,6 +209,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                       context,
                       invoiceId: _invoiceId,
                     );
+
+                    if (!mounted) return;
 
                     _invalidateReceipt(
                       invoiceId: _invoiceId,
@@ -226,11 +237,11 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required PaymentController ctl,
     required ZohoInvoicePayment payment,
   }) async {
-    final String paymentId = payment.paymentId.trim();
+    final paymentId = payment.paymentId.trim();
 
     if (paymentId.isEmpty) return;
 
-    final bool ok = await DialogService.confirm(
+    final confirmed = await DialogService.confirm(
       context: context,
       title: 'Delete receipt?',
       content: 'This will delete the payment in Zoho Books.',
@@ -239,11 +250,11 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       barrierDismissible: false,
     );
 
-    if (!ok) return;
+    if (!confirmed || !mounted) return;
 
-    final bool deleted = await ctl.deletePayment(paymentId);
+    final deleted = await ctl.deletePayment(paymentId);
 
-    if (!deleted) return;
+    if (!deleted || !mounted) return;
 
     _invalidateInvoicePaymentData(_invoiceId);
 
@@ -260,29 +271,30 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required String invoiceId,
     required String paymentId,
   }) {
-    _invalidateInvoicePaymentData(invoiceId);
+    if (!mounted) return;
 
-    final String payId = paymentId.trim();
+    final id = invoiceId.trim();
+    final payId = paymentId.trim();
 
-    if (payId.isEmpty) return;
+    _invalidateInvoicePaymentData(id);
 
-    ref.invalidate(
-      paymentReceiptVmProvider((invoiceId: invoiceId.trim(), paymentId: payId)),
-    );
+    if (id.isEmpty || payId.isEmpty) return;
+
+    ref.invalidate(paymentReceiptVmProvider((invoiceId: id, paymentId: payId)));
   }
 
   void _invalidateInvoicePaymentData(String invoiceId) {
-    final String id = invoiceId.trim();
+    if (!mounted) return;
 
+    final id = invoiceId.trim();
     if (id.isEmpty) return;
 
     ref.invalidate(invoicePaymentsProvider(id));
     ref.invalidate(invoiceProvider(id));
-    ref.invalidate(invoiceContactProvider(id));
   }
 
   String _currency(String value) {
-    final String text = value.trim();
+    final text = value.trim();
     return text.isEmpty ? 'KES' : text;
   }
 
@@ -305,12 +317,11 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   static String _pickFirstNonEmpty(
     String? a,
     String? b,
-    String? c,
+    String? c, [
     String? fallback,
-  ) {
-    for (final String? value in <String?>[a, b, c, fallback]) {
-      final String text = (value ?? '').trim();
-
+  ]) {
+    for (final value in <String?>[a, b, c, fallback]) {
+      final text = (value ?? '').trim();
       if (text.isNotEmpty) return text;
     }
 

@@ -42,7 +42,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
     if (!mounted || values == null) return;
     await ref
         .read(nativeContactsControllerProvider.notifier)
-        .save(values, contactId: existing?.id);
+        .save(values, accountNumber: existing?.accountNumber ?? existing?.id);
   }
 
   Future<void> _openDeliveryAddresses(NativeContact contact) async {
@@ -169,36 +169,50 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                   return searchable.contains(query);
                 }).toList();
 
-                if (filtered.isEmpty) {
-                  return const Center(child: Text('No contacts found'));
-                }
-                return RefreshIndicator(
-                  onRefresh: controller.refresh,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        query.isEmpty
+                            ? '${contacts.length} contacts'
+                            : '${filtered.length} of ${contacts.length} contacts',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final contact = filtered[index];
-                      return NativeContactTile(
-                        key: ValueKey(contact.id),
-                        contact: contact,
-                        expanded: _expandedContactId == contact.id,
-                        busy: actions.busy,
-                        onToggle: () => _toggleContact(contact.id),
-                        onAddresses: () => _openDeliveryAddresses(contact),
-                        onEdit: () => _edit(existing: contact),
-                        onGenerateAccountNumber: () {
-                          ref
-                              .read(nativeContactsControllerProvider.notifier)
-                              .generateAccountNumber(contact.id);
-                        },
-                        onRemove: () => _remove(contact),
-                      );
-                    },
-                  ),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(child: Text('No contacts found'))
+                          : RefreshIndicator(
+                              onRefresh: controller.refresh,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final contact = filtered[index];
+                                  return NativeContactTile(
+                                    key: ValueKey(contact.id),
+                                    contact: contact,
+                                    expanded: _expandedContactId == contact.id,
+                                    busy: actions.busy,
+                                    onToggle: () => _toggleContact(contact.id),
+                                    onAddresses: () =>
+                                        _openDeliveryAddresses(contact),
+                                    onEdit: () => _edit(existing: contact),
+                                    onRemove: () => _remove(contact),
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -292,7 +306,7 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                 TextFormField(
                   controller: _name,
                   decoration: const InputDecoration(
-                    labelText: 'Display name \*',
+                    labelText: 'Display name *',
                   ),
                   validator: (value) =>
                       (value ?? '').trim().isEmpty ? 'Required' : null,
@@ -372,7 +386,7 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                   decoration: InputDecoration(
                     labelText:
                         widget.requireIdForPersons && _entityType == 'person'
-                        ? 'National ID number \*'
+                        ? 'National ID number *'
                         : 'National ID number (optional)',
                   ),
                   validator: (value) =>

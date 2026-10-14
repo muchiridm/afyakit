@@ -1,8 +1,8 @@
 // lib/core/auth/shared/models/auth_user_model.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
 
 enum AppMembershipStatus {
   active,
@@ -26,6 +26,7 @@ class AppMembership {
   final AppMembershipStatus status;
   final String? updatedAt;
   bool get isActive => status == AppMembershipStatus.active;
+
   static AppMembership? tryParse(Object? raw) {
     if (raw is! Map) return null;
     final map = Map<String, dynamic>.from(
@@ -52,19 +53,14 @@ class AppMembership {
 @immutable
 class AppEmail {
   const AppEmail({required this.emailLower, this.verifiedAt});
-
   final String emailLower;
   final String? verifiedAt;
-
   bool get verified => true;
 
   static AppEmail? tryParse(Object? raw) {
     if (raw is! Map || raw['verified'] != true) return null;
-
     final email = (raw['emailLower'] ?? '').toString().trim().toLowerCase();
-
     if (email.isEmpty || !email.contains('@')) return null;
-
     return AppEmail(
       emailLower: email,
       verifiedAt: raw['verifiedAt']?.toString(),
@@ -103,7 +99,7 @@ class AuthUser {
     this.previousUids = const <String>[],
     this.recoveredFromAccountNumber,
     this.recoveredAt,
-    this.zoho,
+    this.nativeContactId,
     this.claims,
     this.isSuperAdmin = false,
     List<StaffRole> staffRoles = const [],
@@ -137,10 +133,15 @@ class AuthUser {
   final String? companyName;
 
   /// Current account number.
+
   ///
+
   /// New format:
+
   ///   AC-XXXXXX
+
   ///
+
   /// Legacy numeric values may exist for older/recovered users.
   final String? accountNumber;
 
@@ -148,8 +149,11 @@ class AuthUser {
   final List<String> previousAccountNumbers;
 
   /// Historical Firebase UIDs associated with recovered identity.
+
   ///
+
   /// UID should not be the long-term business identity, but this helps
+
   /// debug/reconcile old records.
   final List<String> previousUids;
 
@@ -158,7 +162,9 @@ class AuthUser {
 
   /// Recovery success timestamp, ISO string.
   final String? recoveredAt;
-  final AuthUserZohoLink? zoho;
+
+  /// Canonical Native Contact ID (AC-XXXXXX), never a Zoho ID.
+  final String? nativeContactId;
   final Map<String, dynamic>? claims;
   final bool isSuperAdmin;
 
@@ -167,10 +173,10 @@ class AuthUser {
   final Map<String, List<StaffRole>> staffRolesByApp;
 
   /// Canonical application membership by app.
+
   /// A user may belong to multiple apps. Membership does not imply staff access.
   final Map<String, AppMembership> appMembershipsByApp;
   final Map<String, AppEmail> emailsByApp;
-
   AppEmail? emailForApp(String appId) =>
       emailsByApp[appId.trim().toLowerCase()];
   String? get activeAppEmailLower =>
@@ -249,7 +255,9 @@ class AuthUser {
   final String? disabledByUid;
   final String? createdAt;
   final String? updatedAt;
+
   static String _cleanStr(Object? v) => (v ?? '').toString().trim();
+
   static String? _optStr(Object? v) {
     final s = _cleanStr(v);
     return s.isEmpty ? null : s;
@@ -261,6 +269,7 @@ class AuthUser {
   }
 
   static bool _bool(Object? v) => v == true;
+
   static List<String> _normalizeStores(Object? raw) {
     final out = <String>[];
     if (raw is List) {
@@ -330,6 +339,7 @@ class AuthUser {
 
   static bool _isSomaliaPhone(String? phoneE164) =>
       phoneE164 != null && phoneE164.trim().startsWith('+252');
+
   static bool _computePhoneSatisfied({
     required String? phoneNumber,
     required bool phoneVerified,
@@ -346,8 +356,7 @@ class AuthUser {
     return previousAccountNumbers.isNotEmpty ||
         previousUids.isNotEmpty ||
         (recoveredFromAccountNumber ?? '').trim().isNotEmpty ||
-        (recoveredAt ?? '').trim().isNotEmpty ||
-        (zoho?.previousAccountNumbers.isNotEmpty ?? false);
+        (recoveredAt ?? '').trim().isNotEmpty;
   }
 
   List<String> get allKnownAccountNumbers {
@@ -356,18 +365,14 @@ class AuthUser {
       ...previousAccountNumbers,
       if ((recoveredFromAccountNumber ?? '').trim().isNotEmpty)
         recoveredFromAccountNumber!.trim(),
-      ...?zoho?.previousAccountNumbers,
     ];
     final seen = <String>{};
     return out.where((x) => seen.add(x)).toList(growable: false);
   }
 
-  String? get contactId {
-    final id = zoho?.contactId.trim();
-    if (id == null || id.isEmpty) return null;
-    return id;
-  }
-
+  /// Transitional alias; resolves to the Native Contact, not Zoho.
+  @Deprecated('Use nativeContactId instead.')
+  String? get contactId => nativeContactId;
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (dn.isNotEmpty) return dn;
@@ -401,7 +406,8 @@ class AuthUser {
   bool get hasEmail => hasVerifiedEmail;
   bool get isDisabled => status == UserStatus.disabled;
   bool get hasRecoveryRequirement => recoveryRequired == true;
-  factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
+
+  factory AuthUser.fromMap(Map<String, dynamic> json) {
     final uid = _cleanStr(json['uid']);
     final tenant = _cleanStr(json['tenantId']);
     if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
@@ -429,21 +435,6 @@ class AuthUser {
       json['recoveredFromAccountNumber'],
     );
     final recoveredAt = _optStr(json['recoveredAt']);
-    AuthUserZohoLink? zoho;
-    if (allowZoho) {
-      final rawZoho = json['zoho'];
-      if (rawZoho is Map) {
-        try {
-          zoho = AuthUserZohoLink.fromMap(
-            Map<String, dynamic>.from(
-              rawZoho.map((k, v) => MapEntry(k.toString(), v)),
-            ),
-          );
-        } catch (_) {
-          zoho = null;
-        }
-      }
-    }
     return AuthUser(
       uid: uid,
       phoneNumber: phone,
@@ -467,7 +458,9 @@ class AuthUser {
       previousUids: previousUids,
       recoveredFromAccountNumber: recoveredFromAccountNumber,
       recoveredAt: recoveredAt,
-      zoho: zoho,
+      nativeContactId: _optUpperStr(
+        json['nativeContactId'] ?? json['native_contact_id'],
+      ),
       claims: claims,
       isSuperAdmin: isSuperAdmin,
       staffRoles: staffRoles,
@@ -482,10 +475,10 @@ class AuthUser {
       updatedAt: _optStr(json['updatedAt']),
     );
   }
-  factory AuthUser.fromJson(
-    Map<String, dynamic> json, {
-    bool allowZoho = true,
-  }) => AuthUser.fromMap(json, allowZoho: allowZoho);
+
+  factory AuthUser.fromJson(Map<String, dynamic> json) =>
+      AuthUser.fromMap(json);
+
   AuthUser copyWith({
     UserStatus? status,
     List<String>? stores,
@@ -506,7 +499,7 @@ class AuthUser {
     List<String>? previousUids,
     String? recoveredFromAccountNumber,
     String? recoveredAt,
-    AuthUserZohoLink? zoho,
+    String? nativeContactId,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
@@ -546,7 +539,7 @@ class AuthUser {
       recoveredFromAccountNumber:
           recoveredFromAccountNumber ?? this.recoveredFromAccountNumber,
       recoveredAt: recoveredAt ?? this.recoveredAt,
-      zoho: zoho ?? this.zoho,
+      nativeContactId: nativeContactId ?? this.nativeContactId,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       staffRoles: staffRoles ?? legacyStaffRoles,
@@ -588,7 +581,7 @@ class AuthUser {
     if (recoveredFromAccountNumber != null)
       'recoveredFromAccountNumber': recoveredFromAccountNumber,
     if (recoveredAt != null) 'recoveredAt': recoveredAt,
-    if (zoho != null) 'zoho': zoho!.toMap(),
+    if (nativeContactId != null) 'nativeContactId': nativeContactId,
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
     'staffRolesByApp': staffRolesByApp.map(

@@ -2,16 +2,13 @@
 
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
-import 'package:afyakit/features/records/zoho_contacts/providers/zoho_contacts_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final quoteContactPolicyProvider = Provider<QuoteContactPolicy>((ref) {
   final mode = ref.watch(effectiveEntryModeProvider);
-  final acct = (ref.watch(zohoContactsAccountScopeProvider) ?? '').trim();
 
-  final isMemberScoped = mode == EntryMode.member && acct.isNotEmpty;
-  return isMemberScoped
+  return mode == EntryMode.member
       ? QuoteContactPolicy.memberScoped
       : QuoteContactPolicy.picker;
 });

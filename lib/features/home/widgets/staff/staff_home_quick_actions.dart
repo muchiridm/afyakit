@@ -8,7 +8,7 @@ import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_quick_a
 import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
-import 'package:afyakit/features/records/zoho_contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 
 class StaffHomeQuickActions extends ConsumerWidget {
   const StaffHomeQuickActions({super.key, this.onChat});

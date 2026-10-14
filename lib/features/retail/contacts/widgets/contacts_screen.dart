@@ -1,8 +1,10 @@
 // lib/features/records/zoho_contacts/widgets/contacts_screen.dart
+// Native Contacts registry screen; retained at its current path until navigation is migrated.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/features/records/native_contacts/models/native_contact.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
@@ -10,7 +12,6 @@ import 'package:afyakit/shared/widgets/app_empty_state.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
 
 import '../controllers/contacts_controller.dart';
-import '../models/zoho_contact.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
@@ -21,9 +22,7 @@ class ContactsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(contactsControllerProvider);
     final ctl = ref.read(contactsControllerProvider.notifier);
-
     final loadingAny = state.loadingList || state.loadingDetail;
-    final count = state.items.length;
 
     return AppPage(
       scrollable: false,
@@ -32,7 +31,7 @@ class ContactsScreen extends ConsumerWidget {
       showBack: true,
       actions: [
         _CountChip(
-          count: count,
+          count: state.items.length,
           loading: state.loadingList,
           hasSearch: state.search.trim().isNotEmpty,
         ),
@@ -45,13 +44,7 @@ class ContactsScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
             onPressed: state.saving ? null : () => ctl.openCreateFlow(context),
-            icon: state.saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add),
+            icon: const Icon(Icons.add),
             label: const Text('Add contact'),
           ),
         ),
@@ -59,13 +52,13 @@ class ContactsScreen extends ConsumerWidget {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: () => ctl.refresh(),
+            onRefresh: ctl.refresh,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
                   child: AppCard(
-                    title: 'Search',
+                    title: 'Search loaded contacts',
                     icon: Icons.search,
                     child: _SearchBar(
                       value: state.search,
@@ -73,24 +66,24 @@ class ContactsScreen extends ConsumerWidget {
                       loading: state.loadingList,
                       onChanged: ctl.setSearch,
                       onClear: () => ctl.setSearch(''),
-                      onSubmit: () => ctl.refresh(),
+                      onSubmit: ctl.refresh,
                     ),
                   ),
                 ),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppShape.gap12),
                 ),
-                if (state.error != null)
+                if (state.error != null) ...[
                   SliverToBoxAdapter(
                     child: _ErrorBanner(
                       message: state.error!,
-                      onRetry: () => ctl.refresh(),
+                      onRetry: ctl.refresh,
                     ),
                   ),
-                if (state.error != null)
                   const SliverToBoxAdapter(
                     child: SizedBox(height: AppShape.gap12),
                   ),
+                ],
                 _buildSliverBody(context, state, ctl),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppShape.gap16),
@@ -116,7 +109,6 @@ class ContactsScreen extends ConsumerWidget {
     ContactsState state,
     ContactsController ctl,
   ) {
-    final count = state.items.length;
     final hasQuery = state.search.trim().isNotEmpty;
 
     if (state.items.isEmpty && state.loadingList) {
@@ -131,15 +123,14 @@ class ContactsScreen extends ConsumerWidget {
         hasScrollBody: false,
         child: AppEmptyState(
           icon: Icons.people_alt_outlined,
-          title: hasQuery ? 'No results' : 'No customers yet',
+          title: hasQuery ? 'No matches in loaded contacts' : 'No contacts',
           subtitle: hasQuery
-              ? 'Try a different search.'
-              : 'No contacts are registered in this application yet.',
-          actionLabel: hasQuery ? 'Clear search' : 'Add customer',
+              ? 'Try another search. Search is limited to contacts already fetched.'
+              : 'No contacts were returned for this application.',
+          actionLabel: hasQuery ? 'Clear search' : 'Add contact',
           onAction: () {
             if (hasQuery) {
               ctl.setSearch('');
-              ctl.refresh();
             } else {
               ctl.openCreateFlow(context);
             }
@@ -150,11 +141,13 @@ class ContactsScreen extends ConsumerWidget {
 
     return SliverToBoxAdapter(
       child: AppCard(
-        title: hasQuery ? 'Results ($count)' : 'Contacts ($count)',
+        title: hasQuery
+            ? 'Loaded matches (${state.items.length})'
+            : 'Contacts (${state.items.length})',
         icon: Icons.people_alt_outlined,
         child: Column(
           children: [
-            for (int i = 0; i < state.items.length; i++) ...[
+            for (var i = 0; i < state.items.length; i++) ...[
               AppTile(
                 child: _ContactTile(
                   contact: state.items[i],
@@ -184,25 +177,23 @@ class _CountChip extends StatelessWidget {
   final bool hasSearch;
 
   @override
-  Widget build(BuildContext context) {
-    final label = loading
-        ? 'Loading…'
-        : hasSearch
-        ? '$count found'
-        : '$count customers';
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Chip(
-        visualDensity: VisualDensity.compact,
-        avatar: Icon(
-          hasSearch ? Icons.manage_search : Icons.people_alt_outlined,
-          size: 16,
-        ),
-        label: Text(label),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: 4),
+    child: Chip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        hasSearch ? Icons.manage_search : Icons.people_alt_outlined,
+        size: 16,
       ),
-    );
-  }
+      label: Text(
+        loading
+            ? 'Loading…'
+            : hasSearch
+            ? '$count matches'
+            : '$count contacts',
+      ),
+    ),
+  );
 }
 
 class _SearchBar extends StatelessWidget {
@@ -218,40 +209,36 @@ class _SearchBar extends StatelessWidget {
   final String value;
   final bool enabled;
   final bool loading;
-  final void Function(String) onChanged;
+  final ValueChanged<String> onChanged;
   final VoidCallback onClear;
   final VoidCallback onSubmit;
 
   @override
-  Widget build(BuildContext context) {
-    final trimmed = value.trim();
-
-    return TextField(
-      enabled: enabled,
-      decoration: InputDecoration(
-        hintText: 'Search customers…',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: trimmed.isEmpty
-            ? (loading
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : null)
-            : IconButton(
-                tooltip: 'Clear',
-                onPressed: enabled ? onClear : null,
-                icon: const Icon(Icons.clear),
+  Widget build(BuildContext context) => TextField(
+    enabled: enabled,
+    decoration: InputDecoration(
+      hintText: 'Filter loaded contacts…',
+      prefixIcon: const Icon(Icons.search),
+      suffixIcon: value.trim().isNotEmpty
+          ? IconButton(
+              tooltip: 'Clear',
+              onPressed: enabled ? onClear : null,
+              icon: const Icon(Icons.clear),
+            )
+          : loading
+          ? const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-      ),
-      onChanged: onChanged,
-      onSubmitted: (_) => onSubmit(),
-    );
-  }
+            )
+          : null,
+    ),
+    onChanged: onChanged,
+    onSubmitted: (_) => onSubmit(),
+  );
 }
 
 class _ErrorBanner extends StatelessWidget {
@@ -262,27 +249,19 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
+    final scheme = Theme.of(context).colorScheme;
     return AppTile(
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: scheme.error, size: 20),
+          Icon(Icons.error_outline, color: scheme.error),
           const SizedBox(width: AppShape.gap10),
           Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: Text(message, style: TextStyle(color: scheme.error)),
           ),
           IconButton(
             tooltip: 'Retry',
             onPressed: onRetry,
-            icon: Icon(Icons.refresh, color: scheme.error),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -297,15 +276,24 @@ class _ContactTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final ZohoContact contact;
+  final NativeContact contact;
   final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final title = contact.title.trim().isEmpty ? 'Contact' : contact.title;
-    final subtitle = contact.subtitle.trim();
-    final linkedCount = contact.activeLinkedProfileCount;
+    final title = contact.displayName.trim().isEmpty
+        ? 'Contact'
+        : contact.displayName.trim();
+    final details = <String>[
+      if ((contact.accountNumber ?? '').trim().isNotEmpty)
+        contact.accountNumber!.trim(),
+      if (contact.contactType.trim().isNotEmpty) contact.contactType.trim(),
+      if ((contact.phone ?? contact.mobile ?? contact.verifiedPhone ?? '')
+          .trim()
+          .isNotEmpty)
+        (contact.phone ?? contact.mobile ?? contact.verifiedPhone)!.trim(),
+    ];
 
     return ListTile(
       dense: true,
@@ -313,41 +301,19 @@ class _ContactTile extends StatelessWidget {
       onTap: enabled ? onTap : null,
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
-        child: contact.isCompanyOnly
+        child: contact.entityType.toLowerCase() == 'company'
             ? const Icon(Icons.apartment_outlined, size: 20)
             : Text(_initials(title)),
       ),
       title: Text(title),
-      subtitle: subtitle.isEmpty ? null : Text(subtitle),
+      subtitle: details.isEmpty ? null : Text(details.join(' • ')),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (contact.isVendor && !contact.isCustomer)
-            const Tooltip(
-              message: 'Vendor only',
-              child: Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.local_shipping_outlined, size: 20),
-              ),
-            ),
           if (contact.isInsurancePayer)
             const Tooltip(
               message: 'Insurance payer',
-              child: Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.verified_user_outlined, size: 20),
-              ),
-            ),
-          if (linkedCount > 0)
-            Tooltip(
-              message: linkedCount == 1
-                  ? '1 linked patient'
-                  : '$linkedCount linked patients',
-              child: Chip(
-                visualDensity: VisualDensity.compact,
-                avatar: const Icon(Icons.personal_injury_outlined, size: 16),
-                label: Text('$linkedCount'),
-              ),
+              child: Icon(Icons.verified_user_outlined, size: 20),
             ),
           const SizedBox(width: 6),
           const Icon(Icons.chevron_right),
@@ -356,16 +322,14 @@ class _ContactTile extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name
+  static String _initials(String value) {
+    final parts = value
         .trim()
         .split(RegExp(r'\s+'))
         .where((s) => s.isNotEmpty)
         .toList();
-
     if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 }

@@ -1,11 +1,10 @@
 // lib/features/insurance/memberships/widgets/insurance_memberships_screen.dart
-
 import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_form_dialog.dart';
-import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/records/zoho_contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/records/native_contacts/models/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/services/native_contacts_service.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +12,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InsuranceMembershipsScreen extends ConsumerStatefulWidget {
   const InsuranceMembershipsScreen({super.key});
-
   @override
   ConsumerState<InsuranceMembershipsScreen> createState() =>
       _InsuranceMembershipsScreenState();
@@ -22,16 +20,11 @@ class InsuranceMembershipsScreen extends ConsumerStatefulWidget {
 class _InsuranceMembershipsScreenState
     extends ConsumerState<InsuranceMembershipsScreen> {
   final _searchCtl = TextEditingController();
-
   bool _activeOnly = true;
-  bool _isLoadingLinks = false;
-
+  bool _isLoadingPayers = false;
   String? _selectedPayerContactId;
-  String? _linkedError;
-
-  List<ZohoContact> _insurancePayers = const <ZohoContact>[];
-  List<_LinkedInsuranceProfile> _linkedRows = const <_LinkedInsuranceProfile>[];
-
+  String? _payerError;
+  List<NativeContact> _insurancePayers = const <NativeContact>[];
   @override
   void initState() {
     super.initState();
@@ -45,7 +38,7 @@ class _InsuranceMembershipsScreenState
   }
 
   Future<void> _load() async {
-    await Future.wait([_loadMemberships(), _loadLinkedInsuranceContacts()]);
+    await Future.wait([_loadMemberships(), _loadInsurancePayers()]);
   }
 
   Future<void> _loadMemberships() {
@@ -60,53 +53,32 @@ class _InsuranceMembershipsScreenState
         );
   }
 
-  Future<void> _loadLinkedInsuranceContacts() async {
+  Future<void> _loadInsurancePayers() async {
     if (!mounted) return;
-
     setState(() {
-      _isLoadingLinks = true;
-      _linkedError = null;
+      _isLoadingPayers = true;
+      _payerError = null;
     });
-
     try {
-      final svc = await ref.read(zohoContactsServiceProvider.future);
-      final payers = await svc.listInsurancePayers(perPage: 50);
-
-      final rows = <_LinkedInsuranceProfile>[];
-
-      for (final payer in payers) {
-        for (final linked in payer.activeInsuranceLinkedProfiles) {
-          rows.add(
-            _LinkedInsuranceProfile(payer: payer, linkedProfile: linked),
-          );
-        }
+      final svc = await ref.read(nativeContactsServiceProvider.future);
+      final payers = <NativeContact>[];
+      // The Native Contacts endpoint is paginated, without payer filtering.
+      // Read successive app-scoped pages before filtering locally.
+      for (var page = 1; ; page++) {
+        final contacts = await svc.list(page: page, perPage: 100);
+        payers.addAll(contacts.where((c) => c.isInsurancePayer));
+        if (contacts.length < 100) break;
       }
-
-      rows.sort((a, b) {
-        final byPayer = a.payer.displayName.toLowerCase().compareTo(
-          b.payer.displayName.toLowerCase(),
-        );
-
-        if (byPayer != 0) return byPayer;
-
-        return a.linkedProfile.profileDisplayName.toLowerCase().compareTo(
-          b.linkedProfile.profileDisplayName.toLowerCase(),
-        );
-      });
-
       if (!mounted) return;
-
       setState(() {
         _insurancePayers = payers;
-        _linkedRows = rows;
-        _isLoadingLinks = false;
+        _isLoadingPayers = false;
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
-        _isLoadingLinks = false;
-        _linkedError = e.toString();
+        _isLoadingPayers = false;
+        _payerError = e.toString();
       });
     }
   }
@@ -117,56 +89,6 @@ class _InsuranceMembershipsScreenState
         builder: (_) => const ProfilesScreen(allowExplicitContactLink: true),
       ),
     );
-  }
-
-  Future<void> _registerFromLinkedContact(_LinkedInsuranceProfile row) async {
-    final existing = _findMembership(
-      profileId: row.linkedProfile.profileId,
-      payerContactId: row.payer.contactId,
-    );
-
-    final input = await showDialog<InsuranceMembershipUpsertInput>(
-      context: context,
-      builder: (_) => InsuranceMembershipFormDialog(
-        initial: existing,
-        profileId: row.linkedProfile.profileId,
-        profileDisplayName: row.linkedProfile.profileDisplayName,
-        payerContactId: row.payer.contactId,
-        payerDisplayName: row.payer.displayName,
-      ),
-    );
-
-    if (input == null || !mounted) return;
-
-    final controller = ref.read(
-      insuranceMembershipsControllerProvider.notifier,
-    );
-
-    final saved = existing == null
-        ? await controller.create(input)
-        : await controller.update(existing.membershipId, input);
-
-    if (!mounted) return;
-
-    if (saved == null) {
-      final error = ref.read(insuranceMembershipsControllerProvider).error;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Failed to save membership')),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          existing == null
-              ? 'Insurance member registered'
-              : 'Insurance membership updated',
-        ),
-      ),
-    );
-
-    await _load();
   }
 
   Future<void> _openEditDialog(InsuranceMembership membership) async {
@@ -180,15 +102,11 @@ class _InsuranceMembershipsScreenState
         payerDisplayName: membership.payerDisplayName,
       ),
     );
-
     if (input == null || !mounted) return;
-
     final updated = await ref
         .read(insuranceMembershipsControllerProvider.notifier)
         .update(membership.membershipId, input);
-
     if (!mounted) return;
-
     if (updated == null) {
       final error = ref.read(insuranceMembershipsControllerProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -196,11 +114,9 @@ class _InsuranceMembershipsScreenState
       );
       return;
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Insurance membership updated')),
     );
-
     await _load();
   }
 
@@ -224,15 +140,11 @@ class _InsuranceMembershipsScreenState
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
-
     final ok = await ref
         .read(insuranceMembershipsControllerProvider.notifier)
         .delete(membership.membershipId);
-
     if (!mounted) return;
-
     if (!ok) {
       final error = ref.read(insuranceMembershipsControllerProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,71 +152,18 @@ class _InsuranceMembershipsScreenState
       );
       return;
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Insurance membership deactivated')),
     );
-
     await _load();
-  }
-
-  InsuranceMembership? _findMembership({
-    required String profileId,
-    required String payerContactId,
-  }) {
-    final memberships = ref.read(insuranceMembershipsControllerProvider).items;
-
-    final profile = profileId.trim();
-    final payer = payerContactId.trim();
-
-    for (final membership in memberships) {
-      if (membership.profileId.trim() == profile &&
-          membership.payerContactId.trim() == payer) {
-        return membership;
-      }
-    }
-
-    return null;
-  }
-
-  bool _isRegistered(_LinkedInsuranceProfile row) {
-    return _findMembership(
-          profileId: row.linkedProfile.profileId,
-          payerContactId: row.payer.contactId,
-        ) !=
-        null;
-  }
-
-  List<_LinkedInsuranceProfile> _visibleLinkedRows() {
-    final selectedPayer = (_selectedPayerContactId ?? '').trim();
-    final search = _searchCtl.text.trim().toLowerCase();
-
-    return _linkedRows
-        .where((row) {
-          if (selectedPayer.isNotEmpty &&
-              row.payer.contactId != selectedPayer) {
-            return false;
-          }
-
-          if (search.isEmpty) return true;
-
-          return row.payer.displayName.toLowerCase().contains(search) ||
-              row.linkedProfile.profileId.toLowerCase().contains(search) ||
-              row.linkedProfile.profileDisplayName.toLowerCase().contains(
-                search,
-              );
-        })
-        .toList(growable: false);
   }
 
   void _clearFilters() {
     _searchCtl.clear();
-
     setState(() {
       _activeOnly = true;
       _selectedPayerContactId = null;
     });
-
     _load();
   }
 
@@ -317,10 +176,7 @@ class _InsuranceMembershipsScreenState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(insuranceMembershipsControllerProvider);
-    final linkedRows = _visibleLinkedRows();
-
-    final isBusy = state.isLoading || _isLoadingLinks;
-
+    final isBusy = state.isLoading || _isLoadingPayers;
     return AppPage(
       title: 'Insurance Members',
       showBack: true,
@@ -372,48 +228,20 @@ class _InsuranceMembershipsScreenState
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _ErrorText(state.error!),
             ),
-          if (_linkedError != null)
+          if (_payerError != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ErrorText(_linkedError!),
+              child: _ErrorText(_payerError!),
             ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
-              child: isBusy && state.items.isEmpty && linkedRows.isEmpty
+              child: isBusy && state.items.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                       children: [
-                        _SectionHeader(
-                          icon: Icons.link,
-                          title: 'Linked insurance contacts',
-                          count: linkedRows.length,
-                          subtitle:
-                              'Patients linked to an insurance payer but not necessarily registered as members.',
-                        ),
-                        const SizedBox(height: 8),
-                        if (linkedRows.isEmpty)
-                          const _EmptyInlineState(
-                            icon: Icons.link_off,
-                            title: 'No linked insurance contacts',
-                            message:
-                                'Open Health Profiles and link a patient to an insurance payer first.',
-                          )
-                        else
-                          ...linkedRows.map(
-                            (row) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _LinkedInsuranceProfileCard(
-                                row: row,
-                                registered: _isRegistered(row),
-                                onRegister: () =>
-                                    _registerFromLinkedContact(row),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 18),
                         _SectionHeader(
                           icon: Icons.verified_user_outlined,
                           title: 'Registered insurance members',
@@ -427,7 +255,7 @@ class _InsuranceMembershipsScreenState
                             icon: Icons.verified_user_outlined,
                             title: 'No registered members',
                             message:
-                                'Click a linked insurance contact above to register membership details.',
+                                'Create a membership from a Health Profile with an insurance payer.',
                           )
                         else
                           ...state.items.map(
@@ -462,17 +290,15 @@ class _MembershipFilters extends StatelessWidget {
     required this.onSearch,
     required this.onClear,
   });
-
   final TextEditingController searchCtl;
   final bool activeOnly;
   final bool isLoading;
   final String? selectedPayerContactId;
-  final List<ZohoContact> insurancePayers;
+  final List<NativeContact> insurancePayers;
   final ValueChanged<String?> onPayerChanged;
   final ValueChanged<bool> onActiveOnlyChanged;
   final VoidCallback onSearch;
   final VoidCallback onClear;
-
   @override
   Widget build(BuildContext context) {
     final sortedPayers = insurancePayers.toList(growable: false)
@@ -480,7 +306,6 @@ class _MembershipFilters extends StatelessWidget {
         (a, b) =>
             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
       );
-
     return Wrap(
       spacing: 12,
       runSpacing: 12,
@@ -522,7 +347,7 @@ class _MembershipFilters extends StatelessWidget {
               ),
               ...sortedPayers.map(
                 (payer) => DropdownMenuItem<String?>(
-                  value: payer.contactId,
+                  value: payer.id,
                   child: Text(
                     payer.displayName,
                     overflow: TextOverflow.ellipsis,
@@ -549,81 +374,18 @@ class _MembershipFilters extends StatelessWidget {
   }
 }
 
-class _LinkedInsuranceProfile {
-  const _LinkedInsuranceProfile({
-    required this.payer,
-    required this.linkedProfile,
-  });
-
-  final ZohoContact payer;
-  final ContactLinkedProfile linkedProfile;
-}
-
-class _LinkedInsuranceProfileCard extends StatelessWidget {
-  const _LinkedInsuranceProfileCard({
-    required this.row,
-    required this.registered,
-    required this.onRegister,
-  });
-
-  final _LinkedInsuranceProfile row;
-  final bool registered;
-  final VoidCallback onRegister;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card.outlined(
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Icon(registered ? Icons.verified_user : Icons.link),
-        ),
-        title: Text(
-          row.linkedProfile.profileDisplayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            '${row.linkedProfile.profileId} · ${row.payer.displayName}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        trailing: FilledButton.icon(
-          onPressed: onRegister,
-          icon: Icon(registered ? Icons.edit_outlined : Icons.app_registration),
-          label: Text(registered ? 'Edit member' : 'Register'),
-          style: registered
-              ? FilledButton.styleFrom(
-                  backgroundColor: theme.colorScheme.secondaryContainer,
-                  foregroundColor: theme.colorScheme.onSecondaryContainer,
-                )
-              : null,
-        ),
-        onTap: onRegister,
-      ),
-    );
-  }
-}
-
 class _MembershipCard extends StatelessWidget {
   const _MembershipCard({
     required this.membership,
     required this.onEdit,
     required this.onDeactivate,
   });
-
   final InsuranceMembership membership;
   final VoidCallback onEdit;
   final VoidCallback onDeactivate;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final subtitleParts = <String>[
       membership.payerLabel,
       if ((membership.scheme ?? '').trim().isNotEmpty)
@@ -633,14 +395,12 @@ class _MembershipCard extends StatelessWidget {
       if ((membership.medicalCardNo ?? '').trim().isNotEmpty)
         'Card: ${membership.medicalCardNo!.trim()}',
     ];
-
     final validity = [
       if ((membership.effectiveFrom ?? '').trim().isNotEmpty)
         'From ${membership.effectiveFrom}',
       if ((membership.effectiveTo ?? '').trim().isNotEmpty)
         'To ${membership.effectiveTo}',
     ].join(' · ');
-
     return Card.outlined(
       child: ListTile(
         leading: CircleAvatar(
@@ -697,16 +457,13 @@ class _SectionHeader extends StatelessWidget {
     required this.count,
     required this.subtitle,
   });
-
   final IconData icon;
   final String title;
   final int count;
   final String subtitle;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -738,9 +495,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _ErrorText extends StatelessWidget {
   const _ErrorText(this.message);
-
   final String message;
-
   @override
   Widget build(BuildContext context) {
     return Text(
@@ -756,15 +511,12 @@ class _EmptyInlineState extends StatelessWidget {
     required this.title,
     required this.message,
   });
-
   final IconData icon;
   final String title;
   final String message;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Card.outlined(
       child: Padding(
         padding: const EdgeInsets.all(18),

@@ -36,7 +36,7 @@ import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 
-import 'package:afyakit/features/records/zoho_contacts/widgets/contacts_screen.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 
 import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 

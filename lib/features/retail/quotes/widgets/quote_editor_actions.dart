@@ -1,9 +1,9 @@
 // lib/features/retail/quotes/widgets/quote_editor_actions.dart
 
-import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/records/zoho_contacts/widgets/contact_picker_dialog.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/status.dart';

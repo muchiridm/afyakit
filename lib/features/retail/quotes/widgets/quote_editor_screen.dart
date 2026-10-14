@@ -5,8 +5,6 @@ import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';

@@ -1,12 +1,11 @@
-// lib/features/retail/payments/controllers/payments_by_invoice_controller.dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/records/zoho_contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final paymentsByInvoiceControllerProvider = StateNotifierProvider.autoDispose
     .family<
@@ -14,14 +13,9 @@ final paymentsByInvoiceControllerProvider = StateNotifierProvider.autoDispose
       PagedQueryState<ZohoInvoice>,
       RetailDocScope
     >((ref, scope) {
-      final PaymentsByInvoiceController ctl = PaymentsByInvoiceController(
-        ref,
-        scope: scope,
-      );
-
-      ctl.refresh(reset: true);
-
-      return ctl;
+      final controller = PaymentsByInvoiceController(ref, scope: scope);
+      controller.refresh(reset: true);
+      return controller;
     });
 
 class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
@@ -41,8 +35,7 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
   bool get hasSearch => _searchQuery != null;
 
   void applySearch(String value) {
-    final String? next = _clean(value);
-
+    final next = _clean(value);
     if (_searchQuery == next) return;
 
     _searchQuery = next;
@@ -62,15 +55,14 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
     required int page,
     required int limit,
   }) async {
-    final ZohoInvoicesService svc = await _ref.read(
-      zohoInvoicesServiceProvider.future,
-    );
+    final service = await _ref.read(zohoInvoicesServiceProvider.future);
 
-    final String? search = _searchQuery ?? _clean(q);
-    final int effectiveLimit = limit > _maxPageSize ? _maxPageSize : limit;
+    final search = _searchQuery ?? _clean(q);
+    final effectiveLimit = limit > _maxPageSize ? _maxPageSize : limit;
 
+    // Staff: retain the existing invoice listing.
     if (!_isMine) {
-      final List<ZohoInvoice> items = await svc.list(
+      final items = await service.list(
         limit: effectiveLimit,
         page: page,
         q: search,
@@ -82,23 +74,21 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
       );
     }
 
-    final _MemberInvoiceScope memberScope = _resolveMemberInvoiceScope();
+    // Member: AuthUser -> Native Contact -> verified Zoho mapping.
+    final customerId = await _resolveMemberZohoCustomerId();
 
-    if (!memberScope.hasScope) {
+    if (customerId == null) {
       return const PageResult<ZohoInvoice>(
         items: <ZohoInvoice>[],
         hasMore: false,
       );
     }
 
-    final List<ZohoInvoice> items = await svc.list(
+    final items = await service.list(
       limit: effectiveLimit,
       page: page,
       q: search,
-      customerId: memberScope.customerId,
-      accountNumber: memberScope.customerId == null
-          ? memberScope.accountNumber
-          : null,
+      customerId: customerId,
     );
 
     return PageResult<ZohoInvoice>(
@@ -107,43 +97,21 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
     );
   }
 
-  _MemberInvoiceScope _resolveMemberInvoiceScope() {
-    final ZohoMemberCustomerScope? zohoScope = _ref.read(
-      zohoMemberCustomerScopeProvider,
-    );
+  Future<String?> _resolveMemberZohoCustomerId() async {
+    final user = _ref.read(currentUserValueProvider);
+    final nativeContactId = _clean(user?.nativeContactId);
 
-    final String? scopedCustomerId = _clean(zohoScope?.contactId);
-    final String? scopedAccountNumber = _clean(zohoScope?.accountNumber);
+    if (nativeContactId == null) return null;
 
-    if (scopedCustomerId != null || scopedAccountNumber != null) {
-      return _MemberInvoiceScope(
-        customerId: scopedCustomerId,
-        accountNumber: scopedAccountNumber,
-      );
-    }
+    final zohoService = await _ref.read(zohoContactsServiceProvider.future);
 
-    final me = _ref.read(currentUserValueProvider);
+    final mapping = await zohoService.getMapping(nativeContactId);
 
-    return _MemberInvoiceScope(accountNumber: _clean(me?.accountNumber));
+    return _clean(mapping.zohoContactId);
   }
 
   static String? _clean(String? value) {
-    final String text = (value ?? '').trim();
+    final text = (value ?? '').trim();
     return text.isEmpty ? null : text;
-  }
-}
-
-class _MemberInvoiceScope {
-  const _MemberInvoiceScope({this.customerId, this.accountNumber});
-
-  final String? customerId;
-  final String? accountNumber;
-
-  bool get hasScope {
-    return _hasText(customerId) || _hasText(accountNumber);
-  }
-
-  static bool _hasText(String? value) {
-    return value != null && value.trim().isNotEmpty;
   }
 }

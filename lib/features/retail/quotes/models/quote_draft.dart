@@ -1,7 +1,6 @@
 // lib/features/retail/quotes/models/quote_draft.dart
-
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
-import 'package:afyakit/features/records/zoho_contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
@@ -15,6 +14,8 @@ class QuoteDraft {
   const QuoteDraft({
     this.contact,
     this.contactId,
+    this.nativeContactId,
+    this.accountNumber,
     this.contactName,
     this.customerNotes,
     this.reference,
@@ -29,7 +30,6 @@ class QuoteDraft {
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
-
   final ZohoContact? contact;
 
   /// Zoho customer/contact being billed.
@@ -37,15 +37,18 @@ class QuoteDraft {
   /// For direct-pay private-use quotes, this is usually the member/customer.
   /// For insurance quotes, this is normally the insurer/payer contact.
   final String? contactId;
-  final String? contactName;
 
+  /// Canonical payer identity, not sent to the legacy Zoho request endpoint.
+  final String? nativeContactId;
+
+  /// Canonical Native Contact account of the payer, distinct from Zoho contactId.
+  final String? accountNumber;
+  final String? contactName;
   final String? customerNotes;
   final String? reference;
-
   final QuotePurchaseContext purchaseContext;
   final QuotePaymentContext paymentContext;
   final QuoteFulfilmentMethod fulfilmentMethod;
-
   final SalesDocumentAddress? deliveryAddress;
 
   /// Canonical Health Profile for the person receiving care or medicine.
@@ -63,39 +66,31 @@ class QuoteDraft {
   ///
   /// Required for insurance and optional for direct pay.
   final String? prescriptionId;
-
   final String? currencyCode;
-
   final List<QuoteLineDraft> lines;
-
   String get customerIdResolved {
     return (contactId ?? contact?.contactId ?? '').trim();
   }
 
-  bool get hasCustomer => customerIdResolved.isNotEmpty;
-
+  String get accountNumberResolved =>
+      (accountNumber ?? contact?.accountNumber ?? '').trim();
+  bool get hasCustomer =>
+      accountNumberResolved.isNotEmpty || customerIdResolved.isNotEmpty;
   bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
-
   bool get hasLines {
     return lines.any((QuoteLineDraft line) => line.safeQty > 0);
   }
 
   bool get isPrivateUse => purchaseContext.isPrivateUse;
-
   bool get isCompany => purchaseContext.isCompany;
-
   QuotePaymentContext get effectivePaymentContext {
     return isCompany ? QuotePaymentContext.directPay : paymentContext;
   }
 
   bool get isDirectPay => effectivePaymentContext.isDirectPay;
-
   bool get isInsurancePayment => effectivePaymentContext.isInsurance;
-
   bool get requiresPatient => purchaseContext.requiresPatient;
-
   bool get requiresDeliveryLocation => fulfilmentMethod.requiresLocation;
-
   bool get hasFulfilmentContext {
     return fulfilmentMethod.isPickup || hasDeliveryAddress;
   }
@@ -111,7 +106,6 @@ class QuoteDraft {
   String? get resolvedProfileId {
     final String direct = (profileId ?? '').trim();
     if (direct.isNotEmpty) return direct;
-
     final String snapshotId = (patientSnapshot?.profileId ?? '').trim();
     return snapshotId.isEmpty ? null : snapshotId;
   }
@@ -119,7 +113,6 @@ class QuoteDraft {
   String? get resolvedMembershipId {
     final String direct = (membershipId ?? '').trim();
     if (direct.isNotEmpty) return direct;
-
     final String snapshotId = (patientSnapshot?.membershipId ?? '').trim();
     return snapshotId.isEmpty ? null : snapshotId;
   }
@@ -130,11 +123,8 @@ class QuoteDraft {
   }
 
   bool get hasPatientContext => resolvedProfileId != null;
-
   bool get hasInsuranceContext => resolvedMembershipId != null;
-
   bool get hasPrescriptionContext => resolvedPrescriptionId != null;
-
   bool get hasRequiredInsuranceQuoteContext {
     return isPrivateUse &&
         isInsurancePayment &&
@@ -145,15 +135,10 @@ class QuoteDraft {
 
   bool get canCreateQuote {
     if (!hasCustomer || !hasLines) return false;
-
     if (requiresPatient && !hasPatientContext) return false;
-
     if (!hasFulfilmentContext) return false;
-
     if (requiresMembership && !hasInsuranceContext) return false;
-
     if (requiresPrescription && !hasPrescriptionContext) return false;
-
     return true;
   }
 
@@ -166,10 +151,8 @@ class QuoteDraft {
   String get displayContactName {
     final String displayName = (contact?.displayName ?? '').trim();
     if (displayName.isNotEmpty) return displayName;
-
     final String fallbackName = (contactName ?? '').trim();
     if (fallbackName.isNotEmpty) return fallbackName;
-
     return '';
   }
 
@@ -178,6 +161,10 @@ class QuoteDraft {
     bool clearContact = false,
     String? contactId,
     bool clearContactId = false,
+    String? nativeContactId,
+    bool clearNativeContactId = false,
+    String? accountNumber,
+    bool clearAccountNumber = false,
     String? contactName,
     bool clearContactName = false,
     String? customerNotes,
@@ -204,22 +191,24 @@ class QuoteDraft {
   }) {
     final QuotePurchaseContext nextPurchaseContext =
         purchaseContext ?? this.purchaseContext;
-
     final QuotePaymentContext nextPaymentContext = nextPurchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : (paymentContext ?? this.paymentContext);
-
     final QuoteFulfilmentMethod nextFulfilmentMethod =
         fulfilmentMethod ?? this.fulfilmentMethod;
-
     final SalesDocumentAddress? nextDeliveryAddress =
         nextFulfilmentMethod.isPickup || clearDeliveryAddress
         ? null
         : (deliveryAddress ?? this.deliveryAddress);
-
     return QuoteDraft(
       contact: clearContact ? null : (contact ?? this.contact),
       contactId: clearContactId ? null : (contactId ?? this.contactId),
+      nativeContactId: clearNativeContactId
+          ? null
+          : (nativeContactId ?? this.nativeContactId),
+      accountNumber: clearAccountNumber
+          ? null
+          : (accountNumber ?? this.accountNumber),
       contactName: clearContactName ? null : (contactName ?? this.contactName),
       customerNotes: clearCustomerNotes
           ? null
@@ -248,46 +237,34 @@ class QuoteDraft {
 
   QuoteDraft upsertLine(QuoteLineDraft next) {
     final String nextKey = next.key;
-
     final int index = lines.indexWhere((QuoteLineDraft line) {
       return line.key == nextKey;
     });
-
     if (next.safeQty == 0) {
       if (index < 0) return this;
-
       final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
         ..removeAt(index);
-
       return copyWith(lines: updated);
     }
-
     if (index < 0) {
       final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
         ..add(next);
-
       return copyWith(lines: updated);
     }
-
     final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
       ..[index] = next;
-
     return copyWith(lines: updated);
   }
 
   QuoteDraft removeLineByKey(String key) {
     final String cleanKey = key.trim();
     if (cleanKey.isEmpty) return this;
-
     final int index = lines.indexWhere((QuoteLineDraft line) {
       return line.key == cleanKey;
     });
-
     if (index < 0) return this;
-
     final List<QuoteLineDraft> updated = List<QuoteLineDraft>.from(lines)
       ..removeAt(index);
-
     return copyWith(lines: updated);
   }
 
@@ -295,6 +272,8 @@ class QuoteDraft {
     return copyWith(
       clearContact: true,
       clearContactId: true,
+      clearNativeContactId: true,
+      clearAccountNumber: true,
       clearContactName: true,
     );
   }
@@ -311,7 +290,6 @@ class QuoteDraft {
   QuoteDraft withPatientSnapshot(SalesDocumentPatientSnapshot snapshot) {
     final bool patientChanged =
         resolvedProfileId != null && resolvedProfileId != snapshot.profileId;
-
     return copyWith(
       profileId: snapshot.profileId,
       patientSnapshot: snapshot,
@@ -324,7 +302,6 @@ class QuoteDraft {
 
   QuoteDraft withPrescriptionId(String? prescriptionId) {
     final String clean = (prescriptionId ?? '').trim();
-
     return copyWith(
       prescriptionId: clean.isEmpty ? null : clean,
       clearPrescriptionId: clean.isEmpty,
@@ -363,7 +340,6 @@ class QuoteDraft {
     final List<QuoteLineDraft> hydratedLines = quote.lineItems
         .map((ZohoQuoteLineItem line) {
           final String stableKey = (line.lineItemId ?? '').trim();
-
           final DiSalesTile tile = stableKey.isNotEmpty
               ? DiSalesTile.fallbackFromName(
                   name: line.name,
@@ -375,7 +351,6 @@ class QuoteDraft {
                   name: line.name,
                   description: line.description,
                 );
-
           return QuoteLineDraft(
             tile: tile,
             quantity: line.quantity.round(),
@@ -389,7 +364,6 @@ class QuoteDraft {
           );
         })
         .toList(growable: false);
-
     return QuoteDraft(
       contactId: (quote.customerId ?? '').trim().isEmpty
           ? null
