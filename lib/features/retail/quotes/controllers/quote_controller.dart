@@ -1,11 +1,8 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
-import 'dart:async';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
-import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_member_binding_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
@@ -118,24 +115,9 @@ final quoteControllerProvider =
 class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
-    // Rebind if the authenticated member's canonical contact changes.
-    _ref.listen<String?>(currentMemberNativeContactIdProvider, (
-      String? previous,
-      String? next,
-    ) {
-      if (previous == next) return;
-      if (!_shouldAutoBindMemberCustomer) return;
-      unawaited(_memberBinding.resolve(showError: false));
-    });
-    _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (
-      QuoteContactPolicy? previous,
-      QuoteContactPolicy next,
-    ) {
-      if (previous == next) return;
-      if (!_shouldAutoBindMemberCustomer) return;
-      unawaited(_memberBinding.resolve(showError: false));
-    });
+    // The member identity comes from AuthUser.accountNumber; no Zoho lookup.
   }
+
   final Ref _ref;
   late final QuoteEngine _engine;
   bool get _busy => state.busy;
@@ -145,15 +127,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       _ref.read(quoteMetaControllerProvider.notifier);
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
   QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
-  QuoteMemberBindingController get _memberBinding =>
-      _ref.read(quoteMemberBindingControllerProvider);
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
-  bool get _shouldAutoBindMemberCustomer {
-    if (!_isMemberScoped) return false;
-    // Insurance is special: the quote customer must remain the insurer/payer
-    // selected from the membership, not the logged-in member/customer.
-    return !_meta.isInsurancePayment;
-  }
 
   void setError(String? message) {
     final String msg = (message ?? '').trim();
@@ -186,7 +160,7 @@ class QuoteController extends StateNotifier<QuoteState> {
   }
 
   void patchDraft({
-    ZohoContact? contact,
+    NativeContact? contact,
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
@@ -194,7 +168,7 @@ class QuoteController extends StateNotifier<QuoteState> {
     SalesDocumentAddress? deliveryAddress,
   }) {
     if (_busy) return;
-    if (contact != null) _metaCtl.setContact(contact);
+    if (contact != null) _metaCtl.setNativePayer(contact);
     if (reference != null) _metaCtl.setReference(reference);
     if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
     if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
@@ -218,9 +192,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (nextId.isEmpty) {
       _metaCtl.beginNew();
       state = const QuoteState();
-      if (_shouldAutoBindMemberCustomer) {
-        unawaited(_memberBinding.resolve(showError: false));
-      }
       await ensureDraftFromLines(requirePrices: requirePrices);
       return;
     }
@@ -299,36 +270,31 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
-    final QuoteMetaState metaBeforeBinding = _meta;
-    final bool shouldBindMemberCustomer =
-        _isMemberScoped && !metaBeforeBinding.isInsurancePayment;
-    if (shouldBindMemberCustomer) {
-      final String? customerId = await _memberBinding.resolve(showError: true);
-      if (customerId == null) {
-        SnackService.showError('Could not resolve your customer profile.');
+    // Member direct-pay uses the authenticated canonical account. Insurance
+    // continues to bill the insurer Native Contact selected via membership.
+    if (_isMemberScoped && !_meta.isInsurancePayment && !state.isEditing) {
+      final accountNumber =
+          (_ref.read(currentMemberAccountNumberProvider) ?? '').trim();
+      if (accountNumber.isEmpty) {
+        SnackService.showError('Your account has no linked Native Contact.');
         return null;
       }
+      _metaCtl.applyState(
+        _meta.copyWith(
+          clearPayer: true,
+          clearCustomerMapping: true,
+          nativeContactId: accountNumber,
+        ),
+      );
     }
-    // Staff/insurance selections are canonical Native Contacts; resolve their
-    // accounting customer before constructing the draft. Never use account numbers.
+
+    // Staff and insurance payer selections are Native Contacts. Never fetch
+    // a Zoho contact or accounting mapping from Flutter: the API resolves it.
     final selectedPayer = _meta.payer;
-    if (selectedPayer != null && !_meta.isEditing) {
-      try {
-        final payerId = selectedPayer.id.trim();
-        final service = await _ref.read(zohoContactsServiceProvider.future);
-        final mapping = await service.getMappedContact(payerId);
-        if (mapping.nativeContactId.trim() != payerId ||
-            mapping.zohoContactId.trim().isEmpty ||
-            _meta.payer?.id.trim() != payerId) {
-          throw StateError('Selected payer mapping is invalid or stale');
-        }
-        _metaCtl.setVerifiedCustomerMapping(
-          nativeContactId: payerId,
-          zohoContactId: mapping.zohoContactId,
-          customerName: mapping.contactName,
-        );
-      } catch (error) {
-        SnackService.showError('Cannot resolve the selected payer: $error');
+    if (selectedPayer != null && !state.isEditing) {
+      final accountNumber = (selectedPayer.accountNumber).trim();
+      if (accountNumber.isEmpty) {
+        SnackService.showError('Selected payer has no Native account number.');
         return null;
       }
     }
@@ -348,8 +314,8 @@ class QuoteController extends StateNotifier<QuoteState> {
       '[QuoteSubmit] '
       'sale=${meta.purchaseContext.apiValue} '
       'payment=${meta.effectivePaymentContext.apiValue} '
-      'customerId=${meta.customerIdResolved} '
-      'customer=${meta.contact?.title ?? ''} '
+      'accountNumber=${meta.payer?.accountNumber ?? meta.nativeContactId ?? ''} '
+      'customer=${meta.displayContactName} '
       'patient=${meta.resolvedProfileId ?? ''} '
       'membership=${meta.resolvedMembershipId ?? ''} '
       'prescription=${meta.resolvedPrescriptionId ?? ''}',

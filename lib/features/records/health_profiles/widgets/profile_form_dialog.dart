@@ -1,11 +1,13 @@
-// lib/features/records/profiles/widgets/profile_form_dialog.dart
+// lib/features/records/health_profiles/widgets/profile_form_dialog.dart
 
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_controller.dart';
+
 import 'package:flutter/material.dart';
 
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ProfileFormDialog extends StatefulWidget {
   const ProfileFormDialog({
@@ -19,13 +21,13 @@ class ProfileFormDialog extends StatefulWidget {
 
   final Profile? initial;
 
-  /// Optional contact seed.
+  /// Optional Native Contact seed.
   ///
-  /// Useful for staff flows where a patient is being created from an existing
-  /// Zoho contact. For self-patients, this can prefill name/phone/email.
+  /// Staff can select an existing Native Contact. A self relationship can
+  /// optionally prefill profile name, phone and email.
   /// For dependents, this only seeds the payer/contact link unless
   /// [prefillFromContact] is true and the relationship is self.
-  final ZohoContact? initialContact;
+  final NativeContact? initialContact;
 
   /// Optional initial relationship between the patient and selected contact.
   final ProfileContactRelationship? initialRelationship;
@@ -60,7 +62,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
   late ProfileGender _gender;
   late bool _isActive;
 
-  ZohoContact? _selectedContact;
+  NativeContact? _selectedContact;
 
   bool get _isEdit => widget.initial != null;
 
@@ -69,7 +71,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     super.initState();
 
     final patient = widget.initial;
-    final primaryLink = patient?.primaryLinkedContact;
 
     final seedContact = widget.allowExplicitContactLink
         ? widget.initialContact
@@ -78,10 +79,10 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     _selectedContact = seedContact;
 
     _relationship =
-        patient?.relationship ??
-        primaryLink?.relationship ??
         widget.initialRelationship ??
-        ProfileContactRelationship.self;
+        (widget.allowExplicitContactLink
+            ? ProfileContactRelationship.other
+            : ProfileContactRelationship.self);
 
     final shouldPrefillFromContact =
         seedContact != null &&
@@ -97,7 +98,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     final seedEmail = shouldPrefillFromContact
         ? _contactEmail(seedContact)
         : '';
-    final seedContactId = _clean(seedContact?.contactId);
+    final seedAccountNumber = _clean(seedContact?.accountNumber);
 
     _fullNameCtl = TextEditingController(
       text: _firstNonEmpty([patient?.fullName, seedName]),
@@ -106,11 +107,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     _dobCtl = TextEditingController(text: patient?.dob ?? '');
 
     _contactLookupCtl = TextEditingController(
-      text: _firstNonEmpty([
-        patient?.contactId,
-        primaryLink?.contactId,
-        seedContactId,
-      ]),
+      text: _firstNonEmpty([seedAccountNumber]),
     );
 
     _phoneCtl = TextEditingController(
@@ -153,26 +150,25 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     return '';
   }
 
-  static String _contactDisplayName(ZohoContact? contact) {
+  static String _contactDisplayName(NativeContact? contact) {
     if (contact == null) return '';
 
     final displayName = contact.displayName.trim();
     if (displayName.isNotEmpty) return displayName;
 
-    final title = contact.title.trim();
-    if (title.isNotEmpty) return title;
-
     return '';
   }
 
-  static String _contactPhone(ZohoContact? contact) {
+  static String _contactPhone(NativeContact? contact) {
     if (contact == null) return '';
-    return contact.bestPhone.trim();
+    final phone = (contact.phone ?? '').trim();
+    if (phone.isNotEmpty) return phone;
+    return (contact.mobile ?? contact.verifiedPhone ?? '').trim();
   }
 
-  static String _contactEmail(ZohoContact? contact) {
+  static String _contactEmail(NativeContact? contact) {
     if (contact == null) return '';
-    return contact.bestEmail.trim();
+    return (contact.email ?? contact.verifiedEmail ?? '').trim();
   }
 
   String? _required(String? value, String label) {
@@ -191,23 +187,27 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     return null;
   }
 
-  String? _contactIdFromLookup(String value) {
+  static final RegExp _accountPattern = RegExp(
+    r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+  );
+
+  String? _accountNumberFromLookup(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
 
-    final looksLikeZohoContactId = RegExp(r'^\d{8,}$').hasMatch(trimmed);
-    if (!looksLikeZohoContactId) return null;
-
-    return trimmed;
+    final accountNumber = trimmed.toUpperCase();
+    return _accountPattern.hasMatch(accountNumber) ? accountNumber : null;
   }
 
-  String? _effectiveContactId() {
-    final selectedContactId = _selectedContact?.contactId.trim();
-    if (selectedContactId != null && selectedContactId.isNotEmpty) {
-      return selectedContactId;
+  String? _effectiveAccountNumber() {
+    final selectedAccountNumber = _selectedContact?.accountNumber
+        .trim()
+        .toUpperCase();
+    if (selectedAccountNumber != null && selectedAccountNumber.isNotEmpty) {
+      return selectedAccountNumber;
     }
 
-    return _contactIdFromLookup(_contactLookupCtl.text);
+    return _accountNumberFromLookup(_contactLookupCtl.text);
   }
 
   String _genderLabel(ProfileGender value) {
@@ -224,7 +224,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
   }
 
   void _prefillMissingPatientFieldsFromContact(
-    ZohoContact contact, {
+    NativeContact contact, {
     bool overwrite = false,
   }) {
     final name = _contactDisplayName(contact);
@@ -244,50 +244,28 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     }
   }
 
-  Future<void> _pickContact() async {
-    final contact = await showDialog<ZohoContact>(
-      context: context,
-      builder: (_) => const ContactPickerDialog(forcePickerMode: true),
-    );
-
-    if (contact == null || !mounted) return;
-
-    setState(() {
-      _selectedContact = contact;
-      _contactLookupCtl.text = contact.contactId;
-
-      if (_relationship == ProfileContactRelationship.self) {
-        _prefillMissingPatientFieldsFromContact(contact);
-      }
-    });
-  }
-
-  void _useSelectedContactAsPatient() {
-    final selected = _selectedContact;
-    if (selected == null) return;
-
-    setState(() {
-      _relationship = ProfileContactRelationship.self;
-      _prefillMissingPatientFieldsFromContact(selected, overwrite: true);
-    });
-  }
-
-  void _clearSelectedContact() {
-    setState(() {
-      _selectedContact = null;
-      _contactLookupCtl.clear();
-    });
-  }
-
   void _submit() {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
+
+    if (widget.allowExplicitContactLink &&
+        _contactLookupCtl.text.trim().isNotEmpty &&
+        _effectiveAccountNumber() == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter or select a valid Native Contact account number (AC-XXXXXX).',
+          ),
+        ),
+      );
+      return;
+    }
 
     final input = ProfileUpsertInput(
       fullName: _fullNameCtl.text.trim(),
       dob: _dobCtl.text.trim(),
       gender: _gender,
-      contactId: widget.allowExplicitContactLink ? _effectiveContactId() : null,
+      accountNumber: null,
       relationship: _relationship,
       phone: _phoneCtl.text.trim(),
       email: _emailCtl.text.trim(),
@@ -306,150 +284,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
       helperText: helper,
       border: const OutlineInputBorder(),
       isDense: true,
-    );
-  }
-
-  Widget _linkedContactsPreview(Profile patient) {
-    if (patient.linkedContacts.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return SizedBox(
-      width: 672,
-      child: InputDecorator(
-        decoration: _dec(
-          'Existing linked contacts',
-          helper:
-              'Existing associations are shown for review. Picking a contact creates or updates one link.',
-        ),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: patient.linkedContacts
-              .map((link) {
-                final label = [
-                  link.contactDisplayName?.trim().isNotEmpty == true
-                      ? link.contactDisplayName!.trim()
-                      : link.contactId,
-                  ProfilesLabels.relationship(link.relationship),
-                  link.isActive ? 'active' : 'inactive',
-                ].join(' · ');
-
-                return Chip(
-                  label: Text(label),
-                  visualDensity: VisualDensity.compact,
-                );
-              })
-              .toList(growable: false),
-        ),
-      ),
-    );
-  }
-
-  Widget _selectedContactCard() {
-    final selected = _selectedContact;
-    final manualId = _contactIdFromLookup(_contactLookupCtl.text);
-
-    if (selected == null && manualId == null) {
-      return const SizedBox.shrink();
-    }
-
-    final title = selected?.displayName.trim().isNotEmpty == true
-        ? selected!.displayName.trim()
-        : 'Selected contact';
-
-    final subtitle = selected == null
-        ? manualId!
-        : [
-            selected.contactId,
-            if ((selected.accountNumber ?? '').trim().isNotEmpty)
-              selected.accountNumber!.trim(),
-          ].join(' · ');
-
-    return SizedBox(
-      width: 672,
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: ListTile(
-          dense: true,
-          leading: const Icon(Icons.account_circle_outlined),
-          title: Text(title),
-          subtitle: Text(subtitle),
-          trailing: Wrap(
-            spacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (selected != null)
-                TextButton(
-                  onPressed: _useSelectedContactAsPatient,
-                  child: const Text('Use as patient'),
-                ),
-              IconButton(
-                tooltip: 'Clear payer/contact',
-                onPressed: _clearSelectedContact,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _staffContactLinkSection() {
-    if (!widget.allowExplicitContactLink) {
-      return const SizedBox.shrink();
-    }
-
-    return SizedBox(
-      width: 672,
-      child: InputDecorator(
-        decoration: _dec(
-          'Optional payer/contact link',
-          helper:
-              'Staff/admin only. Pick a Zoho contact to link this profile to a payer immediately. If the contact is the patient, use relationship “Self”.',
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 320,
-                  child: TextFormField(
-                    controller: _contactLookupCtl,
-                    decoration: const InputDecoration(
-                      labelText: 'Zoho contact ID',
-                      hintText: '705213400000...',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: _pickContact,
-                  icon: const Icon(Icons.search),
-                  label: const Text('Pick payer/contact'),
-                ),
-                TextButton(
-                  onPressed: _clearSelectedContact,
-                  child: const Text('Clear'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _relationshipField(
-              helper:
-                  'Relationship between this profile and the selected payer/contact.',
-            ),
-            const SizedBox(height: 12),
-            _selectedContactCard(),
-          ],
-        ),
-      ),
     );
   }
 
@@ -507,7 +341,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEdit ? 'Edit patient profile' : ' profile'),
+      title: Text(_isEdit ? 'Edit health profile' : 'New health profile'),
       content: SizedBox(
         width: 720,
         height: MediaQuery.of(context).size.height * 0.72,
@@ -523,7 +357,7 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
                   SizedBox(
                     width: 330,
                     child: InputDecorator(
-                      decoration: _dec('DawaPap patient ID'),
+                      decoration: _dec('Health profile ID'),
                       child: SelectableText(widget.initial!.profileId),
                     ),
                   ),
@@ -587,10 +421,10 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
                     decoration: _dec('National ID'),
                   ),
                 ),
-                if (!widget.allowExplicitContactLink) _relationshipField(),
-                _staffContactLinkSection(),
-                if (widget.allowExplicitContactLink && widget.initial != null)
-                  _linkedContactsPreview(widget.initial!),
+                if (!widget.allowExplicitContactLink && !_isEdit)
+                  _relationshipField(),
+
+                // Contact associations are created in the Linked Payers panel.
                 SizedBox(
                   width: 672,
                   child: TextFormField(
@@ -625,6 +459,104 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
         FilledButton(
           onPressed: _submit,
           child: Text(_isEdit ? 'Save changes' : 'Create'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Staff picker using the existing Native Contacts provider.
+/// It lists the current provider page, not the entire tenant directory.
+class _NativeContactPickerDialog extends ConsumerStatefulWidget {
+  const _NativeContactPickerDialog();
+
+  @override
+  ConsumerState<_NativeContactPickerDialog> createState() =>
+      _NativeContactPickerDialogState();
+}
+
+class _NativeContactPickerDialogState
+    extends ConsumerState<_NativeContactPickerDialog> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final contactsAsync = ref.watch(nativeContactsListProvider);
+    return AlertDialog(
+      title: const Text('Select Native Contact'),
+      content: SizedBox(
+        width: 560,
+        height: 480,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Search loaded contacts',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) =>
+                  setState(() => _query = value.trim().toLowerCase()),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: contactsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) =>
+                    Center(child: Text('Could not load contacts: $error')),
+                data: (contacts) {
+                  final filtered = contacts
+                      .where((contact) {
+                        if (contact.status != 'active') return false;
+                        final accountNumber = (contact.accountNumber)
+                            .trim()
+                            .toUpperCase();
+                        if (!RegExp(
+                          r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+                        ).hasMatch(accountNumber)) {
+                          return false;
+                        }
+                        final text = [
+                          contact.displayName,
+                          accountNumber,
+                          contact.phone ?? '',
+                          contact.mobile ?? '',
+                          contact.email ?? '',
+                        ].join(' ').toLowerCase();
+                        return text.contains(_query);
+                      })
+                      .toList(growable: false);
+
+                  if (filtered.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No matching active Native Contacts in the loaded list.',
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final contact = filtered[index];
+                      return ListTile(
+                        title: Text(contact.displayName),
+                        subtitle: Text(contact.accountNumber),
+                        onTap: () => Navigator.of(context).pop(contact),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
         ),
       ],
     );

@@ -326,12 +326,25 @@ class ZohoQuotesService {
     final String accountNumber = draft.accountNumberResolved.trim();
     // Member direct-pay creation is scoped by the authenticated backend identity.
     // Staff and insurance creation must supply a payer; backend enforces this.
-    if (requireCustomer && customerId.isEmpty) {
+    // The backend resolves account_number to the app-scoped Zoho customer.
+    // Member direct-pay quotes are bound to the authenticated member by the API.
+    // For insurance, the selected payer must be an explicit Native account.
+    final bool serverSelectsMember = memberMode &&
+        draft.isPrivateUse &&
+        !draft.isInsurancePayment;
+    if (requireCustomer && accountNumber.isEmpty && !serverSelectsMember) {
       throw StateError(
         draft.isInsurancePayment
-            ? 'Please select an insurer with a verified Zoho mapping.'
-            : 'Please select a customer with a verified Zoho mapping.',
+            ? 'Select an insurance payer with a Native account number.'
+            : 'Select a customer with a Native account number.',
       );
+    }
+    // Do not accept a raw Zoho ID as a substitute for canonical selection
+    // when creating a new quote. Historical IDs are retained only for edits.
+    if (requireCustomer && !serverSelectsMember &&
+        !RegExp(r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$')
+            .hasMatch(accountNumber.toUpperCase())) {
+      throw StateError('A valid Native Contact account number is required.');
     }
     if (!draft.hasLines) {
       throw StateError(
@@ -390,9 +403,11 @@ class ZohoQuotesService {
       'sale_context': draft.purchaseContext.apiValue,
       'payment_context': paymentContext.apiValue,
       'fulfilment_method': draft.fulfilmentMethod.apiValue,
-      if (accountNumber.isNotEmpty && customerId.isEmpty)
-        'account_number': accountNumber,
-      if (customerId.isNotEmpty) 'customer_id': customerId,
+      if (accountNumber.isNotEmpty)
+        'account_number': accountNumber.toUpperCase(),
+      // Zoho IDs are only retained while editing historical quotes.
+      if (!requireCustomer && accountNumber.isEmpty && customerId.isNotEmpty)
+        'customer_id': customerId,
       if (quoteDateValue != null) 'date': quoteDateValue,
       if (expiryDateValue != null) 'expiry_date': expiryDateValue,
       if (reference != null) 'reference_number': reference,

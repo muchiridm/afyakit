@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/native_contact.dart';
+import '../native_contact.dart';
 
 /// Responsive, expandable and read-only Native Contact tile.
 ///
@@ -23,6 +23,7 @@ class NativeContactTile extends StatelessWidget {
   final VoidCallback onAddresses;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
+
   bool get _hasAccountNumber => (contact.accountNumber ?? '').trim().isNotEmpty;
   bool get _active => contact.status.trim().toLowerCase() == 'active';
   String get _primaryPhone {
@@ -163,6 +164,7 @@ class _ContactDetails extends StatelessWidget {
   final bool desktop;
   final bool busy;
   final VoidCallback onRemove;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -302,6 +304,7 @@ class _ContactActionsMenu extends StatelessWidget {
   final VoidCallback onAddresses;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
+
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(

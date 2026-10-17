@@ -1,7 +1,8 @@
 // lib/features/retail/quotes/widgets/quote_editor_actions.dart
 
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/contacts/widgets/contact_picker_dialog.dart';
+
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
@@ -30,7 +31,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
   final QuoteMetaState meta;
   final SalesDocMetaVm vmMeta;
   final bool isMemberScoped;
-  final ValueChanged<ZohoContact> onContactPicked;
+  final ValueChanged<NativeContact> onContactPicked;
   final Future<void> Function() onDelete;
   final Future<bool> Function() onEnsureAuthed;
 
@@ -52,14 +53,17 @@ class QuoteEditorHeaderActions extends StatelessWidget {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 
-    final bool hasContact = meta.contact != null;
+    final bool hasContact =
+        meta.payer != null ||
+        (meta.nativeContactId ?? '').trim().isNotEmpty ||
+        (meta.zohoContactId ?? '').trim().isNotEmpty;
 
     Future<void> pickContact() async {
       final bool ok = await onEnsureAuthed();
       if (!ok) return;
       if (!context.mounted) return;
 
-      final ZohoContact? picked = await showDialog<ZohoContact>(
+      final NativeContact? picked = await showDialog<NativeContact>(
         context: context,
         builder: (_) => const ContactPickerDialog(),
       );
@@ -167,9 +171,15 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       return 'Some items are missing prices';
     }
 
-    if (meta.customerIdResolved.isEmpty) {
-      return isMemberScoped
-          ? 'Customer profile is still loading'
+    final bool hasNativePayer =
+        meta.payerAccountNumber.isNotEmpty ||
+        (meta.nativeContactId ?? '').trim().isNotEmpty;
+    // In member direct-pay mode, the API supplies the authenticated customer.
+    if (!hasNativePayer &&
+        !(isMemberScoped && !meta.isInsurancePayment) &&
+        !(isEdit && meta.customerIdResolved.isNotEmpty)) {
+      return meta.isInsurancePayment
+          ? 'Select an insurer from Native Contacts'
           : 'Pick a payer/customer';
     }
 

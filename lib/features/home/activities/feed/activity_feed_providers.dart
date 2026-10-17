@@ -13,50 +13,38 @@ final activityFeedServiceProvider = Provider<ActivityFeedService>((ref) {
   return ActivityFeedService(FirebaseFirestore.instance);
 });
 
+/// Member feed scope keyed only by the authenticated Native Contact account.
+///
+/// [contactId] is accepted temporarily for older widget callers but never used
+/// for queries or authorisation. Remove after those callers are migrated.
 class MemberActivityScope {
   const MemberActivityScope({
-    required this.contactId,
-    required this.accountNumber,
+    this.accountNumber,
+    @Deprecated('Use accountNumber; contactId is ignored.') this.contactId,
     this.limit = 20,
   });
 
-  final String? contactId;
   final String? accountNumber;
+  @Deprecated('Legacy Zoho identifier; ignored for member activity.')
+  final String? contactId;
   final int limit;
-
-  String? get cleanContactId {
-    final id = contactId?.trim();
-
-    if (id == null || id.isEmpty) {
-      return null;
-    }
-
-    return id;
-  }
 
   String? get cleanAccountNumber {
     final value = accountNumber?.trim();
-
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-
-    return value;
+    return value == null || value.isEmpty ? null : value;
   }
 
-  bool get isEmpty => cleanContactId == null && cleanAccountNumber == null;
+  bool get isEmpty => cleanAccountNumber == null;
 
   @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is MemberActivityScope &&
-            other.cleanContactId == cleanContactId &&
-            other.cleanAccountNumber == cleanAccountNumber &&
-            other.limit == limit;
-  }
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MemberActivityScope &&
+          other.cleanAccountNumber == cleanAccountNumber &&
+          other.limit == limit;
 
   @override
-  int get hashCode => Object.hash(cleanContactId, cleanAccountNumber, limit);
+  int get hashCode => Object.hash(cleanAccountNumber, limit);
 }
 
 final staffActivityFeedProvider =
@@ -83,17 +71,6 @@ final memberActivityFeedProvider = StreamProvider.autoDispose
       final tenantId = ref.watch(tenantIdProvider);
       final appId = ref.watch(appIdProvider);
       final service = ref.watch(activityFeedServiceProvider);
-
-      final contactId = scope.cleanContactId;
-
-      if (contactId != null) {
-        return service.watchContactActivity(
-          tenantId: tenantId,
-          appId: appId,
-          contactId: contactId,
-          limit: scope.limit,
-        );
-      }
 
       return service.watchAccountActivity(
         tenantId: tenantId,

@@ -1,16 +1,10 @@
 part of 'routes.dart';
 
 /// Retail, billing, payments and catalog API routes.
+///
+/// Native Contacts are managed through the records API. Zoho Books uses
+/// app-scoped contact mapping internally; no Zoho Contacts picker endpoints.
 extension AfyaKitRetailRoutes on AfyaKitRoutes {
-  // Zoho accounting customer mappings (Native ID, app-scoped).
-  // GET /zoho/v1/contacts/:nativeContactId/mapping
-  Uri retailZohoContactMapping(String nativeContactId) =>
-      _uri('zoho/v1/contacts/${_seg(nativeContactId)}/mapping');
-
-  // GET /zoho/v1/contacts/:nativeContactId
-  Uri retailZohoMappedContact(String nativeContactId) =>
-      _uri('zoho/v1/contacts/${_seg(nativeContactId)}');
-
   // ─────────────────────────────────────────────
   // Quotes
   // ─────────────────────────────────────────────
@@ -29,7 +23,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
 
     add('q', q);
     add('accountNumber', accountNumber);
-    // Backend expects snake_case.
+    // Legacy/accounting filter. The backend expects snake_case.
     add('customer_id', customerId);
     return _uri('zoho/v1/quotes', query: query);
   }
@@ -48,6 +42,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
       _uri('zoho/v1/quotes/${_seg(quoteId)}/status/sent');
   Uri retailConvertQuoteToInvoice(String quoteId) =>
       _uri('zoho/v1/quotes/${_seg(quoteId)}/convert-to-invoice');
+
   // ─────────────────────────────────────────────
   // Invoices
   // ─────────────────────────────────────────────
@@ -57,11 +52,8 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? q,
     String? accountNumber,
     String? customerId,
-    // Clinical / insurance claim context.
-    //
-    // The canonical care-recipient identity is profileId/profile_id.
-    // patientNo remains contextual because Zoho/insurer-facing fields may
-    // still use patient terminology such as cf_patient_no.
+    // Canonical clinical recipient identity is profileId/profile_id.
+    // patientNo remains available for existing Zoho/insurer-facing fields.
     String? profileId,
     String? patientNo,
     String? claimPackId,
@@ -75,10 +67,9 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     }
 
     add('q', q);
-    // Accounting customer_id remains the Zoho customer ID for existing API filters.
-    // Backend expects snake_case.
+    // Accounting customer_id remains a Zoho customer ID for legacy filters.
     add('customer_id', customerId);
-    // Existing backend fallback filter; not a Native Contact lookup endpoint.
+    // Preserve the existing backend fallback filter behaviour.
     if ((customerId ?? '').trim().isEmpty) {
       add('accountNumber', accountNumber);
     }
@@ -100,6 +91,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
       _uri('zoho/v1/invoices/${_seg(invoiceId)}/email');
   Uri retailMarkInvoiceSent(String invoiceId) =>
       _uri('zoho/v1/invoices/${_seg(invoiceId)}/status/sent');
+
   // ─────────────────────────────────────────────
   // Payments
   // ─────────────────────────────────────────────
@@ -141,12 +133,14 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
       _uri('zoho/v1/payments/${_seg(paymentId)}');
   Uri retailPaymentsDelete(String paymentId) =>
       _uri('zoho/v1/payments/${_seg(paymentId)}');
+
   // ─────────────────────────────────────────────
   // M-Pesa
   // ─────────────────────────────────────────────
   Uri retailMpesaStkInitiate() => _uri('mpesa/stk/initiate');
   Uri retailMpesaPaymentStatus(String paymentId) =>
       _uri('mpesa/payments/${_seg(paymentId)}');
+
   // ─────────────────────────────────────────────
   // Retail meta
   // ─────────────────────────────────────────────
@@ -167,6 +161,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
 
   Uri retailMetaAccountById(String accountId) =>
       _uri('zoho/v1/meta/accounts/${_seg(accountId)}');
+
   // ─────────────────────────────────────────────
   // DawaIndex retail catalog
   // ─────────────────────────────────────────────

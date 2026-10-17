@@ -1,8 +1,8 @@
 // lib/features/clinical/prescriptions/widgets/prescriptions_screen.dart
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
@@ -42,7 +42,7 @@ class PrescriptionsScreen extends ConsumerStatefulWidget {
         profile ??
         await showProfilePickerScreen(
           context: context,
-          contactId: contactId,
+          accountNumber: contactId,
           forcePickerMode: forceProfilePickerMode,
         );
 
@@ -162,7 +162,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
           child: ProfilePickerCard(
             selectedProfile: _selectedProfile,
             busy: busy,
-            contactId: widget.contactId,
+            accountNumber: widget.contactId,
             forcePickerMode: widget.forceProfilePickerMode,
             canChange: !_fixedToProfile,
             onChanged: _selectProfile,

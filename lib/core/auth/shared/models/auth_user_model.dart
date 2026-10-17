@@ -75,6 +75,52 @@ class AppEmail {
 }
 
 @immutable
+class SessionIdentity {
+  const SessionIdentity({required this.linkVerified, this.accountNumber,
+    this.displayName, this.verifiedPhone, this.verifiedEmail});
+  final bool linkVerified;
+  final String? accountNumber;
+  final String? displayName;
+  final String? verifiedPhone;
+  final String? verifiedEmail;
+
+  factory SessionIdentity.fromMap(Object? value) {
+    final map = value is Map ? value : const <String, dynamic>{};
+    String? str(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+    return SessionIdentity(
+      linkVerified: map['linkVerified'] == true,
+      accountNumber: str(map['accountNumber']),
+      displayName: str(map['displayName']),
+      verifiedPhone: str(map['verifiedPhone']),
+      verifiedEmail: str(map['verifiedEmail']),
+    );
+  }
+}
+
+@immutable
+class SessionOnboarding {
+  const SessionOnboarding({required this.required, required this.next, this.missingFields = const []});
+  final bool required;
+  final String next;
+  final List<String> missingFields;
+
+  factory SessionOnboarding.fromMap(Object? value) {
+    if (value is! Map) throw const FormatException('Session missing onboarding state');
+    final next = value['next'];
+    if (next is! String || !const {'done', 'verify_email', 'complete_contact', 'link_contact'}.contains(next)) {
+      throw const FormatException('Invalid session onboarding state');
+    }
+    return SessionOnboarding(
+      required: value['required'] == true || next != 'done',
+      next: next,
+      missingFields: value['missingFields'] is List
+          ? (value['missingFields'] as List).whereType<String>().toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+@immutable
 class AuthUser {
   const AuthUser({
     required this.uid,
@@ -100,6 +146,8 @@ class AuthUser {
     this.recoveredFromAccountNumber,
     this.recoveredAt,
     this.nativeContactId,
+    this.identity,
+    this.onboarding,
     this.claims,
     this.isSuperAdmin = false,
     List<StaffRole> staffRoles = const [],
@@ -165,6 +213,8 @@ class AuthUser {
 
   /// Canonical Native Contact ID (AC-XXXXXX), never a Zoho ID.
   final String? nativeContactId;
+  final SessionIdentity? identity;
+  final SessionOnboarding? onboarding;
   final Map<String, dynamic>? claims;
   final bool isSuperAdmin;
 
@@ -375,6 +425,7 @@ class AuthUser {
   String? get contactId => nativeContactId;
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
+    if (identity?.displayName != null && identity!.displayName!.isNotEmpty) return identity!.displayName!;
     if (dn.isNotEmpty) return dn;
     final f = (firstName ?? '').trim();
     final l = (lastName ?? '').trim();
@@ -458,9 +509,11 @@ class AuthUser {
       previousUids: previousUids,
       recoveredFromAccountNumber: recoveredFromAccountNumber,
       recoveredAt: recoveredAt,
-      nativeContactId: _optUpperStr(
-        json['nativeContactId'] ?? json['native_contact_id'],
-      ),
+      nativeContactId: _optUpperStr(json['nativeContactId'] ?? json['native_contact_id']),
+      identity: json['identity'] is Map ? SessionIdentity.fromMap(json['identity']) : null,
+      onboarding: json['onboarding'] is Map
+          ? SessionOnboarding.fromMap(json['onboarding'])
+          : null,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
       staffRoles: staffRoles,
@@ -500,6 +553,8 @@ class AuthUser {
     String? recoveredFromAccountNumber,
     String? recoveredAt,
     String? nativeContactId,
+    SessionIdentity? identity,
+    SessionOnboarding? onboarding,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
@@ -540,6 +595,8 @@ class AuthUser {
           recoveredFromAccountNumber ?? this.recoveredFromAccountNumber,
       recoveredAt: recoveredAt ?? this.recoveredAt,
       nativeContactId: nativeContactId ?? this.nativeContactId,
+      identity: identity ?? this.identity,
+      onboarding: onboarding ?? this.onboarding,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       staffRoles: staffRoles ?? legacyStaffRoles,
@@ -561,10 +618,9 @@ class AuthUser {
     'tenantId': tenantId,
     if (phoneNumber != null) 'phoneNumber': phoneNumber,
     'status': status.wire,
-    'stores': stores,
-    if (firstName != null) 'firstName': firstName,
-    if (lastName != null) 'lastName': lastName,
-    if (displayName != null) 'displayName': displayName,
+    // Legacy store assignments must not be written from AuthUser.
+
+    // Native Contact owns name fields.
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
     if (phoneHistory.isNotEmpty) 'phoneHistory': phoneHistory,
     if (phoneVerified) 'phoneVerified': true,
@@ -573,7 +629,7 @@ class AuthUser {
     if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
     if (phoneSatisfied != null) 'phoneSatisfied': phoneSatisfied,
     if (isCompany) 'isCompany': true,
-    if (companyName != null) 'companyName': companyName,
+
     if (accountNumber != null) 'accountNumber': accountNumber,
     if (previousAccountNumbers.isNotEmpty)
       'previousAccountNumbers': previousAccountNumbers,
@@ -581,7 +637,7 @@ class AuthUser {
     if (recoveredFromAccountNumber != null)
       'recoveredFromAccountNumber': recoveredFromAccountNumber,
     if (recoveredAt != null) 'recoveredAt': recoveredAt,
-    if (nativeContactId != null) 'nativeContactId': nativeContactId,
+
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
     'staffRolesByApp': staffRolesByApp.map(

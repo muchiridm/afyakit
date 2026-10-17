@@ -1,14 +1,14 @@
 // lib/core/home/widgets/staff/staff_home_quick_actions.dart
 
+import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
 
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
-import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 
 class StaffHomeQuickActions extends ConsumerWidget {
   const StaffHomeQuickActions({super.key, this.onChat});
@@ -30,7 +30,9 @@ class StaffHomeQuickActions extends ConsumerWidget {
           icon: Icons.person_add_outlined,
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const ContactsScreen()),
+              MaterialPageRoute<void>(
+                builder: (_) => const NativeContactsScreen(),
+              ),
             );
           },
         ),

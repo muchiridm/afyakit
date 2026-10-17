@@ -1,15 +1,15 @@
-import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
-import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
+import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
 
-import '../controllers/native_contacts_controller.dart';
-import '../models/native_contact.dart';
+import '../native_contacts_controller.dart';
+import '../native_contact.dart';
 import 'native_contact_tile.dart';
 
-/// Staff-facing native Contacts, independent of Retail and Zoho Books.
+/// Staff-facing canonical Native Contacts, independent of Retail accounting.
 class NativeContactsScreen extends ConsumerStatefulWidget {
   const NativeContactsScreen({super.key, this.requireIdForPersons = false});
 
@@ -22,7 +22,7 @@ class NativeContactsScreen extends ConsumerStatefulWidget {
 }
 
 class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
-  String query = '';
+  String _query = '';
   String? _expandedContactId;
 
   void _toggleContact(String contactId) {
@@ -47,7 +47,8 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
 
   Future<void> _openDeliveryAddresses(NativeContact contact) async {
     final tenantId = ref.read(tenantIdProvider).trim().toLowerCase();
-    final contactId = contact.id.trim();
+    // Native Contact account number is the canonical contact document ID.
+    final contactId = (contact.accountNumber ?? '').trim();
     if (tenantId.isEmpty || contactId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -100,9 +101,15 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       ),
     );
     if (confirmed == true && mounted) {
+      if ((contact.accountNumber ?? '').trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contact account number is missing.')),
+        );
+        return;
+      }
       await ref
           .read(nativeContactsControllerProvider.notifier)
-          .removeFromApp(contact.id);
+          .removeFromApp((contact.accountNumber ?? '').trim());
     }
   }
 
@@ -138,7 +145,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                 hintText: 'Filter loaded contacts',
               ),
               onChanged: (text) =>
-                  setState(() => query = text.trim().toLowerCase()),
+                  setState(() => _query = text.trim().toLowerCase()),
             ),
           ),
           if (actions.busy) const LinearProgressIndicator(),
@@ -166,7 +173,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                     contact.accountNumber ?? '',
                     contact.verifiedPhone ?? '',
                   ].join(' ').toLowerCase();
-                  return searchable.contains(query);
+                  return searchable.contains(_query);
                 }).toList();
 
                 return Column(
@@ -178,7 +185,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                         vertical: 8,
                       ),
                       child: Text(
-                        query.isEmpty
+                        _query.isEmpty
                             ? '${contacts.length} contacts'
                             : '${filtered.length} of ${contacts.length} contacts',
                         style: Theme.of(context).textTheme.bodySmall,

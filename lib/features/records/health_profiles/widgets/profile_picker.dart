@@ -1,27 +1,29 @@
-// lib/features/records/profiles/widgets/profile_picker.dart
+// lib/features/records/health_profiles/widgets/profile_picker.dart
 
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:flutter/material.dart';
 
 Future<Profile?> showProfilePickerScreen({
   required BuildContext context,
-  String? contactId,
+  String? accountNumber,
   bool forcePickerMode = false,
 }) {
-  final cleanedContactId = (contactId ?? '').trim();
+  final cleanedAccountNumber = (accountNumber ?? '').trim();
 
-  final scopeContactId = forcePickerMode || cleanedContactId.isEmpty
-      ? null
-      : cleanedContactId;
+  // Only an explicit staff picker may open the unscoped directory.
+  // A member with no resolved account fails closed in ProfilesScreen.
+  final scopeAccountNumber = forcePickerMode ? null :
+      (cleanedAccountNumber.isEmpty ? null : cleanedAccountNumber);
 
-  final scoped = scopeContactId != null;
+  final scoped = !forcePickerMode;
 
   return Navigator.of(context).push<Profile>(
     MaterialPageRoute<Profile>(
       builder: (_) => ProfilesScreen(
-        contactId: scopeContactId,
-        allowExplicitContactLink: !scoped,
+        accountNumber: scopeAccountNumber,
+        memberMode: scoped,
+        allowExplicitContactLink: forcePickerMode,
         selectionMode: true,
         selectionTitle: scoped ? 'Select profile' : 'Select patient',
       ),
@@ -35,7 +37,7 @@ class ProfilePickerCard extends StatelessWidget {
     required this.selectedProfile,
     required this.busy,
     required this.onChanged,
-    this.contactId,
+    this.accountNumber,
     this.forcePickerMode = false,
     this.canChange = true,
   });
@@ -44,13 +46,13 @@ class ProfilePickerCard extends StatelessWidget {
   final bool busy;
   final ValueChanged<Profile> onChanged;
 
-  final String? contactId;
+  final String? accountNumber;
   final bool forcePickerMode;
   final bool canChange;
 
   bool get _isScoped {
     if (forcePickerMode) return false;
-    return (contactId ?? '').trim().isNotEmpty;
+    return (accountNumber ?? '').trim().isNotEmpty;
   }
 
   @override
@@ -110,7 +112,7 @@ class ProfilePickerCard extends StatelessWidget {
 
     final picked = await showProfilePickerScreen(
       context: context,
-      contactId: contactId,
+      accountNumber: accountNumber,
       forcePickerMode: forcePickerMode,
     );
 

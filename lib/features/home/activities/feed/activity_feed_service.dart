@@ -58,50 +58,6 @@ class ActivityFeedService {
         });
   }
 
-  /// Member activity associated with a contact ID
-  /// within one application.
-  ///
-  /// Contact identifiers are deliberately excluded from logs.
-  Stream<List<ActivityFeedRecord>> watchContactActivity({
-    required String tenantId,
-    required String appId,
-    required String contactId,
-    int limit = 20,
-  }) {
-    debugPrint(
-      '🔍 [activity][MEMBER-CONTACT] '
-      'tenant=$tenantId app=$appId limit=$limit '
-      'subscription started',
-    );
-
-    return _collection(tenantId)
-        .where('app_id', isEqualTo: appId)
-        .where('contact_id', isEqualTo: contactId)
-        .orderBy('occurred_at', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snap) {
-          debugPrint(
-            '✅ [activity][MEMBER-CONTACT] '
-            'received=${snap.docs.length} '
-            'tenant=$tenantId app=$appId',
-          );
-
-          return snap.docs
-              .map(ActivityFeedRecord.fromDoc)
-              .toList(growable: false);
-        })
-        .handleError((Object error, StackTrace stack) {
-          debugPrint(
-            '❌ [activity][MEMBER-CONTACT] '
-            'tenant=$tenantId app=$appId '
-            'error=$error',
-          );
-
-          Error.throwWithStackTrace(error, stack);
-        });
-  }
-
   /// Member activity associated with an account number
   /// within one application.
   ///

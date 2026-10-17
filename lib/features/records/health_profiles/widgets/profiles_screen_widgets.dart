@@ -1,8 +1,8 @@
-// lib/features/records/profiles/widgets/profiles_screen_widgets.dart
+// lib/features/records/health_profiles/widgets/profiles_screen_widgets.dart
 
-import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:flutter/material.dart';
 
 class ProfilesLabels {
@@ -46,7 +46,29 @@ class ProfilesLabels {
       case ProfileContactRelationship.insurance:
         return 'Insurance';
       case ProfileContactRelationship.other:
-        return 'Other payer/contact';
+        return 'Other';
+    }
+  }
+
+  /// On a profile detail view, the linked Contact is described relative
+  /// to the patient; the stored relationship describes the patient relative
+  /// to that Contact.
+  static String profilePerspectiveRelationship(ProfileContactRelationship value) {
+    switch (value) {
+      case ProfileContactRelationship.child:
+        return 'Parent';
+      case ProfileContactRelationship.parent:
+        return 'Child';
+      case ProfileContactRelationship.self:
+        return 'Self';
+      case ProfileContactRelationship.spouse:
+        return 'Spouse';
+      case ProfileContactRelationship.guardian:
+        return 'Guardian';
+      case ProfileContactRelationship.insurance:
+        return 'Insurer';
+      case ProfileContactRelationship.other:
+        return 'Other';
     }
   }
 
@@ -97,25 +119,25 @@ class ProfilesFilterBar extends StatelessWidget {
   const ProfilesFilterBar({
     super.key,
     required this.searchController,
-    required this.contactIdController,
+    required this.accountNumberController,
     required this.relationship,
     required this.isActive,
     required this.allowExplicitContactLink,
     required this.onSearchSubmitted,
-    required this.onContactIdSubmitted,
+    required this.onAccountNumberSubmitted,
     required this.onRelationshipChanged,
     required this.onStatusChanged,
     required this.onClearFilters,
   });
 
   final TextEditingController searchController;
-  final TextEditingController contactIdController;
+  final TextEditingController accountNumberController;
   final ProfileContactRelationship? relationship;
   final bool? isActive;
   final bool allowExplicitContactLink;
 
   final ValueChanged<String> onSearchSubmitted;
-  final ValueChanged<String> onContactIdSubmitted;
+  final ValueChanged<String> onAccountNumberSubmitted;
   final ValueChanged<ProfileContactRelationship?> onRelationshipChanged;
   final ValueChanged<String?> onStatusChanged;
   final VoidCallback onClearFilters;
@@ -145,13 +167,13 @@ class ProfilesFilterBar extends StatelessWidget {
             SizedBox(
               width: 220,
               child: TextField(
-                controller: contactIdController,
+                controller: accountNumberController,
                 decoration: const InputDecoration(
-                  labelText: 'Associated contact ID',
+                  labelText: 'Native Contact account number',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
-                onSubmitted: onContactIdSubmitted,
+                onSubmitted: onAccountNumberSubmitted,
               ),
             ),
           SizedBox(
@@ -304,10 +326,10 @@ class ProfileCard extends StatelessWidget {
 
   Widget _linkedContactsView(BuildContext context) {
     if (profile.linkedContacts.isEmpty) {
-      final contextualContact = profile.contactDisplayName ?? profile.contactId;
+      final contextualContact = profile.contactDisplayName ?? profile.accountNumber;
 
       return _infoLine(
-        'Linked contacts',
+        'Contextual account',
         ProfilesLabels.nullable(contextualContact),
       );
     }
@@ -324,7 +346,7 @@ class ProfileCard extends StatelessWidget {
               .map((link) {
                 final title = link.contactDisplayName?.trim().isNotEmpty == true
                     ? link.contactDisplayName!.trim()
-                    : link.contactId;
+                    : link.accountNumber;
 
                 final relationship = ProfilesLabels.relationship(
                   link.relationship,
@@ -366,7 +388,7 @@ class ProfileCard extends StatelessWidget {
   }
 
   Widget _contextualContactView(BuildContext context) {
-    final contact = profile.contactDisplayName ?? profile.contactId;
+    final contact = profile.contactDisplayName ?? profile.accountNumber;
     final relationship = profile.relationship;
 
     if (ProfilesLabels.nullable(contact).trim() == '—' &&

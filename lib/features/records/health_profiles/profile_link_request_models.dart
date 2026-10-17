@@ -1,4 +1,4 @@
-// lib/features/records/profiles/models/profile_link_request_models.dart
+// lib/features/records/health_profiles/profile_link_request_models.dart
 
 import 'package:flutter/foundation.dart';
 
@@ -92,10 +92,8 @@ class ProfileLinkRequest {
     required this.relationship,
     required this.approvalMode,
     required this.status,
-    this.requestedByContactId,
     this.requestedByAccountNumber,
     this.requestedByDisplayName,
-    this.targetContactId,
     this.targetAccountNumber,
     this.targetContactDisplayName,
     this.targetPhone,
@@ -109,7 +107,6 @@ class ProfileLinkRequest {
     this.confirmNationalId,
     this.matchesCount,
     this.approvedByUid,
-    this.approvedByContactId,
     this.approvedByRole,
     this.approvedAt,
     this.rejectedByUid,
@@ -125,11 +122,9 @@ class ProfileLinkRequest {
   final String profileDisplayName;
 
   final String requestedByUid;
-  final String? requestedByContactId;
   final String? requestedByAccountNumber;
   final String? requestedByDisplayName;
 
-  final String? targetContactId;
   final String? targetAccountNumber;
   final String? targetContactDisplayName;
   final String? targetPhone;
@@ -151,7 +146,6 @@ class ProfileLinkRequest {
   final int? matchesCount;
 
   final String? approvedByUid;
-  final String? approvedByContactId;
   final ProfileLinkApprovedByRole? approvedByRole;
   final DateTime? approvedAt;
 
@@ -190,10 +184,7 @@ class ProfileLinkRequest {
     final email = targetEmail?.trim();
     if (email != null && email.isNotEmpty) return email;
 
-    final contactId = targetContactId?.trim();
-    if (contactId != null && contactId.isNotEmpty) return contactId;
-
-    return 'Unspecified payer/contact';
+    return 'Unspecified Native Contact';
   }
 
   static String? _readNullableString(Map<String, Object?> json, String key) {
@@ -248,10 +239,6 @@ class ProfileLinkRequest {
       profileId: _readRequiredString(json, 'profile_id'),
       profileDisplayName: _readRequiredString(json, 'profile_display_name'),
       requestedByUid: _readRequiredString(json, 'requested_by_uid'),
-      requestedByContactId: _readNullableString(
-        json,
-        'requested_by_contact_id',
-      ),
       requestedByAccountNumber: _readNullableString(
         json,
         'requested_by_account_number',
@@ -260,7 +247,6 @@ class ProfileLinkRequest {
         json,
         'requested_by_display_name',
       ),
-      targetContactId: _readNullableString(json, 'target_contact_id'),
       targetAccountNumber: _readNullableString(json, 'target_account_number'),
       targetContactDisplayName: _readNullableString(
         json,
@@ -282,7 +268,6 @@ class ProfileLinkRequest {
       confirmNationalId: _readNullableString(json, 'confirm_national_id'),
       matchesCount: _readInt(json, 'matches_count'),
       approvedByUid: _readNullableString(json, 'approved_by_uid'),
-      approvedByContactId: _readNullableString(json, 'approved_by_contact_id'),
       approvedByRole: ProfileLinkApprovedByRole.fromJson(approvedByRoleRaw),
       approvedAt: _readDateTime(json, 'approved_at'),
       rejectedByUid: _readNullableString(json, 'rejected_by_uid'),
@@ -298,7 +283,6 @@ class ProfileLinkRequest {
 class ProfileLinkRequestCreateInput {
   const ProfileLinkRequestCreateInput({
     this.relationship = ProfileContactRelationship.other,
-    this.targetContactId,
     this.targetAccountNumber,
     this.targetContactDisplayName,
     this.targetPhone,
@@ -313,7 +297,6 @@ class ProfileLinkRequestCreateInput {
   });
 
   final ProfileContactRelationship relationship;
-  final String? targetContactId;
   final String? targetAccountNumber;
   final String? targetContactDisplayName;
   final String? targetPhone;
@@ -336,7 +319,6 @@ class ProfileLinkRequestCreateInput {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'relationship': relationship.name,
-      'target_contact_id': _nullable(targetContactId),
       'target_account_number': _nullable(targetAccountNumber),
       'target_contact_display_name': _nullable(targetContactDisplayName),
       'target_phone': _nullable(targetPhone),
@@ -355,13 +337,11 @@ class ProfileLinkRequestCreateInput {
 @immutable
 class ProfileLinkRequestApproveInput {
   const ProfileLinkRequestApproveInput({
-    this.contactId,
     this.accountNumber,
     this.contactDisplayName,
     this.relationship,
   });
 
-  final String? contactId;
   final String? accountNumber;
   final String? contactDisplayName;
   final ProfileContactRelationship? relationship;
@@ -374,7 +354,6 @@ class ProfileLinkRequestApproveInput {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'contact_id': _nullable(contactId),
       'account_number': _nullable(accountNumber),
       'contact_display_name': _nullable(contactDisplayName),
       'relationship': relationship?.name,

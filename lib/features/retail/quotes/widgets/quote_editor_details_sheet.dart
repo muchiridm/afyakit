@@ -1,12 +1,14 @@
 // lib/features/retail/quotes/widgets/quote_editor_details_sheet.dart
 
 import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 
-import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
 
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 
-import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 
@@ -29,10 +31,6 @@ import 'package:afyakit/features/insurance/memberships/controllers/insurance_mem
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 
@@ -110,8 +108,6 @@ class QuoteEditorDetailsSheet extends ConsumerStatefulWidget {
 
 class _QuoteEditorDetailsSheetState
     extends ConsumerState<QuoteEditorDetailsSheet> {
-  static const String _missingMemberContactId = '__missing_member_contact__';
-
   late QuoteMetaState _draft;
 
   late QuotePaymentContext _paymentContext;
@@ -132,8 +128,8 @@ class _QuoteEditorDetailsSheetState
 
   bool get _isMemberScoped => !widget.isStaffMode;
 
-  String get _memberContactId {
-    return (ref.read(currentMemberNativeContactIdProvider) ?? '').trim();
+  String get _memberAccountNumber {
+    return (ref.read(currentMemberAccountNumberProvider) ?? '').trim();
   }
 
   String? get _profileId {
@@ -145,11 +141,11 @@ class _QuoteEditorDetailsSheetState
   }
 
   ProfilesScope get _memberProfileScope {
-    final String contactId = _memberContactId;
+    final accountNumber = _memberAccountNumber;
 
     return ProfilesScope(
-      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
-
+      accountNumber: accountNumber.isEmpty ? null : accountNumber,
+      memberMode: true,
       allowExplicitContactLink: false,
     );
   }
@@ -774,19 +770,24 @@ class _QuoteEditorDetailsSheetState
     );
   }
 
-  ZohoContact _payerContactFromMembership(InsuranceMembership membership) {
-    final String payerName =
-        _clean(membership.payerDisplayName) ?? membership.payerContactId;
+  NativeContact _payerContactFromMembership(InsuranceMembership membership) {
+    final accountNumber = (membership.payerAccountNumber ?? '')
+        .trim()
+        .toUpperCase();
 
-    return ZohoContact(
-      contactId: membership.payerContactId.trim(),
+    if (accountNumber.isEmpty) {
+      throw StateError('Insurance payer has no Native Contact account number.');
+    }
 
+    final payerName = _clean(membership.payerDisplayName) ?? accountNumber;
+
+    return NativeContact(
+      accountNumber: accountNumber,
       displayName: payerName,
-
-      accountNumber: _clean(membership.payerAccountNumber),
-
+      entityType: 'organization',
       contactType: 'customer',
-
+      status: 'active',
+      appIds: const [],
       isInsurancePayer: true,
     );
   }
@@ -886,16 +887,11 @@ class _QuoteEditorDetailsSheetState
 
           child: ProfilePickerCard(
             selectedProfile: _profile,
-
             busy: false,
-
-            contactId: _isMemberScoped ? _memberContactId : null,
-
+            accountNumber: _isMemberScoped ? _memberAccountNumber : null,
             forcePickerMode: widget.isStaffMode,
-
             onChanged: (Profile profile) {
               _profile = profile;
-
               _pickProfileResult(profile);
             },
           ),

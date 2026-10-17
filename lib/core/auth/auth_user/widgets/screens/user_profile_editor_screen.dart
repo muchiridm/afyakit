@@ -1,605 +1,280 @@
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:flutter/material.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/core/auth/auth_user/controllers/profile_controller.dart';
-
-import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
-
-import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
-
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-
-import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
-
+import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/core/auth/auth_user/controllers/profile_controller.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
-
-import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
-
-import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-
+import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/shared/layout/app_header.dart';
-
 import 'package:afyakit/shared/layout/app_page.dart';
 
-class UserProfileEditorScreen extends ConsumerStatefulWidget {
+/// Compatibility entry point. Self -> Native Contact, target user -> access administration.
+class UserProfileEditorScreen extends ConsumerWidget {
   const UserProfileEditorScreen({super.key, this.user});
-
-  /// If null → edit current logged-in user.
-
-  /// If non-null → admin editing a specific user.
-
   final AuthUser? user;
-
   @override
-  ConsumerState<UserProfileEditorScreen> createState() =>
-      _UserProfileEditorScreenState();
+  Widget build(BuildContext context, WidgetRef ref) => user == null
+      ? const _MyContactEditor()
+      : _AccountAdministration(target: user!);
 }
 
-class _UserProfileEditorScreenState
-    extends ConsumerState<UserProfileEditorScreen> {
-  final _formKey = GlobalKey<FormState>();
+class _MyContactEditor extends ConsumerStatefulWidget {
+  const _MyContactEditor();
+  @override
+  ConsumerState<_MyContactEditor> createState() => _MyContactEditorState();
+}
 
+class _MyContactEditorState extends ConsumerState<_MyContactEditor> {
+  final _key = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _mobile = TextEditingController();
+  final _email = TextEditingController();
+  final _idNumber = TextEditingController();
+  NativeContact? _contact;
+  bool _initialised = false;
+  bool _saving = false;
+  String? _error;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileControllerProvider(widget.user).notifier).init();
-    });
+  Future<void> _load() async {
+    try {
+      final service = await ref.read(nativeContactsServiceProvider.future);
+      final contact = await service.getMine();
+      if (!mounted) return;
+      setState(() {
+        _contact = contact;
+        _name.text = contact.displayName;
+        _phone.text = contact.phone ?? '';
+        _mobile.text = contact.mobile ?? '';
+        _email.text = contact.email ?? '';
+        _idNumber.text = contact.idNumber ?? '';
+        _initialised = true;
+        _error = null;
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _initialised = true;
+        _error = err.toString();
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!(_key.currentState?.validate() ?? false) || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final service = await ref.read(nativeContactsServiceProvider.future);
+      final updated = await service.updateMine({
+        'display_name': _name.text.trim(),
+        'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+        'mobile': _mobile.text.trim().isEmpty ? null : _mobile.text.trim(),
+        'email': _email.text.trim().isEmpty ? null : _email.text.trim(),
+        'id_number': _idNumber.text.trim().isEmpty
+            ? null
+            : _idNumber.text.trim(),
+      });
+      if (!mounted) return;
+      setState(() {
+        _contact = updated;
+        _error = null;
+      });
+      await ref
+          .read(sessionControllerProvider(ref.read(tenantIdProvider)).notifier)
+          .refresh(forceNetwork: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Contact updated')));
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _error = err.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [_name, _phone, _mobile, _email, _idNumber]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppPage(
+    maxWidth: 720,
+    scrollable: true,
+    header: const AppHeader(title: 'My Native Contact'),
+    body: !_initialised
+        ? const Center(child: CircularProgressIndicator())
+        : _contact == null
+        ? Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error ?? 'Contact not available'),
+                TextButton(onPressed: _load, child: const Text('Retry')),
+              ],
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _key,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Account number: ${_contact!.accountNumber ?? _contact!.id}',
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _name,
+                    decoration: const InputDecoration(
+                      labelText: 'Display name',
+                    ),
+                    validator: (v) =>
+                        (v ?? '').trim().isEmpty ? 'Name required' : null,
+                  ),
+                  TextFormField(
+                    controller: _phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact phone (not a verified login number)',
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _mobile,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile (unverified)',
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _email,
+                    decoration: const InputDecoration(
+                      labelText: 'General email (unverified)',
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _idNumber,
+                    decoration: const InputDecoration(
+                      labelText: 'Identification number',
+                    ),
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    child: Text(_saving ? 'Saving…' : 'Save contact'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+  );
+}
+
+class _AccountAdministration extends ConsumerStatefulWidget {
+  const _AccountAdministration({required this.target});
+  final AuthUser target;
+  @override
+  ConsumerState<_AccountAdministration> createState() =>
+      _AccountAdministrationState();
+}
+
+class _AccountAdministrationState
+    extends ConsumerState<_AccountAdministration> {
+  bool _started = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted)
+          ref.read(profileControllerProvider(widget.target).notifier).init();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(profileControllerProvider(widget.user));
-
-    final ctrl = ref.read(profileControllerProvider(widget.user).notifier);
-
-    if (state.loading && state.user == null) {
-      return const AppPage(
-        maxWidth: 720,
-
-        scrollable: false,
-
-        header: AppHeader(title: 'Profile'),
-
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (state.user == null) {
-      return AppPage(
-        maxWidth: 720,
-
-        scrollable: false,
-
-        header: const AppHeader(title: 'Profile'),
-
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-
-            children: [
-              const Text('⚠️ No user found.'),
-
-              const SizedBox(height: 12),
-
-              ElevatedButton.icon(
-                onPressed: () => ctrl.init(),
-
-                icon: const Icon(Icons.sync),
-
-                label: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final user = state.user!;
-
-    final isAdminEditing = state.isAdminEditing;
-
-    final title = isAdminEditing ? 'Edit User Profile' : 'My Profile';
-
+    final state = ref.watch(profileControllerProvider(widget.target));
+    final ctrl = ref.read(profileControllerProvider(widget.target).notifier);
+    final u = state.user;
     return AppPage(
       maxWidth: 720,
-
       scrollable: true,
-
-      header: AppHeader(title: title),
-
+      header: const AppHeader(title: 'User administration'),
       body: Padding(
         padding: const EdgeInsets.all(16),
-
-        child: Column(
-          children: [
-            _buildHeaderBlock(context, user),
-
-            const SizedBox(height: 24),
-
-            _buildIdentitySection(user, state),
-
-            const SizedBox(height: 24),
-
-            _buildEditableSection(state),
-
-            const SizedBox(height: 24),
-
-            _RoleAndStoreSection(user: user, isAdminEditing: isAdminEditing),
-
-            const SizedBox(height: 24),
-
-            _buildSaveButton(context, ctrl, state),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderBlock(BuildContext context, AuthUser user) {
-    final display = user.displayLabel();
-
-    final roleLabelText = staffRoleLabel(user);
-
-    return Column(
-      children: [
-        _AvatarBlock(displayName: display, avatarUrl: user.avatarUrl),
-
-        const SizedBox(height: 8),
-
-        Row(
-          mainAxisSize: MainAxisSize.min,
-
-          children: [
-            _RoleChip(label: roleLabelText),
-
-            const SizedBox(width: 8),
-
-            _RoleChip(label: user.status.label),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIdentitySection(AuthUser user, ProfileFormState state) {
-    final phone = (user.phoneNumber ?? '').trim();
-
-    final appId = user.activeAppId?.trim().toLowerCase();
-
-    final appEmail = appId == null || appId.isEmpty
-        ? null
-        : user.emailForApp(appId)?.emailLower;
-
-    final account = (user.accountNumber ?? '').trim();
-
-    final hasAccount = account.isNotEmpty;
-
-    return Card(
-      elevation: 0,
-
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-
-        child: Column(
-          children: [
-            TextFormField(
-              controller: state.phoneController,
-
-              readOnly: true,
-
-              decoration: const InputDecoration(
-                labelText: 'WhatsApp Number (identity)',
-
-                filled: true,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            TextFormField(
-              key: ValueKey('app-email-${appId ?? 'none'}'),
-              initialValue: appId == null || appId.isEmpty
-                  ? 'Application not selected'
-                  : appEmail ?? 'Not verified',
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: appId == null || appId.isEmpty
-                    ? 'Application email'
-                    : 'Verified email ($appId)',
-                filled: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            TextFormField(
-              initialValue: user.tenantId,
-
-              readOnly: true,
-
-              decoration: const InputDecoration(
-                labelText: 'Tenant ID',
-
-                filled: true,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Account number remains tenant-scoped.
-            TextFormField(
-              initialValue: hasAccount ? account : '—',
-
-              readOnly: true,
-
-              decoration: const InputDecoration(
-                labelText: 'Account Number',
-
-                filled: true,
-              ),
-            ),
-
-            // Show UID when no account number is available.
-            if (!hasAccount) ...[
-              const SizedBox(height: 12),
-
-              TextFormField(
-                initialValue: user.uid,
-
-                readOnly: true,
-
-                decoration: const InputDecoration(
-                  labelText: 'User ID',
-
-                  filled: true,
-                ),
-              ),
-            ],
-
-            if (phone.isEmpty) ...[
-              const SizedBox(height: 12),
-
-              const Text(
-                'Phone number is missing. Ask an administrator to update the global identity.',
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEditableSection(ProfileFormState state) {
-    return Card(
-      elevation: 0,
-
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-
-        child: Form(
-          key: _formKey,
-
-          child: TextFormField(
-            controller: state.nameController,
-
-            decoration: const InputDecoration(
-              labelText: 'Display Name',
-
-              hintText: 'e.g. Dr. John Doe',
-            ),
-
-            textInputAction: TextInputAction.done,
-
-            validator: (value) => (value == null || value.trim().isEmpty)
-                ? 'Display name is required'
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton(
-    BuildContext context,
-
-    ProfileController ctrl,
-
-    ProfileFormState state,
-  ) {
-    final isBusy = state.loading;
-
-    return SizedBox(
-      width: double.infinity,
-
-      child: ElevatedButton.icon(
-        icon: isBusy
-            ? const SizedBox(
-                width: 16,
-
-                height: 16,
-
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.save),
-
-        label: const Text('Save Changes'),
-
-        onPressed: isBusy
-            ? null
-            : () async {
-                if (!(_formKey.currentState?.validate() ?? false)) return;
-
-                await ctrl.save(context);
-              },
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-
-// Roles / stores / status section
-
-// ──────────────────────────────────────────────────────────────
-
-class _RoleAndStoreSection extends ConsumerWidget {
-  const _RoleAndStoreSection({
-    required this.user,
-
-    required this.isAdminEditing,
-  });
-
-  final AuthUser user;
-
-  final bool isAdminEditing;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(profileControllerProvider(user));
-
-    final ctrl = ref.read(profileControllerProvider(user).notifier);
-
-    final storesAsync = ref.watch(
-      inventoryLocationProvider(InventoryLocationType.store),
-    );
-
-    final effectiveStatus = state.statusOverride ?? user.status;
-
-    final effectiveRoles = state.staffRoleOverrides ?? user.staffRoles;
-
-    return Card(
-      elevation: 0,
-
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-          children: [
-            Text(
-              'Account Status',
-
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-
-            const SizedBox(height: 8),
-
-            if (isAdminEditing)
-              DropdownButtonFormField<UserStatus>(
-                initialValue: effectiveStatus,
-
-                onChanged: (val) {
-                  if (val != null) ctrl.setStatus(val);
-                },
-
-                items: UserStatus.values
-                    .map(
-                      (s) => DropdownMenuItem(value: s, child: Text(s.label)),
-                    )
-                    .toList(),
-              )
-            else
-              TextFormField(
-                initialValue: effectiveStatus.label,
-
-                readOnly: true,
-
-                decoration: const InputDecoration(filled: true),
-              ),
-
-            const SizedBox(height: 16),
-
-            Text('Roles', style: Theme.of(context).textTheme.titleSmall),
-
-            const SizedBox(height: 8),
-
-            if (isAdminEditing)
-              Wrap(
-                spacing: 8,
-
-                runSpacing: 4,
-
-                children: StaffRole.values.map((role) {
-                  final selected = effectiveRoles.any((r) => r == role);
-
-                  return FilterChip(
-                    label: Text(role.label),
-
-                    selected: selected,
-
-                    onSelected: (_) => ctrl.toggleStaffRole(role),
-                  );
-                }).toList(),
-              )
-            else
-              TextFormField(
-                initialValue: effectiveRoles.isEmpty
-                    ? 'Member'
-                    : effectiveRoles.map((r) => r.label).join(', '),
-
-                readOnly: true,
-
-                decoration: const InputDecoration(filled: true),
-              ),
-
-            const SizedBox(height: 16),
-
-            Text(
-              'Assigned Stores',
-
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-
-            const SizedBox(height: 8),
-
-            storesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-
-              error: (e, _) => Text('Error loading stores: $e'),
-
-              data: (locations) {
-                final allStores = locations;
-
-                final effectiveStoreIds = state.storeOverrides ?? user.stores;
-
-                if (!isAdminEditing) {
-                  final names = allStores
-                      .where((loc) => effectiveStoreIds.contains(loc.id))
-                      .map((loc) => loc.name)
-                      .toList();
-
-                  return TextFormField(
-                    initialValue: names.isEmpty
-                        ? 'No stores assigned'
-                        : names.join(', '),
-
-                    readOnly: true,
-
-                    decoration: const InputDecoration(filled: true),
-                  );
-                }
-
-                if (allStores.isEmpty) {
-                  return const Text('No stores configured for this tenant.');
-                }
-
-                return Wrap(
-                  spacing: 8,
-
-                  runSpacing: 4,
-
-                  children: allStores.map((store) {
-                    final selected = effectiveStoreIds.contains(store.id);
-
-                    return FilterChip(
-                      label: Text(store.name),
-
-                      selected: selected,
-
-                      onSelected: (_) => ctrl.toggleStore(store.id),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-
-// Small UI atoms
-
-// ──────────────────────────────────────────────────────────────
-
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-
-      decoration: BoxDecoration(
-        color: Colors.indigo.shade50,
-
-        borderRadius: BorderRadius.circular(6),
-
-        border: Border.all(color: Colors.indigo.shade100),
-      ),
-
-      child: Text(
-        label,
-
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-}
-
-class _AvatarBlock extends StatelessWidget {
-  const _AvatarBlock({required this.displayName, required this.avatarUrl});
-
-  final String displayName;
-
-  final String? avatarUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final initials = initialsFromName(displayName);
-
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 48,
-
-          backgroundColor: Colors.indigo.shade100,
-
-          backgroundImage: (avatarUrl != null && avatarUrl!.trim().isNotEmpty)
-              ? NetworkImage(avatarUrl!.trim())
-              : null,
-
-          child: (avatarUrl == null || avatarUrl!.trim().isEmpty)
-              ? Text(
-                  initials,
-
-                  style: const TextStyle(
-                    fontSize: 28,
-
-                    fontWeight: FontWeight.bold,
-
-                    color: Colors.indigo,
+        child: state.loading && u == null
+            ? const Center(child: CircularProgressIndicator())
+            : u == null
+            ? const Text('User unavailable')
+            : !state.isAdminEditing
+            ? const Text('You are not authorised to administer this account.')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('UID: ${u.uid}'),
+                  Text('Account: ${u.accountNumber ?? '—'}'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<UserStatus>(
+                    initialValue: state.statusOverride ?? u.status,
+                    items: UserStatus.values
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) ctrl.setStatus(value);
+                    },
                   ),
-                )
-              : null,
-        ),
-
-        const SizedBox(height: 12),
-
-        Text(
-          displayName.isNotEmpty ? displayName : 'Unnamed User',
-
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-
-          textAlign: TextAlign.center,
-        ),
-      ],
+                  const SizedBox(height: 16),
+                  const Text('App-specific staff roles'),
+                  Wrap(
+                    spacing: 8,
+                    children: StaffRole.values
+                        .map(
+                          (role) => FilterChip(
+                            label: Text(role.label),
+                            selected: (state.staffRoleOverrides ?? u.staffRoles)
+                                .contains(role),
+                            onSelected: (_) => ctrl.toggleStaffRole(role),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  ElevatedButton(
+                    onPressed: state.loading ? null : () => ctrl.save(context),
+                    child: const Text('Save account access'),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

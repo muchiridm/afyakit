@@ -95,7 +95,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   bool _hasMetaEdits(QuoteMetaState meta) {
     return (meta.reference ?? '').trim().isNotEmpty ||
         (meta.customerNotes ?? '').trim().isNotEmpty ||
-        meta.contact != null ||
+        meta.payer != null ||
         meta.quoteDate != null ||
         meta.expiryDate != null ||
         meta.deliveryAddress != null ||
@@ -238,9 +238,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final bool showDiscardDraft = !_isEdit && _hasDraftEdits(linesState, meta);
 
     final String fallbackPartyName = isMemberScoped
-        ? ((meta.contact?.title ?? '').trim().isNotEmpty
-              ? meta.contact!.title
-              : 'Loading customer…')
+        ? 'Your account'
         : (_isEdit ? 'Loading customer…' : 'Customer');
 
     final SalesDocMetaVm vmMeta = buildQuoteMetaVm(
@@ -279,7 +277,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
                       meta: meta,
                       vmMeta: vmMeta,
                       isMemberScoped: isMemberScoped,
-                      onContactPicked: metaCtl.setContact,
+                      onContactPicked: metaCtl.setNativePayer,
                       onDelete: () => _handleDeleteQuote(context, ctl, meta),
                       onEnsureAuthed: () => _ensureAuthed(context),
                     ),
@@ -417,7 +415,7 @@ SalesDocMetaVm buildQuoteMetaVm({
   required bool requirePrices,
   required String fallbackPartyName,
 }) {
-  final String contactTitle = _clean(meta.contact?.title) ?? '';
+  final String contactTitle = _clean(meta.displayContactName) ?? '';
   final String fallback = _clean(fallbackPartyName) ?? '';
 
   final String partyName = contactTitle.isNotEmpty

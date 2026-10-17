@@ -1,6 +1,6 @@
 // lib/features/retail/quotes/models/quote_draft.dart
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_line_draft.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote.dart';
@@ -30,18 +30,16 @@ class QuoteDraft {
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
-  final ZohoContact? contact;
+  final NativeContact? contact;
 
-  /// Zoho customer/contact being billed.
-  ///
-  /// For direct-pay private-use quotes, this is usually the member/customer.
-  /// For insurance quotes, this is normally the insurer/payer contact.
+  /// Historical Zoho customer ID from a previously saved quote.
+  /// Do not populate this for a newly selected Native Contact.
   final String? contactId;
 
-  /// Canonical payer identity, not sent to the legacy Zoho request endpoint.
+  /// Canonical Native Contact identity (not a Zoho customer ID).
   final String? nativeContactId;
 
-  /// Canonical Native Contact account of the payer, distinct from Zoho contactId.
+  /// Canonical Native Contact account of the payer, distinct from the historical Zoho customer ID.
   final String? accountNumber;
   final String? contactName;
   final String? customerNotes;
@@ -53,7 +51,7 @@ class QuoteDraft {
 
   /// Canonical Health Profile for the person receiving care or medicine.
   ///
-  /// This remains separate from [contactId], which identifies the payer.
+  /// This remains separate from the payer Native account number.
   final String? profileId;
   final SalesDocumentPatientSnapshot? patientSnapshot;
 
@@ -69,7 +67,7 @@ class QuoteDraft {
   final String? currencyCode;
   final List<QuoteLineDraft> lines;
   String get customerIdResolved {
-    return (contactId ?? contact?.contactId ?? '').trim();
+    return (contactId ?? '').trim();
   }
 
   String get accountNumberResolved =>
@@ -157,7 +155,7 @@ class QuoteDraft {
   }
 
   QuoteDraft copyWith({
-    ZohoContact? contact,
+    NativeContact? contact,
     bool clearContact = false,
     String? contactId,
     bool clearContactId = false,
@@ -365,6 +363,7 @@ class QuoteDraft {
         })
         .toList(growable: false);
     return QuoteDraft(
+      // Historical ID is retained only for editing this existing quote.
       contactId: (quote.customerId ?? '').trim().isEmpty
           ? null
           : quote.customerId,

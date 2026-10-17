@@ -1,6 +1,7 @@
 // lib/core/home/activities/shared/staff_latest_activity_panel.dart
 
 import 'package:afyakit/features/inventory/records/deliveries/widgets/screens/delivery_details_screen.dart';
+import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,14 +11,13 @@ import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart'
 import 'package:afyakit/features/home/activities/shared/latest_activity_panel.dart';
 import 'package:afyakit/features/home/models/activity_entry.dart';
 
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_details_screen.dart';
 
-import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
@@ -148,9 +148,9 @@ class StaffLatestActivityPanel extends ConsumerWidget {
         );
 
       case ActivityEntityType.contact:
-        return () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: (_) => const ContactsScreen()));
+        return () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const NativeContactsScreen()),
+        );
 
       case ActivityEntityType.inventoryIssue:
         final issueId = activity.entity.id.trim();

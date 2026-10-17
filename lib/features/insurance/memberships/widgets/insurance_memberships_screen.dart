@@ -1,10 +1,10 @@
 // lib/features/insurance/memberships/widgets/insurance_memberships_screen.dart
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_form_dialog.dart';
-import 'package:afyakit/features/records/native_contacts/models/native_contact.dart';
-import 'package:afyakit/features/records/native_contacts/services/native_contacts_service.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:flutter/material.dart';

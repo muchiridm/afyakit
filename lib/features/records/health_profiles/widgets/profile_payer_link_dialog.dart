@@ -1,8 +1,8 @@
-// lib/features/records/profiles/widgets/profile_payer_link_dialog.dart
+// lib/features/records/health_profiles/widgets/profile_payer_link_dialog.dart
 
-import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
 class ProfilePayerLinkDialog {
@@ -164,8 +164,8 @@ class ProfilePayerLinkDialog {
                               child: TextFormField(
                                 controller: accountNumberCtl,
                                 decoration: const InputDecoration(
-                                  labelText: 'Account/member number',
-                                  hintText: 'Optional',
+                                  labelText: 'Native Contact account number',
+                                  hintText: 'Optional AC-XXXXXX',
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                 ),
@@ -367,10 +367,6 @@ class ProfilePayerLinkDialog {
     required BuildContext context,
     required ProfileLinkRequest request,
   }) async {
-    final contactIdCtl = TextEditingController(
-      text: request.targetContactId ?? '',
-    );
-
     final accountNumberCtl = TextEditingController(
       text: request.targetAccountNumber ?? '',
     );
@@ -403,25 +399,12 @@ class ProfilePayerLinkDialog {
                     runSpacing: 16,
                     children: [
                       SizedBox(
-                        width: 300,
-                        child: TextFormField(
-                          controller: contactIdCtl,
-                          decoration: const InputDecoration(
-                            labelText: 'Zoho contact ID',
-                            helperText:
-                                'Optional if account number is provided',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
                         width: 260,
                         child: TextFormField(
                           controller: accountNumberCtl,
                           decoration: const InputDecoration(
-                            labelText: 'Account number',
-                            helperText: 'Used when Zoho contact ID is blank',
+                            labelText: 'Native Contact account number',
+                            helperText: 'Required canonical Native Contact ID',
                             hintText: 'AC-XXXXXX',
                             border: OutlineInputBorder(),
                             isDense: true,
@@ -487,7 +470,7 @@ class ProfilePayerLinkDialog {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Staff approval needs a real Zoho contact. If only the account number is available, the backend will resolve it before creating the patient-contact link.',
+                    'Staff approval needs an active Native Contact. The backend validates the Native Contact and relationship before linking.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -501,13 +484,18 @@ class ProfilePayerLinkDialog {
             ),
             FilledButton(
               onPressed: () {
-                final contactId = _cleanNullable(contactIdCtl.text);
-                final accountNumber = _cleanNullable(accountNumberCtl.text);
+                final accountNumber = _cleanNullable(accountNumberCtl.text)?.toUpperCase();
+                if (accountNumber == null ||
+                    !RegExp(r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$').hasMatch(accountNumber)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter a valid Native Contact account number (AC-XXXXXX).')),
+                  );
+                  return;
+                }
 
                 Navigator.of(context).pop(
                   ProfileLinkRequestApproveInput(
-                    contactId: contactId,
-                    accountNumber: contactId == null ? accountNumber : null,
+                    accountNumber: accountNumber,
                     contactDisplayName: _cleanNullable(contactNameCtl.text),
                     relationship: relationship.value,
                   ),
@@ -519,7 +507,6 @@ class ProfilePayerLinkDialog {
         ),
       );
     } finally {
-      contactIdCtl.dispose();
       accountNumberCtl.dispose();
       contactNameCtl.dispose();
       relationship.dispose();

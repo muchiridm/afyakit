@@ -292,21 +292,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   }
 
   void toggleStore(String storeId) {
-    final target = state.user;
-    final editor = ref.read(currentUserValueProvider);
-
-    if (target == null || editor == null) return;
-    if (!editor.canEditUserStoresFor(target)) return;
-
-    final stores = _effectiveTargetStores(target);
-
-    if (stores.contains(storeId)) {
-      stores.remove(storeId);
-    } else {
-      stores.add(storeId);
-    }
-
-    state = state.copyWith(storeOverrides: stores);
+    SnackService.showError('Legacy store assignments are no longer editable.');
   }
 
   // ────────────────────────────────────────────
@@ -326,20 +312,8 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       return;
     }
     final fields = <String, dynamic>{};
-    final name = state.nameController.text.trim();
-    if (name != (target.displayName ?? '').trim()) {
-      if (editor.uid != target.uid && !editor.canEditUserAccounts) {
-        SnackService.showError(
-          'Only platform administrators can edit another account profile.',
-        );
-        return;
-      }
-      if (name.isEmpty) {
-        SnackService.showError('Display name is required.');
-        return;
-      }
-      fields['displayName'] = name;
-    }
+    // Personal data is edited only through NativeContactsService.updateMine().
+    // Do not copy names back into auth_users.
     final nextStatus = state.statusOverride;
     if (nextStatus != null && nextStatus != target.status) {
       if (!editor.canChangeStatusFor(target)) {
@@ -348,14 +322,8 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       }
       fields['status'] = nextStatus.wire;
     }
-    final stores = state.storeOverrides;
-    if (stores != null && !listEquals(stores, target.stores)) {
-      if (!editor.canEditUserStoresFor(target)) {
-        SnackService.showError('You cannot change this account store access.');
-        return;
-      }
-      fields['stores'] = stores;
-    }
+    // Legacy stores is not an authoritative permission grant.
+    // Store access will be managed separately when app-scoped grants exist.
     final desiredRoles = _effectiveTargetRoles(target);
     final oldRoles = target.rolesForApp(target.activeAppId!);
     final rolesChanged = !setEquals(desiredRoles.toSet(), oldRoles.toSet());
@@ -419,9 +387,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         if (profileSaved) {
           state = state.copyWith(
             user: target.copyWith(
-              displayName: fields['displayName'] as String?,
               status: nextStatus,
-              stores: stores,
             ),
             statusOverride: null,
             storeOverrides: null,

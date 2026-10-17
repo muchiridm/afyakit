@@ -1,8 +1,8 @@
 // lib/features/retail/quotes/widgets/quote_clinical_context_dialog.dart
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
@@ -11,8 +11,8 @@ import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_pic
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/records/native_contacts/models/native_contact.dart';
-import 'package:afyakit/features/records/native_contacts/services/native_contacts_service.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
@@ -64,7 +64,6 @@ class QuoteClinicalContextDialog extends ConsumerStatefulWidget {
 
 class _QuoteClinicalContextDialogState
     extends ConsumerState<QuoteClinicalContextDialog> {
-  static const String _missingMemberContactId = '__missing_member_contact__';
   Profile? _profile;
   InsuranceMembership? _membership;
   Prescription? _prescription;
@@ -88,9 +87,11 @@ class _QuoteClinicalContextDialogState
   }
 
   ProfilesScope get _memberProfileScope {
-    final String contactId = _memberContactId;
+    final accountNumber = _memberContactId.trim();
+
     return ProfilesScope(
-      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
+      accountNumber: accountNumber.isEmpty ? null : accountNumber,
+      memberMode: true,
       allowExplicitContactLink: false,
     );
   }
@@ -233,13 +234,16 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _openProfilePicker() async {
-    if (_isMemberScoped && _memberContactId.isEmpty) return;
+    if (_isMemberScoped && _memberContactId.trim().isEmpty) return;
+
     final Profile? picked = await showProfilePickerScreen(
       context: context,
-      contactId: _isMemberScoped ? _memberContactId : null,
+      accountNumber: _isMemberScoped ? _memberContactId.trim() : null,
       forcePickerMode: !_isMemberScoped,
     );
+
     if (picked == null || !mounted) return;
+
     _setProfile(picked);
   }
 
@@ -554,7 +558,9 @@ class _QuoteClinicalContextDialogState
                   ProfilePickerCard(
                     selectedProfile: _profile,
                     busy: false,
-                    contactId: _isMemberScoped ? _memberContactId : null,
+                    accountNumber: _isMemberScoped
+                        ? _memberContactId.trim()
+                        : null,
                     forcePickerMode: !_isMemberScoped,
                     onChanged: _setProfile,
                   ),

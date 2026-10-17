@@ -1,17 +1,12 @@
 part of 'routes.dart';
 
-/// Shared application records, independent of the Retail feature flag.
-///
-/// All requests remain tenant-scoped through [AfyaKitRoutes._uri].
-/// App selection/authorisation is performed by the API client and backend,
-/// not by accepting an arbitrary appId query parameter.
+/// Shared tenant-scoped records routes.
+/// App scope is resolved by the API.
 extension AfyaKitRecordsRoutes on AfyaKitRoutes {
-  // ─────────────────────────────────────────────
-  // Native Contacts (canonical; staff-scoped)
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
+  // Native Contacts
+  // ---------------------------------------------------------
 
-  /// GET /records/contacts?page=&per_page=
-  /// Current backend does not support search/type/account-number filtering.
   Uri recordsContactsList({int page = 1, int perPage = 50}) => _uri(
     'records/contacts',
     query: _recordsQuery(page: page, perPage: perPage),
@@ -19,23 +14,39 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
 
   Uri recordsContactCreate() => _uri('records/contacts');
 
-  Uri recordsContactGet(String contactId) =>
-      _uri('records/contacts/${_seg(contactId)}');
+  Uri recordsMyContact() => _uri('records/contacts/me');
 
-  Uri recordsContactUpdate(String contactId) =>
-      _uri('records/contacts/${_seg(contactId)}');
+  /// Canonical Native Contact identifier: AC-XXXXXX.
+  ///
+  Uri recordsContactGet(String accountNumber) =>
+      _uri('records/contacts/${_seg(accountNumber)}');
 
-  /// DELETE removes app enrolment; it never deletes the canonical contact.
-  Uri recordsContactMembershipRemove(String contactId) =>
-      _uri('records/contacts/${_seg(contactId)}/membership');
+  Uri recordsContactUpdate(String accountNumber) => recordsContactGet(accountNumber);
 
-  // ─────────────────────────────────────────────
+  Uri recordsContactMembershipRemove(String accountNumber) =>
+      _uri('records/contacts/${_seg(accountNumber)}/membership');
+
+  /// Staff-authorised linked Health Profile summaries for a Native Contact.
+  ///
+  /// GET /v1/records/contacts/:accountNumber/health-profiles
+  ///
+  /// The backend resolves active relationships from health_profile_links.
+  Uri recordsContactHealthProfilesList(
+    String accountNumber, {
+    int page = 1,
+    int perPage = 50,
+  }) => _uri(
+    'records/contacts/${_seg(accountNumber)}/health-profiles',
+    query: _recordsQuery(page: page, perPage: perPage),
+  );
+
+  // ---------------------------------------------------------
   // Health profiles
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
 
   Uri recordsProfilesList({
     String? search,
-    String? contactId,
+    String? accountNumber,
     String? relationship,
     bool? isActive,
     int perPage = 50,
@@ -43,11 +54,8 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   }) => _uri(
     'records/profiles',
     query: _recordsQuery(
-      search: search,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-      extras: {'contact_id': contactId, 'relationship': relationship},
+      search: search, isActive: isActive, perPage: perPage, page: page,
+      extras: {'account_number': accountNumber, 'relationship': relationship},
     ),
   );
 
@@ -65,9 +73,9 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsProfileLinkSelf(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/link-self');
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
   // Profile link requests
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
 
   Uri recordsProfileLinkRequestCreate(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/link-requests');
@@ -92,23 +100,30 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsProfileLinkRequestReject(String requestId) =>
       _uri('records/profiles/link-requests/${_seg(requestId)}/reject');
 
-  // ─────────────────────────────────────────────
-  // Profile-linked contacts
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
+  // Profile-linked Native Contacts
+  // ---------------------------------------------------------
 
   Uri recordsProfileLinkedContactCreate(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/linked-contacts');
 
+  /// The path parameter is a canonical Native Contact account number.
   Uri recordsProfileLinkedContactDelete({
     required String profileId,
-    required String contactId,
+    required String accountNumber,
   }) => _uri(
-    'records/profiles/${_seg(profileId)}/linked-contacts/${_seg(contactId)}',
+    'records/profiles/${_seg(profileId)}/linked-contacts/${_seg(accountNumber)}',
   );
 
-  // ─────────────────────────────────────────────
+  Uri recordsProfileLinkedContactsList(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/linked-contacts');
+
+  Uri recordsProfileRelationshipsList(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/relationships');
+
+  // ---------------------------------------------------------
   // Health metrics
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
 
   Uri recordsProfileHealthMetricsList(
     String profileId, {
@@ -169,9 +184,9 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
     ),
   );
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
   // Documents
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
 
   Uri recordsDocumentsList({
     String? search,
@@ -251,9 +266,9 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   }) =>
       _uri('records/profiles/${_seg(profileId)}/documents/${_seg(documentId)}');
 
-  // ─────────────────────────────────────────────
-  // Delivery addresses (Native Contact owned)
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
+  // Delivery addresses — staff-managed contacts
+  // ---------------------------------------------------------
 
   Uri recordsDeliveryAddressesList(
     String contactId, {
@@ -267,7 +282,8 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       _uri('records/delivery-addresses/contacts/${_seg(contactId)}');
 
   Uri recordsDeliveryAddressGet(String contactId, String addressId) => _uri(
-    'records/delivery-addresses/contacts/${_seg(contactId)}/${_seg(addressId)}',
+    'records/delivery-addresses/contacts/'
+    '${_seg(contactId)}/${_seg(addressId)}',
   );
 
   Uri recordsDeliveryAddressUpdate(String contactId, String addressId) =>
@@ -276,7 +292,10 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsDeliveryAddressArchive(String contactId, String addressId) =>
       recordsDeliveryAddressGet(contactId, addressId);
 
-  // Member-owned delivery addresses; backend resolves ownership from UID.
+  // ---------------------------------------------------------
+  // Delivery addresses — member-owned
+  // ---------------------------------------------------------
+
   Uri recordsMyDeliveryAddressesList({bool includeArchived = false}) => _uri(
     'records/delivery-addresses/me',
     query: includeArchived ? {'include_archived': 'true'} : null,
@@ -293,13 +312,12 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsMyDeliveryAddressArchive(String addressId) =>
       recordsMyDeliveryAddressGet(addressId);
 
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
   // Shared query helpers
-  // ─────────────────────────────────────────────
+  // ---------------------------------------------------------
 
   Map<String, String> _recordsQuery({
     String? search,
-    String searchKey = 'search',
     bool? isActive,
     int? perPage,
     int? page,
@@ -309,17 +327,29 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
 
     void add(String key, String? value) {
       final cleaned = value?.trim();
-      if (cleaned != null && cleaned.isNotEmpty) query[key] = cleaned;
+      if (cleaned != null && cleaned.isNotEmpty) {
+        query[key] = cleaned;
+      }
     }
 
-    add(searchKey, search);
+    add('search', search);
+
     for (final entry in extras.entries) {
       add(entry.key, entry.value);
     }
 
-    if (isActive != null) query['is_active'] = isActive.toString();
-    if (perPage != null && perPage > 0) query['per_page'] = '$perPage';
-    if (page != null && page > 0) query['page'] = '$page';
+    if (isActive != null) {
+      query['is_active'] = isActive.toString();
+    }
+
+    if (perPage != null && perPage > 0) {
+      query['per_page'] = '$perPage';
+    }
+
+    if (page != null && page > 0) {
+      query['page'] = '$page';
+    }
+
     return query;
   }
 
@@ -338,8 +368,15 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       page: page,
       extras: {'profile_id': profileId, 'type': type},
     );
-    if (from != null) query['from'] = from.toUtc().toIso8601String();
-    if (to != null) query['to'] = to.toUtc().toIso8601String();
+
+    if (from != null) {
+      query['from'] = from.toUtc().toIso8601String();
+    }
+
+    if (to != null) {
+      query['to'] = to.toUtc().toIso8601String();
+    }
+
     return query.isEmpty ? null : query;
   }
 }

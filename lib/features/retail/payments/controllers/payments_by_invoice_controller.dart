@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/retail/contacts/services/zoho_contacts_service.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
@@ -58,9 +57,9 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
     final service = await _ref.read(zohoInvoicesServiceProvider.future);
 
     final search = _searchQuery ?? _clean(q);
-    final effectiveLimit = limit > _maxPageSize ? _maxPageSize : limit;
+    final effectiveLimit = limit.clamp(1, _maxPageSize).toInt();
 
-    // Staff: retain the existing invoice listing.
+    // Staff: preserve the existing invoice listing.
     if (!_isMine) {
       final items = await service.list(
         limit: effectiveLimit,
@@ -74,21 +73,24 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
       );
     }
 
-    // Member: AuthUser -> Native Contact -> verified Zoho mapping.
-    final customerId = await _resolveMemberZohoCustomerId();
+    // Member: use the authenticated Native Contact account.
+    // No frontend Zoho Contacts lookup is required.
+    final accountNumber = _resolveMemberAccountNumber();
 
-    if (customerId == null) {
+    if (accountNumber == null) {
       return const PageResult<ZohoInvoice>(
         items: <ZohoInvoice>[],
         hasMore: false,
       );
     }
 
+    // Backend must verify member ownership and resolve the
+    // app-scoped Native Contact -> Zoho customer mapping.
     final items = await service.list(
       limit: effectiveLimit,
       page: page,
       q: search,
-      customerId: customerId,
+      accountNumber: accountNumber,
     );
 
     return PageResult<ZohoInvoice>(
@@ -97,17 +99,23 @@ class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
     );
   }
 
-  Future<String?> _resolveMemberZohoCustomerId() async {
+  String? _resolveMemberAccountNumber() {
     final user = _ref.read(currentUserValueProvider);
-    final nativeContactId = _clean(user?.nativeContactId);
+    final accountNumber = _clean(user?.accountNumber);
 
-    if (nativeContactId == null) return null;
+    if (accountNumber == null) {
+      return null;
+    }
 
-    final zohoService = await _ref.read(zohoContactsServiceProvider.future);
+    final canonicalPattern = RegExp(
+      r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+    );
 
-    final mapping = await zohoService.getMapping(nativeContactId);
+    if (!canonicalPattern.hasMatch(accountNumber)) {
+      throw StateError('Invalid Native Contact account number');
+    }
 
-    return _clean(mapping.zohoContactId);
+    return accountNumber;
   }
 
   static String? _clean(String? value) {

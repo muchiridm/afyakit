@@ -1,7 +1,6 @@
 // lib/features/retail/quotes/controllers/quote_meta_controller.dart
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/records/native_contacts/models/native_contact.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
@@ -39,20 +38,31 @@ class QuoteMetaState {
   });
   final String? editingQuoteId;
 
-  /// Zoho contact retained only for existing editor widgets and historical quotes.
-  /// It is not the canonical Native Contact identity.
-  final ZohoContact? contact;
+  /// Transitional alias for older quote-editor callers. Always a Native Contact.
+  /// New code should use [payer] and [setNativePayer].
+  final NativeContact? contact;
 
   /// Canonical payer selected from the Native Contacts directory.
   final NativeContact? payer;
 
-  /// Canonical payer identity and verified accounting projection.
+  /// Legacy metadata from an already-loaded accounting document.
+  /// These are not evidence of a verified mapping for new selections.
   final String? nativeContactId;
   final String? zohoContactId;
   final String? mappedCustomerName;
 
-  /// Native account number, if assigned. Never substitute a Native ID.
-  String get payerAccountNumber => (payer?.accountNumber ?? '').trim();
+  /// Canonical account of the selected payer. Never substitute a Zoho ID.
+  String get payerAccountNumber =>
+      (payer?.accountNumber ?? contact?.accountNumber ?? '').trim();
+
+  String get accountNumberResolved => payerAccountNumber;
+
+  /// Legacy accounting ID, usable only for an unchanged historical quote.
+  String get historicalZohoCustomerId => (zohoContactId ?? '').trim();
+
+  bool get hasCustomerSelection =>
+      accountNumberResolved.isNotEmpty ||
+      (isEditing && historicalZohoCustomerId.isNotEmpty);
   final String? reference;
   final String? customerNotes;
 
@@ -64,7 +74,7 @@ class QuoteMetaState {
   final QuotePurchaseContext purchaseContext;
 
   /// directPay:
-  ///   The selected Zoho customer/contact pays directly.
+  ///   The selected Native Contact pays directly.
   ///   This includes patient self-pay, parent/guardian paying,
   ///   employer/company direct-pay, OTC, and B2B.
   ///
@@ -122,18 +132,16 @@ class QuoteMetaState {
     return isPrivateUse && effectivePaymentContext.requiresPrescription;
   }
 
-  /// Canonical AfyaKit payer account number.
-  /// Resolved to a Zoho customer ID by the backend.
-  /// Historical Zoho customer ID, retained for existing quotation editing.
-  String get customerIdResolved =>
-      (zohoContactId ?? contact?.contactId ?? '').trim();
+  /// Compatibility getter for historical accounting documents only.
+  /// New quote submissions must use [accountNumberResolved].
+  String get customerIdResolved => historicalZohoCustomerId;
 
   /// Display name of the selected payer.
   String get displayContactName {
     final String? name =
         _clean(payer?.displayName) ?? _clean(mappedCustomerName);
     if (name != null) return name;
-    return _clean(contact?.title) ?? 'Customer';
+    return _clean(contact?.displayName) ?? 'Customer';
   }
 
   /// Canonical AfyaKit Health Profile ID for the person in the patient role.
@@ -207,7 +215,7 @@ class QuoteMetaState {
   QuoteMetaState copyWith({
     String? editingQuoteId,
     bool clearEditingQuoteId = false,
-    ZohoContact? contact,
+    NativeContact? contact,
     bool clearContact = false,
     NativeContact? payer,
     bool clearPayer = false,
@@ -399,23 +407,15 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
-  void setContact(ZohoContact? contact) {
-    final ZohoContact? safeContact = _safeContactForPolicy(contact);
-    if (_isMemberScoped && safeContact == null) return;
-    state = state.copyWith(
-      contact: safeContact,
-      clearContact: safeContact == null,
-      clearPayer: true,
-      clearCustomerMapping: true,
-    );
-  }
+  /// Compatibility method used by older editor call sites.
+  void setContact(NativeContact? contact) => setNativePayer(contact);
 
   /// Sets the canonical payer for new quotation requests.
   /// The corresponding Native -> Zoho mapping is resolved by the API.
   void setNativePayer(NativeContact? payer) {
     if (_isMemberScoped) return;
-    if (payer != null && payer.id.trim().isEmpty) {
-      throw StateError('Selected payer has no Native Contact ID');
+    if (payer != null && (payer.accountNumber).trim().isEmpty) {
+      throw StateError('Selected payer has no Native account number');
     }
     state = state.copyWith(
       payer: payer,
@@ -425,27 +425,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
-  /// Bind only after verifying the mapping belongs to the Native Contact.
-  void setVerifiedCustomerMapping({
-    required String nativeContactId,
-    required String zohoContactId,
-    String? customerName,
-  }) {
-    final nativeId = nativeContactId.trim();
-    final zohoId = zohoContactId.trim();
-    if (nativeId.isEmpty || zohoId.isEmpty) {
-      throw StateError('Native and Zoho customer IDs are required');
-    }
-    if (!_isMemberScoped && state.payer?.id.trim() != nativeId) {
-      throw StateError('The selected payer has changed');
-    }
-    state = state.copyWith(
-      nativeContactId: nativeId,
-      zohoContactId: zohoId,
-      mappedCustomerName: customerName,
-      clearContact: true,
-    );
-  }
+  // Customer mapping is deliberately not resolved or stored in Flutter.
+  // App-scoped Native -> Zoho resolution belongs to the API.
 
   void clearContact() {
     if (_isMemberScoped) return;
@@ -631,7 +612,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   }
 
   void applyState(QuoteMetaState next) {
-    final ZohoContact? safeContact = _safeContactForPolicy(next.contact);
+    final NativeContact? safeContact = _safeContactForPolicy(next.contact);
     final QuotePaymentContext safePaymentContext =
         next.purchaseContext.isCompany
         ? QuotePaymentContext.directPay
@@ -639,7 +620,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = QuoteMetaState(
       editingQuoteId: next.editingQuoteId,
       contact: safeContact,
-      payer: next.payer,
+      payer: next.payer ?? safeContact,
       nativeContactId: next.nativeContactId,
       zohoContactId: next.zohoContactId,
       mappedCustomerName: next.mappedCustomerName,
@@ -671,7 +652,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 
   void applyZohoMeta({
     required String editingQuoteId,
-    ZohoContact? contact,
+    NativeContact? contact,
     String? nativeContactId,
     String? zohoContactId,
     String? mappedCustomerName,
@@ -689,7 +670,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     String? prescriptionLabel,
   }) {
     final String? id = _clean(editingQuoteId);
-    final ZohoContact? safeContact = _safeContactForPolicy(contact);
+    final NativeContact? safeContact = _safeContactForPolicy(contact);
     final String? resolvedMembershipId = patientSnapshot == null
         ? _clean(membershipId)
         : _resolveMembershipId(
@@ -702,6 +683,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = QuoteMetaState(
       editingQuoteId: id,
       contact: safeContact,
+      payer: safeContact,
       nativeContactId: _clean(nativeContactId),
       zohoContactId: _clean(zohoContactId),
       mappedCustomerName: _clean(mappedCustomerName),
@@ -720,15 +702,16 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
-  /// Historical Zoho contacts remain display-only in the edit flow.
-  /// Member identity is never inferred from legacy account numbers.
-  ZohoContact? _safeContactForPolicy(ZohoContact? contact) {
+  /// Member payer identity is never inferred from an untrusted editor selection.
+  NativeContact? _safeContactForPolicy(NativeContact? contact) {
     if (_isMemberScoped) return null;
     return contact;
   }
 
   NativeContact? _requiredInsurancePayerContact(NativeContact? payer) {
-    if (payer == null || payer.id.trim().isEmpty || !payer.isInsurancePayer) {
+    if (payer == null ||
+        (payer.accountNumber).trim().isEmpty ||
+        !payer.isInsurancePayer) {
       return null;
     }
     return payer;

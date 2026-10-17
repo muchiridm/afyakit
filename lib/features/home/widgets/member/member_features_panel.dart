@@ -11,8 +11,8 @@ import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_add
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_shared.dart';
 import 'package:afyakit/features/records/native_contacts/widgets/member_contact_screen.dart';
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
@@ -48,7 +48,11 @@ class MemberFeaturesPanel extends ConsumerWidget {
         label: 'My Profiles',
         onTap: () => _open(
           context,
-          ProfilesScreen(contactId: contactId, allowExplicitContactLink: false),
+          ProfilesScreen(
+            accountNumber: contactId,
+            memberMode: true,
+            allowExplicitContactLink: false,
+          ),
         ),
       ),
       HomeActionChip(
@@ -155,7 +159,8 @@ class MemberFeaturesPanel extends ConsumerWidget {
     final profile = await Navigator.of(context).push<Profile>(
       MaterialPageRoute<Profile>(
         builder: (_) => ProfilesScreen(
-          contactId: normalizedContactId,
+          accountNumber: normalizedContactId,
+          memberMode: true,
           allowExplicitContactLink: false,
           selectionMode: true,
           selectionTitle: 'Select health profile',

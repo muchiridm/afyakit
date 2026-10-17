@@ -32,11 +32,9 @@ import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart'
 
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
-
-import 'package:afyakit/features/retail/contacts/widgets/contacts_screen.dart';
 
 import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 
@@ -198,14 +196,6 @@ final class HomeRegistry {
 
   static const List<StaffFeatureDef> _staffQuickActions = [
     // Core Records — Contacts, Health Profiles, Health Metrics.
-    StaffFeatureDef(
-      featureKey: FeatureKeys.core,
-      labelOverride: 'Contacts',
-      iconOverride: Icons.people_alt_outlined,
-      destination: _zohoContacts,
-      allowedRef: _allowLegacyZohoContacts,
-    ),
-
     StaffFeatureDef(
       featureKey: FeatureKeys.core,
       labelOverride: 'Contacts',
@@ -404,8 +394,6 @@ final class HomeRegistry {
   static Widget _healthMetrics(BuildContext _) =>
       const HealthMetricsDashboardScreen();
 
-  static Widget _zohoContacts(BuildContext _) => const ContactsScreen();
-
   static Widget _nativeContacts(BuildContext _) => const NativeContactsScreen();
 
   static Widget _catalog(BuildContext _) => const CatalogScreen();
@@ -456,9 +444,6 @@ final class HomeRegistry {
   // Switch to an explicit app-level contact backend selector before
 
   // another app activates Retail.
-
-  static bool _allowLegacyZohoContacts(WidgetRef ref, AuthUser user) =>
-      user.isStaff && _allowRetailForApp(ref, user);
 
   static bool _allowNativeContacts(WidgetRef ref, AuthUser user) =>
       user.isStaff;

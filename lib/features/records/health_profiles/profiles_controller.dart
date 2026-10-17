@@ -1,32 +1,39 @@
-// lib/features/records/profiles/controllers/profiles_controller.dart
+// lib/features/records/health_profiles/profiles_controller.dart
 
-import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/services/profiles_service.dart';
+import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
 class ProfilesScope {
-  const ProfilesScope({this.contactId, this.allowExplicitContactLink = false});
+  const ProfilesScope({
+    this.accountNumber,
+    this.memberMode = false,
+    this.allowExplicitContactLink = false,
+  });
 
-  final String? contactId;
+  final String? accountNumber;
+  final bool memberMode;
   final bool allowExplicitContactLink;
 
-  String? get cleanContactId => ProfilesController.nullable(contactId);
+  String? get cleanAccountNumber => ProfilesController.nullable(accountNumber);
 
-  bool get isContactScoped => cleanContactId != null;
+  bool get isContactScoped => memberMode || cleanAccountNumber != null;
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         other is ProfilesScope &&
-            other.cleanContactId == cleanContactId &&
+            other.cleanAccountNumber == cleanAccountNumber &&
+            other.memberMode == memberMode &&
             other.allowExplicitContactLink == allowExplicitContactLink;
   }
 
   @override
-  int get hashCode => Object.hash(cleanContactId, allowExplicitContactLink);
+  int get hashCode =>
+      Object.hash(cleanAccountNumber, memberMode, allowExplicitContactLink);
 }
 
 @immutable
@@ -39,7 +46,7 @@ class ProfilesState {
     this.isSaving = false,
     this.error,
     this.search = '',
-    this.contactId,
+    this.accountNumber,
     this.relationship,
     this.isActive,
     this.linkRequestStatus,
@@ -54,7 +61,7 @@ class ProfilesState {
   final String? error;
 
   final String search;
-  final String? contactId;
+  final String? accountNumber;
   final ProfileContactRelationship? relationship;
   final bool? isActive;
 
@@ -62,7 +69,7 @@ class ProfilesState {
 
   bool get hasFilters {
     return search.trim().isNotEmpty ||
-        contactId != null ||
+        accountNumber != null ||
         relationship != null ||
         isActive != null;
   }
@@ -80,11 +87,11 @@ class ProfilesState {
     String? error,
     bool clearError = false,
     String? search,
-    String? contactId,
+    String? accountNumber,
     ProfileContactRelationship? relationship,
     bool? isActive,
     ProfileLinkRequestStatus? linkRequestStatus,
-    bool clearContactId = false,
+    bool clearAccountNumber = false,
     bool clearRelationship = false,
     bool clearIsActive = false,
     bool clearLinkRequestStatus = false,
@@ -98,7 +105,7 @@ class ProfilesState {
       isSaving: isSaving ?? this.isSaving,
       error: clearError ? null : (error ?? this.error),
       search: search ?? this.search,
-      contactId: clearContactId ? null : (contactId ?? this.contactId),
+      accountNumber: clearAccountNumber ? null : (accountNumber ?? this.accountNumber),
       relationship: clearRelationship
           ? null
           : (relationship ?? this.relationship),
@@ -114,33 +121,49 @@ final profilesControllerProvider = StateNotifierProvider.autoDispose
     .family<ProfilesController, ProfilesState, ProfilesScope>((ref, scope) {
       return ProfilesController(
         () => ref.read(profilesServiceProvider),
-        fixedContactId: scope.cleanContactId,
+        fixedAccountNumber: scope.cleanAccountNumber,
+        memberMode: scope.memberMode,
       );
     });
 
 class ProfilesController extends StateNotifier<ProfilesState> {
-  ProfilesController(this._readService, {String? fixedContactId})
-    : _fixedContactId = nullable(fixedContactId),
-      super(ProfilesState(contactId: nullable(fixedContactId)));
+  ProfilesController(
+    this._readService, {
+    String? fixedAccountNumber,
+    bool memberMode = false,
+  }) : _memberMode = memberMode,
+       _fixedAccountNumber = nullable(fixedAccountNumber),
+       super(ProfilesState(accountNumber: nullable(fixedAccountNumber)));
 
   final ProfilesService Function() _readService;
-  final String? _fixedContactId;
+  final String? _fixedAccountNumber;
+  final bool _memberMode;
 
   ProfilesService get _service => _readService();
 
-  bool get isContactScoped => _fixedContactId != null;
+  bool get isContactScoped => _memberMode || _fixedAccountNumber != null;
 
   // ─────────────────────────────────────────────
   // Profiles
   // ─────────────────────────────────────────────
 
   Future<void> load() async {
+    // Fail closed: missing member identity must never become a directory query.
+    if (_memberMode && _fixedAccountNumber == null) {
+      state = state.copyWith(
+        items: const <Profile>[],
+        isLoading: false,
+        error:
+            'Your Native Contact account is unavailable. Please sign in again.',
+      );
+      return;
+    }
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final items = await _service.list(
         search: nullable(state.search),
-        contactId: _fixedContactId ?? state.contactId,
+        accountNumber: _fixedAccountNumber ?? state.accountNumber,
         relationship: state.relationship,
         isActive: state.isActive,
       );
@@ -169,12 +192,12 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     state = state.copyWith(search: value);
   }
 
-  void setContactId(String? value) {
+  void setAccountNumber(String? value) {
     if (isContactScoped) return;
 
     final trimmed = nullable(value);
 
-    state = state.copyWith(contactId: trimmed, clearContactId: trimmed == null);
+    state = state.copyWith(accountNumber: trimmed, clearAccountNumber: trimmed == null);
   }
 
   void setRelationship(ProfileContactRelationship? value) {
@@ -190,31 +213,31 @@ class ProfilesController extends StateNotifier<ProfilesState> {
 
   Future<void> applyFilters({
     String? search,
-    String? contactId,
+    String? accountNumber,
     ProfileContactRelationship? relationship,
     bool? isActive,
-    bool resetContactId = false,
+    bool resetAccountNumber = false,
     bool resetRelationship = false,
     bool resetIsActive = false,
   }) async {
-    final trimmedContactId = nullable(contactId);
+    final trimmedAccountNumber = nullable(accountNumber);
 
     state = state.copyWith(
       search: search ?? state.search,
-      contactId: isContactScoped
-          ? _fixedContactId
-          : resetContactId
+      accountNumber: isContactScoped
+          ? _fixedAccountNumber
+          : resetAccountNumber
           ? null
-          : contactId == null
-          ? state.contactId
-          : trimmedContactId,
+          : accountNumber == null
+          ? state.accountNumber
+          : trimmedAccountNumber,
       relationship: resetRelationship
           ? null
           : (relationship ?? state.relationship),
       isActive: resetIsActive ? null : (isActive ?? state.isActive),
-      clearContactId: isContactScoped
+      clearAccountNumber: isContactScoped
           ? false
-          : resetContactId || (contactId != null && trimmedContactId == null),
+          : resetAccountNumber || (accountNumber != null && trimmedAccountNumber == null),
       clearRelationship: resetRelationship,
       clearIsActive: resetIsActive,
     );
@@ -225,8 +248,8 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   Future<void> clearFilters() async {
     state = state.copyWith(
       search: '',
-      contactId: _fixedContactId,
-      clearContactId: _fixedContactId == null,
+      accountNumber: _fixedAccountNumber,
+      clearAccountNumber: _fixedAccountNumber == null,
       clearRelationship: true,
       clearIsActive: true,
     );
@@ -235,9 +258,18 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   }
 
   Future<Profile> create(ProfileUpsertInput input) async {
+    _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
+      if (_memberMode && !const <ProfileContactRelationship>{
+        ProfileContactRelationship.self,
+        ProfileContactRelationship.child,
+        ProfileContactRelationship.parent,
+        ProfileContactRelationship.guardian,
+      }.contains(input.relationship)) {
+        throw StateError('Select Self, Child, Parent or Guardian when creating a member profile.');
+      }
       final effectiveInput = _withFixedContact(input);
       final created = await _service.create(effectiveInput);
       final items = _upsertProfile(state.items, created);
@@ -258,6 +290,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     String profileId,
     ProfileLinkToSelfInput input,
   ) async {
+    _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -277,11 +310,12 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   }
 
   Future<Profile> update(String profileId, ProfileUpsertInput input) async {
+    _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
       final effectiveInput = _withFixedContact(input);
-      final updated = await _service.update(profileId, effectiveInput);
+      final updated = await _service.update(profileId, input);
       final items = _upsertProfile(state.items, updated);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -297,6 +331,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   }
 
   Future<void> remove(String profileId) async {
+    _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
@@ -350,7 +385,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
 
   Future<Profile> delinkContact({
     required String profileId,
-    required String contactId,
+    required String accountNumber,
   }) async {
     if (isContactScoped) {
       throw StateError('Scoped member views cannot delink arbitrary contacts.');
@@ -361,7 +396,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     try {
       final updated = await _service.delinkContact(
         profileId: profileId,
-        contactId: contactId,
+        accountNumber: accountNumber,
       );
 
       final items = _upsertProfile(state.items, updated);
@@ -485,25 +520,18 @@ class ProfilesController extends StateNotifier<ProfilesState> {
 
   Future<ProfileLinkRequest> approvePayerLinkRequest(
     ProfileLinkRequest request, {
-    String? contactId,
     String? accountNumber,
     String? contactDisplayName,
     ProfileContactRelationship? relationship,
   }) {
-    final resolvedContactId = nullable(contactId) ?? request.targetContactId;
     final resolvedAccountNumber =
         nullable(accountNumber) ?? request.targetAccountNumber;
-    final resolvedDisplayName =
-        nullable(contactDisplayName) ?? request.targetContactDisplayName;
-
     return approveLinkRequest(
       request.requestId,
       ProfileLinkRequestApproveInput(
-        contactId: nullable(resolvedContactId),
-        accountNumber: nullable(resolvedContactId) == null
-            ? nullable(resolvedAccountNumber)
-            : null,
-        contactDisplayName: nullable(resolvedDisplayName),
+        accountNumber: nullable(resolvedAccountNumber),
+        contactDisplayName:
+            nullable(contactDisplayName) ?? request.targetContactDisplayName,
         relationship: relationship ?? request.relationship,
       ),
     );
@@ -543,14 +571,22 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   // Input scope helpers
   // ─────────────────────────────────────────────
 
+  void _requireMemberAccount() {
+    if (_memberMode && _fixedAccountNumber == null) {
+      throw StateError(
+        'A verified Native Contact account is required in member mode.',
+      );
+    }
+  }
+
   ProfileUpsertInput _withFixedContact(ProfileUpsertInput input) {
-    if (_fixedContactId == null) return input;
+    if (_fixedAccountNumber == null) return input;
 
     return ProfileUpsertInput(
       fullName: input.fullName,
       dob: input.dob,
       gender: input.gender,
-      contactId: _fixedContactId,
+      accountNumber: _fixedAccountNumber,
       relationship: input.relationship,
       phone: input.phone,
       email: input.email,

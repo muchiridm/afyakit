@@ -226,24 +226,6 @@ class LoginController extends StateNotifier<LoginState> {
     return status.next;
   }
 
-  ({String firstName, String lastName}) _deriveNamesFromDisplayName(
-    String displayName,
-  ) {
-    final s = displayName.trim();
-    if (s.isEmpty) return (firstName: '-', lastName: '-');
-
-    final parts = s
-        .split(RegExp(r'\s+'))
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) return (firstName: '-', lastName: '-');
-    if (parts.length == 1) return (firstName: parts.first, lastName: '-');
-
-    return (firstName: parts.first, lastName: parts.sublist(1).join(' '));
-  }
-
   // ─────────────────────────────────────────────
   // Navigation helpers
   // ─────────────────────────────────────────────
@@ -785,31 +767,8 @@ class LoginController extends StateNotifier<LoginState> {
       return;
     }
 
-    final fnIn = firstName.trim();
-    final lnIn = lastName.trim();
-    final cn = (companyName ?? '').trim();
-
-    final user = _ref.read(sessionControllerProvider(_tenantId)).valueOrNull;
-    final isCompany = user?.isCompany == true;
-
-    if (isCompany) {
-      if (cn.isEmpty) {
-        SnackService.showError('Enter company name');
-        return;
-      }
-    }
-
-    final derived = _deriveNamesFromDisplayName(dn);
-    final fn = fnIn.isNotEmpty ? fnIn : derived.firstName;
-    final ln = lnIn.isNotEmpty ? lnIn : derived.lastName;
-
-    if (!isCompany) {
-      if (fn.trim().isEmpty || ln.trim().isEmpty) {
-        SnackService.showError('Enter first and last name');
-        return;
-      }
-    }
-
+    // Native Contact uses one canonical display_name; no synthetic first/last names.
+    // The existing UI arguments are retained temporarily for compatibility.
     if (!mounted || state.busy) return;
 
     state = state.copyWith(savingProfile: true, stepHint: 'Saving…');
@@ -818,11 +777,13 @@ class LoginController extends StateNotifier<LoginState> {
       final svc = await _auth();
 
       await svc.saveProfile(
-        firstName: fn.isEmpty ? '-' : fn,
-        lastName: ln.isEmpty ? '-' : ln,
+        firstName: firstName,
+        lastName: lastName,
         displayName: dn,
-        companyName: cn.isEmpty ? null : cn,
       );
+      await _ref
+          .read(sessionControllerProvider(_tenantId).notifier)
+          .refresh(forceNetwork: true);
 
       final next = await _postAuthNextStep(svc);
       if (!mounted) return;

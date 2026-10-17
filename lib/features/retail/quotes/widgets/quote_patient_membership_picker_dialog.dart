@@ -1,11 +1,11 @@
 // lib/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart
-import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
@@ -30,10 +30,11 @@ class QuotePatientContextSelection {
   /// Present only when the selected context came from an insurance membership.
   ///
   /// Insurance quotes must be billed to the payer/insurer, not the patient.
-  final ZohoContact? payerContact;
+  final NativeContact? payerContact;
   bool get isInsurance => paymentContext == QuotePaymentContext.insurance;
   bool get hasMembership => (membershipId ?? '').trim().isNotEmpty;
-  bool get hasPayerContact => (payerContact?.contactId ?? '').trim().isNotEmpty;
+  bool get hasPayerContact =>
+      (payerContact?.accountNumber ?? '').trim().isNotEmpty;
 }
 
 class QuotePatientMembershipPickerDialog extends ConsumerStatefulWidget {
@@ -55,18 +56,19 @@ class _QuotePatientMembershipPickerDialogState
     extends ConsumerState<QuotePatientMembershipPickerDialog>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtl;
-  static const String _missingMemberContactId = '__missing_member_contact__';
   Profile? _selectedPatient;
   QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
-  String get _memberContactId {
-    return (ref.read(currentMemberNativeContactIdProvider) ?? '').trim();
+  String get _memberAccountNumber {
+    return (ref.read(currentMemberAccountNumberProvider) ?? '').trim();
   }
 
   ProfilesScope get _memberProfileScope {
-    final String contactId = _memberContactId;
+    final accountNumber = _memberAccountNumber.trim();
+
     return ProfilesScope(
-      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
+      accountNumber: accountNumber.isEmpty ? null : accountNumber,
+      memberMode: true,
       allowExplicitContactLink: false,
     );
   }
@@ -143,13 +145,21 @@ class _QuotePatientMembershipPickerDialogState
         _clean(membership.payerDisplayName).isNotEmpty
         ? membership.payerDisplayName!.trim()
         : membership.payerContactId.trim();
-    final ZohoContact payerContact = ZohoContact(
-      contactId: membership.payerContactId.trim(),
+    final String payerAccountNumber = _clean(
+      membership.payerAccountNumber,
+    ).toUpperCase();
+    if (payerAccountNumber.isEmpty) {
+      throw StateError('Insurance payer has no Native Contact account number.');
+    }
+    // This is a UI-only contact selection. The backend must independently
+    // verify the insurer and resolve its accounting projection.
+    final NativeContact payerContact = NativeContact(
+      accountNumber: payerAccountNumber,
       displayName: payerDisplayName,
-      accountNumber: _clean(membership.payerAccountNumber).isEmpty
-          ? null
-          : membership.payerAccountNumber!.trim(),
+      entityType: 'organization',
       contactType: 'customer',
+      status: 'active',
+      appIds: const <String>[],
       isInsurancePayer: true,
     );
     return QuotePatientContextSelection(
@@ -173,14 +183,21 @@ class _QuotePatientMembershipPickerDialogState
   }
 
   void _selectMembership(InsuranceMembership membership) {
-    Navigator.of(context).pop(_selectionFromMembership(membership));
+    try {
+      final selection = _selectionFromMembership(membership);
+      Navigator.of(context).pop(selection);
+    } on StateError catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final Set<String>? allowedProfileIds = _allowedProfileIdsForMemberships();
     final bool memberContactMissing =
-        _isMemberScoped && _memberContactId.isEmpty;
+        _isMemberScoped && _memberAccountNumber.isEmpty;
     return AlertDialog(
       title: Text(
         _isMemberScoped
@@ -216,7 +233,9 @@ class _QuotePatientMembershipPickerDialogState
                 children: <Widget>[
                   _DirectPayPatientTab(
                     memberScoped: _isMemberScoped,
-                    contactId: _isMemberScoped ? _memberContactId : null,
+                    accountNumber: _isMemberScoped
+                        ? _memberAccountNumber
+                        : null,
                     selectedPatient: _selectedPatient,
                     onSelected: (Profile patient) {
                       setState(() => _selectedPatient = patient);
@@ -249,12 +268,12 @@ class _QuotePatientMembershipPickerDialogState
 class _DirectPayPatientTab extends StatelessWidget {
   const _DirectPayPatientTab({
     required this.memberScoped,
-    required this.contactId,
+    required this.accountNumber,
     required this.selectedPatient,
     required this.onSelected,
   });
   final bool memberScoped;
-  final String? contactId;
+  final String? accountNumber;
   final Profile? selectedPatient;
   final ValueChanged<Profile> onSelected;
   @override
@@ -271,7 +290,7 @@ class _DirectPayPatientTab extends StatelessWidget {
         ProfilePickerCard(
           selectedProfile: selectedPatient,
           busy: false,
-          contactId: memberScoped ? contactId : null,
+          accountNumber: memberScoped ? accountNumber?.trim() : null,
           forcePickerMode: !memberScoped,
           onChanged: onSelected,
         ),

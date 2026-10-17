@@ -102,8 +102,11 @@ class ActivityFeedRecord {
 
   final String? subtitle;
 
-  /// Visibility / member ownership scope.
+  /// Legacy activity metadata retained for historical records only.
+  /// Never use contactId for member authorisation or new activity queries.
   final String? contactId;
+
+  /// Canonical Native Contact payer/owner reference.
   final String? accountNumber;
 
   final String? actorUid;

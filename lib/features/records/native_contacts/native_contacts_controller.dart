@@ -1,7 +1,6 @@
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../models/native_contact.dart';
-import '../services/native_contacts_service.dart';
 
 /// First-page list only.
 /// Search in the current pilot is client-side.

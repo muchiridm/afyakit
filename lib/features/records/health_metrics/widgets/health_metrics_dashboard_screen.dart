@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -100,7 +100,7 @@ class _HealthMetricsDashboardScreenState
           ProfilePickerCard(
             selectedProfile: selectedProfile,
             busy: false,
-            contactId: widget.profilePickerContactId,
+            accountNumber: widget.profilePickerContactId,
             forcePickerMode: !widget.memberMode,
             onChanged: (profile) {
               if (profile.profileId == _selectedProfile?.profileId) {

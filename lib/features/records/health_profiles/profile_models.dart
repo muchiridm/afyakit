@@ -1,4 +1,4 @@
-// lib/features/records/profiles/models/profile_models.dart
+// lib/features/records/health_profiles/profile_models.dart
 
 import 'package:flutter/foundation.dart';
 
@@ -40,13 +40,13 @@ enum ProfileGender {
 @immutable
 class ProfileLinkedContact {
   const ProfileLinkedContact({
-    required this.contactId,
+    required this.accountNumber,
     required this.relationship,
     required this.isActive,
     this.contactDisplayName,
   });
 
-  final String contactId;
+  final String accountNumber;
   final String? contactDisplayName;
   final ProfileContactRelationship relationship;
   final bool isActive;
@@ -94,7 +94,7 @@ class ProfileLinkedContact {
 
   factory ProfileLinkedContact.fromJson(Map<String, Object?> json) {
     return ProfileLinkedContact(
-      contactId: _readRequiredString(json, 'contact_id'),
+      accountNumber: _readRequiredString(json, 'account_number'),
       contactDisplayName: _readNullableString(json, 'contact_display_name'),
       relationship: ProfileContactRelationship.fromJson(json['relationship']),
       isActive: _readBool(json, 'is_active', fallback: true),
@@ -103,7 +103,7 @@ class ProfileLinkedContact {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'contact_id': contactId,
+      'account_number': accountNumber,
       'contact_display_name': contactDisplayName,
       'relationship': relationship.name,
       'is_active': isActive,
@@ -111,18 +111,42 @@ class ProfileLinkedContact {
   }
 
   ProfileLinkedContact copyWith({
-    String? contactId,
+    String? accountNumber,
     String? contactDisplayName,
     ProfileContactRelationship? relationship,
     bool? isActive,
   }) {
     return ProfileLinkedContact(
-      contactId: contactId ?? this.contactId,
+      accountNumber: accountNumber ?? this.accountNumber,
       contactDisplayName: contactDisplayName ?? this.contactDisplayName,
       relationship: relationship ?? this.relationship,
       isActive: isActive ?? this.isActive,
     );
   }
+}
+
+enum ProfileRelationship {
+  spouse, parent, child, guardian, ward, sibling, other;
+
+  static ProfileRelationship fromJson(Object? value) =>
+      ProfileRelationship.values.firstWhere(
+        (e) => e.name == value?.toString().trim().toLowerCase(),
+        orElse: () => ProfileRelationship.other,
+      );
+}
+
+@immutable
+class RelatedProfile {
+  const RelatedProfile({required this.profileId, required this.fullName, required this.relationship});
+  final String profileId;
+  final String fullName;
+  final ProfileRelationship relationship;
+
+  factory RelatedProfile.fromJson(Map<String, Object?> json) => RelatedProfile(
+    profileId: json['profile_id']?.toString() ?? '',
+    fullName: json['full_name']?.toString() ?? '',
+    relationship: ProfileRelationship.fromJson(json['relationship']),
+  );
 }
 
 @immutable
@@ -139,7 +163,7 @@ class Profile {
     this.notes,
     this.linkedContacts = const <ProfileLinkedContact>[],
     this.linkId,
-    this.contactId,
+    this.accountNumber,
     this.contactDisplayName,
     this.relationship,
     this.createdAt,
@@ -161,7 +185,7 @@ class Profile {
   final List<ProfileLinkedContact> linkedContacts;
 
   final String? linkId;
-  final String? contactId;
+  final String? accountNumber;
   final String? contactDisplayName;
   final ProfileContactRelationship? relationship;
 
@@ -268,9 +292,9 @@ class Profile {
       nationalId: _readNullableString(json, 'national_id'),
       notes: _readNullableString(json, 'notes'),
       isActive: _readBool(json, 'is_active', fallback: true),
-      linkedContacts: _readLinkedContacts(json),
+      linkedContacts: const <ProfileLinkedContact>[],
       linkId: _readNullableString(json, 'link_id'),
-      contactId: _readNullableString(json, 'contact_id'),
+      accountNumber: _readNullableString(json, 'account_number'),
       contactDisplayName: _readNullableString(json, 'contact_display_name'),
       relationship: relationshipRaw == null
           ? null
@@ -292,7 +316,7 @@ class Profile {
     bool? isActive,
     List<ProfileLinkedContact>? linkedContacts,
     String? linkId,
-    String? contactId,
+    String? accountNumber,
     String? contactDisplayName,
     ProfileContactRelationship? relationship,
     DateTime? createdAt,
@@ -310,7 +334,7 @@ class Profile {
       isActive: isActive ?? this.isActive,
       linkedContacts: linkedContacts ?? this.linkedContacts,
       linkId: linkId ?? this.linkId,
-      contactId: contactId ?? this.contactId,
+      accountNumber: accountNumber ?? this.accountNumber,
       contactDisplayName: contactDisplayName ?? this.contactDisplayName,
       relationship: relationship ?? this.relationship,
       createdAt: createdAt ?? this.createdAt,
@@ -325,8 +349,8 @@ class ProfileUpsertInput {
     required this.fullName,
     this.dob,
     this.gender = ProfileGender.unknown,
-    this.contactId,
-    this.relationship = ProfileContactRelationship.self,
+    this.accountNumber,
+    this.relationship = ProfileContactRelationship.other,
     this.phone,
     this.email,
     this.nationalId,
@@ -337,7 +361,7 @@ class ProfileUpsertInput {
   final String fullName;
   final String? dob;
   final ProfileGender gender;
-  final String? contactId;
+  final String? accountNumber;
   final ProfileContactRelationship relationship;
   final String? phone;
   final String? email;
@@ -356,7 +380,7 @@ class ProfileUpsertInput {
       'full_name': fullName.trim(),
       'dob': _nullable(dob),
       'gender': gender.name,
-      'contact_id': _nullable(contactId),
+      'account_number': _nullable(accountNumber),
       'relationship': relationship.name,
       'phone': _nullable(phone),
       'email': _nullable(email),
@@ -373,11 +397,11 @@ class ProfileUpsertInput {
       fullName: profile.fullName,
       dob: profile.dob,
       gender: profile.gender ?? ProfileGender.unknown,
-      contactId: profile.contactId ?? linkedContact?.contactId,
+      accountNumber: profile.accountNumber ?? linkedContact?.accountNumber,
       relationship:
           profile.relationship ??
           linkedContact?.relationship ??
-          ProfileContactRelationship.self,
+          ProfileContactRelationship.other,
       phone: profile.phone,
       email: profile.email,
       nationalId: profile.nationalId,
@@ -429,36 +453,21 @@ class ProfileLinkToSelfInput {
 @immutable
 class ProfileContactLinkInput {
   const ProfileContactLinkInput({
-    this.contactId,
     this.accountNumber,
     this.contactDisplayName,
     this.relationship = ProfileContactRelationship.other,
     this.isActive = true,
   });
 
-  final String? contactId;
   final String? accountNumber;
   final String? contactDisplayName;
   final ProfileContactRelationship relationship;
   final bool isActive;
 
-  static String? _nullable(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  Map<String, Object?> toJson() {
-    final cleanContactId = _nullable(contactId);
-
-    return <String, Object?>{
-      'contact_id': cleanContactId,
-      'account_number': cleanContactId == null
-          ? _nullable(accountNumber)
-          : null,
-      'contact_display_name': _nullable(contactDisplayName),
-      'relationship': relationship.name,
-      'is_active': isActive,
-    };
-  }
+  Map<String, Object?> toJson() => <String, Object?>{
+    'account_number': accountNumber?.trim().toUpperCase(),
+    'contact_display_name': contactDisplayName?.trim(),
+    'relationship': relationship.name,
+    'is_active': isActive,
+  };
 }

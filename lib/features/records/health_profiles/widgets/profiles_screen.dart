@@ -1,15 +1,15 @@
-// lib/features/records/profiles/widgets/profiles_screen.dart
+// lib/features/records/health_profiles/widgets/profiles_screen.dart
 
-import 'package:afyakit/features/records/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_form_dialog.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_payer_link_dialog.dart';
-import 'package:afyakit/features/records/profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_link_dialog.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/records/profiles/models/profile_link_request_models.dart';
-import 'package:afyakit/features/records/profiles/models/profile_models.dart';
-import 'package:afyakit/features/records/profiles/widgets/profile_details_screen.dart';
+import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_details_screen.dart';
 
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -17,7 +17,8 @@ import 'package:afyakit/shared/layout/app_page.dart';
 class ProfilesScreen extends ConsumerStatefulWidget {
   const ProfilesScreen({
     super.key,
-    this.contactId,
+    this.accountNumber,
+    this.memberMode,
     this.allowExplicitContactLink = false,
     this.selectionMode = false,
     this.selectionTitle,
@@ -28,7 +29,11 @@ class ProfilesScreen extends ConsumerStatefulWidget {
   /// this contact.
   ///
   /// Member flows should always provide this value.
-  final String? contactId;
+  final String? accountNumber;
+
+  /// Explicit member mode. Defaults to member mode unless staff features are enabled.
+  /// Does not authorise access; the backend must verify account ownership.
+  final bool? memberMode;
 
   /// Staff/admin mode only.
   final bool allowExplicitContactLink;
@@ -53,7 +58,7 @@ class ProfilesScreen extends ConsumerStatefulWidget {
 
 class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   late final TextEditingController _searchCtl;
-  late final TextEditingController _contactIdCtl;
+  late final TextEditingController _accountNumberCtl;
 
   ProfileContactRelationship? _relationship;
   bool _createFlowOpened = false;
@@ -61,7 +66,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   double get _maxWidth => AppLayout.contentMaxWidth;
 
   String? get _contactScope {
-    final id = widget.contactId?.trim();
+    final id = widget.accountNumber?.trim();
 
     if (id == null || id.isEmpty) {
       return null;
@@ -70,14 +75,19 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     return id;
   }
 
+  bool get _memberMode => widget.memberMode ?? !widget.allowExplicitContactLink;
+
+  bool get _missingMemberAccount => _memberMode && _contactScope == null;
+
   ProfilesScope get _scope {
     return ProfilesScope(
-      contactId: _contactScope,
+      accountNumber: _contactScope,
+      memberMode: _memberMode,
       allowExplicitContactLink: widget.allowExplicitContactLink,
     );
   }
 
-  bool get _isContactScoped => _contactScope != null;
+  bool get _isContactScoped => _memberMode || _contactScope != null;
 
   bool get _showMemberInfo =>
       _isContactScoped &&
@@ -97,7 +107,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     super.initState();
 
     _searchCtl = TextEditingController();
-    _contactIdCtl = TextEditingController(text: _contactScope ?? '');
+    _accountNumberCtl = TextEditingController(text: _contactScope ?? '');
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -126,17 +136,18 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   void didUpdateWidget(covariant ProfilesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldContactId = oldWidget.contactId?.trim();
-    final newContactId = widget.contactId?.trim();
+    final oldAccountNumber = oldWidget.accountNumber?.trim();
+    final newAccountNumber = widget.accountNumber?.trim();
 
-    if (oldContactId == newContactId &&
+    if (oldAccountNumber == newAccountNumber &&
+        oldWidget.memberMode == widget.memberMode &&
         oldWidget.allowExplicitContactLink == widget.allowExplicitContactLink &&
         oldWidget.selectionMode == widget.selectionMode &&
         oldWidget.createOnOpen == widget.createOnOpen) {
       return;
     }
 
-    _contactIdCtl.text = _contactScope ?? '';
+    _accountNumberCtl.text = _contactScope ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -154,7 +165,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   @override
   void dispose() {
     _searchCtl.dispose();
-    _contactIdCtl.dispose();
+    _accountNumberCtl.dispose();
 
     super.dispose();
   }
@@ -173,7 +184,8 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
       MaterialPageRoute<void>(
         builder: (_) => ProfileDetailsScreen(
           profile: profile,
-          contactId: _contactScope,
+          memberMode: _memberMode,
+          accountNumber: _contactScope,
           allowExplicitContactLink: widget.allowExplicitContactLink,
         ),
       ),
@@ -181,7 +193,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   }
 
   Future<void> _openCreateDialogOnce() async {
-    if (_createFlowOpened || !mounted) return;
+    if (_createFlowOpened || !mounted || _missingMemberAccount) return;
 
     _createFlowOpened = true;
 
@@ -189,6 +201,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   }
 
   Future<void> _openCreateDialog() async {
+    if (_missingMemberAccount) return;
     final input = await showDialog<ProfileUpsertInput>(
       context: context,
       builder: (_) => ProfileFormDialog(
@@ -233,7 +246,6 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     try {
       await _controller.approvePayerLinkRequest(
         request,
-        contactId: input.contactId,
         accountNumber: input.accountNumber,
         contactDisplayName: input.contactDisplayName,
         relationship: input.relationship,
@@ -289,9 +301,9 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     _searchCtl.clear();
 
     if (widget.allowExplicitContactLink && !_isContactScoped) {
-      _contactIdCtl.clear();
+      _accountNumberCtl.clear();
     } else {
-      _contactIdCtl.text = _contactScope ?? '';
+      _accountNumberCtl.text = _contactScope ?? '';
     }
 
     setState(() {
@@ -338,7 +350,9 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.isSaving ? null : _openCreateDialog,
+            onPressed: state.isSaving || _missingMemberAccount
+                ? null
+                : _openCreateDialog,
             icon: state.isSaving
                 ? const SizedBox(
                     width: 18,
@@ -356,6 +370,13 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
+                if (_missingMemberAccount)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'Unable to identify your Native Contact account. Profiles cannot be loaded.',
+                    ),
+                  ),
                 if (_showMemberInfo) ...[
                   const _MemberProfilesInfoCard(),
                   const SizedBox(height: 12),
@@ -378,7 +399,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                 if (widget.selectionMode) const _ProfileSelectionHint(),
                 ProfilesFilterBar(
                   searchController: _searchCtl,
-                  contactIdController: _contactIdCtl,
+                  accountNumberController: _accountNumberCtl,
                   relationship: _relationship,
                   isActive: state.isActive,
                   allowExplicitContactLink:
@@ -386,13 +407,13 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                   onSearchSubmitted: (value) {
                     controller.applyFilters(search: value);
                   },
-                  onContactIdSubmitted: (value) {
+                  onAccountNumberSubmitted: (value) {
                     if (!widget.allowExplicitContactLink ||
                         widget.selectionMode) {
                       return;
                     }
 
-                    controller.applyFilters(contactId: value);
+                    controller.applyFilters(accountNumber: value);
                   },
                   onRelationshipChanged: (value) {
                     setState(() {
@@ -433,7 +454,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                       ),
                     ),
                   )
-                else
+                else if (!_missingMemberAccount)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Column(
@@ -483,7 +504,7 @@ class _MemberProfilesInfoCard extends StatelessWidget {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Create a separate profile for yourself and each dependant. '
+                'Create a separate profile for yourself and each dependant; choose the relationship explicitly. '
                 'Prescriptions, health measurements, and other clinical records '
                 'remain linked to the correct person.',
               ),
