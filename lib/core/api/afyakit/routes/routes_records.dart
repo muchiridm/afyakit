@@ -16,12 +16,21 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
 
   Uri recordsMyContact() => _uri('records/contacts/me');
 
+  /// Member-only linked profile summaries; account is resolved server-side.
+  /// GET /v1/records/contacts/me/health-profiles
+  Uri recordsMyContactHealthProfilesList({int page = 1, int perPage = 50}) =>
+      _uri(
+        'records/contacts/me/health-profiles',
+        query: _recordsQuery(page: page, perPage: perPage),
+      );
+
   /// Canonical Native Contact identifier: AC-XXXXXX.
   ///
   Uri recordsContactGet(String accountNumber) =>
       _uri('records/contacts/${_seg(accountNumber)}');
 
-  Uri recordsContactUpdate(String accountNumber) => recordsContactGet(accountNumber);
+  Uri recordsContactUpdate(String accountNumber) =>
+      recordsContactGet(accountNumber);
 
   Uri recordsContactMembershipRemove(String accountNumber) =>
       _uri('records/contacts/${_seg(accountNumber)}/membership');
@@ -40,6 +49,27 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
     query: _recordsQuery(page: page, perPage: perPage),
   );
 
+  /// Staff: create an association between a canonical Contact and Profile.
+  Uri recordsContactHealthProfileLinkCreate(String accountNumber) =>
+      _uri('records/contacts/${_seg(accountNumber)}/health-profiles');
+
+  /// Staff: change an existing association's relationship (or reactivate it).
+  Uri recordsContactHealthProfileLinkUpdate({
+    required String accountNumber,
+    required String profileId,
+  }) => _uri(
+    'records/contacts/${_seg(accountNumber)}/health-profiles/${_seg(profileId)}',
+  );
+
+  /// Staff: deactivate an association, preserving both records.
+  Uri recordsContactHealthProfileLinkDelete({
+    required String accountNumber,
+    required String profileId,
+  }) => recordsContactHealthProfileLinkUpdate(
+    accountNumber: accountNumber,
+    profileId: profileId,
+  );
+
   // ---------------------------------------------------------
   // Health profiles
   // ---------------------------------------------------------
@@ -54,7 +84,10 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   }) => _uri(
     'records/profiles',
     query: _recordsQuery(
-      search: search, isActive: isActive, perPage: perPage, page: page,
+      search: search,
+      isActive: isActive,
+      perPage: perPage,
+      page: page,
       extras: {'account_number': accountNumber, 'relationship': relationship},
     ),
   );

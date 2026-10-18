@@ -9,6 +9,7 @@ import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_sc
 import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
 import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_shared.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/records/native_contacts/widgets/member_contact_screen.dart';
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -31,13 +32,14 @@ class MemberFeaturesPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final contactId = user?.contactId;
+    // UI-only scope. The API independently verifies contact ownership.
+    // NEVER use the legacy AuthUser.contactId for Native Contact identity.
+    final accountNumber = ref.watch(currentMemberAccountNumberProvider);
     final clinicalEnabled = ref.watch(appClinicalEnabledProvider);
     final pharmacyEnabled = ref.watch(appPharmacyEnabledProvider);
     final retailEnabled = ref.watch(appRetailEnabledProvider);
 
     final actions = <Widget>[
-      // Core Records: same order as staff, but always member-scoped.
       HomeActionChip(
         icon: Icons.people_alt_outlined,
         label: 'My Contact',
@@ -46,33 +48,46 @@ class MemberFeaturesPanel extends ConsumerWidget {
       HomeActionChip(
         icon: Icons.people_outline,
         label: 'My Profiles',
-        onTap: () => _open(
-          context,
-          ProfilesScreen(
-            accountNumber: contactId,
-            memberMode: true,
-            allowExplicitContactLink: false,
-          ),
-        ),
+        onTap: () {
+          final account = _requireAccount(context, accountNumber);
+          if (account == null) return;
+          _open(
+            context,
+            ProfilesScreen(
+              accountNumber: account,
+              memberMode: true,
+              allowExplicitContactLink: false,
+            ),
+          );
+        },
       ),
       HomeActionChip(
         icon: Icons.monitor_heart_outlined,
         label: 'My Health Metrics',
-        onTap: () => _openHealthMetrics(context, contactId: contactId),
+        onTap: () => _openHealthMetrics(
+          context,
+          accountNumber: accountNumber,
+        ),
       ),
-
       if (clinicalEnabled)
         HomeActionChip(
           icon: Icons.description_outlined,
           label: 'My Prescriptions',
-          onTap: () =>
-              PrescriptionsScreen.open(context: context, contactId: contactId),
+          onTap: () {
+            final account = _requireAccount(context, accountNumber);
+            if (account == null) return;
+            // The existing prescriptions API uses `contactId` as its argument
+            // name, but the value is the canonical AC-XXXXXX account number.
+            PrescriptionsScreen.open(context: context, contactId: account);
+          },
         ),
       if (pharmacyEnabled)
         HomeActionChip(
           icon: Icons.location_on_outlined,
           label: 'Delivery Addresses',
           onTap: () {
+            final account = _requireAccount(context, accountNumber);
+            if (account == null) return;
             final scope = ref.read(currentUserDeliveryAddressScopeProvider);
             _open(
               context,
@@ -118,9 +133,8 @@ class MemberFeaturesPanel extends ConsumerWidget {
                 SizedBox(
                   width: itemWidth,
                   child: Align(
-                    alignment: centered
-                        ? Alignment.center
-                        : Alignment.centerLeft,
+                    alignment:
+                        centered ? Alignment.center : Alignment.centerLeft,
                     child: action,
                   ),
                 ),
@@ -138,28 +152,39 @@ class MemberFeaturesPanel extends ConsumerWidget {
     );
   }
 
+  String? _requireAccount(BuildContext context, String? value) {
+    final account = value?.trim().toUpperCase();
+    if (account != null &&
+        RegExp(r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$')
+            .hasMatch(account)) {
+      return account;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your Native Contact account is not available yet. '
+          'Please refresh your account or sign in again.',
+        ),
+      ),
+    );
+    return null;
+  }
+
   void _open(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   Future<void> _openHealthMetrics(
     BuildContext context, {
-    required String? contactId,
+    required String? accountNumber,
   }) async {
-    final normalizedContactId = (contactId ?? '').trim();
-    if (normalizedContactId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your account is not linked to a contact.'),
-        ),
-      );
-      return;
-    }
+    final account = _requireAccount(context, accountNumber);
+    if (account == null) return;
 
     final profile = await Navigator.of(context).push<Profile>(
       MaterialPageRoute<Profile>(
         builder: (_) => ProfilesScreen(
-          accountNumber: normalizedContactId,
+          accountNumber: account,
           memberMode: true,
           allowExplicitContactLink: false,
           selectionMode: true,
@@ -173,7 +198,8 @@ class MemberFeaturesPanel extends ConsumerWidget {
       MaterialPageRoute<void>(
         builder: (_) => HealthMetricsDashboardScreen(
           initialProfile: profile,
-          profilePickerContactId: normalizedContactId,
+          // Legacy constructor parameter name; value is canonical account.
+          profilePickerContactId: account,
           memberMode: true,
         ),
       ),

@@ -1,10 +1,10 @@
+import 'package:afyakit/core/api/afyakit/client.dart';
+import 'package:afyakit/core/api/afyakit/providers.dart';
+import 'package:afyakit/core/api/afyakit/routes/routes.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/core/api/afyakit/client.dart';
-import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 final nativeContactsServiceProvider = FutureProvider<NativeContactsService>((
   ref,
@@ -20,18 +20,55 @@ class NativeContactsService {
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
 
-  Map<String, dynamic> _object(Object? value) {
+  static final RegExp _accountPattern = RegExp(
+    r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+  );
+
+  static Map<String, dynamic> _object(Object? value) {
     if (value is Map) return Map<String, dynamic>.from(value);
-    throw const FormatException('Unexpected contact API response');
+    throw const FormatException('Unexpected Native Contact API response');
   }
 
-  /// Member self-service: no account number supplied by the client.
+  static String _account(String value) {
+    final account = value.trim().toUpperCase();
+    if (!_accountPattern.hasMatch(account)) {
+      throw ArgumentError.value(
+        value,
+        'accountNumber',
+        'Expected canonical Native Contact account number (AC-XXXXXX)',
+      );
+    }
+    return account;
+  }
+
+  static String _profileId(String value) {
+    final id = value.trim();
+    if (id.isEmpty || id.contains('/') || id.contains(r'\')) {
+      throw ArgumentError.value(
+        value,
+        'profileId',
+        'Invalid Health Profile ID',
+      );
+    }
+    return id;
+  }
+
+  static Profile _profile(Object? value) => Profile.fromJson(_object(value));
+
+  static List<Profile> _profileList(Object? body) {
+    final items = _object(body)['profiles'];
+    if (items is! List) {
+      throw const FormatException('Missing linked profiles array');
+    }
+    return items.map((item) => _profile(item)).toList(growable: false);
+  }
+
+  // Member-scoped operations. The server derives the account from auth.
   Future<NativeContact> getMine() async {
     final res = await api.getUri<Object?>(routes.recordsMyContact());
     return NativeContact.fromJson(_object(_object(res.data)['contact']));
   }
 
-  /// Only contact fields accepted by the backend SelfContactPatch parser.
   Future<NativeContact> updateMine(Map<String, Object?> body) async {
     const allowed = {'display_name', 'phone', 'mobile', 'email', 'id_number'};
     if (body.isEmpty || body.keys.any((key) => !allowed.contains(key))) {
@@ -44,22 +81,32 @@ class NativeContactsService {
     return NativeContact.fromJson(_object(_object(res.data)['contact']));
   }
 
+  /// Only profiles directly linked to the authenticated member's Contact.
+  /// Does not accept an account number and does not grant clinical permissions.
+  Future<List<Profile>> listMyLinkedHealthProfiles({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    final res = await api.getUri<Object?>(
+      routes.recordsMyContactHealthProfilesList(page: page, perPage: perPage),
+    );
+    return _profileList(res.data);
+  }
+
+  // Staff-only Contact directory and mutations.
   Future<List<NativeContact>> list({int page = 1, int perPage = 50}) async {
     final res = await api.getUri<Object?>(
       routes.recordsContactsList(page: page, perPage: perPage),
     );
-
     final items = _object(res.data)['contacts'];
-    if (items is! List) {
-      throw const FormatException('Missing contacts array');
-    }
-
+    if (items is! List) throw const FormatException('Missing contacts array');
     return items.map((item) => NativeContact.fromJson(_object(item))).toList();
   }
 
-  Future<NativeContact> get(String id) async {
-    final res = await api.getUri<Object?>(routes.recordsContactGet(id));
-
+  Future<NativeContact> get(String accountNumber) async {
+    final res = await api.getUri<Object?>(
+      routes.recordsContactGet(_account(accountNumber)),
+    );
     return NativeContact.fromJson(_object(_object(res.data)['contact']));
   }
 
@@ -68,25 +115,96 @@ class NativeContactsService {
       routes.recordsContactCreate(),
       data: body,
     );
-
     return NativeContact.fromJson(_object(_object(res.data)['contact']));
   }
 
-  Future<NativeContact> update(String id, Map<String, Object?> body) async {
+  Future<NativeContact> update(
+    String accountNumber,
+    Map<String, Object?> body,
+  ) async {
     if (body.containsKey('entity_type')) {
       throw ArgumentError(
         'entity_type cannot be changed after account creation',
       );
     }
     final res = await api.putUri<Object?>(
-      routes.recordsContactUpdate(id),
+      routes.recordsContactUpdate(_account(accountNumber)),
       data: body,
     );
-
     return NativeContact.fromJson(_object(_object(res.data)['contact']));
   }
 
-  Future<void> removeFromApp(String id) async {
-    await api.deleteUri<Object?>(routes.recordsContactMembershipRemove(id));
+  Future<void> removeFromApp(String accountNumber) async {
+    await api.deleteUri<Object?>(
+      routes.recordsContactMembershipRemove(_account(accountNumber)),
+    );
+  }
+
+  // Staff-only Contact -> Health Profile associations.
+  // Sole source of truth: tenants/{tenantId}/health_profile_links.
+  Future<List<Profile>> listLinkedHealthProfiles(
+    String accountNumber, {
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    final res = await api.getUri<Object?>(
+      routes.recordsContactHealthProfilesList(
+        _account(accountNumber),
+        page: page,
+        perPage: perPage,
+      ),
+    );
+    return _profileList(res.data);
+  }
+
+  /// The relationship describes the patient relative to the Contact.
+  Future<Profile> linkHealthProfile({
+    required String accountNumber,
+    required String profileId,
+    required ProfileContactRelationship relationship,
+  }) async {
+    final account = _account(accountNumber);
+    final id = _profileId(profileId);
+    final res = await api.postUri<Object?>(
+      routes.recordsContactHealthProfileLinkCreate(account),
+      data: <String, Object?>{
+        'profile_id': id,
+        'relationship': relationship.name,
+      },
+    );
+    return _profile(_object(res.data)['profile']);
+  }
+
+  Future<Profile> updateHealthProfileLink({
+    required String accountNumber,
+    required String profileId,
+    required ProfileContactRelationship relationship,
+  }) async {
+    final account = _account(accountNumber);
+    final id = _profileId(profileId);
+    final res = await api.putUri<Object?>(
+      routes.recordsContactHealthProfileLinkUpdate(
+        accountNumber: account,
+        profileId: id,
+      ),
+      data: <String, Object?>{
+        'profile_id': id,
+        'relationship': relationship.name,
+      },
+    );
+    return _profile(_object(res.data)['profile']);
+  }
+
+  Future<Profile> unlinkHealthProfile({
+    required String accountNumber,
+    required String profileId,
+  }) async {
+    final res = await api.deleteUri<Object?>(
+      routes.recordsContactHealthProfileLinkDelete(
+        accountNumber: _account(accountNumber),
+        profileId: _profileId(profileId),
+      ),
+    );
+    return _profile(_object(res.data)['profile']);
   }
 }

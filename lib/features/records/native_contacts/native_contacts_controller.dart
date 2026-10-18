@@ -1,6 +1,7 @@
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 
 /// First-page list only.
 /// Search in the current pilot is client-side.
@@ -10,6 +11,12 @@ final nativeContactsListProvider =
 
       return service.list(perPage: 100);
     });
+
+/// Staff-only linked Profile summaries. Scoped to the canonical account ID.
+final contactLinkedProfilesProvider = FutureProvider.autoDispose.family<List<Profile>, String>((ref, accountNumber) async {
+  final service = await ref.watch(nativeContactsServiceProvider.future);
+  return service.listLinkedHealthProfiles(accountNumber);
+});
 
 class NativeContactsActionState {
   const NativeContactsActionState({this.busy = false, this.error});
@@ -22,11 +29,21 @@ class NativeContactsActionState {
 /// Widgets own only form state.
 class NativeContactsController
     extends StateNotifier<NativeContactsActionState> {
-  NativeContactsController(this._service, this._invalidate)
+  NativeContactsController(this._service, this._invalidate, this._invalidateLinks)
     : super(const NativeContactsActionState());
 
   final Future<NativeContactsService> _service;
   final void Function() _invalidate;
+  final void Function() _invalidateLinks;
+
+  Future<bool> linkProfile({required String accountNumber, required String profileId, required ProfileContactRelationship relationship}) =>
+      _mutate((service) async { await service.linkHealthProfile(accountNumber: accountNumber, profileId: profileId, relationship: relationship); });
+
+  Future<bool> changeProfileLink({required String accountNumber, required String profileId, required ProfileContactRelationship relationship}) =>
+      _mutate((service) async { await service.updateHealthProfileLink(accountNumber: accountNumber, profileId: profileId, relationship: relationship); });
+
+  Future<bool> unlinkProfile({required String accountNumber, required String profileId}) =>
+      _mutate((service) async { await service.unlinkHealthProfile(accountNumber: accountNumber, profileId: profileId); });
 
   Future<void> refresh() async {
     _invalidate();
@@ -45,6 +62,7 @@ class NativeContactsController
       await action(service);
 
       _invalidate();
+      _invalidateLinks();
 
       if (mounted) {
         state = const NativeContactsActionState();
@@ -90,5 +108,6 @@ final nativeContactsControllerProvider =
       return NativeContactsController(
         service,
         () => ref.invalidate(nativeContactsListProvider),
+        () => ref.invalidate(contactLinkedProfilesProvider),
       );
     });

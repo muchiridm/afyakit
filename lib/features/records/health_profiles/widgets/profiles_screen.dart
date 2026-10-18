@@ -3,7 +3,9 @@
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_link_dialog.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_self_link_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_list_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -112,6 +114,8 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
+      if (_missingMemberAccount) return;
+
       final controller = _controller;
 
       await controller.load();
@@ -124,9 +128,12 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
 
       if (!mounted) return;
 
-      if (widget.allowExplicitContactLink && !widget.selectionMode) {
+      if (!widget.selectionMode) {
         await controller.loadLinkRequests(
-          status: ProfileLinkRequestStatus.pendingStaffApproval,
+          status: widget.allowExplicitContactLink
+              ? ProfileLinkRequestStatus.pendingStaffApproval
+              : null,
+          resetStatus: !widget.allowExplicitContactLink,
         );
       }
     });
@@ -152,6 +159,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
+      if (_missingMemberAccount) return;
       await _controller.refreshAll();
 
       if (!mounted) return;
@@ -228,6 +236,27 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
       if (!mounted) return;
 
       _showErrorFromState();
+    }
+  }
+
+  Future<void> _requestExistingProfile() async {
+    if (!_memberMode || _missingMemberAccount || widget.selectionMode) return;
+    final submission = await ExistingProfileLinkRequestDialog.show(context);
+    if (submission == null || !mounted) return;
+    try {
+      await _controller.createLinkRequest(
+        submission.profileId,
+        submission.input,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Request submitted. A staff member must review it.'),
+        ),
+      );
+      await _controller.loadLinkRequests(resetStatus: true);
+    } catch (_) {
+      if (mounted) _showErrorFromState();
     }
   }
 
@@ -347,6 +376,14 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
           onPressed: state.isLoading ? null : controller.refreshAll,
           icon: const Icon(Icons.refresh),
         ),
+        if (_memberMode && !widget.selectionMode)
+          TextButton.icon(
+            onPressed: state.isSaving || _missingMemberAccount
+                ? null
+                : _requestExistingProfile,
+            icon: const Icon(Icons.add_link),
+            label: const Text('Request existing'),
+          ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
@@ -436,6 +473,19 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                     _clearFilters(controller);
                   },
                 ),
+                // Count the profiles in the current loaded/filtered list.
+                // Do not present this as a tenant-wide total if the API paginates.
+                if (!_missingMemberAccount && !state.isLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${state.items.length} ${state.items.length == 1 ? 'profile' : 'profiles'}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  ),
                 if (state.error != null && state.error!.trim().isNotEmpty)
                   ProfilesErrorBanner(error: state.error!),
                 if (state.isLoading)
@@ -462,7 +512,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                           .map(
                             (profile) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: _ProfileListTile(
+                              child: ProfileListTile(
                                 profile: profile,
                                 selectionMode: widget.selectionMode,
                                 onTap: () {
@@ -546,144 +596,4 @@ class _ProfileSelectionHint extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ProfileListTile extends StatelessWidget {
-  const _ProfileListTile({
-    required this.profile,
-    required this.selectionMode,
-    required this.onTap,
-  });
-
-  final Profile profile;
-  final bool selectionMode;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    final subtitleParts = <String>[];
-
-    if (profile.relationship != null) {
-      subtitleParts.add(ProfilesLabels.relationship(profile.relationship!));
-    }
-
-    final age = _profileAge(profile.dob);
-
-    if (age != null) {
-      subtitleParts.add('$age years');
-    }
-
-    final dob = _formatDob(profile.dob);
-
-    if (dob != null) {
-      subtitleParts.add('DOB $dob');
-    }
-
-    final contactName = (profile.contactDisplayName ?? '').trim();
-
-    if (contactName.isNotEmpty) {
-      subtitleParts.add(contactName);
-    }
-
-    final phone = (profile.phone ?? '').trim();
-
-    if (phone.isNotEmpty) {
-      subtitleParts.add(phone);
-    }
-
-    if (!profile.isActive) {
-      subtitleParts.add('Inactive');
-    }
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(child: Text(_initials(profile.fullName))),
-        title: Text(
-          profile.fullName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        subtitle: Text(
-          subtitleParts.isEmpty ? profile.profileId : subtitleParts.join(' • '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Icon(
-          selectionMode
-              ? Icons.check_circle_outline
-              : Icons.chevron_right_rounded,
-          color: selectionMode ? scheme.primary : scheme.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-
-  static String _initials(String value) {
-    final parts = value
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) {
-      return '?';
-    }
-
-    if (parts.length == 1) {
-      return parts.first[0].toUpperCase();
-    }
-
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-}
-
-int? _profileAge(String? rawDob) {
-  final dob = _parseDob(rawDob);
-
-  if (dob == null) {
-    return null;
-  }
-
-  final today = DateTime.now();
-
-  var age = today.year - dob.year;
-
-  final birthdayPassed =
-      today.month > dob.month ||
-      (today.month == dob.month && today.day >= dob.day);
-
-  if (!birthdayPassed) {
-    age--;
-  }
-
-  return age >= 0 ? age : null;
-}
-
-String? _formatDob(String? rawDob) {
-  final dob = _parseDob(rawDob);
-
-  if (dob == null) {
-    return null;
-  }
-
-  final day = dob.day.toString().padLeft(2, '0');
-
-  final month = dob.month.toString().padLeft(2, '0');
-
-  return '$day/$month/${dob.year}';
-}
-
-DateTime? _parseDob(String? rawDob) {
-  final value = rawDob?.trim();
-
-  if (value == null || value.isEmpty) {
-    return null;
-  }
-
-  return DateTime.tryParse(value);
 }

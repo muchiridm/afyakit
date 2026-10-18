@@ -2,6 +2,7 @@
 
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -368,7 +369,8 @@ class ProfilePayerLinkDialog {
     required ProfileLinkRequest request,
   }) async {
     final accountNumberCtl = TextEditingController(
-      text: request.targetAccountNumber ?? '',
+      text:
+          request.requestedByAccountNumber ?? request.targetAccountNumber ?? '',
     );
 
     final contactNameCtl = TextEditingController(
@@ -402,6 +404,7 @@ class ProfilePayerLinkDialog {
                         width: 260,
                         child: TextFormField(
                           controller: accountNumberCtl,
+                          readOnly: request.requestedByAccountNumber != null,
                           decoration: const InputDecoration(
                             labelText: 'Native Contact account number',
                             helperText: 'Required canonical Native Contact ID',
@@ -484,11 +487,19 @@ class ProfilePayerLinkDialog {
             ),
             FilledButton(
               onPressed: () {
-                final accountNumber = _cleanNullable(accountNumberCtl.text)?.toUpperCase();
+                final accountNumber = _cleanNullable(
+                  accountNumberCtl.text,
+                )?.toUpperCase();
                 if (accountNumber == null ||
-                    !RegExp(r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$').hasMatch(accountNumber)) {
+                    !RegExp(
+                      r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+                    ).hasMatch(accountNumber)) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid Native Contact account number (AC-XXXXXX).')),
+                    const SnackBar(
+                      content: Text(
+                        'Enter a valid Native Contact account number (AC-XXXXXX).',
+                      ),
+                    ),
                   );
                   return;
                 }

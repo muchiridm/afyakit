@@ -1,13 +1,11 @@
 // lib/features/records/health_profiles/widgets/profile_form_dialog.dart
 
-import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
-import 'package:afyakit/features/records/native_contacts/native_contacts_controller.dart';
 
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ProfileFormDialog extends StatefulWidget {
   const ProfileFormDialog({
@@ -52,7 +50,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
 
   late final TextEditingController _fullNameCtl;
   late final TextEditingController _dobCtl;
-  late final TextEditingController _contactLookupCtl;
   late final TextEditingController _phoneCtl;
   late final TextEditingController _emailCtl;
   late final TextEditingController _nationalIdCtl;
@@ -98,17 +95,12 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     final seedEmail = shouldPrefillFromContact
         ? _contactEmail(seedContact)
         : '';
-    final seedAccountNumber = _clean(seedContact?.accountNumber);
 
     _fullNameCtl = TextEditingController(
       text: _firstNonEmpty([patient?.fullName, seedName]),
     );
 
     _dobCtl = TextEditingController(text: patient?.dob ?? '');
-
-    _contactLookupCtl = TextEditingController(
-      text: _firstNonEmpty([seedAccountNumber]),
-    );
 
     _phoneCtl = TextEditingController(
       text: _firstNonEmpty([patient?.phone, seedPhone]),
@@ -129,7 +121,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
   void dispose() {
     _fullNameCtl.dispose();
     _dobCtl.dispose();
-    _contactLookupCtl.dispose();
     _phoneCtl.dispose();
     _emailCtl.dispose();
     _nationalIdCtl.dispose();
@@ -187,29 +178,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     return null;
   }
 
-  static final RegExp _accountPattern = RegExp(
-    r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-  );
-
-  String? _accountNumberFromLookup(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-
-    final accountNumber = trimmed.toUpperCase();
-    return _accountPattern.hasMatch(accountNumber) ? accountNumber : null;
-  }
-
-  String? _effectiveAccountNumber() {
-    final selectedAccountNumber = _selectedContact?.accountNumber
-        .trim()
-        .toUpperCase();
-    if (selectedAccountNumber != null && selectedAccountNumber.isNotEmpty) {
-      return selectedAccountNumber;
-    }
-
-    return _accountNumberFromLookup(_contactLookupCtl.text);
-  }
-
   String _genderLabel(ProfileGender value) {
     switch (value) {
       case ProfileGender.male:
@@ -247,19 +215,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
   void _submit() {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
-
-    if (widget.allowExplicitContactLink &&
-        _contactLookupCtl.text.trim().isNotEmpty &&
-        _effectiveAccountNumber() == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter or select a valid Native Contact account number (AC-XXXXXX).',
-          ),
-        ),
-      );
-      return;
-    }
 
     final input = ProfileUpsertInput(
       fullName: _fullNameCtl.text.trim(),
@@ -404,7 +359,22 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
                   width: 220,
                   child: TextFormField(
                     controller: _phoneCtl,
-                    decoration: _dec('Phone'),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: _dec(
+                      'Mobile (optional)',
+                      hint: '+254712345678',
+                      helper:
+                          'Use +254 followed by 9 digits starting with 7 or 1.',
+                    ),
+                    validator: (value) {
+                      final mobile = (value ?? '').trim();
+                      if (mobile.isEmpty) return null;
+                      if (!RegExp(r'^\+254[17]\d{8}$').hasMatch(mobile)) {
+                        return 'Use +254 followed by 9 digits starting with 7 or 1';
+                      }
+                      return null;
+                    },
                   ),
                 ),
                 SizedBox(
@@ -459,104 +429,6 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
         FilledButton(
           onPressed: _submit,
           child: Text(_isEdit ? 'Save changes' : 'Create'),
-        ),
-      ],
-    );
-  }
-}
-
-/// Staff picker using the existing Native Contacts provider.
-/// It lists the current provider page, not the entire tenant directory.
-class _NativeContactPickerDialog extends ConsumerStatefulWidget {
-  const _NativeContactPickerDialog();
-
-  @override
-  ConsumerState<_NativeContactPickerDialog> createState() =>
-      _NativeContactPickerDialogState();
-}
-
-class _NativeContactPickerDialogState
-    extends ConsumerState<_NativeContactPickerDialog> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final contactsAsync = ref.watch(nativeContactsListProvider);
-    return AlertDialog(
-      title: const Text('Select Native Contact'),
-      content: SizedBox(
-        width: 560,
-        height: 480,
-        child: Column(
-          children: [
-            TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Search loaded contacts',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) =>
-                  setState(() => _query = value.trim().toLowerCase()),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: contactsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) =>
-                    Center(child: Text('Could not load contacts: $error')),
-                data: (contacts) {
-                  final filtered = contacts
-                      .where((contact) {
-                        if (contact.status != 'active') return false;
-                        final accountNumber = (contact.accountNumber)
-                            .trim()
-                            .toUpperCase();
-                        if (!RegExp(
-                          r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-                        ).hasMatch(accountNumber)) {
-                          return false;
-                        }
-                        final text = [
-                          contact.displayName,
-                          accountNumber,
-                          contact.phone ?? '',
-                          contact.mobile ?? '',
-                          contact.email ?? '',
-                        ].join(' ').toLowerCase();
-                        return text.contains(_query);
-                      })
-                      .toList(growable: false);
-
-                  if (filtered.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No matching active Native Contacts in the loaded list.',
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final contact = filtered[index];
-                      return ListTile(
-                        title: Text(contact.displayName),
-                        subtitle: Text(contact.accountNumber),
-                        onTap: () => Navigator.of(context).pop(contact),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
         ),
       ],
     );

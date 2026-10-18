@@ -40,9 +40,7 @@ class ProfilesService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final account = _optionalAccountNumber(
-      accountNumber: accountNumber,
-    );
+    final account = _optionalAccountNumber(accountNumber: accountNumber);
 
     final uri = routes.recordsProfilesList(
       search: _nullable(search),
@@ -85,7 +83,9 @@ class ProfilesService {
   Future<Profile> update(String profileId, ProfileUpsertInput input) async {
     final id = _requiredId(profileId, 'profileId');
 
-    final data = _profileUpsertPayload(input)..remove('account_number')..remove('relationship');
+    final data = _profileUpsertPayload(input)
+      ..remove('account_number')
+      ..remove('relationship');
 
     final response = await api.putUri<Object?>(
       routes.recordsProfileUpdate(id),
@@ -111,24 +111,17 @@ class ProfilesService {
   // Member Profile Linking
   // ---------------------------------------------------------
 
-  /// The backend identifies the member's canonical Native
-  /// Contact through the authenticated session.
-  ///
-  /// The frontend must not supply another member's account.
+  /// Legacy entry point: direct member linking is no longer authorised.
+  /// Use createLinkRequest() and await staff approval instead.
   Future<Profile> linkToSelf(
     String profileId,
     ProfileLinkToSelfInput input,
   ) async {
-    final id = _requiredId(profileId, 'profileId');
-
-    final response = await api.postUri<Object?>(
-      routes.recordsProfileLinkSelf(id),
-      data: input.toJson(),
+    // The backend intentionally disables demographics-only instant linking.
+    // Existing callers should migrate to createLinkRequest(...).
+    throw StateError(
+      'Direct linking is disabled. Submit a Health Profile link request for staff review.',
     );
-
-    final body = _asMap(response.data);
-
-    return _readProfile(body['profile']);
   }
 
   // ---------------------------------------------------------
@@ -147,9 +140,7 @@ class ProfilesService {
   ) async {
     final id = _requiredId(profileId, 'profileId');
 
-    final account = _requiredAccountNumber(
-      accountNumber: input.accountNumber,
-    );
+    final account = _requiredAccountNumber(accountNumber: input.accountNumber);
 
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkedContactCreate(id),
@@ -174,9 +165,7 @@ class ProfilesService {
   }) async {
     final pid = _requiredId(profileId, 'profileId');
 
-    final account = _requiredAccountNumber(
-      accountNumber: accountNumber,
-    );
+    final account = _requiredAccountNumber(accountNumber: accountNumber);
 
     final response = await api.deleteUri<Object?>(
       routes.recordsProfileLinkedContactDelete(
@@ -196,11 +185,14 @@ class ProfilesService {
 
   Future<List<RelatedProfile>> listRelatedProfiles(String profileId) async {
     final response = await api.getUri<Object?>(
-      routes.recordsProfileRelationshipsList(_requiredId(profileId, 'profileId')),
+      routes.recordsProfileRelationshipsList(
+        _requiredId(profileId, 'profileId'),
+      ),
     );
     final body = _asMap(response.data);
-    return _asListOfMaps(body['linked_profiles'])
-        .map(RelatedProfile.fromJson).toList(growable: false);
+    return _asListOfMaps(
+      body['linked_profiles'],
+    ).map(RelatedProfile.fromJson).toList(growable: false);
   }
 
   // Profile-to-profile relationships are inferred, never written.
@@ -209,10 +201,13 @@ class ProfilesService {
   /// Staff-only under backend v2. Do not fetch in member mode.
   Future<List<ProfileLinkedContact>> listLinkedPayers(String profileId) async {
     final response = await api.getUri<Object?>(
-      routes.recordsProfileLinkedContactsList(_requiredId(profileId, 'profileId')),
+      routes.recordsProfileLinkedContactsList(
+        _requiredId(profileId, 'profileId'),
+      ),
     );
-    return _asListOfMaps(_asMap(response.data)['linked_payers'])
-        .map(ProfileLinkedContact.fromJson).toList(growable: false);
+    return _asListOfMaps(
+      _asMap(response.data)['linked_payers'],
+    ).map(ProfileLinkedContact.fromJson).toList(growable: false);
   }
 
   // ---------------------------------------------------------

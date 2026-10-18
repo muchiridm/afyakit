@@ -105,7 +105,9 @@ class ProfilesState {
       isSaving: isSaving ?? this.isSaving,
       error: clearError ? null : (error ?? this.error),
       search: search ?? this.search,
-      accountNumber: clearAccountNumber ? null : (accountNumber ?? this.accountNumber),
+      accountNumber: clearAccountNumber
+          ? null
+          : (accountNumber ?? this.accountNumber),
       relationship: clearRelationship
           ? null
           : (relationship ?? this.relationship),
@@ -197,7 +199,10 @@ class ProfilesController extends StateNotifier<ProfilesState> {
 
     final trimmed = nullable(value);
 
-    state = state.copyWith(accountNumber: trimmed, clearAccountNumber: trimmed == null);
+    state = state.copyWith(
+      accountNumber: trimmed,
+      clearAccountNumber: trimmed == null,
+    );
   }
 
   void setRelationship(ProfileContactRelationship? value) {
@@ -237,7 +242,8 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       isActive: resetIsActive ? null : (isActive ?? state.isActive),
       clearAccountNumber: isContactScoped
           ? false
-          : resetAccountNumber || (accountNumber != null && trimmedAccountNumber == null),
+          : resetAccountNumber ||
+                (accountNumber != null && trimmedAccountNumber == null),
       clearRelationship: resetRelationship,
       clearIsActive: resetIsActive,
     );
@@ -262,13 +268,16 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      if (_memberMode && !const <ProfileContactRelationship>{
-        ProfileContactRelationship.self,
-        ProfileContactRelationship.child,
-        ProfileContactRelationship.parent,
-        ProfileContactRelationship.guardian,
-      }.contains(input.relationship)) {
-        throw StateError('Select Self, Child, Parent or Guardian when creating a member profile.');
+      if (_memberMode &&
+          !const <ProfileContactRelationship>{
+            ProfileContactRelationship.self,
+            ProfileContactRelationship.child,
+            ProfileContactRelationship.parent,
+            ProfileContactRelationship.guardian,
+          }.contains(input.relationship)) {
+        throw StateError(
+          'Select Self, Child, Parent or Guardian when creating a member profile.',
+        );
       }
       final effectiveInput = _withFixedContact(input);
       final created = await _service.create(effectiveInput);
@@ -314,7 +323,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     state = state.copyWith(isSaving: true, clearError: true);
 
     try {
-      final effectiveInput = _withFixedContact(input);
+      _withFixedContact(input);
       final updated = await _service.update(profileId, input);
       final items = _upsertProfile(state.items, updated);
 

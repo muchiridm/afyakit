@@ -8,6 +8,7 @@ import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_add
 import '../native_contacts_controller.dart';
 import '../native_contact.dart';
 import 'native_contact_tile.dart';
+import 'contact_linked_profiles_screen.dart';
 
 /// Staff-facing canonical Native Contacts, independent of Retail accounting.
 class NativeContactsScreen extends ConsumerStatefulWidget {
@@ -45,10 +46,18 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
         .save(values, accountNumber: existing?.accountNumber ?? existing?.id);
   }
 
+  Future<void> _openLinkedProfiles(NativeContact contact) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ContactLinkedProfilesScreen(contact: contact),
+      ),
+    );
+  }
+
   Future<void> _openDeliveryAddresses(NativeContact contact) async {
     final tenantId = ref.read(tenantIdProvider).trim().toLowerCase();
     // Native Contact account number is the canonical contact document ID.
-    final contactId = (contact.accountNumber ?? '').trim();
+    final contactId = (contact.accountNumber).trim();
     if (tenantId.isEmpty || contactId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -101,7 +110,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       ),
     );
     if (confirmed == true && mounted) {
-      if ((contact.accountNumber ?? '').trim().isEmpty) {
+      if ((contact.accountNumber).trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contact account number is missing.')),
         );
@@ -109,7 +118,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       }
       await ref
           .read(nativeContactsControllerProvider.notifier)
-          .removeFromApp((contact.accountNumber ?? '').trim());
+          .removeFromApp((contact.accountNumber).trim());
     }
   }
 
@@ -163,18 +172,26 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
               error: (error, _) =>
                   Center(child: Text('Unable to load contacts: $error')),
               data: (contacts) {
-                final filtered = contacts.where((contact) {
-                  final searchable = [
-                    contact.displayName,
-                    contact.companyName ?? '',
-                    contact.phone ?? '',
-                    contact.mobile ?? '',
-                    contact.email ?? '',
-                    contact.accountNumber ?? '',
-                    contact.verifiedPhone ?? '',
-                  ].join(' ').toLowerCase();
-                  return searchable.contains(_query);
-                }).toList();
+                final filtered =
+                    contacts.where((contact) {
+                      final searchable = [
+                        contact.displayName,
+                        contact.companyName ?? '',
+                        contact.phone ?? '',
+                        contact.mobile ?? '',
+                        contact.email ?? '',
+                        contact.accountNumber,
+                        contact.verifiedPhone ?? '',
+                      ].join(' ').toLowerCase();
+                      return searchable.contains(_query);
+                    }).toList()..sort((a, b) {
+                      final byName = a.displayName
+                          .trim()
+                          .toLowerCase()
+                          .compareTo(b.displayName.trim().toLowerCase());
+                      if (byName != 0) return byName;
+                      return a.accountNumber.compareTo(b.accountNumber);
+                    });
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -212,6 +229,8 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                                     onToggle: () => _toggleContact(contact.id),
                                     onAddresses: () =>
                                         _openDeliveryAddresses(contact),
+                                    onProfiles: () =>
+                                        _openLinkedProfiles(contact),
                                     onEdit: () => _edit(existing: contact),
                                     onRemove: () => _remove(contact),
                                   );
@@ -242,32 +261,24 @@ class _ContactEditDialog extends StatefulWidget {
 class _ContactEditDialogState extends State<_ContactEditDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
-  late final TextEditingController _company;
-  late final TextEditingController _phone;
   late final TextEditingController _mobile;
   late final TextEditingController _email;
   late final TextEditingController _idNumber;
   late String _entityType;
-  late String _contactType;
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
     _name = TextEditingController(text: existing?.displayName ?? '');
-    _company = TextEditingController(text: existing?.companyName ?? '');
-    _phone = TextEditingController(text: existing?.phone ?? '');
     _mobile = TextEditingController(text: existing?.mobile ?? '');
     _email = TextEditingController(text: existing?.email ?? '');
     _idNumber = TextEditingController(text: existing?.idNumber ?? '');
     _entityType = existing?.entityType ?? 'person';
-    _contactType = existing?.contactType ?? 'customer';
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _company.dispose();
-    _phone.dispose();
     _mobile.dispose();
     _email.dispose();
     _idNumber.dispose();
@@ -276,18 +287,17 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    // Preserve verified_phone: editing mobile never verifies authentication identity.
     final existing = widget.existing;
     final body = <String, Object?>{
       'display_name': _name.text.trim(),
-      'entity_type': _entityType,
-      'contact_type': _contactType,
+      if (existing == null) 'entity_type': _entityType,
+      if (existing == null) 'contact_type': 'customer',
     };
     for (final pair in [
-      ('company_name', _company.text),
-      ('phone', _phone.text),
       ('mobile', _mobile.text),
       ('email', _email.text),
-      ('id_number', _idNumber.text),
+      if (widget.requireIdForPersons) ('id_number', _idNumber.text),
     ]) {
       final value = pair.$2.trim();
       if (existing != null || value.isNotEmpty) {
@@ -332,28 +342,6 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                     if (value != null) setState(() => _entityType = value);
                   },
                 ),
-                DropdownButtonFormField<String>(
-                  initialValue: _contactType,
-                  decoration: const InputDecoration(labelText: 'Contact type'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'customer',
-                      child: Text('Customer'),
-                    ),
-                    DropdownMenuItem(value: 'vendor', child: Text('Vendor')),
-                    DropdownMenuItem(
-                      value: 'customer_vendor',
-                      child: Text('Customer and vendor'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _contactType = value);
-                  },
-                ),
-                TextFormField(
-                  controller: _company,
-                  decoration: const InputDecoration(labelText: 'Company'),
-                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.verified_user_outlined),
@@ -365,44 +353,53 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                   ),
                 ),
                 TextFormField(
-                  controller: _phone,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                TextFormField(
                   controller: _mobile,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Mobile'),
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile *',
+                    hintText: '+254712345678',
+                    helperText: 'Kenyan mobile number in international format.',
+                  ),
+                  validator: (value) {
+                    final mobile = (value ?? '').trim();
+                    if (!RegExp(r'^\+254[17]\d{8}$').hasMatch(mobile)) {
+                      return 'Use +254 followed by 9 digits (starting with 7 or 1)';
+                    }
+                    return null;
+                  },
                 ),
                 TextFormField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: const InputDecoration(
+                    labelText: 'Email (optional)',
+                  ),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Account number'),
                   subtitle: Text(
-                    (existing?.accountNumber?.isNotEmpty ?? false)
-                        ? existing!.accountNumber!
-                        : 'Not assigned — generate from contact actions',
+                    (existing?.accountNumber.isNotEmpty ?? false)
+                        ? existing!.accountNumber
+                        : 'Assigned automatically when saved',
                   ),
                 ),
-                TextFormField(
-                  controller: _idNumber,
-                  decoration: InputDecoration(
-                    labelText:
-                        widget.requireIdForPersons && _entityType == 'person'
-                        ? 'National ID number *'
-                        : 'National ID number (optional)',
+                if (widget.requireIdForPersons)
+                  TextFormField(
+                    controller: _idNumber,
+                    decoration: InputDecoration(
+                      labelText:
+                          widget.requireIdForPersons && _entityType == 'person'
+                          ? 'National ID number *'
+                          : 'National ID number (optional)',
+                    ),
+                    validator: (value) =>
+                        widget.requireIdForPersons &&
+                            _entityType == 'person' &&
+                            (value ?? '').trim().isEmpty
+                        ? 'Required for Occuwell'
+                        : null,
                   ),
-                  validator: (value) =>
-                      widget.requireIdForPersons &&
-                          _entityType == 'person' &&
-                          (value ?? '').trim().isEmpty
-                      ? 'Required for Occuwell'
-                      : null,
-                ),
               ],
             ),
           ),

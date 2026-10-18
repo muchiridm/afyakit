@@ -37,6 +37,197 @@ enum ProfileGender {
   }
 }
 
+// The classification values remain controlled; each patient may have any number of
+// allergy, vaccination and condition records. Backend validation must match.
+enum AllergyStatus { unknown, none_known, known }
+
+enum AllergyCategory { drug, food, environmental, other }
+
+enum AllergySeverity { mild, moderate, severe, unknown }
+
+enum VaccinationStatus { administered, historical, not_done, entered_in_error }
+
+enum ConditionStatus { active, inactive, resolved, entered_in_error }
+
+T _enumFromString<T extends Enum>(List<T> values, Object? raw, T fallback) {
+  final text = raw?.toString().trim().toLowerCase();
+  for (final value in values) {
+    if (value.name == text) return value;
+  }
+  return fallback;
+}
+
+String? _clinicalString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+List<T> _clinicalList<T>(Object? raw, T Function(Map<String, Object?>) decode) {
+  if (raw is! List) return <T>[];
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) =>
+            decode(item.map((key, value) => MapEntry(key.toString(), value))),
+      )
+      .toList(growable: false);
+}
+
+@immutable
+class ProfileAllergy {
+  const ProfileAllergy({
+    this.allergyId,
+    required this.category,
+    required this.substance,
+    this.reaction,
+    this.severity,
+    this.notes,
+    this.isActive = true,
+  });
+  final String? allergyId;
+  final AllergyCategory category;
+  final String substance;
+  final String? reaction;
+  final AllergySeverity? severity;
+  final String? notes;
+  final bool isActive;
+
+  factory ProfileAllergy.fromJson(Map<String, Object?> json) => ProfileAllergy(
+    allergyId: _clinicalString(json['allergy_id']),
+    category: _enumFromString(
+      AllergyCategory.values,
+      json['category'],
+      AllergyCategory.other,
+    ),
+    substance: _clinicalString(json['substance']) ?? '',
+    reaction: _clinicalString(json['reaction']),
+    severity: json['severity'] == null
+        ? null
+        : _enumFromString(
+            AllergySeverity.values,
+            json['severity'],
+            AllergySeverity.unknown,
+          ),
+    notes: _clinicalString(json['notes']),
+    isActive: json['is_active'] != false,
+  );
+  Map<String, Object?> toJson() => {
+    if (allergyId != null) 'allergy_id': allergyId,
+    'category': category.name,
+    'substance': substance,
+    'reaction': reaction,
+    'severity': severity?.name,
+    'notes': notes,
+    'is_active': isActive,
+  };
+}
+
+@immutable
+class ProfileVaccination {
+  const ProfileVaccination({
+    this.vaccinationId,
+    required this.vaccineName,
+    this.status = VaccinationStatus.administered,
+    this.administeredOn,
+    this.doseNumber,
+    this.manufacturer,
+    this.batchNumber,
+    this.facility,
+    this.nextDueOn,
+    this.notes,
+  });
+  final String? vaccinationId;
+  final String vaccineName;
+  final VaccinationStatus status;
+  final String? administeredOn;
+  final int? doseNumber;
+  final String? manufacturer;
+  final String? batchNumber;
+  final String? facility;
+  final String? nextDueOn;
+  final String? notes;
+
+  factory ProfileVaccination.fromJson(Map<String, Object?> json) =>
+      ProfileVaccination(
+        vaccinationId: _clinicalString(json['vaccination_id']),
+        vaccineName: _clinicalString(json['vaccine_name']) ?? '',
+        status: _enumFromString(
+          VaccinationStatus.values,
+          json['status'],
+          VaccinationStatus.administered,
+        ),
+        administeredOn: _clinicalString(json['administered_on']),
+        doseNumber: json['dose_number'] is num
+            ? (json['dose_number'] as num).toInt()
+            : null,
+        manufacturer: _clinicalString(json['manufacturer']),
+        batchNumber: _clinicalString(json['batch_number']),
+        facility: _clinicalString(json['facility']),
+        nextDueOn: _clinicalString(json['next_due_on']),
+        notes: _clinicalString(json['notes']),
+      );
+  Map<String, Object?> toJson() => {
+    if (vaccinationId != null) 'vaccination_id': vaccinationId,
+    'vaccine_name': vaccineName,
+    'status': status.name,
+    'administered_on': administeredOn,
+    'dose_number': doseNumber,
+    'manufacturer': manufacturer,
+    'batch_number': batchNumber,
+    'facility': facility,
+    'next_due_on': nextDueOn,
+    'notes': notes,
+  };
+}
+
+@immutable
+class ProfileCondition {
+  const ProfileCondition({
+    this.conditionId,
+    required this.name,
+    this.status = ConditionStatus.active,
+    this.code,
+    this.codeSystem,
+    this.diagnosedOn,
+    this.resolvedOn,
+    this.notes,
+  });
+  final String? conditionId;
+  final String name;
+  final ConditionStatus status;
+  final String? code;
+  final String? codeSystem;
+  final String? diagnosedOn;
+  final String? resolvedOn;
+  final String? notes;
+
+  factory ProfileCondition.fromJson(Map<String, Object?> json) =>
+      ProfileCondition(
+        conditionId: _clinicalString(json['condition_id']),
+        name: _clinicalString(json['name']) ?? '',
+        status: _enumFromString(
+          ConditionStatus.values,
+          json['status'],
+          ConditionStatus.active,
+        ),
+        code: _clinicalString(json['code']),
+        codeSystem: _clinicalString(json['code_system']),
+        diagnosedOn: _clinicalString(json['diagnosed_on']),
+        resolvedOn: _clinicalString(json['resolved_on']),
+        notes: _clinicalString(json['notes']),
+      );
+  Map<String, Object?> toJson() => {
+    if (conditionId != null) 'condition_id': conditionId,
+    'name': name,
+    'status': status.name,
+    'code': code,
+    'code_system': codeSystem,
+    'diagnosed_on': diagnosedOn,
+    'resolved_on': resolvedOn,
+    'notes': notes,
+  };
+}
+
 @immutable
 class ProfileLinkedContact {
   const ProfileLinkedContact({
@@ -126,7 +317,13 @@ class ProfileLinkedContact {
 }
 
 enum ProfileRelationship {
-  spouse, parent, child, guardian, ward, sibling, other;
+  spouse,
+  parent,
+  child,
+  guardian,
+  ward,
+  sibling,
+  other;
 
   static ProfileRelationship fromJson(Object? value) =>
       ProfileRelationship.values.firstWhere(
@@ -137,7 +334,11 @@ enum ProfileRelationship {
 
 @immutable
 class RelatedProfile {
-  const RelatedProfile({required this.profileId, required this.fullName, required this.relationship});
+  const RelatedProfile({
+    required this.profileId,
+    required this.fullName,
+    required this.relationship,
+  });
   final String profileId;
   final String fullName;
   final ProfileRelationship relationship;
@@ -161,6 +362,10 @@ class Profile {
     this.email,
     this.nationalId,
     this.notes,
+    this.allergyStatus = AllergyStatus.unknown,
+    this.allergies = const <ProfileAllergy>[],
+    this.vaccinations = const <ProfileVaccination>[],
+    this.conditions = const <ProfileCondition>[],
     this.linkedContacts = const <ProfileLinkedContact>[],
     this.linkId,
     this.accountNumber,
@@ -179,6 +384,10 @@ class Profile {
   final String? email;
   final String? nationalId;
   final String? notes;
+  final AllergyStatus allergyStatus;
+  final List<ProfileAllergy> allergies;
+  final List<ProfileVaccination> vaccinations;
+  final List<ProfileCondition> conditions;
 
   final bool isActive;
 
@@ -264,20 +473,6 @@ class Profile {
     return value;
   }
 
-  static List<ProfileLinkedContact> _readLinkedContacts(
-    Map<String, Object?> json,
-  ) {
-    final raw = json['linked_contacts'];
-
-    if (raw is! List) return const <ProfileLinkedContact>[];
-
-    return raw
-        .whereType<Map>()
-        .map((item) => item.cast<String, Object?>())
-        .map(ProfileLinkedContact.fromJson)
-        .toList(growable: false);
-  }
-
   factory Profile.fromJson(Map<String, Object?> json) {
     final relationshipRaw = _readNullableString(json, 'relationship');
     final genderRaw = _readNullableString(json, 'gender');
@@ -291,6 +486,17 @@ class Profile {
       email: _readNullableString(json, 'email'),
       nationalId: _readNullableString(json, 'national_id'),
       notes: _readNullableString(json, 'notes'),
+      allergyStatus: _enumFromString(
+        AllergyStatus.values,
+        json['allergy_status'],
+        AllergyStatus.unknown,
+      ),
+      allergies: _clinicalList(json['allergies'], ProfileAllergy.fromJson),
+      vaccinations: _clinicalList(
+        json['vaccinations'],
+        ProfileVaccination.fromJson,
+      ),
+      conditions: _clinicalList(json['conditions'], ProfileCondition.fromJson),
       isActive: _readBool(json, 'is_active', fallback: true),
       linkedContacts: const <ProfileLinkedContact>[],
       linkId: _readNullableString(json, 'link_id'),
@@ -313,6 +519,10 @@ class Profile {
     String? email,
     String? nationalId,
     String? notes,
+    AllergyStatus? allergyStatus,
+    List<ProfileAllergy>? allergies,
+    List<ProfileVaccination>? vaccinations,
+    List<ProfileCondition>? conditions,
     bool? isActive,
     List<ProfileLinkedContact>? linkedContacts,
     String? linkId,
@@ -331,6 +541,10 @@ class Profile {
       email: email ?? this.email,
       nationalId: nationalId ?? this.nationalId,
       notes: notes ?? this.notes,
+      allergyStatus: allergyStatus ?? this.allergyStatus,
+      allergies: allergies ?? this.allergies,
+      vaccinations: vaccinations ?? this.vaccinations,
+      conditions: conditions ?? this.conditions,
       isActive: isActive ?? this.isActive,
       linkedContacts: linkedContacts ?? this.linkedContacts,
       linkId: linkId ?? this.linkId,
@@ -355,6 +569,10 @@ class ProfileUpsertInput {
     this.email,
     this.nationalId,
     this.notes,
+    this.allergyStatus,
+    this.allergies,
+    this.vaccinations,
+    this.conditions,
     this.isActive = true,
   });
 
@@ -367,6 +585,10 @@ class ProfileUpsertInput {
   final String? email;
   final String? nationalId;
   final String? notes;
+  final AllergyStatus? allergyStatus;
+  final List<ProfileAllergy>? allergies;
+  final List<ProfileVaccination>? vaccinations;
+  final List<ProfileCondition>? conditions;
   final bool isActive;
 
   static String? _nullable(String? value) {
@@ -386,6 +608,13 @@ class ProfileUpsertInput {
       'email': _nullable(email),
       'national_id': _nullable(nationalId),
       'notes': _nullable(notes),
+      if (allergyStatus != null) 'allergy_status': allergyStatus!.name,
+      if (allergies != null)
+        'allergies': allergies!.map((e) => e.toJson()).toList(),
+      if (vaccinations != null)
+        'vaccinations': vaccinations!.map((e) => e.toJson()).toList(),
+      if (conditions != null)
+        'conditions': conditions!.map((e) => e.toJson()).toList(),
       'is_active': isActive,
     };
   }
@@ -406,6 +635,8 @@ class ProfileUpsertInput {
       email: profile.email,
       nationalId: profile.nationalId,
       notes: profile.notes,
+      // Existing edit forms do not expose these collections; preserve them.
+      // Do not send arrays unless the clinical editor intentionally changes them.
       isActive: profile.isActive,
     );
   }

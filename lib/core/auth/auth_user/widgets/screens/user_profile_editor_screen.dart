@@ -134,9 +134,7 @@ class _MyContactEditorState extends ConsumerState<_MyContactEditor> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Account number: ${_contact!.accountNumber ?? _contact!.id}',
-                  ),
+                  Text('Account number: ${_contact!.accountNumber}'),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _name,
@@ -209,8 +207,9 @@ class _AccountAdministrationState
     if (!_started) {
       _started = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted)
+        if (mounted) {
           ref.read(profileControllerProvider(widget.target).notifier).init();
+        }
       });
     }
   }

@@ -12,6 +12,7 @@ class NativeContactTile extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.onAddresses,
+    required this.onProfiles,
     required this.onEdit,
     required this.onRemove,
     this.busy = false,
@@ -21,10 +22,11 @@ class NativeContactTile extends StatelessWidget {
   final bool busy;
   final VoidCallback onToggle;
   final VoidCallback onAddresses;
+  final VoidCallback onProfiles;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
 
-  bool get _hasAccountNumber => (contact.accountNumber ?? '').trim().isNotEmpty;
+  bool get _hasAccountNumber => (contact.accountNumber).trim().isNotEmpty;
   bool get _active => contact.status.trim().toLowerCase() == 'active';
   String get _primaryPhone {
     for (final value in [
@@ -84,7 +86,7 @@ class NativeContactTile extends StatelessWidget {
                             Text(
                               [
                                 if (_hasAccountNumber)
-                                  contact.accountNumber!.trim(),
+                                  contact.accountNumber.trim(),
                                 if (_primaryPhone.isNotEmpty) _primaryPhone,
                               ].join(' · '),
                               maxLines: 2,
@@ -97,6 +99,7 @@ class NativeContactTile extends StatelessWidget {
                         ),
                       ),
                       if (desktop) ...[
+                        OutlinedButton.icon(onPressed: busy || !_active ? null : onProfiles, icon: const Icon(Icons.medical_information_outlined, size: 18), label: const Text('Profiles')),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
                           onPressed: busy || !_active ? null : onAddresses,
@@ -118,6 +121,7 @@ class NativeContactTile extends StatelessWidget {
                           busy: busy,
                           active: _active,
                           onAddresses: onAddresses,
+                          onProfiles: onProfiles,
                           onEdit: onEdit,
                           onRemove: onRemove,
                         ),
@@ -296,12 +300,14 @@ class _ContactActionsMenu extends StatelessWidget {
     required this.busy,
     required this.active,
     required this.onAddresses,
+    required this.onProfiles,
     required this.onEdit,
     required this.onRemove,
   });
   final bool busy;
   final bool active;
   final VoidCallback onAddresses;
+  final VoidCallback onProfiles;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
 
@@ -312,7 +318,9 @@ class _ContactActionsMenu extends StatelessWidget {
       enabled: !busy,
       onSelected: (value) {
         switch (value) {
-          case 'addresses':
+          case 'profiles':
+             onProfiles();
+           case 'addresses':
             onAddresses();
           case 'edit':
             onEdit();
@@ -321,6 +329,7 @@ class _ContactActionsMenu extends StatelessWidget {
         }
       },
       itemBuilder: (_) => [
+        PopupMenuItem(value: 'profiles', enabled: active, child: const Text('Linked Health Profiles')),
         PopupMenuItem(
           value: 'addresses',
           enabled: active,
