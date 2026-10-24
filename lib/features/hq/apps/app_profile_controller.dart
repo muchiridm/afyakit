@@ -1,4 +1,4 @@
-// lib/features/hq/apps/controllers/app_profile_controller.dart
+// lib/features/hq/apps/app_profile_controller.dart
 
 import 'dart:async';
 
@@ -10,8 +10,8 @@ import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/feature_registry.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
-import 'package:afyakit/features/hq/apps/services/app_profile_service.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/app_profile_service.dart';
 
 // ─────────────────────────────────────────────
 // Editor input

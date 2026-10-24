@@ -201,8 +201,8 @@ class _QuotePatientMembershipPickerDialogState
     return AlertDialog(
       title: Text(
         _isMemberScoped
-            ? 'Select your patient / insurance'
-            : 'Select patient / insurance',
+            ? 'Select your profile / insurance'
+            : 'Select profile / insurance',
       ),
       content: SizedBox(
         width: 760,

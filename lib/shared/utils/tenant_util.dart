@@ -1,3 +1,5 @@
+// lib/shared/utils/tenant_util.dart
+
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 
 class TenantUtil {

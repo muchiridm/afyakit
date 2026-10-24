@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../native_contact.dart';
 
-/// Responsive, expandable and read-only Native Contact tile.
-///
-/// Parent controls expansion so only one tile needs to be open at a time.
-/// All mutations and navigation remain the parent's responsibility.
+/// Responsive app-scoped Native Contact tile.
+/// Shared lifecycle operations (archive, restore and purge) belong to HQ.
 class NativeContactTile extends StatelessWidget {
   const NativeContactTile({
     super.key,
@@ -17,6 +16,7 @@ class NativeContactTile extends StatelessWidget {
     required this.onRemove,
     this.busy = false,
   });
+
   final NativeContact contact;
   final bool expanded;
   final bool busy;
@@ -26,17 +26,15 @@ class NativeContactTile extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onRemove;
 
-  bool get _hasAccountNumber => (contact.accountNumber).trim().isNotEmpty;
   bool get _active => contact.status.trim().toLowerCase() == 'active';
+
   String get _primaryPhone {
     for (final value in [
       contact.verifiedPhone,
       contact.mobile,
       contact.phone,
     ]) {
-      if (value != null && value.trim().isNotEmpty) {
-        return value.trim();
-      }
+      if (value != null && value.trim().isNotEmpty) return value.trim();
     }
     return '';
   }
@@ -44,6 +42,11 @@ class NativeContactTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final secondaryLine = [
+      if (contact.accountNumber.trim().isNotEmpty) contact.accountNumber.trim(),
+      if (_primaryPhone.isNotEmpty) _primaryPhone,
+    ].join(' · ');
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
@@ -58,7 +61,7 @@ class NativeContactTile extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
-                    vertical: 12,
+                    vertical: 10,
                   ),
                   child: Row(
                     children: [
@@ -73,33 +76,49 @@ class NativeContactTile extends StatelessWidget {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               contact.displayName,
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              [
-                                if (_hasAccountNumber)
-                                  contact.accountNumber.trim(),
-                                if (_primaryPhone.isNotEmpty) _primaryPhone,
-                              ].join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            if (secondaryLine.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                secondaryLine,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
-                            ),
+                            ],
+                            if (!_active) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Archived',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       if (desktop) ...[
-                        OutlinedButton.icon(onPressed: busy || !_active ? null : onProfiles, icon: const Icon(Icons.medical_information_outlined, size: 18), label: const Text('Profiles')),
+                        OutlinedButton.icon(
+                          onPressed: busy || !_active ? null : onProfiles,
+                          icon: const Icon(
+                            Icons.medical_information_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('Profiles'),
+                        ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
                           onPressed: busy || !_active ? null : onAddresses,
@@ -111,12 +130,11 @@ class NativeContactTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          onPressed: busy ? null : onEdit,
+                          onPressed: busy || !_active ? null : onEdit,
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           label: const Text('Edit'),
                         ),
-                        const SizedBox(width: 4),
-                      ] else ...[
+                      ] else
                         _ContactActionsMenu(
                           busy: busy,
                           active: _active,
@@ -125,7 +143,7 @@ class NativeContactTile extends StatelessWidget {
                           onEdit: onEdit,
                           onRemove: onRemove,
                         ),
-                      ],
+                      const SizedBox(width: 4),
                       Icon(
                         expanded
                             ? Icons.keyboard_arrow_up
@@ -164,6 +182,7 @@ class _ContactDetails extends StatelessWidget {
     required this.busy,
     required this.onRemove,
   });
+
   final NativeContact contact;
   final bool desktop;
   final bool busy;
@@ -172,125 +191,62 @@ class _ContactDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final details = <_DetailValue>[
-      if (contact.companyName?.trim().isNotEmpty == true)
-        _DetailValue('Company', contact.companyName!),
-      if (contact.verifiedEmail?.trim().isNotEmpty == true)
-        _DetailValue('Verified app email', contact.verifiedEmail!),
-      if (contact.email?.trim().isNotEmpty == true)
-        _DetailValue('Contact email', contact.email!),
+    final details = <String>[
       if (contact.verifiedPhone?.trim().isNotEmpty == true)
-        _DetailValue('Verified phone', contact.verifiedPhone!),
-      if (contact.phone?.trim().isNotEmpty == true)
-        _DetailValue('Phone', contact.phone!),
-      if (contact.mobile?.trim().isNotEmpty == true)
-        _DetailValue('Mobile', contact.mobile!),
-      if (contact.idNumber?.trim().isNotEmpty == true)
-        _DetailValue('ID number', contact.idNumber!),
+        'Phone: ${contact.verifiedPhone!.trim()}'
+      else if (contact.mobile?.trim().isNotEmpty == true)
+        'Phone: ${contact.mobile!.trim()}'
+      else if (contact.phone?.trim().isNotEmpty == true)
+        'Phone: ${contact.phone!.trim()}',
       if (contact.appIds.isNotEmpty)
-        _DetailValue('Applications', contact.appIds.join(', ')),
+        'Applications: ${contact.appIds.join(', ')}',
+      'Status: ${contact.status}',
+      if (contact.companyName?.trim().isNotEmpty == true)
+        'Company: ${contact.companyName!.trim()}',
+      if (contact.email?.trim().isNotEmpty == true)
+        'Email: ${contact.email!.trim()}',
+      if (contact.verifiedEmail?.trim().isNotEmpty == true)
+        'Verified email: ${contact.verifiedEmail!.trim()}',
+      if (contact.idNumber?.trim().isNotEmpty == true)
+        'ID: ${contact.idNumber!.trim()}',
     ];
+    final description = details.join('   ·   ');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Divider(height: 1, color: theme.dividerColor),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: Row(
             children: [
-              if (details.isEmpty)
-                Text(
-                  'No additional contact details',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                )
-              else
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 560 ? 2 : 1;
-                    const gap = 12.0;
-                    final width =
-                        (constraints.maxWidth - (columns - 1) * gap) / columns;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: 6,
-                      children: [
-                        for (final detail in details)
-                          SizedBox(
-                            width: width,
-                            child: _CompactDetail(detail: detail),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              if (desktop) ...[
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 6,
-                    children: [
-                      TextButton.icon(
-                        onPressed: busy ? null : onRemove,
-                        icon: const Icon(
-                          Icons.person_remove_outlined,
-                          size: 16,
-                        ),
-                        label: const Text('Remove from app'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.error,
-                        ),
-                      ),
-                    ],
+              Expanded(
+                child: Tooltip(
+                  message: description,
+                  child: Text(
+                    description,
+                    maxLines: desktop ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: busy ? null : onRemove,
+                icon: const Icon(Icons.person_remove_outlined, size: 16),
+                label: Text(desktop ? 'Remove from app' : 'Remove'),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DetailValue {
-  const _DetailValue(this.label, this.value);
-  final String label;
-  final String value;
-}
-
-class _CompactDetail extends StatelessWidget {
-  const _CompactDetail({required this.detail});
-  final _DetailValue detail;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 112,
-            child: Text(
-              detail.label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: SelectableText(
-              detail.value.trim(),
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -304,6 +260,7 @@ class _ContactActionsMenu extends StatelessWidget {
     required this.onEdit,
     required this.onRemove,
   });
+
   final bool busy;
   final bool active;
   final VoidCallback onAddresses;
@@ -316,11 +273,11 @@ class _ContactActionsMenu extends StatelessWidget {
     return PopupMenuButton<String>(
       tooltip: 'Contact actions',
       enabled: !busy,
-      onSelected: (value) {
-        switch (value) {
+      onSelected: (choice) {
+        switch (choice) {
           case 'profiles':
-             onProfiles();
-           case 'addresses':
+            onProfiles();
+          case 'addresses':
             onAddresses();
           case 'edit':
             onEdit();
@@ -329,14 +286,25 @@ class _ContactActionsMenu extends StatelessWidget {
         }
       },
       itemBuilder: (_) => [
-        PopupMenuItem(value: 'profiles', enabled: active, child: const Text('Linked Health Profiles')),
-        PopupMenuItem(
+        PopupMenuItem<String>(
+          value: 'profiles',
+          enabled: active,
+          child: const Text('Linked Health Profiles'),
+        ),
+        PopupMenuItem<String>(
           value: 'addresses',
           enabled: active,
           child: const Text('Delivery addresses'),
         ),
-        const PopupMenuItem(value: 'edit', child: Text('Edit')),
-        const PopupMenuItem(value: 'remove', child: Text('Remove from app')),
+        PopupMenuItem<String>(
+          value: 'edit',
+          enabled: active,
+          child: const Text('Edit contact'),
+        ),
+        const PopupMenuItem<String>(
+          value: 'remove',
+          child: Text('Remove from this app'),
+        ),
       ],
     );
   }

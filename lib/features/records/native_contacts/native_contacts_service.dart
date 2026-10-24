@@ -103,6 +103,21 @@ class NativeContactsService {
     return items.map((item) => NativeContact.fromJson(_object(item))).toList();
   }
 
+  /// Staff-only search. Uses the API's app-scoped search query parameter.
+  /// Never call this service from a member-only screen.
+  Future<List<NativeContact>> search(String query, {int perPage = 30}) async {
+    final term = query.trim();
+    if (term.isEmpty) return const <NativeContact>[];
+    final base = routes.recordsContactsList(page: 1, perPage: perPage);
+    final uri = base.replace(
+      queryParameters: {...base.queryParameters, 'search': term},
+    );
+    final res = await api.getUri<Object?>(uri);
+    final rows = _object(res.data)['contacts'];
+    if (rows is! List) throw const FormatException('Missing contacts array');
+    return rows.map((row) => NativeContact.fromJson(_object(row))).toList();
+  }
+
   Future<NativeContact> get(String accountNumber) async {
     final res = await api.getUri<Object?>(
       routes.recordsContactGet(_account(accountNumber)),
@@ -122,9 +137,9 @@ class NativeContactsService {
     String accountNumber,
     Map<String, Object?> body,
   ) async {
-    if (body.containsKey('entity_type')) {
+    if (body.containsKey('entity_type') || body.containsKey('status')) {
       throw ArgumentError(
-        'entity_type cannot be changed after account creation',
+        'entity_type and status cannot be changed through app contact editing',
       );
     }
     final res = await api.putUri<Object?>(

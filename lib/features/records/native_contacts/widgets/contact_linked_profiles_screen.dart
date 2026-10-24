@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
 import '../native_contact.dart';
 import '../native_contacts_controller.dart';
 
@@ -17,6 +19,7 @@ class _ContactLinkedProfilesScreenState
     extends ConsumerState<ContactLinkedProfilesScreen> {
   String get account => widget.contact.accountNumber;
   Future<void> _edit({Profile? existing}) async {
+    if (widget.contact.status != 'active') return;
     final value =
         await showDialog<
           ({String id, ProfileContactRelationship relationship})
@@ -55,7 +58,48 @@ class _ContactLinkedProfilesScreenState
     }
   }
 
+  /// Create a new patient record with the current Native Contact selected.
+  /// The backend validates and persists the Contact link as part of creation.
+  Future<void> _createLinkedProfile() async {
+    if (widget.contact.status != 'active') return;
+    final input = await showDialog<ProfileUpsertInput>(
+      context: context,
+      builder: (_) => ProfileFormDialog(
+        allowExplicitContactLink: true,
+        initialContact: widget.contact,
+        initialRelationship: widget.contact.entityType == 'organization'
+            ? ProfileContactRelationship.insurance
+            : ProfileContactRelationship.self,
+      ),
+    );
+    if (input == null || !mounted) return;
+    if (input.accountNumber != account) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected Contact changed. No profile was created.'),
+        ),
+      );
+      return;
+    }
+    try {
+      await ref.read(profilesServiceProvider).create(input);
+      if (!mounted) return;
+      ref.invalidate(contactLinkedProfilesProvider(account));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Health Profile created and linked')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to create linked Health Profile: $error'),
+        ),
+      );
+    }
+  }
+
   Future<void> _unlink(Profile p) async {
+    if (widget.contact.status != 'active') return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -102,6 +146,12 @@ class _ContactLinkedProfilesScreenState
       appBar: AppBar(
         title: Text('${widget.contact.displayName} · Profiles'),
         actions: [
+          if (widget.contact.status == 'active')
+            IconButton(
+              tooltip: 'Create and link new Health Profile',
+              onPressed: state.busy ? null : _createLinkedProfile,
+              icon: const Icon(Icons.person_add_alt_1),
+            ),
           IconButton(
             onPressed: () =>
                 ref.invalidate(contactLinkedProfilesProvider(account)),
@@ -153,7 +203,11 @@ class _ContactLinkedProfilesScreenState
                             ),
                             IconButton(
                               tooltip: 'Unlink',
-                              onPressed: state.busy ? null : () => _unlink(p),
+                              onPressed:
+                                  state.busy ||
+                                      widget.contact.status != 'active'
+                                  ? null
+                                  : () => _unlink(p),
                               icon: const Icon(Icons.link_off),
                             ),
                           ],
@@ -214,12 +268,12 @@ class _LinkProfileDialogState extends State<_LinkProfileDialog> {
               enabled: widget.existing == null,
               decoration: const InputDecoration(
                 labelText: 'Existing Profile ID',
-                hintText: 'PT-XXXXXXXX',
+                hintText: 'HP-YYMMNNNN',
               ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<ProfileContactRelationship>(
-              value: _relation,
+              initialValue: _relation,
               decoration: const InputDecoration(
                 labelText: 'Patient is this Contact’s',
               ),

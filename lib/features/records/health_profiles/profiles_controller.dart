@@ -601,6 +601,15 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       email: input.email,
       nationalId: input.nationalId,
       notes: input.notes,
+      pastMedicalHistory: input.pastMedicalHistory,
+      surgicalHistory: input.surgicalHistory,
+      familyHistory: input.familyHistory,
+      socialHistory: input.socialHistory,
+      currentMedications: input.currentMedications,
+      allergyStatus: input.allergyStatus,
+      allergies: input.allergies,
+      conditions: input.conditions,
+      vaccinations: input.vaccinations,
       isActive: input.isActive,
     );
   }

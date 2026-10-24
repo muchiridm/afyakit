@@ -6,13 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
 import 'package:afyakit/core/tenancy/models/tenant_status_x.dart';
 
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_profiles_screen.dart';
 
-import 'package:afyakit/features/hq/tenants/controllers/tenant_profile_controller.dart'
+import 'package:afyakit/features/hq/tenants/tenant_profile_controller.dart'
     show tenantProfileEditorInputProvider;
-import 'package:afyakit/features/hq/tenants/providers/hq_tenant_providers.dart';
+import 'package:afyakit/features/hq/tenants/hq_tenant_providers.dart';
 import 'package:afyakit/features/hq/tenants/widgets/tenant_profile_editor.dart';
+import 'package:afyakit/features/hq/tenants/contacts/hq_tenant_contacts_screen.dart';
 
 class HqTenantsTab extends ConsumerWidget {
   const HqTenantsTab({super.key});
@@ -71,6 +72,7 @@ class HqTenantsTab extends ConsumerWidget {
                 return _TenantTile(
                   profile: profile,
                   onApps: () => _openApps(context, profile),
+                  onContacts: () => _openContacts(context, profile),
                   onCapabilities: () => _openEditor(context, profile),
                 );
               },
@@ -108,6 +110,14 @@ class HqTenantsTab extends ConsumerWidget {
     );
   }
 
+  void _openContacts(BuildContext context, TenantProfile profile) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => HqTenantContactsScreen(tenantId: profile.id),
+      ),
+    );
+  }
+
   void _openApps(BuildContext context, TenantProfile profile) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -121,11 +131,13 @@ class _TenantTile extends ConsumerWidget {
   const _TenantTile({
     required this.profile,
     required this.onApps,
+    required this.onContacts,
     required this.onCapabilities,
   });
 
   final TenantProfile profile;
   final VoidCallback onApps;
+  final VoidCallback onContacts;
   final VoidCallback onCapabilities;
 
   @override
@@ -169,6 +181,11 @@ class _TenantTile extends ConsumerWidget {
             label: const Text('Apps'),
           ),
 
+          OutlinedButton.icon(
+            onPressed: onContacts,
+            icon: const Icon(Icons.contacts_outlined, size: 16),
+            label: const Text('Contacts'),
+          ),
           OutlinedButton.icon(
             onPressed: onCapabilities,
             icon: const Icon(Icons.tune, size: 16),

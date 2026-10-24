@@ -53,12 +53,18 @@ OtpNextStep _nextFromUser(AuthUser u, {required String appId}) {
   if (u.recoveryRequired) return OtpNextStep.recoverAccount;
   final next = u.onboarding?.next;
   switch (next) {
-    case 'verify_email': return OtpNextStep.collectEmail;
-    case 'complete_contact': return OtpNextStep.collectName;
+    case 'verify_email':
+      return OtpNextStep.collectEmail;
+    case 'complete_contact':
+      return OtpNextStep.collectName;
     case 'link_contact':
-      throw StateError('Native Contact link requires trusted account provisioning or recovery.');
-    case 'done': return OtpNextStep.done;
-    default: throw StateError('Backend session onboarding state unavailable.');
+      throw StateError(
+        'Native Contact link requires trusted account provisioning or recovery.',
+      );
+    case 'done':
+      return OtpNextStep.done;
+    default:
+      throw StateError('Backend session onboarding state unavailable.');
   }
 }
 
@@ -341,10 +347,7 @@ class AuthService {
     final a = _requireTrimmed(attemptId, 'attemptId is required');
     final c = _requireTrimmed(code, 'code is required');
     final uri = routes.otpVerify();
-    final payload = <String, dynamic>{
-      'attemptId': a,
-      'code': c,
-    };
+    final payload = <String, dynamic>{'attemptId': a, 'code': c};
     try {
       _logReq(op: 'verifyOtpRaw', uri: uri, data: payload, options: _skipAuth);
       final res = await _dio.postUri(uri, data: payload, options: _skipAuth);
@@ -567,7 +570,9 @@ class AuthService {
         throw StateError('Invalid session payload: expected an object.');
       }
       final user = AuthUser.fromMap(map);
-      if (user.onboarding == null) throw const FormatException('Missing session onboarding');
+      if (user.onboarding == null) {
+        throw const FormatException('Missing session onboarding');
+      }
       _cachedUser = user;
       return user;
     } on DioException catch (ex) {
@@ -597,8 +602,11 @@ class AuthService {
     final uri = nativeContactMeUri();
     try {
       final opts = await _authHeaderFresh();
-      final res = await _dio.patchUri(uri,
-          data: <String, dynamic>{'display_name': name}, options: opts);
+      final res = await _dio.patchUri(
+        uri,
+        data: <String, dynamic>{'display_name': name},
+        options: opts,
+      );
       _logResp('saveNativeContact', res);
       return loadSession();
     } on DioException catch (ex) {
@@ -609,7 +617,6 @@ class AuthService {
   /// Relative to the existing mounted native_contacts router.
   /// Confirm the API prefix in AfyaKitRoutes before deployment.
   Uri nativeContactMeUri() => routes.recordsMyContact();
-
 
   // ─────────────────────────────────────────────
   // Sign in with custom token (Firebase)
@@ -654,19 +661,4 @@ class AuthService {
   // ─────────────────────────────────────────────
   // Small response helpers
   // ─────────────────────────────────────────────
-  JsonMap _unwrapUserMap(Object? data) {
-    final root = _asJsonMap(data);
-    if (root.isEmpty) return const <String, dynamic>{};
-    final userObj = root['user'];
-    if (userObj is Map) return Map<String, dynamic>.from(userObj);
-    return root;
-  }
-
-  JsonMap _ensureUid(JsonMap userMap, String uid) {
-    final existing = userMap['uid'];
-    if (existing is String && existing.trim().isNotEmpty) return userMap;
-    final out = Map<String, dynamic>.from(userMap);
-    out['uid'] = uid;
-    return out;
-  }
 }

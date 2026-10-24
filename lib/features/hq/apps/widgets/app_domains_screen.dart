@@ -1,6 +1,6 @@
-// lib/features/hq/apps/domains/widgets/app_domains_screen.dart
+// lib/features/hq/apps/app_domains_screen.dart
 
-import 'package:afyakit/features/hq/domains/controllers/app_domains_controller.dart';
+import 'package:afyakit/features/hq/apps/app_domains_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

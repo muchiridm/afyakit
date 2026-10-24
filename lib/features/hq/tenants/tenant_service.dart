@@ -1,4 +1,4 @@
-// lib/features/hq/tenants/services/tenant_service.dart
+// lib/features/hq/tenants/tenant_service.dart
 
 import 'dart:convert';
 

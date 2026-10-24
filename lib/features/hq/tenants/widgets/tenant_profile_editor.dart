@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/capabilities/feature_registry.dart';
-import 'package:afyakit/features/hq/tenants/controllers/tenant_profile_controller.dart';
+import 'package:afyakit/features/hq/tenants/tenant_profile_controller.dart';
 
 import 'tenant_profile_editor_sections.dart';
 

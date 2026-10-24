@@ -362,6 +362,11 @@ class Profile {
     this.email,
     this.nationalId,
     this.notes,
+    this.currentMedications,
+    this.socialHistory,
+    this.familyHistory,
+    this.surgicalHistory,
+    this.pastMedicalHistory,
     this.allergyStatus = AllergyStatus.unknown,
     this.allergies = const <ProfileAllergy>[],
     this.vaccinations = const <ProfileVaccination>[],
@@ -384,6 +389,11 @@ class Profile {
   final String? email;
   final String? nationalId;
   final String? notes;
+  final String? currentMedications;
+  final String? socialHistory;
+  final String? familyHistory;
+  final String? surgicalHistory;
+  final String? pastMedicalHistory;
   final AllergyStatus allergyStatus;
   final List<ProfileAllergy> allergies;
   final List<ProfileVaccination> vaccinations;
@@ -486,6 +496,11 @@ class Profile {
       email: _readNullableString(json, 'email'),
       nationalId: _readNullableString(json, 'national_id'),
       notes: _readNullableString(json, 'notes'),
+      currentMedications: _readNullableString(json, 'current_medications'),
+      socialHistory: _readNullableString(json, 'social_history'),
+      familyHistory: _readNullableString(json, 'family_history'),
+      surgicalHistory: _readNullableString(json, 'surgical_history'),
+      pastMedicalHistory: _readNullableString(json, 'past_medical_history'),
       allergyStatus: _enumFromString(
         AllergyStatus.values,
         json['allergy_status'],
@@ -519,6 +534,11 @@ class Profile {
     String? email,
     String? nationalId,
     String? notes,
+    String? currentMedications,
+    String? socialHistory,
+    String? familyHistory,
+    String? surgicalHistory,
+    String? pastMedicalHistory,
     AllergyStatus? allergyStatus,
     List<ProfileAllergy>? allergies,
     List<ProfileVaccination>? vaccinations,
@@ -541,6 +561,11 @@ class Profile {
       email: email ?? this.email,
       nationalId: nationalId ?? this.nationalId,
       notes: notes ?? this.notes,
+      currentMedications: currentMedications ?? this.currentMedications,
+      socialHistory: socialHistory ?? this.socialHistory,
+      familyHistory: familyHistory ?? this.familyHistory,
+      surgicalHistory: surgicalHistory ?? this.surgicalHistory,
+      pastMedicalHistory: pastMedicalHistory ?? this.pastMedicalHistory,
       allergyStatus: allergyStatus ?? this.allergyStatus,
       allergies: allergies ?? this.allergies,
       vaccinations: vaccinations ?? this.vaccinations,
@@ -569,6 +594,11 @@ class ProfileUpsertInput {
     this.email,
     this.nationalId,
     this.notes,
+    this.currentMedications,
+    this.socialHistory,
+    this.familyHistory,
+    this.surgicalHistory,
+    this.pastMedicalHistory,
     this.allergyStatus,
     this.allergies,
     this.vaccinations,
@@ -585,6 +615,11 @@ class ProfileUpsertInput {
   final String? email;
   final String? nationalId;
   final String? notes;
+  final String? currentMedications;
+  final String? socialHistory;
+  final String? familyHistory;
+  final String? surgicalHistory;
+  final String? pastMedicalHistory;
   final AllergyStatus? allergyStatus;
   final List<ProfileAllergy>? allergies;
   final List<ProfileVaccination>? vaccinations;
@@ -608,6 +643,11 @@ class ProfileUpsertInput {
       'email': _nullable(email),
       'national_id': _nullable(nationalId),
       'notes': _nullable(notes),
+      'current_medications': _nullable(currentMedications),
+      'social_history': _nullable(socialHistory),
+      'family_history': _nullable(familyHistory),
+      'surgical_history': _nullable(surgicalHistory),
+      'past_medical_history': _nullable(pastMedicalHistory),
       if (allergyStatus != null) 'allergy_status': allergyStatus!.name,
       if (allergies != null)
         'allergies': allergies!.map((e) => e.toJson()).toList(),
@@ -635,6 +675,11 @@ class ProfileUpsertInput {
       email: profile.email,
       nationalId: profile.nationalId,
       notes: profile.notes,
+      currentMedications: profile.currentMedications,
+      socialHistory: profile.socialHistory,
+      familyHistory: profile.familyHistory,
+      surgicalHistory: profile.surgicalHistory,
+      pastMedicalHistory: profile.pastMedicalHistory,
       // Existing edit forms do not expose these collections; preserve them.
       // Do not send arrays unless the clinical editor intentionally changes them.
       isActive: profile.isActive,

@@ -1,13 +1,13 @@
-// lib/features/records/health_profiles/widgets/profile_form_dialog.dart
-
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
-
+import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/records/health_profiles/profile_models.dart';
-
-class ProfileFormDialog extends StatefulWidget {
+/// Creates/edit profiles and (staff creation only) selects an existing Native Contact.
+/// Links and self-identity are always revalidated by the backend.
+class ProfileFormDialog extends ConsumerStatefulWidget {
   const ProfileFormDialog({
     super.key,
     this.initial,
@@ -16,421 +16,614 @@ class ProfileFormDialog extends StatefulWidget {
     this.prefillFromContact = true,
     this.allowExplicitContactLink = false,
   });
-
   final Profile? initial;
-
-  /// Optional Native Contact seed.
-  ///
-  /// Staff can select an existing Native Contact. A self relationship can
-  /// optionally prefill profile name, phone and email.
-  /// For dependents, this only seeds the payer/contact link unless
-  /// [prefillFromContact] is true and the relationship is self.
   final NativeContact? initialContact;
-
-  /// Optional initial relationship between the patient and selected contact.
   final ProfileContactRelationship? initialRelationship;
-
-  /// Whether to copy contact name/phone/email into patient fields.
-  ///
-  /// This only applies when the relationship is self.
   final bool prefillFromContact;
-
-  /// Staff/admin only.
-  ///
-  /// When false, this form creates/edits patient demographics only.
-  /// Member ownership/linking is handled by the separate self/dependent flow.
   final bool allowExplicitContactLink;
-
   @override
-  State<ProfileFormDialog> createState() => _ProfileFormDialogState();
+  ConsumerState<ProfileFormDialog> createState() => _ProfileFormDialogState();
 }
 
-class _ProfileFormDialogState extends State<ProfileFormDialog> {
-  final _formKey = GlobalKey<FormState>();
-
-  late final TextEditingController _fullNameCtl;
-  late final TextEditingController _dobCtl;
-  late final TextEditingController _phoneCtl;
-  late final TextEditingController _emailCtl;
-  late final TextEditingController _nationalIdCtl;
-  late final TextEditingController _notesCtl;
-
-  late ProfileContactRelationship _relationship;
-  late ProfileGender _gender;
-  late bool _isActive;
-
-  NativeContact? _selectedContact;
-
-  bool get _isEdit => widget.initial != null;
+class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
+  final _key = GlobalKey<FormState>();
+  final _name = TextEditingController(),
+      _dob = TextEditingController(),
+      _phone = TextEditingController(),
+      _email = TextEditingController(),
+      _nationalId = TextEditingController(),
+      _notes = TextEditingController();
+  final _past = TextEditingController(),
+      _surgical = TextEditingController(),
+      _family = TextEditingController(),
+      _social = TextEditingController(),
+      _medicines = TextEditingController();
+  ProfileGender _gender = ProfileGender.unknown;
+  ProfileContactRelationship _relationship = ProfileContactRelationship.self;
+  AllergyStatus _allergyStatus = AllergyStatus.unknown;
+  List<ProfileAllergy> _allergies = [];
+  List<ProfileCondition> _conditions = [];
+  List<ProfileVaccination> _vaccinations = [];
+  NativeContact? _contact;
+  bool _active = true;
+  bool get _staffCreate =>
+      widget.initial == null && widget.allowExplicitContactLink;
+  bool get _editing => widget.initial != null;
 
   @override
   void initState() {
     super.initState();
-
-    final patient = widget.initial;
-
-    final seedContact = widget.allowExplicitContactLink
-        ? widget.initialContact
-        : null;
-
-    _selectedContact = seedContact;
-
+    final p = widget.initial;
+    _name.text = p?.fullName ?? '';
+    _dob.text = p?.dob ?? '';
+    _phone.text = p?.phone ?? '';
+    _email.text = p?.email ?? '';
+    _nationalId.text = p?.nationalId ?? '';
+    _notes.text = p?.notes ?? '';
+    _past.text = p?.pastMedicalHistory ?? '';
+    _surgical.text = p?.surgicalHistory ?? '';
+    _family.text = p?.familyHistory ?? '';
+    _social.text = p?.socialHistory ?? '';
+    _medicines.text = p?.currentMedications ?? '';
+    _gender = p?.gender ?? ProfileGender.unknown;
+    _active = p?.isActive ?? true;
+    _allergyStatus = p?.allergyStatus ?? AllergyStatus.unknown;
+    _allergies = [...?p?.allergies];
+    _conditions = [...?p?.conditions];
+    _vaccinations = [...?p?.vaccinations];
     _relationship =
         widget.initialRelationship ??
         (widget.allowExplicitContactLink
             ? ProfileContactRelationship.other
             : ProfileContactRelationship.self);
+    _contact = _staffCreate ? widget.initialContact : null;
+    if (_contact != null &&
+        _relationship == ProfileContactRelationship.self &&
+        widget.prefillFromContact) {
+      _prefillSelf(_contact!);
+    }
+  }
 
-    final shouldPrefillFromContact =
-        seedContact != null &&
-        widget.prefillFromContact &&
-        _relationship == ProfileContactRelationship.self;
-
-    final seedName = shouldPrefillFromContact
-        ? _contactDisplayName(seedContact)
-        : '';
-    final seedPhone = shouldPrefillFromContact
-        ? _contactPhone(seedContact)
-        : '';
-    final seedEmail = shouldPrefillFromContact
-        ? _contactEmail(seedContact)
-        : '';
-
-    _fullNameCtl = TextEditingController(
-      text: _firstNonEmpty([patient?.fullName, seedName]),
-    );
-
-    _dobCtl = TextEditingController(text: patient?.dob ?? '');
-
-    _phoneCtl = TextEditingController(
-      text: _firstNonEmpty([patient?.phone, seedPhone]),
-    );
-
-    _emailCtl = TextEditingController(
-      text: _firstNonEmpty([patient?.email, seedEmail]),
-    );
-
-    _nationalIdCtl = TextEditingController(text: patient?.nationalId ?? '');
-    _notesCtl = TextEditingController(text: patient?.notes ?? '');
-
-    _gender = patient?.gender ?? ProfileGender.unknown;
-    _isActive = patient?.isActive ?? true;
+  void _prefillSelf(NativeContact c) {
+    if (_name.text.trim().isEmpty) _name.text = c.displayName;
+    if (_phone.text.trim().isEmpty)
+      _phone.text = c.phone ?? c.mobile ?? c.verifiedPhone ?? '';
+    if (_email.text.trim().isEmpty)
+      _email.text = c.email ?? c.verifiedEmail ?? '';
+    if (_nationalId.text.trim().isEmpty) _nationalId.text = c.idNumber ?? '';
   }
 
   @override
   void dispose() {
-    _fullNameCtl.dispose();
-    _dobCtl.dispose();
-    _phoneCtl.dispose();
-    _emailCtl.dispose();
-    _nationalIdCtl.dispose();
-    _notesCtl.dispose();
+    for (final c in [
+      _name,
+      _dob,
+      _phone,
+      _email,
+      _nationalId,
+      _notes,
+      _past,
+      _surgical,
+      _family,
+      _social,
+      _medicines,
+    ]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  static String _clean(String? value) {
-    return (value ?? '').trim();
+  InputDecoration _dec(String label) => InputDecoration(
+    labelText: label,
+    isDense: true,
+    border: const OutlineInputBorder(),
+  );
+  Widget _field(
+    String label,
+    TextEditingController c, {
+    int lines = 1,
+    String? Function(String?)? validator,
+  }) => TextFormField(
+    controller: c,
+    maxLines: lines,
+    decoration: _dec(label),
+    validator: validator,
+  );
+  String? _date(String? v) {
+    final raw = (v ?? '').trim();
+    if (raw.isEmpty) return null;
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw)) return 'Use YYYY-MM-DD';
+    final d = DateTime.tryParse(raw);
+    return d == null || d.toIso8601String().substring(0, 10) != raw
+        ? 'Invalid date'
+        : null;
   }
 
-  static String _firstNonEmpty(List<String?> values) {
-    for (final value in values) {
-      final clean = _clean(value);
-      if (clean.isNotEmpty) return clean;
+  Future<void> _chooseContact() async {
+    final chosen = await showDialog<NativeContact>(
+      context: context,
+      builder: (_) => const _ContactSearchDialog(),
+    );
+    if (!mounted || chosen == null) return;
+    setState(() {
+      _contact = chosen;
+      if (_relationship == ProfileContactRelationship.self) {
+        // New self profile is identified from the canonical Contact.
+        _name.text = chosen.displayName;
+        _phone.text =
+            chosen.phone ?? chosen.mobile ?? chosen.verifiedPhone ?? '';
+        _email.text = chosen.email ?? chosen.verifiedEmail ?? '';
+        _nationalId.text = chosen.idNumber ?? '';
+      }
+    });
+  }
+
+  Future<void> _addAllergy() async {
+    final result = await _textRecordDialog('Add allergy', [
+      'Substance',
+      'Reaction (optional)',
+      'Notes (optional)',
+    ]);
+    if (result == null) return;
+    setState(() {
+      _allergyStatus = AllergyStatus.known;
+      _allergies.add(
+        ProfileAllergy(
+          category: AllergyCategory.drug,
+          substance: result[0],
+          reaction: result[1],
+          notes: result[2],
+        ),
+      );
+    });
+  }
+
+  Future<void> _addCondition() async {
+    final result = await _textRecordDialog('Add illness / condition', [
+      'Condition name',
+      'Diagnosis date (YYYY-MM-DD, optional)',
+      'Notes (optional)',
+    ]);
+    if (result == null) return;
+    if (result[1].isNotEmpty && _date(result[1]) != null) return;
+    setState(
+      () => _conditions.add(
+        ProfileCondition(
+          name: result[0],
+          diagnosedOn: result[1],
+          notes: result[2],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addVaccination() async {
+    final result = await _textRecordDialog('Add vaccination', [
+      'Vaccine',
+      'Administration date (YYYY-MM-DD, optional)',
+      'Notes (optional)',
+    ]);
+    if (result == null) return;
+    if (result[1].isNotEmpty && _date(result[1]) != null) return;
+    setState(
+      () => _vaccinations.add(
+        ProfileVaccination(
+          vaccineName: result[0],
+          status: VaccinationStatus.historical,
+          administeredOn: result[1],
+          notes: result[2],
+        ),
+      ),
+    );
+  }
+
+  Future<List<String>?> _textRecordDialog(
+    String title,
+    List<String> labels,
+  ) async {
+    final controls = List.generate(
+      labels.length,
+      (_) => TextEditingController(),
+    );
+    final formKey = GlobalKey<FormState>();
+    try {
+      return await showDialog<List<String>>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 420,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TextFormField(
+                        controller: controls[i],
+                        decoration: _dec(labels[i]),
+                        validator: i == 0
+                            ? (v) =>
+                                  (v ?? '').trim().isEmpty ? 'Required' : null
+                            : null,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(
+                    ctx,
+                    controls.map((c) => c.text.trim()).toList(),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      for (final c in controls) {
+        c.dispose();
+      }
     }
-
-    return '';
   }
 
-  static String _contactDisplayName(NativeContact? contact) {
-    if (contact == null) return '';
-
-    final displayName = contact.displayName.trim();
-    if (displayName.isNotEmpty) return displayName;
-
-    return '';
-  }
-
-  static String _contactPhone(NativeContact? contact) {
-    if (contact == null) return '';
-    final phone = (contact.phone ?? '').trim();
-    if (phone.isNotEmpty) return phone;
-    return (contact.mobile ?? contact.verifiedPhone ?? '').trim();
-  }
-
-  static String _contactEmail(NativeContact? contact) {
-    if (contact == null) return '';
-    return (contact.email ?? contact.verifiedEmail ?? '').trim();
-  }
-
-  String? _required(String? value, String label) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return '$label is required';
-    return null;
-  }
-
-  String? _dateValidator(String? value) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return null;
-
-    final ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed);
-    if (!ok) return 'Use YYYY-MM-DD';
-
-    return null;
-  }
-
-  String _genderLabel(ProfileGender value) {
-    switch (value) {
-      case ProfileGender.male:
-        return 'Male';
-      case ProfileGender.female:
-        return 'Female';
-      case ProfileGender.other:
-        return 'Other';
-      case ProfileGender.unknown:
-        return 'Unknown';
-    }
-  }
-
-  void _prefillMissingPatientFieldsFromContact(
-    NativeContact contact, {
-    bool overwrite = false,
-  }) {
-    final name = _contactDisplayName(contact);
-    final phone = _contactPhone(contact);
-    final email = _contactEmail(contact);
-
-    if (overwrite || _fullNameCtl.text.trim().isEmpty) {
-      _fullNameCtl.text = name;
-    }
-
-    if (overwrite || _phoneCtl.text.trim().isEmpty) {
-      _phoneCtl.text = phone;
-    }
-
-    if (overwrite || _emailCtl.text.trim().isEmpty) {
-      _emailCtl.text = email;
-    }
-  }
+  Widget _clinicalList<T>({
+    required String title,
+    required List<T> values,
+    required String Function(T) label,
+    required VoidCallback onAdd,
+    required void Function(int) onRemove,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+          ),
+          TextButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Add'),
+          ),
+        ],
+      ),
+      for (var i = 0; i < values.length; i++)
+        ListTile(
+          dense: true,
+          title: Text(label(values[i])),
+          trailing: IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Remove',
+            onPressed: () => onRemove(i),
+          ),
+        ),
+    ],
+  );
 
   void _submit() {
-    final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
-
-    final input = ProfileUpsertInput(
-      fullName: _fullNameCtl.text.trim(),
-      dob: _dobCtl.text.trim(),
-      gender: _gender,
-      accountNumber: null,
-      relationship: _relationship,
-      phone: _phoneCtl.text.trim(),
-      email: _emailCtl.text.trim(),
-      nationalId: _nationalIdCtl.text.trim(),
-      notes: _notesCtl.text.trim(),
-      isActive: _isActive,
-    );
-
-    Navigator.of(context).pop(input);
-  }
-
-  InputDecoration _dec(String label, {String? hint, String? helper}) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      helperText: helper,
-      border: const OutlineInputBorder(),
-      isDense: true,
-    );
-  }
-
-  Widget _relationshipField({String? helper}) {
-    return SizedBox(
-      width: 260,
-      child: DropdownButtonFormField<ProfileContactRelationship>(
-        initialValue: _relationship,
-        isExpanded: true,
-        decoration: _dec(
-          'Relationship',
-          helper:
-              helper ??
-              (widget.allowExplicitContactLink
-                  ? 'Used when an explicit contact association is added.'
-                  : 'Used when auto-linking this profile to your own account.'),
+    if (!(_key.currentState?.validate() ?? false)) return;
+    if (_staffCreate &&
+        _relationship == ProfileContactRelationship.self &&
+        _contact == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose the Native Contact for Self.')),
+      );
+      return;
+    }
+    if (_staffCreate &&
+        _contact?.entityType == 'organization' &&
+        !{
+          ProfileContactRelationship.insurance,
+          ProfileContactRelationship.other,
+        }.contains(_relationship)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Organisation relationships must be Insurance or Other.',
+          ),
         ),
-        items: ProfilesLabels.staffLinkRelationships
-            .map(
-              (value) => DropdownMenuItem<ProfileContactRelationship>(
-                value: value,
-                child: Text(
-                  ProfilesLabels.relationship(value),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            )
-            .toList(growable: false),
-        selectedItemBuilder: (context) {
-          return ProfilesLabels.staffLinkRelationships
-              .map(
-                (value) => Text(
-                  ProfilesLabels.relationship(value),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )
-              .toList(growable: false);
-        },
-        onChanged: (value) {
-          if (value == null) return;
-
-          setState(() {
-            _relationship = value;
-
-            if (value == ProfileContactRelationship.self &&
-                _selectedContact != null) {
-              _prefillMissingPatientFieldsFromContact(_selectedContact!);
-            }
-          });
-        },
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      ProfileUpsertInput(
+        fullName: _name.text.trim(),
+        dob: _dob.text.trim(),
+        gender: _gender,
+        accountNumber: _staffCreate ? _contact?.accountNumber : null,
+        relationship: _relationship,
+        phone: _phone.text.trim(),
+        email: _email.text.trim(),
+        nationalId: _nationalId.text.trim(),
+        notes: _notes.text.trim(),
+        pastMedicalHistory: _past.text.trim(),
+        surgicalHistory: _surgical.text.trim(),
+        familyHistory: _family.text.trim(),
+        socialHistory: _social.text.trim(),
+        currentMedications: _medicines.text.trim(),
+        allergyStatus: _allergyStatus,
+        allergies: _allergies,
+        vaccinations: _vaccinations,
+        conditions: _conditions,
+        isActive: _active,
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_isEdit ? 'Edit health profile' : 'New health profile'),
-      content: SizedBox(
-        width: 720,
-        height: MediaQuery.of(context).size.height * 0.72,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 14, right: 8, bottom: 8),
-            child: Wrap(
-              runSpacing: 14,
-              spacing: 12,
-              children: [
-                if (widget.initial?.profileId.trim().isNotEmpty == true)
-                  SizedBox(
-                    width: 330,
-                    child: InputDecorator(
-                      decoration: _dec('Health profile ID'),
-                      child: SelectableText(widget.initial!.profileId),
-                    ),
-                  ),
-                SizedBox(
-                  width: 330,
-                  child: TextFormField(
-                    controller: _fullNameCtl,
-                    decoration: _dec('Profile name'),
-                    validator: (v) => _required(v, 'Profile name'),
-                  ),
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(_editing ? 'Edit health profile' : 'Create health profile'),
+    content: SizedBox(
+      width: 720,
+      height: MediaQuery.sizeOf(context).height * .75,
+      child: Form(
+        key: _key,
+        child: ListView(
+          children: [
+            if (_staffCreate) ...[
+              OutlinedButton.icon(
+                onPressed: _chooseContact,
+                icon: const Icon(Icons.person_search),
+                label: Text(
+                  _contact == null
+                      ? 'Search and link existing Native Contact'
+                      : '${_contact!.displayName} (${_contact!.accountNumber})',
                 ),
-                SizedBox(
-                  width: 180,
-                  child: TextFormField(
-                    controller: _dobCtl,
-                    decoration: _dec('DOB (YYYY-MM-DD)'),
-                    validator: _dateValidator,
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: DropdownButtonFormField<ProfileGender>(
-                    initialValue: _gender,
-                    isExpanded: true,
-                    decoration: _dec('Gender'),
-                    items: ProfileGender.values
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (!_editing)
+              DropdownButtonFormField<ProfileContactRelationship>(
+                key: ValueKey(_relationship),
+                initialValue: _relationship,
+                decoration: _dec('Patient is Contact’s…'),
+                items:
+                    (widget.allowExplicitContactLink
+                            ? ProfilesLabels.staffLinkRelationships
+                            : const [
+                                ProfileContactRelationship.self,
+                                ProfileContactRelationship.child,
+                                ProfileContactRelationship.parent,
+                                ProfileContactRelationship.guardian,
+                              ])
                         .map(
-                          (value) => DropdownMenuItem<ProfileGender>(
-                            value: value,
-                            child: Text(
-                              _genderLabel(value),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          (x) => DropdownMenuItem(
+                            value: x,
+                            child: Text(ProfilesLabels.relationship(x)),
                           ),
                         )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _gender = value);
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _phoneCtl,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.next,
-                    decoration: _dec(
-                      'Mobile (optional)',
-                      hint: '+254712345678',
-                      helper:
-                          'Use +254 followed by 9 digits starting with 7 or 1.',
-                    ),
-                    validator: (value) {
-                      final mobile = (value ?? '').trim();
-                      if (mobile.isEmpty) return null;
-                      if (!RegExp(r'^\+254[17]\d{8}$').hasMatch(mobile)) {
-                        return 'Use +254 followed by 9 digits starting with 7 or 1';
+                        .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _relationship = v;
+                      if (v == ProfileContactRelationship.self &&
+                          _contact != null) {
+                        _prefillSelf(_contact!);
                       }
-                      return null;
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 280,
-                  child: TextFormField(
-                    controller: _emailCtl,
-                    decoration: _dec('Email'),
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextFormField(
-                    controller: _nationalIdCtl,
-                    decoration: _dec('National ID'),
-                  ),
-                ),
-                if (!widget.allowExplicitContactLink && !_isEdit)
-                  _relationshipField(),
+                    });
+                  }
+                },
+              ),
+            const SizedBox(height: 12),
+            _field(
+              'Full name',
+              _name,
+              validator: (v) =>
+                  (v ?? '').trim().isEmpty ? 'Full name required' : null,
+            ),
+            const SizedBox(height: 12),
+            _field('Date of birth (YYYY-MM-DD)', _dob, validator: _date),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<ProfileGender>(
+              initialValue: _gender,
+              decoration: _dec('Gender'),
+              items: ProfileGender.values
+                  .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setState(() => _gender = v);
+              },
+            ),
+            const SizedBox(height: 12),
+            _field('Phone', _phone),
+            const SizedBox(height: 12),
+            _field('Email', _email),
+            const SizedBox(height: 12),
+            _field('National ID', _nationalId),
+            const Divider(height: 32),
+            DropdownButtonFormField<AllergyStatus>(
+              key: ValueKey(_allergyStatus),
+              initialValue: _allergyStatus,
+              decoration: _dec('Allergy status'),
+              items: AllergyStatus.values
+                  .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _allergyStatus = v;
+                    if (v != AllergyStatus.known) _allergies.clear();
+                  });
+                }
+              },
+            ),
+            _clinicalList(
+              title: 'Allergies',
+              values: _allergies,
+              label: (a) => a.substance,
+              onAdd: _addAllergy,
+              onRemove: (i) => setState(() {
+                _allergies.removeAt(i);
+                if (_allergies.isEmpty) _allergyStatus = AllergyStatus.unknown;
+              }),
+            ),
+            const Divider(),
+            _clinicalList(
+              title: 'Chronic illnesses / conditions',
+              values: _conditions,
+              label: (c) => c.name,
+              onAdd: _addCondition,
+              onRemove: (i) => setState(() => _conditions.removeAt(i)),
+            ),
+            const Divider(),
+            _clinicalList(
+              title: 'Vaccinations',
+              values: _vaccinations,
+              label: (v) => v.vaccineName,
+              onAdd: _addVaccination,
+              onRemove: (i) => setState(() => _vaccinations.removeAt(i)),
+            ),
+            const Divider(height: 32),
+            _field('Past medical history', _past, lines: 3),
+            const SizedBox(height: 12),
+            _field('Surgical history', _surgical, lines: 2),
+            const SizedBox(height: 12),
+            _field('Family history', _family, lines: 2),
+            const SizedBox(height: 12),
+            _field('Social history', _social, lines: 2),
+            const SizedBox(height: 12),
+            _field('Current medications', _medicines, lines: 2),
+            const SizedBox(height: 12),
+            _field('Other notes', _notes, lines: 2),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              title: const Text('Active'),
+              value: _active,
+              onChanged: (v) => setState(() => _active = v),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _submit,
+        child: Text(_editing ? 'Save changes' : 'Create'),
+      ),
+    ],
+  );
+}
 
-                // Contact associations are created in the Linked Payers panel.
-                SizedBox(
-                  width: 672,
-                  child: TextFormField(
-                    controller: _notesCtl,
-                    decoration: _dec('Notes'),
-                    minLines: 2,
-                    maxLines: 4,
+class _ContactSearchDialog extends ConsumerStatefulWidget {
+  const _ContactSearchDialog();
+  @override
+  ConsumerState<_ContactSearchDialog> createState() =>
+      _ContactSearchDialogState();
+}
+
+class _ContactSearchDialogState extends ConsumerState<_ContactSearchDialog> {
+  final _query = TextEditingController();
+  List<NativeContact> _results = [];
+  bool _loading = false;
+  String? _error;
+  int _request = 0;
+  @override
+  void dispose() {
+    _request++;
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final q = _query.text.trim();
+    if (q.length < 2) {
+      setState(() {
+        _results = [];
+        _error = 'Enter at least 2 characters';
+      });
+      return;
+    }
+    final id = ++_request;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final svc = await ref.read(nativeContactsServiceProvider.future);
+      final matches = await svc.search(q);
+      if (!mounted || id != _request) return;
+      setState(() {
+        _results = matches.where((c) => c.isActive).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted && id == _request)
+        setState(() {
+          _error = '$e';
+          _loading = false;
+        });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Find Native Contact'),
+    content: SizedBox(
+      width: 560,
+      height: 400,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _query,
+                  onSubmitted: (_) => _search(),
+                  decoration: const InputDecoration(
+                    labelText: 'Name, account, email or phone',
                   ),
                 ),
-                SizedBox(
-                  width: 672,
-                  child: SwitchListTile(
-                    value: _isActive,
-                    onChanged: (v) => setState(() => _isActive = v),
-                    title: const Text('Active'),
-                    subtitle: const Text(
-                      'Inactive profiles are hidden from normal active profile lists.',
+              ),
+              IconButton(
+                onPressed: _loading ? null : _search,
+                icon: const Icon(Icons.search),
+              ),
+            ],
+          ),
+          if (_loading) const LinearProgressIndicator(),
+          if (_error != null) Text(_error!),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final c in _results)
+                  ListTile(
+                    title: Text(c.displayName),
+                    subtitle: Text(
+                      '${c.accountNumber} · ${c.phone ?? c.mobile ?? c.email ?? ''}',
                     ),
-                    contentPadding: EdgeInsets.zero,
+                    onTap: () => Navigator.pop(context, c),
                   ),
-                ),
               ],
             ),
           ),
-        ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(_isEdit ? 'Save changes' : 'Create'),
-        ),
-      ],
-    );
-  }
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+    ],
+  );
 }

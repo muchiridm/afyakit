@@ -19,6 +19,11 @@ class NativeContact {
   });
 
   String get id => accountNumber;
+
+  /// Lifecycle status is authoritative on the API; this is only a UI hint.
+  bool get isArchived => status == 'inactive';
+  bool get isActive => status == 'active';
+
   final String displayName;
   final String entityType;
   final String contactType;

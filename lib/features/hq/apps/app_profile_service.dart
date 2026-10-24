@@ -1,4 +1,4 @@
-// lib/features/hq/apps/services/app_profile_service.dart
+// lib/features/hq/apps/app_profile_service.dart
 
 import 'dart:convert';
 

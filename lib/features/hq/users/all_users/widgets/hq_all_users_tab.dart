@@ -1,8 +1,8 @@
 import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
 import 'package:afyakit/features/hq/shell/hq_controller.dart';
-import 'package:afyakit/features/hq/tenants/providers/hq_tenant_providers.dart';
+import 'package:afyakit/features/hq/tenants/hq_tenant_providers.dart';
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/all_users_controller.dart';
 import 'package:afyakit/features/hq/users/all_users/widgets/user_editor_screen.dart';

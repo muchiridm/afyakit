@@ -1,10 +1,12 @@
+// lib/features/hq/apps/app_branding_controller.dart
+
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/branding/services/branding_storage.dart';
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
-import 'package:afyakit/features/hq/apps/services/app_profile_service.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/app_profile_service.dart';
 
 class AppBrandingState {
   const AppBrandingState({

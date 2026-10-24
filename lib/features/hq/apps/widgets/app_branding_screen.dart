@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/core/branding/services/branding_storage.dart';
-import 'package:afyakit/features/hq/apps/controllers/app_branding_controller.dart';
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/app_branding_controller.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
 
 class AppBrandingScreen extends ConsumerStatefulWidget {
   const AppBrandingScreen({

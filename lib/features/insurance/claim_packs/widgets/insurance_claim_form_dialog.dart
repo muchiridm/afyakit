@@ -214,7 +214,7 @@ class _InsuranceClaimFormDialogState
         // accountNumber is a Zoho customer/member scope filter, not a patient filter.
         accountNumber: null,
 
-        title: 'Select patient invoice',
+        title: 'Select profile invoice',
         emptyText: 'No invoices found for this profile.',
       ),
     );

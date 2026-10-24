@@ -13,8 +13,9 @@ Future<Profile?> showProfilePickerScreen({
 
   // Only an explicit staff picker may open the unscoped directory.
   // A member with no resolved account fails closed in ProfilesScreen.
-  final scopeAccountNumber = forcePickerMode ? null :
-      (cleanedAccountNumber.isEmpty ? null : cleanedAccountNumber);
+  final scopeAccountNumber = forcePickerMode
+      ? null
+      : (cleanedAccountNumber.isEmpty ? null : cleanedAccountNumber);
 
   final scoped = !forcePickerMode;
 
@@ -25,7 +26,7 @@ Future<Profile?> showProfilePickerScreen({
         memberMode: scoped,
         allowExplicitContactLink: forcePickerMode,
         selectionMode: true,
-        selectionTitle: scoped ? 'Select profile' : 'Select patient',
+        selectionTitle: 'Select profile',
       ),
     ),
   );
@@ -133,7 +134,7 @@ class _EmptyProfileSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          scoped ? 'Select patient profile' : 'Select patient',
+          'Select profile',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),

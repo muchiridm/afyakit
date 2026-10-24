@@ -225,6 +225,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                 const SizedBox(height: AppShape.gap14),
                 _ProfileDemographicsCard(profile: visibleProfile),
                 const SizedBox(height: AppShape.gap14),
+                 _ProfileClinicalCard(profile: visibleProfile),
+                 const SizedBox(height: AppShape.gap14),
                 ProfileAssociationsSection(
                   profile: visibleProfile,
                   staffMode: widget.allowExplicitContactLink && !_memberMode,
@@ -438,4 +440,24 @@ class _StatusChip extends StatelessWidget {
           : scheme.errorContainer.withOpacity(0.55),
     );
   }
+}
+
+class _ProfileClinicalCard extends StatelessWidget {
+  const _ProfileClinicalCard({required this.profile});
+  final Profile profile;
+  @override
+  Widget build(BuildContext context) => AppCard(
+    title:'Medical history', icon:Icons.medical_information_outlined,
+    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      _InfoRow(label:'Allergy status',value:profile.allergyStatus.name),
+      for(final a in profile.allergies) _InfoRow(label:'Allergy',value:'${a.substance}${a.reaction==null?'':' — ${a.reaction}'}'),
+      for(final c in profile.conditions) _InfoRow(label:'Condition',value:'${c.name} (${c.status.name})'),
+      for(final v in profile.vaccinations) _InfoRow(label:'Vaccination',value:'${v.vaccineName} (${v.status.name})'),
+      _InfoRow(label:'Past medical history',value:profile.pastMedicalHistory),
+      _InfoRow(label:'Surgical history',value:profile.surgicalHistory),
+      _InfoRow(label:'Family history',value:profile.familyHistory),
+      _InfoRow(label:'Social history',value:profile.socialHistory),
+      _InfoRow(label:'Current medications',value:profile.currentMedications),
+    ]),
+  );
 }

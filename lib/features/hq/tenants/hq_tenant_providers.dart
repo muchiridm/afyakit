@@ -1,8 +1,8 @@
-// lib/features/hq/tenants/providers/hq_tenant_providers.dart
+// lib/features/hq/tenants/hq_tenant_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
-import 'package:afyakit/features/hq/tenants/services/tenant_service.dart';
+import 'package:afyakit/features/hq/tenants/tenant_service.dart';
 
 /// HQ tenants list (fetch-once).
 /// Refresh by `ref.invalidate(hqTenantsProvider)`.

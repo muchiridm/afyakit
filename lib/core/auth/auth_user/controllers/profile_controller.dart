@@ -148,10 +148,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     );
   }
 
-  List<String> _effectiveTargetStores(AuthUser target) {
-    return List<String>.from(state.storeOverrides ?? target.stores);
-  }
-
   // ────────────────────────────────────────────
   // Init
   // ────────────────────────────────────────────
@@ -386,9 +382,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         // Two API writes are not atomic. Keep role overrides so they can be retried.
         if (profileSaved) {
           state = state.copyWith(
-            user: target.copyWith(
-              status: nextStatus,
-            ),
+            user: target.copyWith(status: nextStatus),
             statusOverride: null,
             storeOverrides: null,
           );

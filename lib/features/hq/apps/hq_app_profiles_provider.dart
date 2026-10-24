@@ -1,10 +1,10 @@
-// lib/features/hq/apps/providers/hq_app_profiles_provider.dart
+// lib/features/hq/apps/hq_app_profiles_provider.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/app/models/zoho_app_config.dart';
-import 'package:afyakit/features/hq/apps/services/app_profile_service.dart';
+import 'package:afyakit/features/hq/apps/app_profile_service.dart';
 
 // ═════════════════════════════════════════════
 // App profiles

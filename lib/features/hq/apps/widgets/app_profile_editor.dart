@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/feature_registry.dart';
-import 'package:afyakit/features/hq/apps/controllers/app_profile_controller.dart';
+import 'package:afyakit/features/hq/apps/app_profile_controller.dart';
 
 class AppProfileEditor extends ConsumerStatefulWidget {
   const AppProfileEditor({super.key});

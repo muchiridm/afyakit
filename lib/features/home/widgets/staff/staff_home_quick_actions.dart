@@ -31,7 +31,8 @@ class StaffHomeQuickActions extends ConsumerWidget {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const NativeContactsScreen(),
+                builder: (_) =>
+                    const NativeContactsScreen(allowAdminPurge: true),
               ),
             );
           },

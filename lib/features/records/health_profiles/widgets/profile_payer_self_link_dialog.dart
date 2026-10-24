@@ -272,17 +272,20 @@ class ProfileLinkSelfDialog {
 class ExistingProfileLinkRequestDialog extends StatefulWidget {
   const ExistingProfileLinkRequestDialog({super.key});
 
-  static Future<({String profileId, ProfileLinkRequestCreateInput input})?> show(
-      BuildContext context) => showDialog<({String profileId, ProfileLinkRequestCreateInput input})>(
+  static Future<({String profileId, ProfileLinkRequestCreateInput input})?>
+  show(BuildContext context) =>
+      showDialog<({String profileId, ProfileLinkRequestCreateInput input})>(
         context: context,
         builder: (_) => const ExistingProfileLinkRequestDialog(),
       );
 
   @override
-  State<ExistingProfileLinkRequestDialog> createState() => _ExistingProfileLinkRequestDialogState();
+  State<ExistingProfileLinkRequestDialog> createState() =>
+      _ExistingProfileLinkRequestDialogState();
 }
 
-class _ExistingProfileLinkRequestDialogState extends State<ExistingProfileLinkRequestDialog> {
+class _ExistingProfileLinkRequestDialogState
+    extends State<ExistingProfileLinkRequestDialog> {
   final _key = GlobalKey<FormState>();
   final _id = TextEditingController();
   final _name = TextEditingController();
@@ -296,7 +299,17 @@ class _ExistingProfileLinkRequestDialogState extends State<ExistingProfileLinkRe
 
   @override
   void dispose() {
-    for (final ctl in [_id, _name, _dob, _phone, _email, _nationalId, _reason]) { ctl.dispose(); }
+    for (final ctl in [
+      _id,
+      _name,
+      _dob,
+      _phone,
+      _email,
+      _nationalId,
+      _reason,
+    ]) {
+      ctl.dispose();
+    }
     super.dispose();
   }
 
@@ -307,13 +320,18 @@ class _ExistingProfileLinkRequestDialogState extends State<ExistingProfileLinkRe
     // Do not prefetch patient demographics or validate identity on device.
     // Backend verifies at least three matching identifiers before accepting.
     final identifiers = [
-      _optional(_name.text), _gender == null ? null : _gender!.name,
-      _optional(_dob.text), _optional(_phone.text), _optional(_email.text),
+      _optional(_name.text),
+      _gender?.name,
+      _optional(_dob.text),
+      _optional(_phone.text),
+      _optional(_email.text),
       _optional(_nationalId.text),
     ].where((v) => v != null).length;
     if (identifiers < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter at least three identifiers for verification.')),
+        const SnackBar(
+          content: Text('Enter at least three identifiers for verification.'),
+        ),
       );
       return;
     }
@@ -340,51 +358,142 @@ class _ExistingProfileLinkRequestDialogState extends State<ExistingProfileLinkRe
       height: MediaQuery.sizeOf(context).height * 0.65,
       child: Form(
         key: _key,
-        child: ListView(children: [
-          const Text('Your Native Contact is determined securely from your sign-in. '
-            'A staff member must approve this request before the Profile is linked.'),
-          const SizedBox(height: 16),
-          TextFormField(controller: _id,
-            decoration: const InputDecoration(labelText: 'Existing Health Profile ID', hintText: 'HP-YYMMNNNN', border: OutlineInputBorder()),
-            validator: (v) => v == null || v.trim().isEmpty || v.contains('/') ? 'Enter a valid Profile ID' : null),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<ProfileContactRelationship>(
-            initialValue: _relationship,
-            decoration: const InputDecoration(labelText: 'Patient is my…', border: OutlineInputBorder()),
-            items: const [ProfileContactRelationship.self, ProfileContactRelationship.child,
-              ProfileContactRelationship.spouse, ProfileContactRelationship.parent,
-              ProfileContactRelationship.guardian, ProfileContactRelationship.other]
-              .map((r) => DropdownMenuItem(value:r, child:Text(ProfilesLabels.relationship(r)))).toList(),
-            onChanged: (value) { if (value != null) setState(() => _relationship = value); },
-          ),
-          const SizedBox(height: 16),
-          const Text('Provide at least three matching identifiers. Incorrect details will be rejected. '
-            'No Profile information is displayed before approval.'),
-          const SizedBox(height: 12),
-          TextFormField(controller: _name, decoration: const InputDecoration(labelText:'Patient full name',border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<ProfileGender?>(
-            initialValue: _gender,
-            decoration: const InputDecoration(labelText:'Patient gender (optional)',border:OutlineInputBorder()),
-            items: [const DropdownMenuItem<ProfileGender?>(value:null,child:Text('Not provided')),
-              ...ProfileGender.values.map((g)=>DropdownMenuItem<ProfileGender?>(value:g,child:Text(ProfilesLabels.gender(g))))],
-            onChanged: (value)=>setState(()=>_gender=value),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(controller: _dob, decoration: const InputDecoration(labelText:'Date of birth (YYYY-MM-DD)',border:OutlineInputBorder()),
-            validator: (v) => v == null || v.trim().isEmpty || RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v.trim()) ? null : 'Use YYYY-MM-DD'),
-          const SizedBox(height: 10),
-          TextFormField(controller: _phone, decoration: const InputDecoration(labelText:'Patient phone',border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          TextFormField(controller: _email, decoration: const InputDecoration(labelText:'Patient email',border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          TextFormField(controller: _nationalId, decoration: const InputDecoration(labelText:'Patient national ID',border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          TextFormField(controller: _reason, maxLines:2, decoration: const InputDecoration(labelText:'Reason (optional)',border: OutlineInputBorder())),
-        ]),
+        child: ListView(
+          children: [
+            const Text(
+              'Your Native Contact is determined securely from your sign-in. '
+              'A staff member must approve this request before the Profile is linked.',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _id,
+              decoration: const InputDecoration(
+                labelText: 'Existing Health Profile ID',
+                hintText: 'HP-YYMMNNNN',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) => v == null || v.trim().isEmpty || v.contains('/')
+                  ? 'Enter a valid Profile ID'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<ProfileContactRelationship>(
+              initialValue: _relationship,
+              decoration: const InputDecoration(
+                labelText: 'Patient is my…',
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  const [
+                        ProfileContactRelationship.self,
+                        ProfileContactRelationship.child,
+                        ProfileContactRelationship.spouse,
+                        ProfileContactRelationship.parent,
+                        ProfileContactRelationship.guardian,
+                        ProfileContactRelationship.other,
+                      ]
+                      .map(
+                        (r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(ProfilesLabels.relationship(r)),
+                        ),
+                      )
+                      .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => _relationship = value);
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Provide at least three matching identifiers. Incorrect details will be rejected. '
+              'No Profile information is displayed before approval.',
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _name,
+              decoration: const InputDecoration(
+                labelText: 'Patient full name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<ProfileGender?>(
+              initialValue: _gender,
+              decoration: const InputDecoration(
+                labelText: 'Patient gender (optional)',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<ProfileGender?>(
+                  value: null,
+                  child: Text('Not provided'),
+                ),
+                ...ProfileGender.values.map(
+                  (g) => DropdownMenuItem<ProfileGender?>(
+                    value: g,
+                    child: Text(ProfilesLabels.gender(g)),
+                  ),
+                ),
+              ],
+              onChanged: (value) => setState(() => _gender = value),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _dob,
+              decoration: const InputDecoration(
+                labelText: 'Date of birth (YYYY-MM-DD)',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) =>
+                  v == null ||
+                      v.trim().isEmpty ||
+                      RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v.trim())
+                  ? null
+                  : 'Use YYYY-MM-DD',
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _phone,
+              decoration: const InputDecoration(
+                labelText: 'Patient phone',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _email,
+              decoration: const InputDecoration(
+                labelText: 'Patient email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _nationalId,
+              decoration: const InputDecoration(
+                labelText: 'Patient national ID',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _reason,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
-    actions: [TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),
-      FilledButton(onPressed:_submit,child:const Text('Submit for review'))],
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Submit for review')),
+    ],
   );
 }

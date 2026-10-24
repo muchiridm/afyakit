@@ -1,3 +1,5 @@
+// lib/features/records/native_contacts/widgets/native_contacts_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,10 +14,18 @@ import 'contact_linked_profiles_screen.dart';
 
 /// Staff-facing canonical Native Contacts, independent of Retail accounting.
 class NativeContactsScreen extends ConsumerStatefulWidget {
-  const NativeContactsScreen({super.key, this.requireIdForPersons = false});
+  const NativeContactsScreen({
+    super.key,
+    this.requireIdForPersons = false,
+    this.allowAdminPurge = false,
+  });
 
   /// UI hint only; server enforces the Occuwell identity policy.
   final bool requireIdForPersons;
+
+  /// Deprecated compatibility flag. Lifecycle administration moved to HQ.
+  /// Ignored by this staff-facing directory.
+  final bool allowAdminPurge;
 
   @override
   ConsumerState<NativeContactsScreen> createState() =>
@@ -41,9 +51,18 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       ),
     );
     if (!mounted || values == null) return;
-    await ref
+    final ok = await ref
         .read(nativeContactsControllerProvider.notifier)
-        .save(values, accountNumber: existing?.accountNumber ?? existing?.id);
+        .save(values, accountNumber: existing?.accountNumber);
+    if (!mounted) return;
+    if (!ok) _showActionError();
+  }
+
+  void _showActionError() {
+    final error = ref.read(nativeContactsControllerProvider).error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Unable to update Contact')),
+    );
   }
 
   Future<void> _openLinkedProfiles(NativeContact contact) async {
@@ -151,7 +170,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
             child: TextField(
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Filter loaded contacts',
+                hintText: 'Filter first page of contacts',
               ),
               onChanged: (text) =>
                   setState(() => _query = text.trim().toLowerCase()),
@@ -231,7 +250,11 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                                         _openDeliveryAddresses(contact),
                                     onProfiles: () =>
                                         _openLinkedProfiles(contact),
-                                    onEdit: () => _edit(existing: contact),
+                                    onEdit: () {
+                                      if (contact.status == 'active') {
+                                        _edit(existing: contact);
+                                      }
+                                    },
                                     onRemove: () => _remove(contact),
                                   );
                                 },

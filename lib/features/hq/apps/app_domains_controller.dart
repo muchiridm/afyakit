@@ -1,4 +1,4 @@
-// lib/features/hq/apps/domains/controllers/app_domains_controller.dart
+// lib/features/hq/apps/app_domains_controller.dart
 
 import 'dart:async';
 
