@@ -1,10 +1,11 @@
 // lib/features/messaging/providers/messaging_providers.dart
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
@@ -17,9 +18,13 @@ final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
 final staffChatConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) {
       final String tenantId = ref.watch(tenantIdProvider);
+      final String appId = ref.watch(appIdProvider);
       final repository = ref.watch(messagingRepositoryProvider);
 
-      return repository.watchStaffConversations(tenantId: tenantId);
+      return repository.watchStaffConversations(
+        tenantId: tenantId,
+        appId: appId,
+      );
     });
 
 final memberChatConversationsProvider = StreamProvider.autoDispose

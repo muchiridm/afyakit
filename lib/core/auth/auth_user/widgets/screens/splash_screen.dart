@@ -1,21 +1,41 @@
-// lib/core/auth_users/widgets/screens/splash_screen.dart
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/hq/branding/providers/tenant_logo_providers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/app/app_identity.dart';
+import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/core/branding/providers/app_logo_providers.dart';
+
 class SplashScreen extends ConsumerWidget {
   const SplashScreen({super.key});
+
+  static const double _logoSize = 240;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Use display-name provider so we never show "Loading…"
-    final displayName = ref.watch(tenantDisplayNameProvider);
-    final logoUrl = ref.watch(tenantSecondaryLogoUrlProvider);
-    final primary = theme.colorScheme.primary;
+    final appProfileAsync = ref.watch(appProfileProvider);
+
+    // Splash uses the SECONDARY logo.
+    final logoAsync = ref.watch(appSecondaryLogoUrlProvider);
+
+    final displayName = appProfileAsync.maybeWhen(
+      data: (profile) {
+        final name = profile.displayName.trim();
+        return name.isNotEmpty ? name : profile.id;
+      },
+      orElse: () => AppIdentity.appId,
+    );
+
+    final primary = appProfileAsync.maybeWhen(
+      data: (profile) => profile.primaryColor,
+      orElse: () => theme.colorScheme.primary,
+    );
+
+    final availableWidth = MediaQuery.sizeOf(context).width - 48;
+    final logoSize = availableWidth.clamp(0.0, _logoSize);
 
     return Scaffold(
       backgroundColor: isDark ? theme.colorScheme.surface : Colors.white,
@@ -26,12 +46,13 @@ class SplashScreen extends ConsumerWidget {
             _buildBrand(
               theme: theme,
               displayName: displayName,
-              logoUrl: logoUrl,
+              logoAsync: logoAsync,
               primary: primary,
+              logoSize: logoSize,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildSpinner(),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             _buildLoadingText(theme),
           ],
         ),
@@ -39,19 +60,15 @@ class SplashScreen extends ConsumerWidget {
     );
   }
 
-  // ── private builders ────────────────────────────────────────────────────────
-
   Widget _buildBrand({
     required ThemeData theme,
     required String displayName,
-    required String? logoUrl,
+    required AsyncValue<String?> logoAsync,
     required Color primary,
+    required double logoSize,
   }) {
-    const double logoSize = 140.0;
-    final hasUrl = logoUrl != null && logoUrl.trim().isNotEmpty;
     final radius = BorderRadius.circular(16);
 
-    // Placeholder: initials block + app name
     Widget placeholder() {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -75,21 +92,72 @@ class SplashScreen extends ConsumerWidget {
       );
     }
 
-    // No URL at all → placeholder + name
-    if (!hasUrl) {
-      return placeholder();
+    Widget logoLoading() {
+      return SizedBox(
+        width: logoSize,
+        height: logoSize,
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+          ),
+        ),
+      );
     }
 
-    // URL present → try to load; on error fallback to placeholder
-    return ClipRRect(
-      borderRadius: radius,
-      child: Image.network(
-        logoUrl,
-        height: logoSize,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => placeholder(),
-      ),
+    return logoAsync.when(
+      loading: logoLoading,
+
+      error: (error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('❌ [splash-logo] Secondary logo lookup failed: $error');
+        }
+
+        return placeholder();
+      },
+
+      data: (url) {
+        final logoUrl = url?.trim() ?? '';
+
+        if (logoUrl.isEmpty) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [splash-logo] Secondary logo missing; '
+              'showing fallback: $displayName',
+            );
+          }
+
+          return placeholder();
+        }
+
+        return ClipRRect(
+          borderRadius: radius,
+          child: Image.network(
+            logoUrl,
+            width: logoSize,
+            height: logoSize,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+
+            errorBuilder: (context, error, stackTrace) {
+              if (kDebugMode) {
+                debugPrint('❌ [splash-logo] Secondary image failed: $error');
+              }
+
+              return placeholder();
+            },
+
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) {
+                return child;
+              }
+
+              return logoLoading();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -97,15 +165,16 @@ class SplashScreen extends ConsumerWidget {
     required String displayName,
     required Color primary,
     required BorderRadius radius,
-    double size = 140.0,
+    required double size,
   }) {
     final initials = _initialsFromName(displayName);
+
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: primary.withOpacity(0.12),
+        color: primary.withValues(alpha: 0.12),
         borderRadius: radius,
       ),
       child: Text(
@@ -120,12 +189,19 @@ class SplashScreen extends ConsumerWidget {
   }
 
   String _initialsFromName(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
     if (parts.isEmpty) return '';
+
     if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
+      return parts.first[0].toUpperCase();
     }
-    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
   Widget _buildSpinner() {
@@ -137,12 +213,11 @@ class SplashScreen extends ConsumerWidget {
   }
 
   Widget _buildLoadingText(ThemeData theme) {
-    final color = theme.hintColor.withOpacity(0.9);
     return Text(
       'Loading...',
       style: theme.textTheme.labelMedium?.copyWith(
         fontSize: 12,
-        color: color,
+        color: theme.hintColor.withValues(alpha: 0.9),
         letterSpacing: 0.2,
       ),
     );

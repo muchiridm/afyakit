@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:dio/dio.dart';
@@ -20,17 +21,22 @@ final authServiceProvider = FutureProvider.family<AuthService, String>((
   ref,
   tenantId,
 ) async {
+  final cleanTenantId = tenantId.trim().toLowerCase();
+
+  final appId = ref.watch(appIdProvider).trim().toLowerCase();
+
   final api = await AfyaKitClient.create(
-    baseUrl: apiBaseUrl(tenantId),
+    baseUrl: apiBaseUrl(cleanTenantId),
+    appId: appId,
     getToken: () async => fb.FirebaseAuth.instance.currentUser?.getIdToken(),
     getFreshToken: () async =>
         fb.FirebaseAuth.instance.currentUser?.getIdToken(true),
   );
 
   return AuthService(
-    tenantId: tenantId,
+    tenantId: cleanTenantId,
     client: api,
-    routes: AfyaKitRoutes(tenantId),
+    routes: AfyaKitRoutes(cleanTenantId),
   );
 });
 
@@ -328,7 +334,8 @@ class AuthService {
   }) async {
     final phone = _requireTrimmed(phoneInput, 'Phone number is required');
 
-    final uri = routes.autoStart();
+    final uri = routes.otpStart();
+
     final body = <String, dynamic>{
       'phoneNumber': phone,
       'codeLength': codeLength,
@@ -348,20 +355,20 @@ class AuthService {
 
       final out = _parseStartResponse(res.data);
 
-      // ✅ If backend says EMAIL_REQUIRED (expected 400), DO NOT throw.
       if (res.statusCode == 400 && out.requiresCollectEmail) {
         return out;
       }
 
-      // Any other 4xx from this endpoint is not expected control flow.
       if ((res.statusCode ?? 0) >= 400) {
         final err = _readErrorMessage(res.data) ?? 'bad-request';
+
         throw StateError('startAutoOtp · HTTP ${res.statusCode} · $err');
       }
 
       _ensureAttemptId(
         out,
-        'OTP start returned ok=true but no attemptId was returned (and not firebase_sms).',
+        'OTP start returned ok=true but no attemptId was returned '
+        '(and not firebase_sms).',
       );
 
       return out;

@@ -3,7 +3,7 @@
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
 

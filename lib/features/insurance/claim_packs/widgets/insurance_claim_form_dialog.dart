@@ -1,6 +1,6 @@
 // lib/features/insurance/claim_packs/widgets/insurance_claim_form_dialog.dart
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';

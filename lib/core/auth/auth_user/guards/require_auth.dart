@@ -3,45 +3,59 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 /// Ensures the user is authenticated before continuing.
-/// Returns true if authenticated, false if user cancels/closes login.
+///
+/// Returns:
+/// - true  → already authenticated, or login completed successfully
+/// - false → login was cancelled/closed without success
 Future<bool> requireAuth(BuildContext context, WidgetRef ref) async {
   final tenantId = ref.read(tenantIdProvider);
 
-  // 1) Fast path — already logged in for this tenant session
+  // ─────────────────────────────────────────────
+  // Fast path
+  // ─────────────────────────────────────────────
+
   final session = ref.read(sessionControllerProvider(tenantId));
+
   final user = session.hasValue ? session.value : null;
-  if (user != null) return true;
 
-  // Tenant name for UI copy (read BEFORE await)
-  final tenantName = ref.read(tenantDisplayNameProvider);
+  if (user != null) {
+    return true;
+  }
 
-  // 2) Push OTP login screen.
+  // ─────────────────────────────────────────────
+  // Product-facing login copy
+  // ─────────────────────────────────────────────
   //
-  // IMPORTANT: do NOT touch `ref` after this await.
-  await Navigator.of(context).push<void>(
-    MaterialPageRoute(
+  // Tenant is backend infrastructure.
+  // AppProfile owns the client-facing product name.
+
+  final appProfile = ref.read(appProfileProvider);
+
+  final appName = appProfile.maybeWhen(
+    data: (profile) {
+      final name = profile.displayName.trim();
+
+      return name.isNotEmpty ? name : profile.id;
+    },
+    orElse: () => '',
+  );
+
+  // IMPORTANT:
+  // Do not access `ref` after this await.
+  final loggedIn = await Navigator.of(context).push<bool>(
+    MaterialPageRoute<bool>(
       builder: (_) =>
-          LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName)),
+          LoginScreen(copy: OtpLoginCopy.tenant(tenantName: appName)),
       fullscreenDialog: true,
     ),
   );
 
-  // 3) After returning, re-check session without using `ref` (avoid disposed crashes).
-  // We can safely use FirebaseAuth directly as a fallback signal, BUT your real
-  // source of truth is sessionController -> user.
-  //
-  // Since we can't use `ref` here, we conservatively return "true if popped after success"
-  // only if the caller immediately re-builds based on AuthGate/session state.
-  //
-  // ✅ Best option: re-check via Navigator result. So we should return a bool result.
-
-  // If you want an accurate bool here, use the bool-returning route below instead.
-  return false;
+  return loggedIn == true;
 }

@@ -19,6 +19,12 @@
         ],
         "rpmoc": [
           "rpmoc"
+        ],
+        "afyatracker": [
+          "afyatracker-app"
+        ],
+        "occuwell": [
+          "occuwell-app"
         ]
       }
     }

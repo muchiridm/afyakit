@@ -3,7 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 
 import 'package:afyakit/features/inventory/records/deliveries/controllers/delivery_session_state.dart';
 import 'package:afyakit/features/inventory/records/deliveries/models/delivery_record.dart';

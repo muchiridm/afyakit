@@ -2,15 +2,15 @@
 
 import 'dart:async';
 
+import 'package:afyakit/app/providers/app_profile_provider.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/core/home/enums/entry_mode.dart';
-import 'package:afyakit/core/home/widgets/guest/guest_home_quick_actions.dart';
-import 'package:afyakit/core/home/widgets/member/member_home_quick_action.dart';
-import 'package:afyakit/core/home/widgets/shared/home_dashboard/home_header.dart';
-import 'package:afyakit/core/home/widgets/staff/staff_home_quick_actions.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_profile_providers.dart';
+import 'package:afyakit/features/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/widgets/guest/guest_home_quick_actions.dart';
+import 'package:afyakit/features/home/widgets/member/member_home_quick_action.dart';
+import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_header.dart';
+import 'package:afyakit/features/home/widgets/staff/staff_home_quick_actions.dart';
 import 'package:afyakit/features/messaging/widgets/messaging_entry_screen.dart';
 import 'package:afyakit/features/retail/catalog/controllers/catalog_controller.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
@@ -357,12 +357,16 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   Future<void> _openAuth(BuildContext context) async {
-    final String tenantName = ref.read(tenantDisplayNameProvider);
+    final appProfile = await ref.read(appProfileProvider.future);
+
+    final appName = appProfile.displayName.trim().isNotEmpty
+        ? appProfile.displayName.trim()
+        : appProfile.id;
 
     await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) =>
-            LoginScreen(copy: OtpLoginCopy.tenant(tenantName: tenantName)),
+            LoginScreen(copy: OtpLoginCopy.tenant(tenantName: appName)),
         fullscreenDialog: true,
       ),
     );

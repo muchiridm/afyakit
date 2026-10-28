@@ -59,10 +59,17 @@ class MessagingRepository {
         );
   }
 
+  /// Staff can watch conversations for their active application only.
+  ///
+  /// Firestore rules independently verify the staffRolesByApp grant.
   Stream<List<ChatConversation>> watchStaffConversations({
     required String tenantId,
+    required String appId,
   }) {
+    final String app = _requireValue(appId, 'appId');
+
     return _conversationsRef(tenantId)
+        .where('app_id', isEqualTo: app)
         .orderBy('updatedAt', descending: true)
         .snapshots()
         .map(
@@ -102,12 +109,19 @@ class MessagingRepository {
         );
   }
 
+  /// Create a conversation under the active application.
+  ///
+  /// appId comes from the deployment's appIdProvider.
+  /// Do not hardcode "dawapap" in this repository.
   Future<String> createConversation({
     required String tenantId,
+    required String appId,
     required AuthUser user,
     required String firstMessage,
   }) async {
+    final String app = _requireValue(appId, 'appId');
     final String text = _validateMessage(firstMessage);
+
     final ChatMemberSnapshot member = ChatMemberSnapshot.fromUser(user);
 
     if (member.uid.isEmpty) {
@@ -128,6 +142,7 @@ class MessagingRepository {
     final WriteBatch batch = _firestore.batch();
 
     batch.set(conversationRef, <String, dynamic>{
+      'app_id': app,
       'title': composeConversationTitle(text),
       'member': member.toMap(),
       'status': ChatConversationStatus.open.name,
@@ -223,7 +238,8 @@ class MessagingRepository {
 
       if (conversation.isClosed) {
         throw StateError(
-          'This conversation is closed. Reopen it before sending a message.',
+          'This conversation is closed. '
+          'Reopen it before sending a message.',
         );
       }
 
@@ -376,7 +392,8 @@ class MessagingRepository {
 
     if (clean.length > maxMessageLength) {
       throw ArgumentError(
-        'Message cannot exceed $maxMessageLength characters.',
+        'Message cannot exceed '
+        '$maxMessageLength characters.',
       );
     }
 

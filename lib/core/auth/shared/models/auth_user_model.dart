@@ -42,14 +42,16 @@ class AuthUser {
     this.zoho,
     this.claims,
     this.isSuperAdmin = false,
-    this.staffRoles = const [],
+    List<StaffRole> staffRoles = const [],
+    this.staffRolesByApp = const {},
+    this.activeAppId,
     this.recoveryRequired = false,
     this.disabledAt,
     this.disabledReason,
     this.disabledByUid,
     this.createdAt,
     this.updatedAt,
-  });
+  }) : legacyStaffRoles = staffRoles;
 
   final String uid;
   final String? phoneNumber;
@@ -114,7 +116,40 @@ class AuthUser {
 
   final Map<String, dynamic>? claims;
   final bool isSuperAdmin;
-  final List<StaffRole> staffRoles;
+  /// Retained for reading old records only; never grants access.
+  final List<StaffRole> legacyStaffRoles;
+  final Map<String, List<StaffRole>> staffRolesByApp;
+
+  /// Client context, set by the active-app providers, never trusted from JSON.
+  final String? activeAppId;
+
+  List<StaffRole> rolesForApp(String appId) => List<StaffRole>.unmodifiable(
+    staffRolesByApp[appId.trim().toLowerCase()] ?? const <StaffRole>[],
+  );
+
+  List<StaffRole> get staffRoles => status == UserStatus.active && activeAppId != null
+      ? rolesForApp(activeAppId!)
+      : const <StaffRole>[];
+
+  AuthUser forApp(String appId) {
+    final clean = appId.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(clean)) {
+      throw ArgumentError.value(appId, 'appId', 'Invalid app ID');
+    }
+    return copyWith(activeAppId: clean);
+  }
+
+  static Map<String, List<StaffRole>> _parseAppRoles(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, List<StaffRole>>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final key = entry.key as String;
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(key)) continue;
+      result[key] = List<StaffRole>.unmodifiable(_normalizeStaffRoles(entry.value));
+    }
+    return Map<String, List<StaffRole>>.unmodifiable(result);
+  }
 
   final bool recoveryRequired;
 
@@ -232,7 +267,7 @@ class AuthUser {
     return phoneVerified == true || phoneClaimed == true;
   }
 
-  bool get isStaffResolved => staffRoles.isNotEmpty || isSuperAdmin == true;
+  bool get isStaffResolved => staffRoles.isNotEmpty;
 
   bool get isMemberResolved => !isStaffResolved;
 
@@ -442,6 +477,7 @@ class AuthUser {
       claims: claims,
       isSuperAdmin: isSuperAdmin,
       staffRoles: staffRoles,
+      staffRolesByApp: _parseAppRoles(json['staffRolesByApp']),
       recoveryRequired: recoveryRequired,
       disabledAt: _optStr(json['disabledAt']),
       disabledReason: _optStr(json['disabledReason']),
@@ -488,6 +524,8 @@ class AuthUser {
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
     List<StaffRole>? staffRoles,
+    Map<String, List<StaffRole>>? staffRolesByApp,
+    String? activeAppId,
     bool? recoveryRequired,
     String? disabledAt,
     String? disabledReason,
@@ -532,7 +570,9 @@ class AuthUser {
       zoho: zoho ?? this.zoho,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
-      staffRoles: staffRoles ?? this.staffRoles,
+      staffRoles: staffRoles ?? legacyStaffRoles,
+      staffRolesByApp: staffRolesByApp ?? this.staffRolesByApp,
+      activeAppId: activeAppId ?? this.activeAppId,
       recoveryRequired: recoveryRequired ?? this.recoveryRequired,
       disabledAt: disabledAt ?? this.disabledAt,
       disabledReason: disabledReason ?? this.disabledReason,
@@ -579,8 +619,8 @@ class AuthUser {
     if (zoho != null) 'zoho': zoho!.toMap(),
     if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
-    if (staffRoles.isNotEmpty)
-      'staffRoles': staffRoles.map((r) => r.name).toList(growable: false),
+    'staffRolesByApp': staffRolesByApp.map((appId, roles) =>
+      MapEntry(appId, roles.map((r) => r.wire).toList(growable: false))),
     if (recoveryRequired) 'recoveryRequired': true,
     if (disabledAt != null) 'disabledAt': disabledAt,
     if (disabledReason != null) 'disabledReason': disabledReason,

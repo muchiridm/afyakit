@@ -1,81 +1,59 @@
-// lib/features/insurance/documents/services/insurance_document_storage_paths.dart
-
 import 'dart:math';
 
 final class InsuranceDocumentStoragePaths {
   const InsuranceDocumentStoragePaths._();
 
-  static String newUploadId() {
-    final int now = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final String rand = Random.secure().nextInt(0x7fffffff).toRadixString(36);
+  static const int maxFileBytes = 20 * 1024 * 1024;
 
+  static String newUploadId() {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final rand = Random.secure().nextInt(0x7fffffff).toRadixString(36);
     return 'insurance_document_${now.toRadixString(36)}_$rand';
   }
 
   static String cleanExt(String? ext) {
-    final String raw = (ext ?? '').trim().toLowerCase().replaceAll('.', '');
-
-    if (raw == 'jpeg') return 'jpg';
-
-    switch (raw) {
-      case 'jpg':
-      case 'png':
-      case 'webp':
-      case 'pdf':
-        return raw;
-      default:
-        return 'pdf';
+    var raw = (ext ?? '').trim().toLowerCase();
+    if (raw.startsWith('.')) raw = raw.substring(1);
+    if (raw == 'jpeg') raw = 'jpg';
+    if (!const ['jpg', 'png', 'webp', 'pdf'].contains(raw)) {
+      throw ArgumentError.value(ext, 'extension', 'Use JPG, PNG, WebP or PDF');
     }
+    return raw;
   }
 
   static String contentTypeForExt(String ext) {
     switch (cleanExt(ext)) {
-      case 'jpg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'pdf':
-      default:
-        return 'application/pdf';
+      case 'jpg': return 'image/jpeg';
+      case 'png': return 'image/png';
+      case 'webp': return 'image/webp';
+      default: return 'application/pdf';
     }
   }
 
+  static String _base(String tenantId, String appId, String profileId, String uploadId) => [
+    'tenants', _safeSegment(tenantId), 'apps', _safeSegment(appId),
+    'health_profiles', _safeSegment(profileId), 'insurance_documents', _safeSegment(uploadId),
+  ].join('/');
+
   static String originalPath({
-    required String tenantId,
+    required String tenantId, required String appId,
     required String profileId,
     required String uploadId,
     required String ext,
-  }) {
-    return [
-      'tenants',
-      _safeSegment(tenantId),
-      'clinical_profiles',
-      _safeSegment(profileId),
-      'insurance_documents',
-      _safeSegment(uploadId),
-      'original.${cleanExt(ext)}',
-    ].join('/');
-  }
+  }) => '${_base(tenantId, appId, profileId, uploadId)}/original.${cleanExt(ext)}';
 
   static String thumbnailPath({
-    required String tenantId,
+    required String tenantId, required String appId,
     required String profileId,
     required String uploadId,
-  }) {
-    return [
-      'tenants',
-      _safeSegment(tenantId),
-      'clinical_profiles',
-      _safeSegment(profileId),
-      'insurance_documents',
-      _safeSegment(uploadId),
-      'thumb.jpg',
-    ].join('/');
-  }
+  }) => '${_base(tenantId, appId, profileId, uploadId)}/thumb.jpg';
 
   static String _safeSegment(String value) {
-    return value.trim().replaceAll(RegExp(r'[/\\]+'), '_');
+    if (value.isEmpty || value != value.trim() || value == '.' || value == '..' ||
+        value.contains('/') || value.contains('\\') ||
+        value.codeUnits.any((code) => code < 32 || code == 127)) {
+      throw ArgumentError.value(value, 'path segment', 'Invalid path segment');
+    }
+    return value;
   }
 }

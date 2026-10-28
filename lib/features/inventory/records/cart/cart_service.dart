@@ -1,7 +1,7 @@
 // lib/features/inventory/records/cart/cart_service.dart
 
 import 'package:afyakit/features/inventory/items/providers/item_stream_providers.dart';
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:collection/collection.dart';
 import 'package:afyakit/features/inventory/records/issues/models/issue_entry.dart';
 import 'package:afyakit/features/inventory/records/cart/cart_item_models.dart';

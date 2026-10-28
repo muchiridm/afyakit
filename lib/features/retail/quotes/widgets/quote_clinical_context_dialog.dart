@@ -1,6 +1,6 @@
 // lib/features/retail/quotes/widgets/quote_clinical_context_dialog.dart
 
-import 'package:afyakit/core/hq/tenants/providers/tenant_providers.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
 import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
 import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
