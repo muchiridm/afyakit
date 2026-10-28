@@ -85,7 +85,8 @@ class ProfilesService {
 
     final data = _profileUpsertPayload(input)
       ..remove('account_number')
-      ..remove('relationship');
+      ..remove('relationship')
+      ..remove('is_active');
 
     final response = await api.putUri<Object?>(
       routes.recordsProfileUpdate(id),
@@ -103,9 +104,60 @@ class ProfilesService {
     await api.deleteUri<Object?>(routes.recordsProfileDelete(id));
   }
 
-  Future<void> remove(String profileId) {
-    return delete(profileId);
+  /// Existing DELETE endpoint performs a soft deactivation.
+  Future<void> deactivate(String profileId) => delete(profileId);
+
+  /// Reactivates the profile without changing any historical clinical fields.
+  /// Contact-profile links deactivated previously remain inactive by design.
+  Future<Profile> reactivate(String profileId) async {
+    final id = _requiredId(profileId, 'profileId');
+    final response = await api.putUri<Object?>(
+      routes.recordsProfileUpdate(id),
+      data: <String, Object?>{'is_active': true},
+    );
+    return _readProfile(_asMap(response.data)['profile']);
   }
+
+  /// Read-only purge dependency report. Requires platform superadmin on the API.
+  /// No frontend decision may override the backend's can_purge result.
+  Future<ProfilePurgeReport> inspectPurgeDependencies(String profileId) async {
+    final response = await api.getUri<Object?>(
+      routes.recordsProfileDependencies(_requiredId(profileId, 'profileId')),
+    );
+    return ProfilePurgeReport.fromJson(_asMap(_asMap(response.data)['report']));
+  }
+
+  /// Superadmin-only permanent purge. The backend re-checks dependencies,
+  /// the explicit identifier, retention attestation and reason.
+  /// This is NOT the member unlink / staff deactivate endpoint.
+  Future<void> permanentlyDelete(
+    String profileId, {
+    required String confirmation,
+    required String reason,
+    required bool retentionReviewed,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    if (confirmation.trim() != id) {
+      throw ArgumentError('Type the exact Health Profile ID to confirm deletion');
+    }
+    if (reason.trim().length < 10) {
+      throw ArgumentError('Provide a deletion reason of at least 10 characters');
+    }
+    if (!retentionReviewed) {
+      throw ArgumentError('Clinical retention review must be confirmed');
+    }
+    await api.postUri<Object?>(
+      routes.recordsProfilePurge(id),
+      data: <String, Object?>{
+        'confirmation': confirmation.trim(),
+        'reason': reason.trim(),
+        'retention_reviewed': true,
+      },
+    );
+  }
+
+  @Deprecated('Use deactivate or an explicit member delink instead.')
+  Future<void> remove(String profileId) => deactivate(profileId);
 
   // ---------------------------------------------------------
   // Member Profile Linking
@@ -385,5 +437,52 @@ class ProfilesService {
     }
 
     return trimmed;
+  }
+}
+
+/// A read-only snapshot of backend purge blockers. Never authorises deletion.
+class ProfilePurgeReport {
+  const ProfilePurgeReport({
+    required this.profileId,
+    required this.isActive,
+    required this.blockers,
+    this.references = const <String, bool>{},
+    required this.unchecked,
+    required this.canPurge,
+  });
+
+  final String profileId;
+  final bool isActive;
+  final Map<String, bool> blockers;
+  final Map<String, bool> references;
+  final List<String> unchecked;
+  final bool canPurge;
+
+  static Map<String, bool> _readBoolMap(Object? raw) {
+    if (raw is! Map) return const <String, bool>{};
+    return <String, bool>{
+      for (final entry in raw.entries)
+        if (entry.value is bool) entry.key.toString(): entry.value as bool,
+    };
+  }
+
+  factory ProfilePurgeReport.fromJson(Map<String, Object?> json) {
+    final raw = json['blockers'];
+    final blockers = <String, bool>{};
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        if (entry.value is bool) blockers[entry.key.toString()] = entry.value as bool;
+      }
+    }
+    return ProfilePurgeReport(
+      profileId: json['profile_id']?.toString() ?? '',
+      isActive: json['is_active'] == true,
+      blockers: blockers,
+      references: _readBoolMap(json['references']),
+      unchecked: (json['unchecked'] is List)
+          ? (json['unchecked'] as List).map((e) => e.toString()).toList(growable: false)
+          : const <String>[],
+      canPurge: json['can_purge'] == true,
+    );
   }
 }

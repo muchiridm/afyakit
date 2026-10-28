@@ -131,7 +131,7 @@ class ProfilesFilterBar extends StatelessWidget {
                 ),
                 DropdownMenuItem(
                   value: 'inactive',
-                  child: Text('Inactive', overflow: TextOverflow.ellipsis),
+                  child: Text('Deactivated', overflow: TextOverflow.ellipsis),
                 ),
               ],
               onChanged: onStatusChanged,

@@ -145,12 +145,10 @@ class AuthUser {
     this.previousUids = const <String>[],
     this.recoveredFromAccountNumber,
     this.recoveredAt,
-    this.nativeContactId,
     this.identity,
     this.onboarding,
     this.claims,
     this.isSuperAdmin = false,
-    List<StaffRole> staffRoles = const [],
     this.staffRolesByApp = const {},
     this.appMembershipsByApp = const {},
     this.emailsByApp = const {},
@@ -161,7 +159,7 @@ class AuthUser {
     this.disabledByUid,
     this.createdAt,
     this.updatedAt,
-  }) : legacyStaffRoles = staffRoles;
+  });
   final String uid;
   final String? phoneNumber;
   final String tenantId;
@@ -211,15 +209,11 @@ class AuthUser {
   /// Recovery success timestamp, ISO string.
   final String? recoveredAt;
 
-  /// Canonical Native Contact ID (AC-XXXXXX), never a Zoho ID.
-  final String? nativeContactId;
   final SessionIdentity? identity;
   final SessionOnboarding? onboarding;
   final Map<String, dynamic>? claims;
   final bool isSuperAdmin;
 
-  /// Retained for reading old records only; never grants access.
-  final List<StaffRole> legacyStaffRoles;
   final Map<String, List<StaffRole>> staffRolesByApp;
 
   /// Canonical application membership by app.
@@ -421,8 +415,6 @@ class AuthUser {
   }
 
   /// Transitional alias; resolves to the Native Contact, not Zoho.
-  @Deprecated('Use nativeContactId instead.')
-  String? get contactId => nativeContactId;
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
     if (identity?.displayName != null && identity!.displayName!.isNotEmpty) return identity!.displayName!;
@@ -466,7 +458,6 @@ class AuthUser {
     final phone = _optStr(json['phoneNumber']);
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
-    final staffRoles = _normalizeStaffRoles(json['staffRoles']);
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
     final isCompany = _bool(json['isCompany']);
@@ -509,14 +500,12 @@ class AuthUser {
       previousUids: previousUids,
       recoveredFromAccountNumber: recoveredFromAccountNumber,
       recoveredAt: recoveredAt,
-      nativeContactId: _optUpperStr(json['nativeContactId'] ?? json['native_contact_id']),
       identity: json['identity'] is Map ? SessionIdentity.fromMap(json['identity']) : null,
       onboarding: json['onboarding'] is Map
           ? SessionOnboarding.fromMap(json['onboarding'])
           : null,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
-      staffRoles: staffRoles,
       staffRolesByApp: _parseAppRoles(json['staffRolesByApp']),
       appMembershipsByApp: _parseAppMemberships(json['appMembershipsByApp']),
       emailsByApp: _parseAppEmails(json['emailsByApp']),
@@ -552,12 +541,10 @@ class AuthUser {
     List<String>? previousUids,
     String? recoveredFromAccountNumber,
     String? recoveredAt,
-    String? nativeContactId,
     SessionIdentity? identity,
     SessionOnboarding? onboarding,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
-    List<StaffRole>? staffRoles,
     Map<String, List<StaffRole>>? staffRolesByApp,
     Map<String, AppMembership>? appMembershipsByApp,
     Map<String, AppEmail>? emailsByApp,
@@ -594,12 +581,10 @@ class AuthUser {
       recoveredFromAccountNumber:
           recoveredFromAccountNumber ?? this.recoveredFromAccountNumber,
       recoveredAt: recoveredAt ?? this.recoveredAt,
-      nativeContactId: nativeContactId ?? this.nativeContactId,
       identity: identity ?? this.identity,
       onboarding: onboarding ?? this.onboarding,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
-      staffRoles: staffRoles ?? legacyStaffRoles,
       staffRolesByApp: staffRolesByApp ?? this.staffRolesByApp,
       appMembershipsByApp: appMembershipsByApp ?? this.appMembershipsByApp,
       emailsByApp: emailsByApp ?? this.emailsByApp,
@@ -621,24 +606,13 @@ class AuthUser {
     // Legacy store assignments must not be written from AuthUser.
 
     // Native Contact owns name fields.
-    if (avatarUrl != null) 'avatarUrl': avatarUrl,
-    if (phoneHistory.isNotEmpty) 'phoneHistory': phoneHistory,
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,
     if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
-    if (phoneSatisfied != null) 'phoneSatisfied': phoneSatisfied,
-    if (isCompany) 'isCompany': true,
 
     if (accountNumber != null) 'accountNumber': accountNumber,
-    if (previousAccountNumbers.isNotEmpty)
-      'previousAccountNumbers': previousAccountNumbers,
-    if (previousUids.isNotEmpty) 'previousUids': previousUids,
-    if (recoveredFromAccountNumber != null)
-      'recoveredFromAccountNumber': recoveredFromAccountNumber,
-    if (recoveredAt != null) 'recoveredAt': recoveredAt,
 
-    if (claims != null && claims!.isNotEmpty) 'claims': claims,
     if (isSuperAdmin) 'isSuperAdmin': true,
     'staffRolesByApp': staffRolesByApp.map(
       (appId, roles) =>
@@ -651,9 +625,6 @@ class AuthUser {
       (appId, membership) => MapEntry(appId, membership.toMap()),
     ),
     if (recoveryRequired) 'recoveryRequired': true,
-    if (disabledAt != null) 'disabledAt': disabledAt,
-    if (disabledReason != null) 'disabledReason': disabledReason,
-    if (disabledByUid != null) 'disabledByUid': disabledByUid,
     if (createdAt != null) 'createdAt': createdAt,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };

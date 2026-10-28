@@ -33,11 +33,17 @@ class ProfileAssociationsSectionState
   void didUpdateWidget(covariant ProfileAssociationsSection old) {
     super.didUpdateWidget(old);
     if (old.profile.profileId != widget.profile.profileId ||
-        old.staffMode != widget.staffMode)
+        old.staffMode != widget.staffMode ||
+        old.profile.isActive != widget.profile.isActive)
       _reload();
   }
 
   void _reload() {
+    if (!widget.profile.isActive) {
+      _related = Future<List<RelatedProfile>>.value(const <RelatedProfile>[]);
+      _payers = null;
+      return;
+    }
     final service = ref.read(profilesServiceProvider);
     _related = service.listRelatedProfiles(widget.profile.profileId);
     _payers = widget.staffMode

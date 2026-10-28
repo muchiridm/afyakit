@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Creates/edit profiles and (staff creation only) selects an existing Native Contact.
 /// Links and self-identity are always revalidated by the backend.
+/// Simple clinical summary first; detailed histories remain optional and preserved.
 class ProfileFormDialog extends ConsumerStatefulWidget {
   const ProfileFormDialog({
     super.key,
@@ -45,7 +46,6 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
   List<ProfileCondition> _conditions = [];
   List<ProfileVaccination> _vaccinations = [];
   NativeContact? _contact;
-  bool _active = true;
   bool get _staffCreate =>
       widget.initial == null && widget.allowExplicitContactLink;
   bool get _editing => widget.initial != null;
@@ -66,7 +66,6 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
     _social.text = p?.socialHistory ?? '';
     _medicines.text = p?.currentMedications ?? '';
     _gender = p?.gender ?? ProfileGender.unknown;
-    _active = p?.isActive ?? true;
     _allergyStatus = p?.allergyStatus ?? AllergyStatus.unknown;
     _allergies = [...?p?.allergies];
     _conditions = [...?p?.conditions];
@@ -164,7 +163,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
       'Reaction (optional)',
       'Notes (optional)',
     ]);
-    if (result == null) return;
+    if (!mounted || result == null) return;
     setState(() {
       _allergyStatus = AllergyStatus.known;
       _allergies.add(
@@ -184,7 +183,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
       'Diagnosis date (YYYY-MM-DD, optional)',
       'Notes (optional)',
     ]);
-    if (result == null) return;
+    if (!mounted || result == null) return;
     if (result[1].isNotEmpty && _date(result[1]) != null) return;
     setState(
       () => _conditions.add(
@@ -203,7 +202,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
       'Administration date (YYYY-MM-DD, optional)',
       'Notes (optional)',
     ]);
-    if (result == null) return;
+    if (!mounted || result == null) return;
     if (result[1].isNotEmpty && _date(result[1]) != null) return;
     setState(
       () => _vaccinations.add(
@@ -217,68 +216,11 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
     );
   }
 
-  Future<List<String>?> _textRecordDialog(
-    String title,
-    List<String> labels,
-  ) async {
-    final controls = List.generate(
-      labels.length,
-      (_) => TextEditingController(),
-    );
-    final formKey = GlobalKey<FormState>();
-    try {
-      return await showDialog<List<String>>(
+  Future<List<String>?> _textRecordDialog(String title, List<String> labels) =>
+      showDialog<List<String>>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 420,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < labels.length; i++)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: TextFormField(
-                        controller: controls[i],
-                        decoration: _dec(labels[i]),
-                        validator: i == 0
-                            ? (v) =>
-                                  (v ?? '').trim().isEmpty ? 'Required' : null
-                            : null,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.pop(
-                    ctx,
-                    controls.map((c) => c.text.trim()).toList(),
-                  );
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
+        builder: (_) => _ClinicalEntryDialog(title: title, labels: labels),
       );
-    } finally {
-      for (final c in controls) {
-        c.dispose();
-      }
-    }
-  }
 
   Widget _clinicalList<T>({
     required String title,
@@ -360,7 +302,6 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
         allergies: _allergies,
         vaccinations: _vaccinations,
         conditions: _conditions,
-        isActive: _active,
       ),
     );
   }
@@ -375,6 +316,10 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
         key: _key,
         child: ListView(
           children: [
+            const Text(
+              'Start with the essentials. Medical history is optional and can be updated later.',
+            ),
+            const SizedBox(height: 16),
             if (_staffCreate) ...[
               OutlinedButton.icon(
                 onPressed: _chooseContact,
@@ -450,7 +395,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
             DropdownButtonFormField<AllergyStatus>(
               key: ValueKey(_allergyStatus),
               initialValue: _allergyStatus,
-              decoration: _dec('Allergy status'),
+              decoration: _dec('Known allergies'),
               items: AllergyStatus.values
                   .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
                   .toList(),
@@ -464,7 +409,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
               },
             ),
             _clinicalList(
-              title: 'Allergies',
+              title: 'Allergy details',
               values: _allergies,
               label: (a) => a.substance,
               onAdd: _addAllergy,
@@ -475,38 +420,48 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
             ),
             const Divider(),
             _clinicalList(
-              title: 'Chronic illnesses / conditions',
+              title: 'Existing medical conditions',
               values: _conditions,
               label: (c) => c.name,
               onAdd: _addCondition,
               onRemove: (i) => setState(() => _conditions.removeAt(i)),
             ),
-            const Divider(),
-            _clinicalList(
-              title: 'Vaccinations',
-              values: _vaccinations,
-              label: (v) => v.vaccineName,
-              onAdd: _addVaccination,
-              onRemove: (i) => setState(() => _vaccinations.removeAt(i)),
+            const SizedBox(height: 12),
+            _field('Current medications (optional)', _medicines, lines: 2),
+            const SizedBox(height: 12),
+            _field(
+              'Other relevant medical history (optional)',
+              _past,
+              lines: 3,
             ),
-            const Divider(height: 32),
-            _field('Past medical history', _past, lines: 3),
-            const SizedBox(height: 12),
-            _field('Surgical history', _surgical, lines: 2),
-            const SizedBox(height: 12),
-            _field('Family history', _family, lines: 2),
-            const SizedBox(height: 12),
-            _field('Social history', _social, lines: 2),
-            const SizedBox(height: 12),
-            _field('Current medications', _medicines, lines: 2),
-            const SizedBox(height: 12),
-            _field('Other notes', _notes, lines: 2),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              title: const Text('Active'),
-              value: _active,
-              onChanged: (v) => setState(() => _active = v),
+            const SizedBox(height: 8),
+            ExpansionTile(
+              title: const Text('Additional clinical details'),
+              subtitle: const Text(
+                'Optional — surgery, family/social history and vaccinations',
+              ),
+              initiallyExpanded: false,
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 12),
+              children: [
+                _field('Surgical history', _surgical, lines: 2),
+                const SizedBox(height: 12),
+                _field('Family history', _family, lines: 2),
+                const SizedBox(height: 12),
+                _field('Social history', _social, lines: 2),
+                const SizedBox(height: 12),
+                _clinicalList(
+                  title: 'Vaccinations',
+                  values: _vaccinations,
+                  label: (v) => v.vaccineName,
+                  onAdd: _addVaccination,
+                  onRemove: (i) => setState(() => _vaccinations.removeAt(i)),
+                ),
+                const SizedBox(height: 12),
+                _field('Other notes', _notes, lines: 2),
+              ],
             ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -520,6 +475,87 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
         onPressed: _submit,
         child: Text(_editing ? 'Save changes' : 'Create'),
       ),
+    ],
+  );
+}
+
+/// Owns field controllers for the full dialog route lifecycle, including exit
+/// animations. Never dispose controllers in a showDialog() caller's finally.
+class _ClinicalEntryDialog extends StatefulWidget {
+  const _ClinicalEntryDialog({required this.title, required this.labels});
+
+  final String title;
+  final List<String> labels;
+
+  @override
+  State<_ClinicalEntryDialog> createState() => _ClinicalEntryDialogState();
+}
+
+class _ClinicalEntryDialogState extends State<_ClinicalEntryDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final List<TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = List.generate(
+      widget.labels.length,
+      (_) => TextEditingController(),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _add() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final values = _controllers.map((c) => c.text.trim()).toList();
+    Navigator.of(context).pop(values);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: SizedBox(
+      width: 420,
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < widget.labels.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextFormField(
+                    controller: _controllers[i],
+                    decoration: InputDecoration(
+                      labelText: widget.labels[i],
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: i == 0
+                        ? (value) =>
+                              (value ?? '').trim().isEmpty ? 'Required' : null
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _add, child: const Text('Add')),
     ],
   );
 }

@@ -363,7 +363,6 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
       appId.trim().toLowerCase(),
       user.uid,
       user.isStaffResolved,
-      user.contactId ?? '',
       user.accountNumber ?? '',
     ].join(':');
   }

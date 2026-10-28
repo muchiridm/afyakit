@@ -143,9 +143,6 @@ class NotificationService {
         'enabled': true,
         'isStaff': user.isStaffResolved,
 
-        if ((user.contactId ?? '').trim().isNotEmpty)
-          'contactId': user.contactId!.trim(),
-
         if ((user.accountNumber ?? '').trim().isNotEmpty)
           'accountNumber': user.accountNumber!.trim(),
 
@@ -239,7 +236,7 @@ class NotificationService {
       final data = snapshot.data();
 
       final registeredUid = _clean(data?['uid']);
-      final registeredAppId = _clean(data?['app_Id']).toLowerCase();
+      final registeredAppId = _clean(data?['app_id']).toLowerCase();
 
       if (registeredUid != identity.uid || registeredAppId != identity.appId) {
         debugPrint(

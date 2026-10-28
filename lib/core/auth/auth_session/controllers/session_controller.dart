@@ -155,10 +155,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       'phoneClaimed=${u?.phoneClaimed} '
       'phoneSatisfied=${u?.phoneSatisfied} '
       'appEmailVerified=${u?.activeAppEmailLower != null} '
-      'isCompany=${u?.isCompany} '
-      'firstName="${u?.firstName}" '
-      'lastName="${u?.lastName}" '
-      'company="${u?.companyName}"',
+      'accountNumber=${u?.accountNumber}',
     );
   }
 

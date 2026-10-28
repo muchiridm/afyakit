@@ -1,3 +1,5 @@
+// lib/features/home/widgets/shared/home_shell.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,10 +24,6 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
 
-  // ─────────────────────────────────────────
-  // Entry mode
-  // ─────────────────────────────────────────
-
   EntryMode _entryModeFor(AuthUser? user) {
     if (user == null) {
       return EntryMode.guest;
@@ -33,10 +31,6 @@ class HomeShell extends ConsumerWidget {
 
     return user.isStaffResolved ? EntryMode.staff : EntryMode.member;
   }
-
-  // ─────────────────────────────────────────
-  // Login navigation
-  // ─────────────────────────────────────────
 
   Widget _loginScreen(String appName) {
     return LoginScreen(copy: OtpLoginCopy.tenant(tenantName: appName));
@@ -51,24 +45,15 @@ class HomeShell extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────
-  // Loading
-  // ─────────────────────────────────────────
-
   Widget _loadingScreen() {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
-
-  // ─────────────────────────────────────────
-  // Guest experience
-  // ─────────────────────────────────────────
 
   Widget _guestHome(BuildContext context, WidgetRef ref) {
     final appProfileAsync = ref.watch(appProfileProvider);
 
     return appProfileAsync.when(
       loading: _loadingScreen,
-
       error: (error, _) => Scaffold(
         body: Center(
           child: Padding(
@@ -80,11 +65,9 @@ class HomeShell extends ConsumerWidget {
           ),
         ),
       ),
-
       data: (profile) {
         final name = profile.displayName.trim();
         final appName = name.isNotEmpty ? name : profile.id;
-
         final features = profile.features;
 
         final occupationalHealthEnabled = features.enabled(
@@ -95,8 +78,6 @@ class HomeShell extends ConsumerWidget {
 
         final pharmacyEnabled = features.enabled(FeatureKeys.pharmacy);
 
-        // Occupational Health is independent
-        // of Clinical and uses shared Core Records.
         if (occupationalHealthEnabled) {
           return GuestHealthLanding(
             appName: appName,
@@ -105,8 +86,6 @@ class HomeShell extends ConsumerWidget {
           );
         }
 
-        // Clinical healthcare experience.
-        // Health Tracking is no longer a capability.
         if (clinicalEnabled) {
           return GuestHealthLanding(
             appName: appName,
@@ -115,21 +94,14 @@ class HomeShell extends ConsumerWidget {
           );
         }
 
-        // Pharmacy application.
-        // Clinical is not required for catalogue browsing.
         if (pharmacyEnabled) {
           return const CatalogScreen();
         }
 
-        // Other applications require authentication.
         return _loginScreen(appName);
       },
     );
   }
-
-  // ─────────────────────────────────────────
-  // Application gate
-  // ─────────────────────────────────────────
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -139,23 +111,15 @@ class HomeShell extends ConsumerWidget {
 
     return sessionAsync.when(
       loading: _loadingScreen,
-
       error: (error, _) =>
           _buildError(context, ref, tenantId, AppIdentity.appId, error),
-
       data: (user) {
         final realEntry = _entryModeFor(user);
 
-        // Unauthenticated visitors receive the
-        // app's capability-specific public experience.
         if (realEntry == EntryMode.guest) {
           return _guestHome(context, ref);
         }
 
-        // Authenticated members use member mode.
-        //
-        // Staff may switch between staff and
-        // member dashboards.
         final staffView = ref.watch(staffViewModeProvider);
 
         final effectiveEntry = switch (realEntry) {
@@ -165,11 +129,13 @@ class HomeShell extends ConsumerWidget {
             staffView == EntryMode.staff ? EntryMode.staff : EntryMode.member,
         };
 
+        final accountNumber = user?.accountNumber?.trim();
+
         return HomeScreen(
           key: ValueKey<String>(
             'home-screen-'
             '${effectiveEntry.name}-'
-            '${user?.contactId ?? 'unknown'}',
+            '${accountNumber == null || accountNumber.isEmpty ? 'unknown' : accountNumber}',
           ),
           realEntry: realEntry,
           effectiveEntry: effectiveEntry,
@@ -178,10 +144,6 @@ class HomeShell extends ConsumerWidget {
       },
     );
   }
-
-  // ─────────────────────────────────────────
-  // Session error
-  // ─────────────────────────────────────────
 
   Widget _buildError(
     BuildContext context,
@@ -211,13 +173,9 @@ class HomeShell extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Failed to load session'),
-
               const SizedBox(height: 8),
-
               Text(error.toString(), textAlign: TextAlign.center),
-
               const SizedBox(height: 14),
-
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -228,13 +186,11 @@ class HomeShell extends ConsumerWidget {
                     icon: const Icon(Icons.person_outline),
                     label: const Text('Continue as guest'),
                   ),
-
                   FilledButton.icon(
                     onPressed: logOut,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                   ),
-
                   OutlinedButton.icon(
                     onPressed: openLogin,
                     icon: const Icon(Icons.login),

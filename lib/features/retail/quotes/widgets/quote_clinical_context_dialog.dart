@@ -72,8 +72,8 @@ class _QuoteClinicalContextDialogState
   late QuotePaymentContext _paymentContext;
   QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
-  String get _memberContactId {
-    return (ref.read(currentUserValueProvider)?.nativeContactId ?? '').trim();
+  String get _memberAccountNumber {
+    return (ref.read(currentUserValueProvider)?.accountNumber ?? '').trim();
   }
 
   String? get _profileId {
@@ -87,7 +87,7 @@ class _QuoteClinicalContextDialogState
   }
 
   ProfilesScope get _memberProfileScope {
-    final accountNumber = _memberContactId.trim();
+    final accountNumber = _memberAccountNumber.trim();
 
     return ProfilesScope(
       accountNumber: accountNumber.isEmpty ? null : accountNumber,
@@ -116,7 +116,7 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _loadLinkedProfilesForMembershipGuard() async {
-    if (_memberContactId.isEmpty) return;
+    if (_memberAccountNumber.isEmpty) return;
     final ProfilesController controller = ref.read(
       profilesControllerProvider(_memberProfileScope).notifier,
     );
@@ -234,11 +234,11 @@ class _QuoteClinicalContextDialogState
   }
 
   Future<void> _openProfilePicker() async {
-    if (_isMemberScoped && _memberContactId.trim().isEmpty) return;
+    if (_isMemberScoped && _memberAccountNumber.trim().isEmpty) return;
 
     final Profile? picked = await showProfilePickerScreen(
       context: context,
-      accountNumber: _isMemberScoped ? _memberContactId.trim() : null,
+      accountNumber: _isMemberScoped ? _memberAccountNumber.trim() : null,
       forcePickerMode: !_isMemberScoped,
     );
 
@@ -355,7 +355,7 @@ class _QuoteClinicalContextDialogState
 
   Future<void> _useContext() async {
     if (_submitting) return;
-    if (_isMemberScoped && _memberContactId.isEmpty) {
+    if (_isMemberScoped && _memberAccountNumber.isEmpty) {
       _snack('Your Native Contact is not linked.');
       return;
     }
@@ -530,7 +530,7 @@ class _QuoteClinicalContextDialogState
       visibleMembershipCount,
     );
     final bool memberContactMissing =
-        _isMemberScoped && _memberContactId.isEmpty;
+        _isMemberScoped && _memberAccountNumber.isEmpty;
     return AlertDialog(
       title: const Text('Quote context'),
       content: SizedBox(
@@ -559,7 +559,7 @@ class _QuoteClinicalContextDialogState
                     selectedProfile: _profile,
                     busy: false,
                     accountNumber: _isMemberScoped
-                        ? _memberContactId.trim()
+                        ? _memberAccountNumber.trim()
                         : null,
                     forcePickerMode: !_isMemberScoped,
                     onChanged: _setProfile,

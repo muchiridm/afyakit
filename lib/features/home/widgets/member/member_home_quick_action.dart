@@ -20,7 +20,7 @@ class MemberHomeQuickActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final String? contactId = user?.contactId;
+    final String? accountNumber = user?.accountNumber?.trim();
     final String memberUid = user?.uid.trim() ?? '';
     final VoidCallback? chatAction = onChat;
 
@@ -37,7 +37,7 @@ class MemberHomeQuickActions extends ConsumerWidget {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => ProfilesScreen(
-                  accountNumber: contactId,
+                  accountNumber: accountNumber,
                   memberMode: true,
                   allowExplicitContactLink: false,
                   createOnOpen: true,
@@ -50,13 +50,17 @@ class MemberHomeQuickActions extends ConsumerWidget {
           label: 'Upload prescription',
           icon: Icons.upload_file_outlined,
           onPressed: () {
-            PrescriptionsScreen.open(context: context, contactId: contactId);
+            PrescriptionsScreen.open(
+              context: context,
+              contactId: accountNumber,
+            );
           },
         ),
         HomeQuickAction(
           label: 'Health Metrics',
           icon: Icons.monitor_heart_outlined,
-          onPressed: () => _openHealthMetrics(context, contactId: contactId),
+          onPressed: () =>
+              _openHealthMetrics(context, accountNumber: accountNumber),
         ),
         if (chatAction != null)
           HomeQuickAction(
@@ -71,23 +75,22 @@ class MemberHomeQuickActions extends ConsumerWidget {
 
   Future<void> _openHealthMetrics(
     BuildContext context, {
-    required String? contactId,
+    required String? accountNumber,
   }) async {
-    final String normalizedContactId = (contactId ?? '').trim();
+    final String normalizedAccountNumber = (accountNumber ?? '').trim();
 
-    if (normalizedContactId.isEmpty) {
+    if (normalizedAccountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Your account is not linked to a customer profile.'),
+          content: Text('Your account is not linked to a Native Contact.'),
         ),
       );
-
       return;
     }
 
     final patient = await showProfilePickerScreen(
       context: context,
-      accountNumber: normalizedContactId,
+      accountNumber: normalizedAccountNumber,
       forcePickerMode: false,
     );
 
@@ -99,7 +102,8 @@ class MemberHomeQuickActions extends ConsumerWidget {
       MaterialPageRoute<void>(
         builder: (_) => HealthMetricsDashboardScreen(
           initialProfile: patient,
-          profilePickerContactId: normalizedContactId,
+          // Existing widget parameter; value is canonical account number.
+          profilePickerContactId: normalizedAccountNumber,
           memberMode: true,
         ),
       ),

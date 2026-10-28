@@ -322,7 +322,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       EntryMode.member => MemberHomeQuickActions(
         key: ValueKey<String>(
           'catalog-member-quick-actions-'
-          '${widget.user?.contactId ?? 'unknown'}',
+          '${widget.user?.accountNumber ?? 'unknown'}',
         ),
         user: widget.user,
         onChat: () => _openChat(context),

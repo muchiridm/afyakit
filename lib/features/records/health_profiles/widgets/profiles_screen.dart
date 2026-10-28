@@ -1,5 +1,7 @@
 // lib/features/records/health_profiles/widgets/profiles_screen.dart
 
+import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_link_dialog.dart';
@@ -180,6 +182,12 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
 
   void _handleProfileTap(Profile profile) {
     if (widget.selectionMode) {
+      if (!profile.isActive) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deactivated profiles cannot be selected.')),
+        );
+        return;
+      }
       Navigator.of(context).pop(profile);
       return;
     }
@@ -187,17 +195,25 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     _openProfileDetails(profile);
   }
 
-  void _openProfileDetails(Profile profile) {
-    Navigator.of(context).push(
+  Future<void> _openProfileDetails(Profile profile) async {
+    // Do not trust a caller-provided admin flag: require current session authority.
+    final tenantId = ref.read(tenantIdProvider);
+    final sessionUser = ref.read(sessionControllerProvider(tenantId)).valueOrNull;
+    final canReview = !_memberMode &&
+        widget.allowExplicitContactLink &&
+        sessionUser?.isSuperAdmin == true;
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProfileDetailsScreen(
           profile: profile,
           memberMode: _memberMode,
           accountNumber: _contactScope,
           allowExplicitContactLink: widget.allowExplicitContactLink,
+          canReviewPurgeDependencies: canReview,
         ),
       ),
     );
+    if (mounted) await _controller.load();
   }
 
   Future<void> _openCreateDialogOnce() async {

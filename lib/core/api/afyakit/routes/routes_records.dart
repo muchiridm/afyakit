@@ -103,6 +103,14 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsProfileDelete(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}');
 
+  /// Read-only; platform superadmin required by backend.
+  Uri recordsProfileDependencies(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/dependencies');
+
+  /// POST: superadmin-only permanent purge, with explicit retention review.
+  Uri recordsProfilePurge(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/purge');
+
   Uri recordsProfileLinkSelf(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/link-self');
 
@@ -155,46 +163,8 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       _uri('records/profiles/${_seg(profileId)}/relationships');
 
   // ---------------------------------------------------------
-  // Health metrics
+  // Health metrics — tenant-level independent records
   // ---------------------------------------------------------
-
-  Uri recordsProfileHealthMetricsList(
-    String profileId, {
-    String? type,
-    bool? isActive,
-    DateTime? from,
-    DateTime? to,
-    int? page,
-    int? perPage,
-  }) => _uri(
-    'records/profiles/${_seg(profileId)}/metrics',
-    query: _recordsMetricsQuery(
-      type: type,
-      isActive: isActive,
-      from: from,
-      to: to,
-      page: page,
-      perPage: perPage,
-    ),
-  );
-
-  Uri recordsProfileHealthMetricGet({
-    required String profileId,
-    required String metricId,
-  }) => _uri('records/profiles/${_seg(profileId)}/metrics/${_seg(metricId)}');
-
-  Uri recordsProfileHealthMetricCreate(String profileId) =>
-      _uri('records/profiles/${_seg(profileId)}/metrics');
-
-  Uri recordsProfileHealthMetricUpdate({
-    required String profileId,
-    required String metricId,
-  }) => _uri('records/profiles/${_seg(profileId)}/metrics/${_seg(metricId)}');
-
-  Uri recordsProfileHealthMetricDelete({
-    required String profileId,
-    required String metricId,
-  }) => _uri('records/profiles/${_seg(profileId)}/metrics/${_seg(metricId)}');
 
   Uri recordsHealthMetricsList({
     String? profileId,
@@ -217,8 +187,50 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
     ),
   );
 
+  Uri recordsHealthMetricCreate() => _uri('records/metrics');
+  Uri recordsHealthMetricGet(String metricId) =>
+      _uri('records/metrics/${_seg(metricId)}');
+  Uri recordsHealthMetricUpdate(String metricId) =>
+      recordsHealthMetricGet(metricId);
+  Uri recordsHealthMetricDelete(String metricId) =>
+      recordsHealthMetricGet(metricId);
+
+  // Existing Dart callers may still pass profileId; it is now a query/body field,
+  // NEVER a resource path component. Callers creating records must send profile_id.
+  Uri recordsProfileHealthMetricsList(
+    String profileId, {
+    String? type,
+    bool? isActive,
+    DateTime? from,
+    DateTime? to,
+    int? page,
+    int? perPage,
+  }) => recordsHealthMetricsList(
+    profileId: profileId,
+    type: type,
+    isActive: isActive,
+    from: from,
+    to: to,
+    page: page,
+    perPage: perPage,
+  );
+  Uri recordsProfileHealthMetricGet({
+    required String profileId,
+    required String metricId,
+  }) => recordsHealthMetricGet(metricId);
+  Uri recordsProfileHealthMetricCreate(String profileId) =>
+      recordsHealthMetricCreate();
+  Uri recordsProfileHealthMetricUpdate({
+    required String profileId,
+    required String metricId,
+  }) => recordsHealthMetricUpdate(metricId);
+  Uri recordsProfileHealthMetricDelete({
+    required String profileId,
+    required String metricId,
+  }) => recordsHealthMetricDelete(metricId);
+
   // ---------------------------------------------------------
-  // Documents
+  // Documents — tenant-level independent records
   // ---------------------------------------------------------
 
   Uri recordsDocumentsList({
@@ -250,6 +262,12 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
     ),
   );
 
+  Uri recordsDocumentCreateCanonical() => _uri('records/documents');
+  Uri recordsDocumentById(String documentId) =>
+      _uri('records/documents/${_seg(documentId)}');
+  Uri recordsDocumentStorageAccess() =>
+      _uri('records/documents/storage-access');
+
   Uri recordsDocumentsListForProfile({
     required String profileId,
     String? search,
@@ -261,87 +279,68 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
     bool? isActive,
     int perPage = 50,
     int page = 1,
-  }) => _uri(
-    'records/profiles/${_seg(profileId)}/documents',
-    query: _recordsQuery(
-      search: search,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-      extras: {
-        'claim_pack_id': claimPackId,
-        'document_type': documentType,
-        'membership_id': membershipId,
-        'payer_contact_id': payerContactId,
-        'status': status,
-      },
-    ),
+  }) => recordsDocumentsList(
+    search: search,
+    profileId: profileId,
+    claimPackId: claimPackId,
+    documentType: documentType,
+    membershipId: membershipId,
+    payerContactId: payerContactId,
+    status: status,
+    isActive: isActive,
+    perPage: perPage,
+    page: page,
   );
-
   Uri recordsDocumentGet({
     required String profileId,
     required String documentId,
-  }) =>
-      _uri('records/profiles/${_seg(profileId)}/documents/${_seg(documentId)}');
-
+  }) => recordsDocumentById(documentId);
   Uri recordsDocumentCreate({required String profileId}) =>
-      _uri('records/profiles/${_seg(profileId)}/documents');
-
+      recordsDocumentCreateCanonical();
   Uri recordsDocumentUpdate({
     required String profileId,
     required String documentId,
-  }) =>
-      _uri('records/profiles/${_seg(profileId)}/documents/${_seg(documentId)}');
-
+  }) => recordsDocumentById(documentId);
   Uri recordsDocumentDelete({
     required String profileId,
     required String documentId,
-  }) =>
-      _uri('records/profiles/${_seg(profileId)}/documents/${_seg(documentId)}');
+  }) => recordsDocumentById(documentId);
 
   // ---------------------------------------------------------
-  // Delivery addresses — staff-managed contacts
+  // Delivery addresses — staff and member
   // ---------------------------------------------------------
 
+  /// Staff: list by account_number (canonical Native Contact ID).
   Uri recordsDeliveryAddressesList(
     String contactId, {
     bool includeArchived = false,
   }) => _uri(
-    'records/delivery-addresses/contacts/${_seg(contactId)}',
-    query: includeArchived ? {'include_archived': 'true'} : null,
+    'records/delivery-addresses',
+    query: {
+      'account_number': contactId,
+      if (includeArchived) 'include_archived': 'true',
+    },
   );
 
+  /// POST body must contain account_number; it is not part of the URL.
   Uri recordsDeliveryAddressCreate(String contactId) =>
-      _uri('records/delivery-addresses/contacts/${_seg(contactId)}');
-
-  Uri recordsDeliveryAddressGet(String contactId, String addressId) => _uri(
-    'records/delivery-addresses/contacts/'
-    '${_seg(contactId)}/${_seg(addressId)}',
-  );
-
+      _uri('records/delivery-addresses');
+  Uri recordsDeliveryAddressGet(String contactId, String addressId) =>
+      _uri('records/delivery-addresses/${_seg(addressId)}');
   Uri recordsDeliveryAddressUpdate(String contactId, String addressId) =>
       recordsDeliveryAddressGet(contactId, addressId);
-
   Uri recordsDeliveryAddressArchive(String contactId, String addressId) =>
       recordsDeliveryAddressGet(contactId, addressId);
-
-  // ---------------------------------------------------------
-  // Delivery addresses — member-owned
-  // ---------------------------------------------------------
 
   Uri recordsMyDeliveryAddressesList({bool includeArchived = false}) => _uri(
     'records/delivery-addresses/me',
     query: includeArchived ? {'include_archived': 'true'} : null,
   );
-
   Uri recordsMyDeliveryAddressCreate() => _uri('records/delivery-addresses/me');
-
   Uri recordsMyDeliveryAddressGet(String addressId) =>
       _uri('records/delivery-addresses/me/${_seg(addressId)}');
-
   Uri recordsMyDeliveryAddressUpdate(String addressId) =>
       recordsMyDeliveryAddressGet(addressId);
-
   Uri recordsMyDeliveryAddressArchive(String addressId) =>
       recordsMyDeliveryAddressGet(addressId);
 

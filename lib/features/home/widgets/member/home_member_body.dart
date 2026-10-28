@@ -266,12 +266,12 @@ class _MemberActivityColumn extends StatelessWidget {
     }
     return QuietHomePanel(
       child: MemberLatestActivityPanel(
-        contactId: currentUser.contactId,
+        contactId: currentUser.accountNumber,
         accountNumber: currentUser.accountNumber,
         onTitleTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => MemberActivityHistoryScreen(
-              contactId: currentUser.contactId,
+              contactId: currentUser.accountNumber,
               accountNumber: currentUser.accountNumber,
             ),
           ),

@@ -1,106 +1,70 @@
 part of 'routes.dart';
 
 extension AfyaKitClinicalRoutes on AfyaKitRoutes {
-  // ─────────────────────────────────────────────
-  // 📄 Clinical / Prescriptions
-  // ─────────────────────────────────────────────
-
-  /// GET /clinical/prescriptions?profile_id=...
+  /// Independent prescription resource; profile_id is a query/body field.
   Uri clinicalPrescriptionsList({
     String? profileId,
     bool? isActive,
     String? status,
     int perPage = 50,
     int page = 1,
-  }) {
-    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
+  }) => _uri(
+    'clinical/prescriptions',
+    query: {
+      'per_page': '$perPage',
+      'page': '$page',
+      if (profileId != null && profileId.trim().isNotEmpty)
+        'profile_id': profileId.trim(),
+      if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      if (isActive != null) 'is_active': '$isActive',
+    },
+  );
 
-    final pid = (profileId ?? '').trim();
+  Uri clinicalPrescriptionCreate() => _uri('clinical/prescriptions');
+  Uri clinicalPrescriptionGet(String prescriptionId) =>
+      _uri('clinical/prescriptions/${_seg(prescriptionId)}');
+  Uri clinicalPrescriptionUpdate(String prescriptionId) =>
+      clinicalPrescriptionGet(prescriptionId);
+  Uri clinicalPrescriptionDelete(String prescriptionId) =>
+      clinicalPrescriptionGet(prescriptionId);
+  Uri clinicalPrescriptionApprove(String prescriptionId) =>
+      _uri('clinical/prescriptions/${_seg(prescriptionId)}/approve');
+  Uri clinicalPrescriptionStorageAccess() =>
+      _uri('clinical/prescriptions/storage-access');
+  Uri clinicalPrescriptionStorageDownload(String prescriptionId) =>
+      _uri('clinical/prescriptions/${_seg(prescriptionId)}/storage-download');
 
-    if (pid.isNotEmpty) {
-      query['profile_id'] = pid;
-    }
-
-    final st = (status ?? '').trim();
-
-    if (st.isNotEmpty) {
-      query['status'] = st;
-    }
-
-    if (isActive != null) {
-      query['is_active'] = isActive ? 'true' : 'false';
-    }
-
-    return _uri('clinical/prescriptions', query: query);
-  }
-
-  /// GET /clinical/profiles/:profileId/prescriptions
+  // Keep existing Dart call signatures while removing all old nested URLs.
+  // Create/upload callers must include profile_id in their request body.
   Uri clinicalProfilePrescriptionsList({
     required String profileId,
     bool? isActive,
     String? status,
     int perPage = 50,
     int page = 1,
-  }) {
-    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
-
-    final st = (status ?? '').trim();
-
-    if (st.isNotEmpty) {
-      query['status'] = st;
-    }
-
-    if (isActive != null) {
-      query['is_active'] = isActive ? 'true' : 'false';
-    }
-
-    return _uri(
-      'clinical/profiles/${_seg(profileId)}/prescriptions',
-      query: query,
-    );
-  }
-
-  /// GET /clinical/profiles/:profileId/prescriptions/:prescriptionId
+  }) => clinicalPrescriptionsList(
+    profileId: profileId,
+    isActive: isActive,
+    status: status,
+    perPage: perPage,
+    page: page,
+  );
+  Uri clinicalProfilePrescriptionCreate(String profileId) =>
+      clinicalPrescriptionCreate();
   Uri clinicalProfilePrescriptionGet({
     required String profileId,
     required String prescriptionId,
-  }) {
-    return _uri(
-      'clinical/profiles/${_seg(profileId)}/prescriptions/${_seg(prescriptionId)}',
-    );
-  }
-
-  /// POST /clinical/profiles/:profileId/prescriptions
-  Uri clinicalProfilePrescriptionCreate(String profileId) =>
-      _uri('clinical/profiles/${_seg(profileId)}/prescriptions');
-
-  /// PATCH /clinical/profiles/:profileId/prescriptions/:prescriptionId/approve
-  Uri clinicalProfilePrescriptionApprove({
-    required String profileId,
-    required String prescriptionId,
-  }) {
-    return _uri(
-      'clinical/profiles/${_seg(profileId)}/prescriptions/${_seg(prescriptionId)}/approve',
-    );
-  }
-
-  /// PUT /clinical/profiles/:profileId/prescriptions/:prescriptionId
+  }) => clinicalPrescriptionGet(prescriptionId);
   Uri clinicalProfilePrescriptionUpdate({
     required String profileId,
     required String prescriptionId,
-  }) {
-    return _uri(
-      'clinical/profiles/${_seg(profileId)}/prescriptions/${_seg(prescriptionId)}',
-    );
-  }
-
-  /// DELETE /clinical/profiles/:profileId/prescriptions/:prescriptionId
+  }) => clinicalPrescriptionUpdate(prescriptionId);
   Uri clinicalProfilePrescriptionDelete({
     required String profileId,
     required String prescriptionId,
-  }) {
-    return _uri(
-      'clinical/profiles/${_seg(profileId)}/prescriptions/${_seg(prescriptionId)}',
-    );
-  }
+  }) => clinicalPrescriptionDelete(prescriptionId);
+  Uri clinicalProfilePrescriptionApprove({
+    required String profileId,
+    required String prescriptionId,
+  }) => clinicalPrescriptionApprove(prescriptionId);
 }

@@ -66,7 +66,7 @@ class HomeScreen extends ConsumerWidget {
     return switch (effectiveEntry) {
       EntryMode.member => HomeMemberBody(
         key: ValueKey<String>(
-          'member-home-body-${user?.contactId ?? 'unknown'}',
+          'member-home-body-${user?.accountNumber ?? 'unknown'}',
         ),
         user: user,
       ),
@@ -87,7 +87,7 @@ class HomeScreen extends ConsumerWidget {
     return switch (effectiveEntry) {
       EntryMode.member => MemberHomeQuickActions(
         key: ValueKey<String>(
-          'member-home-quick-actions-${user?.contactId ?? 'unknown'}',
+          'member-home-quick-actions-${user?.accountNumber ?? 'unknown'}',
         ),
         user: user,
         onChat: messagingEnabled ? () => _openChat(context) : null,

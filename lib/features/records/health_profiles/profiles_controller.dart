@@ -360,6 +360,72 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     }
   }
 
+  /// Administrative hard deletion, never available in member or Contact scope.
+  Future<void> permanentlyDelete(
+    String profileId, {
+    required String confirmation,
+    required String reason,
+    required bool retentionReviewed,
+  }) async {
+    if (isContactScoped) {
+      throw StateError('Permanent deletion is restricted to platform administration.');
+    }
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      await _service.permanentlyDelete(
+        profileId,
+        confirmation: confirmation,
+        reason: reason,
+        retentionReviewed: retentionReviewed,
+      );
+      state = state.copyWith(
+        items: state.items.where((p) => p.profileId != profileId).toList(growable: false),
+        isSaving: false,
+        clearError: true,
+      );
+    } catch (error) {
+      state = state.copyWith(isSaving: false, error: 'Permanent deletion failed: $error');
+      rethrow;
+    }
+  }
+
+  /// Deactivates a Health Profile, keeping it visible when viewing all/inactive.
+  Future<void> deactivate(String profileId) async {
+    if (isContactScoped) {
+      throw StateError('Only unscoped staff may deactivate a profile.');
+    }
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      await _service.deactivate(profileId);
+      await load();
+      state = state.copyWith(isSaving: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false, error: 'Failed to deactivate profile: $e',
+      );
+      rethrow;
+    }
+  }
+
+  /// Restores the profile record, not any previously disabled contact links.
+  Future<Profile> reactivate(String profileId) async {
+    if (isContactScoped) {
+      throw StateError('Only unscoped staff may reactivate a profile.');
+    }
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.reactivate(profileId);
+      await load();
+      state = state.copyWith(isSaving: false, clearError: true);
+      return profile;
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false, error: 'Failed to reactivate profile: $e',
+      );
+      rethrow;
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Staff direct profile-contact links
   // ─────────────────────────────────────────────

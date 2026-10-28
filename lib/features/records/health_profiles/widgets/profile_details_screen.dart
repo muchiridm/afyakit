@@ -1,9 +1,11 @@
 // lib/features/records/health_profiles/widgets/profile_details_screen.dart
 
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_associations_section.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +16,18 @@ import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 
+/// UI-only permission check. The API independently verifies the Firebase token.
+/// Only the canonical `superadmin` claim grants platform authority.
+final healthProfileSuperadminClaimProvider = FutureProvider.autoDispose<bool>((
+  ref,
+) async {
+  final user = fb.FirebaseAuth.instance.currentUser;
+  if (user == null) return false;
+
+  final token = await user.getIdTokenResult(true);
+  return token.claims?['superadmin'] == true;
+});
+
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
   const ProfileDetailsScreen({
     super.key,
@@ -21,6 +35,7 @@ class ProfileDetailsScreen extends ConsumerStatefulWidget {
     this.accountNumber,
     this.memberMode,
     this.allowExplicitContactLink = false,
+    this.canReviewPurgeDependencies = false,
   });
 
   final Profile profile;
@@ -31,6 +46,11 @@ class ProfileDetailsScreen extends ConsumerStatefulWidget {
 
   /// Staff/admin mode only.
   final bool allowExplicitContactLink;
+
+  /// Retained for compatibility with existing ProfilesScreen callers.
+  /// Review visibility now uses the verified Firebase superadmin claim directly;
+  /// this caller-provided flag does not grant permissions.
+  final bool canReviewPurgeDependencies;
 
   @override
   ConsumerState<ProfileDetailsScreen> createState() =>
@@ -111,54 +131,216 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     }
   }
 
-  Future<void> _deleteProfile(Profile profile) async {
-    final confirmed = await showDialog<bool>(
+  Future<bool> _confirmAction({
+    required String title,
+    required String message,
+    required String action,
+  }) async {
+    final value = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(
-          widget.allowExplicitContactLink
-              ? 'Delete Health Profile'
-              : 'Remove Health Profile',
-        ),
-        content: Text(
-          widget.allowExplicitContactLink
-              ? 'Delete ${profile.fullName}?'
-              : 'Remove ${profile.fullName} from your linked profiles?',
-        ),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(widget.allowExplicitContactLink ? 'Delete' : 'Remove'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(action),
           ),
         ],
       ),
     );
+    return value == true;
+  }
 
-    if (confirmed != true || !mounted) return;
-
+  Future<void> _deactivateProfile(Profile profile) async {
+    final confirmed = await _confirmAction(
+      title: 'Deactivate Health Profile',
+      message:
+          'Deactivate ${profile.fullName}? The profile and its history '
+          'will be retained, but existing Contact associations will be disabled.',
+      action: 'Deactivate',
+    );
+    if (!confirmed || !mounted) return;
     try {
-      await _controller.remove(profile.profileId);
-
+      await _controller.deactivate(profile.profileId);
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.allowExplicitContactLink
-                ? 'Health Profile deleted'
-                : 'Health Profile removed',
+        const SnackBar(content: Text('Health Profile deactivated')),
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) _showErrorFromState();
+    }
+  }
+
+  Future<void> _reactivateProfile(Profile profile) async {
+    final confirmed = await _confirmAction(
+      title: 'Reactivate Health Profile',
+      message:
+          'Reactivate ${profile.fullName}? Previously deactivated '
+          'Contact associations will not be restored automatically.',
+      action: 'Reactivate',
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await _controller.reactivate(profile.profileId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Health Profile reactivated')),
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) _showErrorFromState();
+    }
+  }
+
+  Future<void> _reviewDeletionDependencies(Profile profile) async {
+    try {
+      final report = await ref.read(profilesServiceProvider)
+          .inspectPurgeDependencies(profile.profileId);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Permanent deletion review'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Health Profile ${report.profileId}'),
+                  const SizedBox(height: 12),
+                  Text(report.canPurge
+                      ? 'No technical blockers detected. Retention review is still required.'
+                      : 'Permanent deletion is blocked by the backend.'),
+                  for (final entry in report.blockers.entries)
+                    if (entry.value) Text('Blocked: ${entry.key.replaceAll('_', ' ')}'),
+                  if (report.references.values.any((found) => found)) ...[
+                    const SizedBox(height: 12),
+                    const Text('Independent or historical references retained:'),
+                    for (final entry in report.references.entries)
+                      if (entry.value) Text('• ${entry.key.replaceAll('_', ' ')}'),
+                  ],
+                  if (report.unchecked.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Manual reviews still required:'),
+                    for (final item in report.unchecked)
+                      Text('• ${item.replaceAll('_', ' ')}'),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close')),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Dependency review unavailable: $error')),
+      );
+    }
+  }
+
+  Future<void> _permanentlyDeleteProfile(Profile profile) async {
+    if (_memberMode || widget.allowExplicitContactLink == false || profile.isActive) return;
+    final report = await ref.read(profilesServiceProvider)
+        .inspectPurgeDependencies(profile.profileId);
+    if (!mounted) return;
+    if (!report.canPurge) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Deletion blocked. Review profile dependencies.')),
+      );
+      await _reviewDeletionDependencies(profile);
+      return;
+    }
+    final idController = TextEditingController();
+    final reasonController = TextEditingController();
+    var reviewed = false;
+    try {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, update) => AlertDialog(
+            title: const Text('Permanently delete Health Profile'),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('This permanently removes ${profile.profileId}. '
+                        'Independent medical, financial and audit records remain.'),
+                    const SizedBox(height: 12),
+                    Text('Type ${profile.profileId} to confirm:'),
+                    TextField(
+                      controller: idController,
+                      onChanged: (_) => update(() {}),
+                      decoration: const InputDecoration(labelText: 'Health Profile ID'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: reasonController,
+                      onChanged: (_) => update(() {}),
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: 'Reason (at least 10 characters)'),
+                    ),
+                    CheckboxListTile(
+                      value: reviewed,
+                      onChanged: (value) => update(() => reviewed = value ?? false),
+                      title: const Text('I have reviewed clinical retention, independent records and legal requirements.'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: reviewed && idController.text.trim() == profile.profileId &&
+                        reasonController.text.trim().length >= 10
+                    ? () => Navigator.of(dialogContext).pop(true)
+                    : null,
+                child: const Text('Delete permanently'),
+              ),
+            ],
           ),
         ),
       );
-
-      Navigator.of(context).pop();
-    } catch (_) {
+      if (approved != true || !mounted) return;
+      await _controller.permanentlyDelete(
+        profile.profileId,
+        confirmation: idController.text,
+        reason: reasonController.text,
+        retentionReviewed: reviewed,
+      );
       if (!mounted) return;
-      _showErrorFromState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Health Profile permanently deleted')),
+      );
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Permanent deletion failed: $error')),
+      );
+    } finally {
+      idController.dispose();
+      reasonController.dispose();
     }
   }
 
@@ -173,6 +355,10 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   Widget build(BuildContext context) {
     final profile = _currentProfile;
     final state = _state;
+    final isPlatformSuperadmin =
+        ref.watch(healthProfileSuperadminClaimProvider).valueOrNull == true;
+    final canReviewDeletion =
+        !_memberMode && widget.allowExplicitContactLink && isPlatformSuperadmin;
     if (_memberMode && profile == null) {
       return AppPage(
         title: 'Health profile',
@@ -207,7 +393,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.isSaving
+            onPressed: state.isSaving || !visibleProfile.isActive
                 ? null
                 : () => _openEditDialog(visibleProfile),
             icon: const Icon(Icons.edit_outlined),
@@ -225,31 +411,72 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                 const SizedBox(height: AppShape.gap14),
                 _ProfileDemographicsCard(profile: visibleProfile),
                 const SizedBox(height: AppShape.gap14),
-                 _ProfileClinicalCard(profile: visibleProfile),
-                 const SizedBox(height: AppShape.gap14),
-                ProfileAssociationsSection(
-                  profile: visibleProfile,
-                  staffMode: widget.allowExplicitContactLink && !_memberMode,
-                ),
+                _ProfileClinicalCard(profile: visibleProfile),
+                const SizedBox(height: AppShape.gap14),
+                if (visibleProfile.isActive)
+                  ProfileAssociationsSection(
+                    profile: visibleProfile,
+                    staffMode: widget.allowExplicitContactLink && !_memberMode,
+                  )
+                else
+                  const AppCard(
+                    child: Text(
+                      'This profile is deactivated. Contact links and '
+                      'family relationships are unavailable until reactivation. '
+                      'Existing links must be reviewed separately.',
+                    ),
+                  ),
                 if ((visibleProfile.notes ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: AppShape.gap14),
                   _ProfileNotesCard(notes: visibleProfile.notes!.trim()),
                 ],
                 const SizedBox(height: AppShape.gap24),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: state.isSaving
-                        ? null
-                        : () => _deleteProfile(visibleProfile),
-                    icon: const Icon(Icons.delete_outline),
-                    label: Text(
-                      widget.allowExplicitContactLink
-                          ? 'Delete Health Profile'
-                          : 'Remove Health Profile',
-                    ),
+                if (widget.allowExplicitContactLink && !_memberMode)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: visibleProfile.isActive
+                        ? TextButton.icon(
+                            onPressed: state.isSaving
+                                ? null
+                                : () => _deactivateProfile(visibleProfile),
+                            icon: const Icon(Icons.pause_circle_outline),
+                            label: const Text('Deactivate Health Profile'),
+                          )
+                        : Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: state.isSaving
+                                    ? null
+                                    : () => _reactivateProfile(visibleProfile),
+                                icon: const Icon(Icons.restore),
+                                label: const Text('Reactivate'),
+                              ),
+                              if (canReviewDeletion)
+                                OutlinedButton.icon(
+                                  onPressed: state.isSaving
+                                      ? null
+                                      : () => _reviewDeletionDependencies(
+                                          visibleProfile,
+                                        ),
+                                  icon: const Icon(Icons.fact_check_outlined),
+                                  label: const Text(
+                                    'Review deletion eligibility',
+                                  ),
+                                ),
+                              if (canReviewDeletion)
+                                TextButton.icon(
+                                  onPressed: state.isSaving
+                                      ? null
+                                      : () => _permanentlyDeleteProfile(visibleProfile),
+                                  icon: const Icon(Icons.delete_forever_outlined),
+                                  label: const Text('Delete permanently'),
+                                ),
+                            ],
+                          ),
                   ),
-                ),
               ],
             ),
           ),
@@ -365,7 +592,6 @@ class _ProfileDemographicsCard extends StatelessWidget {
   }
 }
 
-
 class _ProfileNotesCard extends StatelessWidget {
   const _ProfileNotesCard({required this.notes});
 
@@ -447,17 +673,37 @@ class _ProfileClinicalCard extends StatelessWidget {
   final Profile profile;
   @override
   Widget build(BuildContext context) => AppCard(
-    title:'Medical history', icon:Icons.medical_information_outlined,
-    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      _InfoRow(label:'Allergy status',value:profile.allergyStatus.name),
-      for(final a in profile.allergies) _InfoRow(label:'Allergy',value:'${a.substance}${a.reaction==null?'':' — ${a.reaction}'}'),
-      for(final c in profile.conditions) _InfoRow(label:'Condition',value:'${c.name} (${c.status.name})'),
-      for(final v in profile.vaccinations) _InfoRow(label:'Vaccination',value:'${v.vaccineName} (${v.status.name})'),
-      _InfoRow(label:'Past medical history',value:profile.pastMedicalHistory),
-      _InfoRow(label:'Surgical history',value:profile.surgicalHistory),
-      _InfoRow(label:'Family history',value:profile.familyHistory),
-      _InfoRow(label:'Social history',value:profile.socialHistory),
-      _InfoRow(label:'Current medications',value:profile.currentMedications),
-    ]),
+    title: 'Medical history',
+    icon: Icons.medical_information_outlined,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _InfoRow(label: 'Allergy status', value: profile.allergyStatus.name),
+        for (final a in profile.allergies)
+          _InfoRow(
+            label: 'Allergy',
+            value:
+                '${a.substance}${a.reaction == null ? '' : ' — ${a.reaction}'}',
+          ),
+        for (final c in profile.conditions)
+          _InfoRow(label: 'Condition', value: '${c.name} (${c.status.name})'),
+        for (final v in profile.vaccinations)
+          _InfoRow(
+            label: 'Vaccination',
+            value: '${v.vaccineName} (${v.status.name})',
+          ),
+        _InfoRow(
+          label: 'Past medical history',
+          value: profile.pastMedicalHistory,
+        ),
+        _InfoRow(label: 'Surgical history', value: profile.surgicalHistory),
+        _InfoRow(label: 'Family history', value: profile.familyHistory),
+        _InfoRow(label: 'Social history', value: profile.socialHistory),
+        _InfoRow(
+          label: 'Current medications',
+          value: profile.currentMedications,
+        ),
+      ],
+    ),
   );
 }

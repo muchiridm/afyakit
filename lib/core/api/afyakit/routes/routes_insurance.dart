@@ -44,6 +44,10 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
   Uri insuranceMembershipDelete(String membershipId) =>
       _uri('insurance/memberships/${_seg(membershipId)}');
 
+  Uri insuranceClaimPackCreateCanonical() => _uri('insurance/claim-packs');
+  Uri insuranceClaimPackById(String claimPackId) =>
+      _uri('insurance/claim-packs/${_seg(claimPackId)}');
+
   Uri insuranceClaimPacksList({
     String? search,
     String? membershipId,
@@ -124,40 +128,32 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       query['is_active'] = isActive ? 'true' : 'false';
     }
 
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs',
-      query: query,
-    );
+    query['profile_id'] = profileId;
+    return _uri('insurance/claim-packs', query: query);
   }
 
   Uri insuranceClaimPackGet({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 
   Uri insuranceClaimPackCreate({required String profileId}) {
-    return _uri('insurance/profiles/${_seg(profileId)}/claim-packs');
+    return _uri('insurance/claim-packs');
   }
 
   Uri insuranceClaimPackUpdate({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 
   Uri insuranceClaimPackDelete({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 }
