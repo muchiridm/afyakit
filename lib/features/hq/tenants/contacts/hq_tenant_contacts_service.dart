@@ -82,6 +82,7 @@ class HqTenantContactDependencies {
   final bool requiresIndependentRetentionReview;
 }
 
+/// HQ two-person review status. Approval is NOT a permanent deletion.
 class HqTenantContactsService {
   const HqTenantContactsService(this._dio, this._routes);
   final Dio _dio;
@@ -155,6 +156,26 @@ class HqTenantContactsService {
       deletionAuthorised: data['deletion_authorised'] == true,
       requiresIndependentRetentionReview: data['requires_independent_retention_review'] == true,
     );
+  }
+
+  Future<void> permanentlyDelete(String tenantId, String accountNumber, {required String reason}) async {
+    final id = _tenant(tenantId);
+    final account = _account(accountNumber);
+    await _dio.deleteUri(
+      _routes.permanentlyDeleteHqTenantContact(id, account),
+      data: <String, Object?>{
+        'confirm_account_number': account,
+        'reason': _validReason(reason),
+      },
+    );
+  }
+
+  static String _validReason(String reason) {
+    final explanation = reason.trim();
+    if (explanation.length < 15 || explanation.length > 1000) {
+      throw ArgumentError.value(reason, 'reason', 'Must contain 15–1000 characters');
+    }
+    return explanation;
   }
 
   Future<void> archive(String tenantId, String accountNumber, {required String reason}) =>

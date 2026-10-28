@@ -41,6 +41,14 @@ class HqTenantContactsController extends StateNotifier<HqContactActionState> {
 
   Future<bool> restore(String tenantId, String accountNumber, String reason) =>
       _perform(tenantId, (service) async { await service.restore(tenantId, accountNumber, reason: reason); });
+
+  Future<bool> permanentlyDelete(String tenantId, String accountNumber, String reason) =>
+      _perform(tenantId, (service) async {
+        await service.permanentlyDelete(tenantId, accountNumber, reason: reason);
+        ref.invalidate(hqTenantContactProvider((tenantId: tenantId, accountNumber: accountNumber)));
+        ref.invalidate(hqTenantContactDependenciesProvider((tenantId: tenantId, accountNumber: accountNumber)));
+      });
+
 }
 
 final hqTenantContactsControllerProvider = StateNotifierProvider.autoDispose<

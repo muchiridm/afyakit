@@ -66,6 +66,11 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
   Uri restoreHqTenantContact(String tenantId, String accountNumber) =>
       _uriCore('${_hqTenantContactPath(tenantId, accountNumber)}/restore');
 
+  /// DELETE /api/hq/tenants/:tenantId/contacts/:accountNumber
+  /// Body: confirm_account_number, reason.
+  Uri permanentlyDeleteHqTenantContact(String tenantId, String accountNumber) =>
+      _hqTenantContact(tenantId, accountNumber);
+
   // ═════════════════════════════════════════════
   // Tenant apps
   // /api/hq/tenants/:tenantId/apps

@@ -23,3 +23,4 @@ final hqTenantContactDependenciesProvider = FutureProvider.autoDispose
   final service = await ref.watch(hqTenantContactsServiceProvider.future);
   return service.dependencies(key.tenantId, key.accountNumber);
 });
+

@@ -41,14 +41,43 @@ class AppDomainsScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: state.busy
+        onPressed: state.busy || state.loading
             ? null
             : () async {
                 final domain = await _promptDomain(context);
 
-                if (domain != null && domain.trim().isNotEmpty) {
-                  await ctrl.addDomain(domain);
-                }
+                if (domain == null || domain.trim().isEmpty) return;
+
+                final cleanDomain = domain.trim().toLowerCase();
+
+                debugPrint(
+                  '🌐 [Domains] Adding $cleanDomain '
+                  'to $cleanTenantId/$cleanAppId',
+                );
+
+                await ctrl.addDomain(cleanDomain);
+
+                if (!context.mounted) return;
+
+                final latest = ref.read(appDomainsControllerProvider(scope));
+
+                final error = latest.error;
+                final created = latest.domains.any(
+                  (item) => item.domain == cleanDomain,
+                );
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      error != null
+                          ? 'Unable to add $cleanDomain: $error'
+                          : created
+                          ? '$cleanDomain added successfully'
+                          : '$cleanDomain was not returned by the server',
+                    ),
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
               },
         icon: const Icon(Icons.add),
         label: const Text('Add domain'),
