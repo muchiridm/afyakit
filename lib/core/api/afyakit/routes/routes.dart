@@ -2,7 +2,6 @@
 
 import 'package:afyakit/core/api/afyakit/config.dart';
 import 'package:afyakit/core/api/shared/uri.dart';
-import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
 
 part 'routes_hq.dart';
 part 'routes_auth.dart';
@@ -80,14 +79,10 @@ class AfyaKitRoutes {
   static String _cleanPath(String path) {
     final value = path.trim();
 
-    if (value.isEmpty) {
-      return '';
-    }
+    if (value.isEmpty) return '';
 
     return value.startsWith('/') ? value.substring(1) : value;
   }
 
-  String _seg(String value) {
-    return Uri.encodeComponent(value.trim());
-  }
+  String _seg(String value) => Uri.encodeComponent(value.trim());
 }

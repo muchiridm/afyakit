@@ -1,11 +1,11 @@
+// lib/features/home/activities/feed/activity_feed_adapter.dart
+
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart';
 import 'package:afyakit/features/home/activities/shared/activity_event_tile.dart';
 import 'package:afyakit/features/home/activities/shared/activity_time_format.dart';
 import 'package:afyakit/features/home/models/activity_entry.dart';
-
-import 'package:afyakit/features/inventory/records/issues/extensions/issue_status_x.dart';
 
 typedef ActivityFeedTapBuilder =
     VoidCallback? Function(ActivityFeedRecord activity);
@@ -19,9 +19,9 @@ typedef ActivityFeedSubtitleBuilder =
 abstract final class ActivityFeedAdapter {
   const ActivityFeedAdapter._();
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Feed conversion
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   static List<ActivityEntry> fromFeed(
     List<ActivityFeedRecord> items, {
@@ -59,13 +59,13 @@ abstract final class ActivityFeedAdapter {
     );
   }
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Event titles
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   static String _title(ActivityFeedRecord activity) {
     return switch (activity.type.trim().toLowerCase()) {
-      // Core Records — current and legacy event names
+      // Core Records
       'health_profile_created' ||
       'profile_created' ||
       'patient_created' => 'Health profile created',
@@ -106,12 +106,12 @@ abstract final class ActivityFeedAdapter {
       'health_metric_updated' => 'Health metric updated',
       'health_metric_deleted' => 'Health metric removed',
 
-      // Retail
+      // Contacts
       'contact_created' => 'Contact created',
       'contact_updated' => 'Contact updated',
       'contact_deleted' => 'Contact deleted',
 
-      // Inventory
+      // Inventory Issues
       'inventory_issue_created' => _issueTitle(
         activity,
         transfer: 'Transfer request created',
@@ -139,20 +139,19 @@ abstract final class ActivityFeedAdapter {
       'inventory_issue_cancelled' => 'Issue request cancelled',
 
       'inventory_issue_issued' => 'Stock issued',
-
       'inventory_issue_received' => 'Stock received',
 
       'inventory_issue_disposed' => 'Items disposed',
-
       'inventory_issue_partially_disposed' => 'Items partially disposed',
 
       'inventory_issue_dispensed' => 'Items dispensed',
-
       'inventory_issue_partially_dispensed' => 'Items partially dispensed',
 
+      // Inventory Deliveries
       'inventory_delivery_recorded' => 'Delivery recorded',
+      'inventory_delivery_finalized' => 'Delivery finalized',
 
-      // All other events use their backend-provided titles.
+      // Other events use the backend-provided title.
       _ => _hasText(activity.title) ? activity.title.trim() : 'Activity',
     };
   }
@@ -186,16 +185,14 @@ abstract final class ActivityFeedAdapter {
     return fallback;
   }
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Subtitles
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   static String? _subtitle(ActivityFeedRecord activity) {
     final subtitle = activity.subtitle?.trim();
 
-    if (_hasText(subtitle)) {
-      return subtitle;
-    }
+    if (_hasText(subtitle)) return subtitle;
 
     final label = activity.entity.label?.trim();
 
@@ -210,68 +207,92 @@ abstract final class ActivityFeedAdapter {
 
     final status = activity.status?.trim();
 
-    if (_hasText(status)) {
-      return status;
-    }
+    if (_hasText(status)) return status;
 
-    // Do not expose raw member/contact identifiers
-    // merely to populate an activity subtitle.
+    // Avoid exposing raw contact/member identifiers
+    // merely to fill a missing subtitle.
     return null;
   }
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Status presentation
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   static _ActivityStatusPresentation? _statusPresentation(
     ActivityFeedRecord activity,
   ) {
-    final rawStatus = activity.status?.trim();
-
-    if (!_hasText(rawStatus)) {
+    if (activity.entity.type != ActivityEntityType.inventoryIssue) {
       return null;
     }
 
-    // Reuse the inventory domain's existing
-    // status labels and colours.
-    if (activity.entity.type == ActivityEntityType.inventoryIssue) {
-      final status = _issueStatusFromName(rawStatus!);
+    final raw = activity.status?.trim();
 
-      if (status != null) {
-        return _ActivityStatusPresentation(
-          label: status.label,
-          color: status.color,
-        );
-      }
-    }
+    if (!_hasText(raw)) return null;
 
-    return null;
-  }
-
-  static IssueStatus? _issueStatusFromName(String value) {
-    final normalized = value
-        .trim()
+    final normalized = raw!
+        .toLowerCase()
         .replaceAll('_', '')
         .replaceAll('-', '')
-        .toLowerCase();
+        .replaceAll(' ', '');
 
-    for (final status in IssueStatus.values) {
-      final candidate = status.name
-          .replaceAll('_', '')
-          .replaceAll('-', '')
-          .toLowerCase();
+    return switch (normalized) {
+      'pending' || 'requested' => const _ActivityStatusPresentation(
+        label: 'Pending',
+        color: Colors.orange,
+      ),
 
-      if (candidate == normalized) {
-        return status;
-      }
-    }
+      'approved' => const _ActivityStatusPresentation(
+        label: 'Approved',
+        color: Colors.blue,
+      ),
 
-    return null;
+      'rejected' => const _ActivityStatusPresentation(
+        label: 'Rejected',
+        color: Colors.red,
+      ),
+
+      'cancelled' || 'canceled' => const _ActivityStatusPresentation(
+        label: 'Cancelled',
+        color: Colors.grey,
+      ),
+
+      'issued' => const _ActivityStatusPresentation(
+        label: 'Issued',
+        color: Colors.teal,
+      ),
+
+      'received' => const _ActivityStatusPresentation(
+        label: 'Received',
+        color: Colors.green,
+      ),
+
+      'dispensed' => const _ActivityStatusPresentation(
+        label: 'Dispensed',
+        color: Colors.green,
+      ),
+
+      'disposed' => const _ActivityStatusPresentation(
+        label: 'Disposed',
+        color: Colors.green,
+      ),
+
+      'partiallydispensed' => const _ActivityStatusPresentation(
+        label: 'Partially dispensed',
+        color: Colors.orange,
+      ),
+
+      'partiallydisposed' => const _ActivityStatusPresentation(
+        label: 'Partially disposed',
+        color: Colors.orange,
+      ),
+
+      _ => null,
+    };
   }
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Event icons
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   static IconData _iconForType(String type) {
     final event = type.trim().toLowerCase();
@@ -326,6 +347,10 @@ abstract final class ActivityFeedAdapter {
     // Inventory
     if (event.startsWith('inventory_delivery_')) {
       return Icons.local_shipping_outlined;
+    }
+
+    if (event.startsWith('inventory_issue_')) {
+      return Icons.move_to_inbox_outlined;
     }
 
     if (event.startsWith('inventory_')) {

@@ -1,21 +1,22 @@
-import 'package:afyakit/core/api/afyakit/providers.dart';
-import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
+// lib/core/api/afyakit/tests/api_test_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'api_test_service.dart';
 
-/// STATE
 class ApiTestState {
-  final String itemIdInput;
-  final String batchIdInput;
-  final bool loading;
-  final List<String> logLines;
-
   const ApiTestState({
     this.itemIdInput = '',
     this.batchIdInput = '',
     this.loading = false,
     this.logLines = const <String>[],
   });
+
+  final String itemIdInput;
+  final String batchIdInput;
+  final bool loading;
+  final List<String> logLines;
 
   ApiTestState copyWith({
     String? itemIdInput,
@@ -32,131 +33,164 @@ class ApiTestState {
   }
 }
 
-/// PROVIDERS
+// ─────────────────────────────────────────────
+// Providers
+// ─────────────────────────────────────────────
+
 final apiTestServiceProvider = Provider<ApiTestService>((ref) {
   final client = ref.watch(afyakitClientFutureProvider).requireValue;
+
   return ApiTestService(client);
 });
 
 final apiTestControllerProvider =
-    StateNotifierProvider<ApiTestController, ApiTestState>((ref) {
-      final svc = ref.watch(apiTestServiceProvider);
-      return ApiTestController(svc);
-    });
+    StateNotifierProvider<ApiTestController, ApiTestState>(
+      (ref) => ApiTestController(ref.watch(apiTestServiceProvider)),
+    );
 
-/// CONTROLLER
+// ─────────────────────────────────────────────
+// Controller
+// ─────────────────────────────────────────────
+
 class ApiTestController extends StateNotifier<ApiTestState> {
-  final ApiTestService _svc;
-  ApiTestController(this._svc) : super(const ApiTestState());
+  ApiTestController(this._service) : super(const ApiTestState());
 
-  void setItemId(String v) => state = state.copyWith(itemIdInput: v);
-  void setBatchId(String v) => state = state.copyWith(batchIdInput: v);
+  final ApiTestService _service;
 
-  void _clearAndStart() =>
-      state = state.copyWith(loading: true, logLines: <String>[]);
-  void _stop() => state = state.copyWith(loading: false);
-  void _log(String line) =>
-      state = state.copyWith(logLines: [...state.logLines, line]);
+  void setItemId(String value) {
+    state = state.copyWith(itemIdInput: value);
+  }
 
-  // ---------------- Actions ----------------
+  void setBatchId(String value) {
+    state = state.copyWith(batchIdInput: value);
+  }
 
-  Future<void> runTests() async {
+  void _start() {
+    state = state.copyWith(loading: true, logLines: <String>[]);
+  }
+
+  void _stop() {
+    if (!mounted) return;
+    state = state.copyWith(loading: false);
+  }
+
+  void _log(String message) {
+    if (!mounted) return;
+
+    state = state.copyWith(logLines: [...state.logLines, message]);
+  }
+
+  Future<void> _run(Future<void> Function() operation) async {
     if (state.loading) return;
-    _clearAndStart();
+
+    _start();
+
     try {
-      final ping = await _svc.ping();
-      _log('✅ /ping → ${ping.statusCode}');
-      _log(_svc.prettyJson(ping.data));
-    } catch (e, st) {
-      _log('❌ Ping failed: $e');
-      _log(st.toString());
+      await operation();
+    } catch (error) {
+      _log('❌ $error');
+    } finally {
+      _stop();
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Connectivity and item lookup
+  // ─────────────────────────────────────────────
+
+  Future<void> runTests() => _run(() async {
+    try {
+      final response = await _service.ping();
+
+      _log('✅ GET /ping → ${response.statusCode}');
+      _log(_service.prettyJson(response.data));
+    } catch (error) {
+      _log('❌ Ping failed: $error');
     }
 
     final itemId = state.itemIdInput.trim();
-    if (itemId.isNotEmpty) {
-      try {
-        final res = await _svc.getItemById(itemId);
-        _log('📦 /inventory/$itemId → ${res.statusCode}');
-        _log(_svc.prettyJson(res.data));
-      } catch (e, st) {
-        _log('❌ Failed to get item: $e');
-        _log(st.toString());
-      }
-    }
-    _stop();
-  }
 
-  Future<void> searchItemAcrossTypes() async {
-    if (state.loading) return;
-    _clearAndStart();
-    final target = state.itemIdInput.trim();
-    if (target.isEmpty) {
-      _log('ℹ️ Enter an Item ID or docId first.');
-      _stop();
+    if (itemId.isEmpty) return;
+
+    try {
+      final response = await _service.getItemById(itemId);
+
+      _log(
+        '✅ GET /inventory/items/$itemId '
+        '→ ${response.statusCode}',
+      );
+
+      _log(_service.prettyJson(response.data));
+    } catch (error) {
+      _log('❌ Item lookup failed: $error');
+    }
+  });
+
+  // ─────────────────────────────────────────────
+  // Item lookup
+  // ─────────────────────────────────────────────
+
+  Future<void> searchItemAcrossTypes() => searchItemById();
+
+  Future<void> searchItemById() => _run(() async {
+    final itemId = state.itemIdInput.trim();
+
+    if (itemId.isEmpty) {
+      _log('Enter an Item ID first.');
       return;
     }
-    try {
-      for (final t in ItemTypeX.searchable) {
-        try {
-          final list = await _svc.listInventory(t);
-          for (final it in list) {
-            final matches =
-                it.id == target || (it.docId != null && it.docId == target);
-            if (matches) {
-              _log('✅ Found in "${t.apiName}":');
-              _log('- 🔑 docId: ${it.docId ?? '(unknown)'}');
-              _log('- 🆔 id: ${it.id}');
-              _log(
-                _svc.prettyJson({
-                  'id': it.id,
-                  'docId': it.docId,
-                  'genericName': it.genericName,
-                  'brandName': it.brandName,
-                  'description': it.description,
-                  'itemType': it.itemType,
-                }),
-              );
-              _stop();
-              return;
-            }
-          }
-        } catch (e, st) {
-          _log('❌ Error in "${t.apiName}": $e');
-          _log(st.toString());
-        }
-      }
-      _log('🕵️ Not found in any inventory collection.');
-    } finally {
-      _stop();
-    }
-  }
 
-  Future<void> searchBatchId() async {
-    if (state.loading) return;
-    _clearAndStart();
+    final response = await _service.getItemById(itemId);
+
+    _log('✅ Item found: $itemId');
+    _log('HTTP ${response.statusCode}');
+    _log(_service.prettyJson(response.data));
+  });
+
+  // ─────────────────────────────────────────────
+  // Batch lookup
+  // ─────────────────────────────────────────────
+
+  Future<void> searchBatchId() => _run(() async {
     final batchId = state.batchIdInput.trim();
+
     if (batchId.isEmpty) {
-      _log('ℹ️ Enter a Batch ID first.');
-      _stop();
+      _log('Enter a Batch ID first.');
       return;
     }
 
-    try {
-      final found = await _svc.searchBatchAcrossStores(batchId);
-      if (found.batchJson != null) {
-        _log(
-          '✅ Batch found '
-          '${found.storeId != null ? 'in store "${found.storeId}"' : '(store unknown)'}',
-        );
-        _log(_svc.prettyJson(found.batchJson));
-      } else {
-        _log('🕵️ Batch "$batchId" not found in any store.');
-      }
-    } catch (e, st) {
-      _log('❌ Batch search failed: $e');
-      _log(st.toString());
-    } finally {
-      _stop();
-    }
-  }
+    final response = await _service.getBatchById(batchId);
+
+    _log('✅ Batch found: $batchId');
+    _log('HTTP ${response.statusCode}');
+    _log(_service.prettyJson(response.data));
+  });
+
+  // ─────────────────────────────────────────────
+  // Inventory diagnostics
+  // ─────────────────────────────────────────────
+
+  Future<void> listItemTypes() => _run(() async {
+    final response = await _service.listItemTypes();
+
+    _log('GET /inventory/items/types');
+    _log('HTTP ${response.statusCode}');
+    _log(_service.prettyJson(response.data));
+  });
+
+  Future<void> listStores() => _run(() async {
+    final response = await _service.listLocations(locationType: 'store');
+
+    _log('GET /inventory/locations?location_type=store');
+    _log('HTTP ${response.statusCode}');
+    _log(_service.prettyJson(response.data));
+  });
+
+  Future<void> listInventoryBatches() => _run(() async {
+    final response = await _service.listBatches();
+
+    _log('GET /inventory/batches');
+    _log('HTTP ${response.statusCode}');
+    _log(_service.prettyJson(response.data));
+  });
 }

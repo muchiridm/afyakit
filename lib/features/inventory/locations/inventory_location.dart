@@ -1,82 +1,59 @@
-import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-
 class InventoryLocation {
-  final String id; // e.g. "store_004"
-  final String tenantId;
-  final String name; // e.g. "Main Pharmacy Store"
-  final InventoryLocationType type;
-  final String? createdBy;
-  final DateTime? createdOn;
-
-  // Computed
-  String get normalizedName => name.trim().toLowerCase();
-
   const InventoryLocation({
     required this.id,
-    required this.tenantId,
     required this.name,
-    required this.type,
-    this.createdBy,
-    this.createdOn,
+    required this.typeId,
+    required this.isArchived,
+    this.description,
   });
 
-  factory InventoryLocation.fromMap(String id, Map<String, dynamic>? map) {
-    if (map == null) {
-      throw ArgumentError('Map is null for id=$id');
+  final String id;
+  final String name;
+  final String typeId;
+  final String? description;
+  final bool isArchived;
+
+  bool get isStore => typeId == 'store';
+
+  factory InventoryLocation.fromJson(Map<String, dynamic> json) {
+    String requiredString(String key) {
+      final value = json[key];
+      if (value is! String || value.trim().isEmpty) {
+        throw FormatException('Location is missing $key');
+      }
+      return value;
     }
 
-    final typeRaw = map['type'];
-    final createdOnRaw = map['createdOn'];
-
     return InventoryLocation(
-      id: id,
-      tenantId: map['tenantId'] ?? 'unknown',
-      name: (map['name'] ?? 'Unnamed').toString().trim(),
-      type: (typeRaw?.toString() ?? 'store').toInventoryType(),
-      createdBy: map['createdBy']?.toString(),
-      createdOn: createdOnRaw != null
-          ? DateTime.tryParse(createdOnRaw.toString())
-          : null,
+      id: requiredString('location_id'),
+      name: requiredString('name'),
+      typeId: requiredString('location_type'),
+      description: json['description']?.toString(),
+      isArchived: json['is_archived'] == true,
     );
   }
+}
 
-  Map<String, dynamic> toMap() => {
-    'tenantId': tenantId,
-    'name': name.trim(),
-    'type': type.asString,
-    if (createdBy != null) 'createdBy': createdBy,
-    if (createdOn != null) 'createdOn': createdOn!.toIso8601String(),
-  };
+class InventoryLocationPage {
+  const InventoryLocationPage({
+    required this.locations,
+    required this.page,
+    required this.hasMore,
+  });
 
-  InventoryLocation copyWith({
-    String? id,
-    String? tenantId,
-    String? name,
-    InventoryLocationType? type,
-    String? createdBy,
-    DateTime? createdOn,
-  }) {
-    return InventoryLocation(
-      id: id ?? this.id,
-      tenantId: tenantId ?? this.tenantId,
-      name: name ?? this.name,
-      type: type ?? this.type,
-      createdBy: createdBy ?? this.createdBy,
-      createdOn: createdOn ?? this.createdOn,
-    );
-  }
+  final List<InventoryLocation> locations;
+  final int page;
+  final bool hasMore;
+}
 
-  @override
-  String toString() => '$name (${type.name}) [$id]';
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is InventoryLocation && id == other.id;
-
-  @override
-  int get hashCode => id.hashCode;
-
-  bool get isStore => type == InventoryLocationType.store;
-  bool get isSource => type == InventoryLocationType.source;
-  bool get isDispensary => type == InventoryLocationType.dispensary;
+class InventoryLocationType {
+  const InventoryLocationType({required this.id, required this.label, required this.isActive});
+  final String id;
+  final String label;
+  final bool isActive;
+  factory InventoryLocationType.fromJson(Map<String, dynamic> json) => InventoryLocationType(
+    id: json['type_id'] as String,
+    label: json['label'] as String,
+    isActive: json['is_active'] == true,
+  );
 }

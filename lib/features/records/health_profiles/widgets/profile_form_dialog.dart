@@ -85,10 +85,12 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
 
   void _prefillSelf(NativeContact c) {
     if (_name.text.trim().isEmpty) _name.text = c.displayName;
-    if (_phone.text.trim().isEmpty)
+    if (_phone.text.trim().isEmpty) {
       _phone.text = c.phone ?? c.mobile ?? c.verifiedPhone ?? '';
-    if (_email.text.trim().isEmpty)
+    }
+    if (_email.text.trim().isEmpty) {
       _email.text = c.email ?? c.verifiedEmail ?? '';
+    }
     if (_nationalId.text.trim().isEmpty) _nationalId.text = c.idNumber ?? '';
   }
 
@@ -603,11 +605,12 @@ class _ContactSearchDialogState extends ConsumerState<_ContactSearchDialog> {
         _loading = false;
       });
     } catch (e) {
-      if (mounted && id == _request)
+      if (mounted && id == _request) {
         setState(() {
           _error = '$e';
           _loading = false;
         });
+      }
     }
   }
 

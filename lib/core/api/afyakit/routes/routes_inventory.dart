@@ -4,59 +4,82 @@ part of 'routes.dart';
 
 extension AfyaKitInventoryRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
-  // 📦 Inventory items
+  // Item types
   // ─────────────────────────────────────────────
 
-  Uri inventory(String itemType) =>
-      _uri('inventory/items', query: {'type': itemType});
+  Uri itemTypes() => _uri('inventory/items/types');
 
-  Uri createItem() => _uri('inventory/items');
+  Uri itemTypeById(String typeId) =>
+      _uri('inventory/items/types/${_seg(typeId)}');
 
-  Uri itemById(String id, {String? type}) => _uri(
-    'inventory/items/${_seg(id)}',
-    query: (type != null && type.trim().isNotEmpty)
-        ? {'type': type.trim()}
-        : null,
+  // ─────────────────────────────────────────────
+  // Inventory items
+  // ─────────────────────────────────────────────
+
+  Uri items({String? itemType}) => _uri(
+    'inventory/items',
+    query: {
+      if (itemType != null && itemType.trim().isNotEmpty)
+        'item_type': itemType.trim(),
+    },
   );
 
+  Uri itemById(String itemId) => _uri('inventory/items/${_seg(itemId)}');
+
+  Uri restoreItem(String itemId) =>
+      _uri('inventory/items/${_seg(itemId)}/restore');
+
   // ─────────────────────────────────────────────
-  // ⚙️ Preferences
+  // Preferences
   // ─────────────────────────────────────────────
 
   Uri preferenceField(String itemType, String field) =>
       _uri('inventory/preferences/${_seg(itemType)}/${_seg(field)}');
 
   // ─────────────────────────────────────────────
-  // 📍 Inventory locations
+  // Inventory locations
   // ─────────────────────────────────────────────
 
-  Uri getTypedLocations(InventoryLocationType type) =>
-      _uri('inventory/locations/${type.asString}');
+  Uri locations({String? locationType}) => _uri(
+    'inventory/locations',
+    query: {
+      if (locationType != null && locationType.trim().isNotEmpty)
+        'location_type': locationType.trim(),
+    },
+  );
 
-  Uri addTypedLocation(InventoryLocationType type) =>
-      _uri('inventory/locations/${type.asString}');
+  Uri locationById(String locationId) =>
+      _uri('inventory/locations/${_seg(locationId)}');
 
-  Uri deleteTypedLocation(InventoryLocationType type, String id) =>
-      _uri('inventory/locations/${type.asString}/${_seg(id)}');
+  Uri restoreLocation(String locationId) =>
+      _uri('inventory/locations/${_seg(locationId)}/restore');
 
-  // ─────────────────────────────────────────────
-  // 🧪 Batches
-  // ─────────────────────────────────────────────
-
-  Uri listBatches(String storeId) =>
-      _uri('inventory/stores/${_seg(storeId)}/batches');
-
-  Uri createBatch(String storeId) =>
-      _uri('inventory/stores/${_seg(storeId)}/batches');
-
-  Uri updateBatch(String storeId, String batchId) =>
-      _uri('inventory/stores/${_seg(storeId)}/batches/${_seg(batchId)}');
-
-  Uri deleteBatch(String storeId, String batchId) =>
-      _uri('inventory/stores/${_seg(storeId)}/batches/${_seg(batchId)}');
+  // Add to AfyaKitInventoryRoutes extension in routes_inventory.dart:
+  Uri locationTypes() => _uri('inventory/locations/types');
+  Uri locationTypeById(String typeId) =>
+      _uri('inventory/locations/types/${_seg(typeId)}');
+  Uri restoreLocationType(String typeId) =>
+      _uri('inventory/locations/types/${_seg(typeId)}/restore');
 
   // ─────────────────────────────────────────────
-  // 📥 Imports
+  // Batches
+  // ─────────────────────────────────────────────
+
+  Uri batches({String? storeId}) => _uri(
+    'inventory/batches',
+    query: {
+      if (storeId != null && storeId.trim().isNotEmpty)
+        'store_id': storeId.trim(),
+    },
+  );
+
+  Uri batchById(String batchId) => _uri('inventory/batches/${_seg(batchId)}');
+
+  Uri restoreBatch(String batchId) =>
+      _uri('inventory/batches/${_seg(batchId)}/restore');
+
+  // ─────────────────────────────────────────────
+  // Imports
   // ─────────────────────────────────────────────
 
   Uri importInventory({
@@ -65,7 +88,7 @@ extension AfyaKitInventoryRoutes on AfyaKitRoutes {
     bool persist = false,
   }) => _uri(
     'inventory/imports/inventory',
-    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+    query: {'type': type.trim(), 'dryRun': '$dryRun', 'persist': '$persist'},
   );
 
   Uri importInventoryRaw({
@@ -74,14 +97,14 @@ extension AfyaKitInventoryRoutes on AfyaKitRoutes {
     bool persist = false,
   }) => _uri(
     'inventory/imports/inventory-raw',
-    query: {'type': type, 'dryRun': '$dryRun', 'persist': '$persist'},
+    query: {'type': type.trim(), 'dryRun': '$dryRun', 'persist': '$persist'},
   );
 
-  Uri importTemplate(String type) =>
-      _uri('inventory/imports/templates/${_seg(type)}');
+  Uri importTemplate(String typeId) =>
+      _uri('inventory/imports/templates/${_seg(typeId)}');
 
   // ─────────────────────────────────────────────
-  // 📤 Issues
+  // Issues
   // ─────────────────────────────────────────────
 
   Uri issues() => _uri('inventory/issues');
@@ -103,37 +126,31 @@ extension AfyaKitInventoryRoutes on AfyaKitRoutes {
   Uri receiveIssue(String issueId) =>
       _uri('inventory/issues/${_seg(issueId)}/receive');
 
-  Uri disposeIssue(String issueId) =>
-      _uri('inventory/issues/${_seg(issueId)}/dispose');
-
-  Uri dispenseIssue(String issueId) =>
-      _uri('inventory/issues/${_seg(issueId)}/dispense');
-
   // ─────────────────────────────────────────────
-  // 🚚 Deliveries
+  // Deliveries
   // ─────────────────────────────────────────────
 
-  /// Finalized delivery records.
   Uri deliveries() => _uri('inventory/deliveries');
 
   Uri deliveryById(String deliveryId) =>
       _uri('inventory/deliveries/${_seg(deliveryId)}');
 
-  /// Current authenticated user's open delivery session.
   Uri openDeliverySession() => _uri('inventory/deliveries/session/open');
 
-  /// Ensure/resume an active delivery session.
   Uri ensureDeliverySession() => _uri('inventory/deliveries/session');
 
-  /// Update last store/source context on an open delivery.
-  Uri updateDeliverySession(String deliveryId) =>
+  Uri deliverySession(String deliveryId) =>
       _uri('inventory/deliveries/session/${_seg(deliveryId)}');
 
-  /// Review the authoritative backend delivery summary.
-  Uri reviewDeliverySession(String deliveryId) =>
-      _uri('inventory/deliveries/session/${_seg(deliveryId)}');
-
-  /// Finalize the delivery and create the final delivery record.
   Uri finalizeDeliverySession(String deliveryId) =>
       _uri('inventory/deliveries/session/${_seg(deliveryId)}/finalize');
+
+  // Inventory sources (external stock origins; not stock-holding locations).
+  Uri sources() => _uri('inventory/sources');
+
+  Uri sourceById(String sourceId) =>
+      _uri('inventory/sources/${_seg(sourceId)}');
+
+  Uri restoreSource(String sourceId) =>
+      _uri('inventory/sources/${_seg(sourceId)}/restore');
 }

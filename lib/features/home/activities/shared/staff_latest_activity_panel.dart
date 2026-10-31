@@ -1,22 +1,22 @@
 // lib/core/home/activities/shared/staff_latest_activity_panel.dart
 
-import 'package:afyakit/features/inventory/records/deliveries/widgets/screens/delivery_details_screen.dart';
-import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 
 import 'package:afyakit/features/home/activities/feed/activity_feed_adapter.dart';
 import 'package:afyakit/features/home/activities/feed/activity_feed_providers.dart';
 import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart';
 import 'package:afyakit/features/home/activities/shared/latest_activity_panel.dart';
-import 'package:afyakit/features/home/models/activity_entry.dart';
-
-import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
-import 'package:afyakit/features/inventory/locations/inventory_location_controller.dart';
-import 'package:afyakit/features/inventory/locations/inventory_location_type_enum.dart';
-import 'package:afyakit/features/inventory/records/issues/widgets/screens/issue_details_screen.dart';
+import 'package:afyakit/features/inventory/locations/inventory_locations_providers.dart';
+import 'package:afyakit/features/inventory/records/deliveries/inventory_deliveries_screen.dart';
+import 'package:afyakit/features/inventory/records/issues/inventory_issues_screen.dart';
+
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.dart';
@@ -38,31 +38,21 @@ class StaffLatestActivityPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final appId = ref.watch(appIdProvider);
     final activityAsync = ref.watch(staffActivityFeedProvider);
 
-    final storesAsync = ref.watch(
-      inventoryLocationProvider(InventoryLocationType.store),
-    );
+    // null = all configured location types.
+    final locationsAsync = ref.watch(inventoryLocationsProvider(null));
 
-    final dispensariesAsync = ref.watch(
-      inventoryLocationProvider(InventoryLocationType.dispensary),
-    );
+    final locations = locationsAsync.valueOrNull ?? const <InventoryLocation>[];
 
-    final stores = storesAsync.valueOrNull ?? const <InventoryLocation>[];
-
-    final dispensaries =
-        dispensariesAsync.valueOrNull ?? const <InventoryLocation>[];
-
-    final locations = <InventoryLocation>[...stores, ...dispensaries];
-
-    final List<ActivityEntry> entries = <ActivityEntry>[
-      ...ActivityFeedAdapter.fromFeed(
-        activityAsync.valueOrNull ?? const [],
-        onTapForActivity: (activity) => _onTapForActivity(context, activity),
-        subtitleForActivity: (activity) =>
-            _subtitleForActivity(activity, locations),
-      ),
-    ]..sort((a, b) => b.date.compareTo(a.date));
+    final entries = ActivityFeedAdapter.fromFeed(
+      activityAsync.valueOrNull ?? const [],
+      onTapForActivity: (activity) =>
+          _onTapForActivity(context, activity, appId),
+      subtitleForActivity: (activity) =>
+          _subtitleForActivity(activity, locations),
+    ).toList()..sort((a, b) => b.date.compareTo(a.date));
 
     return LatestActivityPanel(
       title: title,
@@ -78,12 +68,13 @@ class StaffLatestActivityPanel extends ConsumerWidget {
   }
 
   // ─────────────────────────────────────────────
-  // Navigation
+  // Activity navigation
   // ─────────────────────────────────────────────
 
   VoidCallback? _onTapForActivity(
     BuildContext context,
     ActivityFeedRecord activity,
+    String appId,
   ) {
     switch (activity.entity.type) {
       case ActivityEntityType.payment:
@@ -95,101 +86,71 @@ class StaffLatestActivityPanel extends ConsumerWidget {
           return null;
         }
 
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PaymentDetailScreen(
-              invoiceId: invoice.id,
-              paymentId: paymentId,
-              currencyCode: activity.currencyCode ?? 'KES',
-              customerName: activity.subtitle,
-              invoiceNumber: invoice.label,
-              canManagePayments: true,
-            ),
+        return () => _navigate(
+          context,
+          PaymentDetailScreen(
+            invoiceId: invoice.id,
+            paymentId: paymentId,
+            currencyCode: activity.currencyCode ?? 'KES',
+            customerName: activity.subtitle,
+            invoiceNumber: invoice.label,
+            canManagePayments: true,
           ),
         );
 
       case ActivityEntityType.invoice:
         final invoiceId = activity.entity.id.trim();
 
-        if (!_hasText(invoiceId)) {
-          return null;
-        }
+        if (invoiceId.isEmpty) return null;
 
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => InvoiceDetailScreen(
-              invoiceId: invoiceId,
-              forceStaffWorkspace: true,
-            ),
-          ),
+        return () => _navigate(
+          context,
+          InvoiceDetailScreen(invoiceId: invoiceId, forceStaffWorkspace: true),
         );
 
       case ActivityEntityType.quote:
         final quoteId = activity.entity.id.trim();
 
-        if (!_hasText(quoteId)) {
-          return null;
-        }
+        if (quoteId.isEmpty) return null;
 
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                QuoteDetailScreen(quoteId: quoteId, forceStaffWorkspace: true),
-          ),
+        return () => _navigate(
+          context,
+          QuoteDetailScreen(quoteId: quoteId, forceStaffWorkspace: true),
         );
 
       case ActivityEntityType.patient:
       case ActivityEntityType.patientLinkRequest:
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                const ProfilesScreen(allowExplicitContactLink: true),
-          ),
+        return () => _navigate(
+          context,
+          const ProfilesScreen(allowExplicitContactLink: true),
         );
 
       case ActivityEntityType.contact:
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const NativeContactsScreen()),
-        );
+        return () => _navigate(context, const NativeContactsScreen());
 
       case ActivityEntityType.inventoryIssue:
-        final issueId = activity.entity.id.trim();
+        if (appId.trim().isEmpty) return null;
 
-        if (!_hasText(issueId)) {
-          return null;
-        }
+        return () => _navigate(context, const InventoryIssuesScreen());
 
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => IssueDetailsScreen(issueId: issueId),
-          ),
-        );
-
-      // DeliveryDetailScreen currently requires the complete
-      // DeliveryRecord rather than only a delivery ID.
-      //
-      // Keep this non-clickable until that screen/service has
-      // a canonical fetch-by-ID route.
       case ActivityEntityType.inventoryDelivery:
-        final deliveryId = activity.entity.id.trim();
+        if (appId.trim().isEmpty) return null;
 
-        if (!_hasText(deliveryId)) {
-          return null;
-        }
-
-        return () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => DeliveryDetailScreen(deliveryId: deliveryId),
-          ),
-        );
+        return () => _navigate(context, const InventoryDeliveriesScreen());
 
       case ActivityEntityType.unknown:
         return null;
     }
   }
 
+  void _navigate(BuildContext context, Widget destination) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => destination));
+  }
+
   // ─────────────────────────────────────────────
-  // Human-readable inventory subtitles
+  // Inventory activity subtitles
   // ─────────────────────────────────────────────
 
   String? _subtitleForActivity(
@@ -203,17 +164,13 @@ class StaffLatestActivityPanel extends ConsumerWidget {
 
     final raw = activity.subtitle?.trim();
 
-    if (!_hasText(raw)) {
-      return null;
-    }
+    if (!_hasText(raw)) return null;
 
     var result = raw!;
 
-    // Replace known location IDs with their human-readable names.
-    //
-    // Longest IDs first avoids partial replacement if IDs happen
-    // to share prefixes.
-    final sortedLocations = List<InventoryLocation>.from(locations)
+    // Replace location IDs with their display names.
+    // Longer IDs first to avoid partial substitutions.
+    final sortedLocations = [...locations]
       ..sort((a, b) => b.id.length.compareTo(a.id.length));
 
     for (final location in sortedLocations) {
@@ -227,38 +184,31 @@ class StaffLatestActivityPanel extends ConsumerWidget {
       result = result.replaceAll(id, name);
     }
 
-    result = _humanizeIssueType(result);
-
-    return result;
+    return _humanizeIssueType(result);
   }
 
   String _humanizeIssueType(String value) {
     final parts = value.split('•');
 
-    if (parts.isEmpty) {
-      return value;
-    }
+    if (parts.isEmpty) return value;
 
-    final type = parts.first.trim().toLowerCase();
+    final rawType = parts.first.trim();
 
-    final friendlyType = switch (type) {
+    final friendlyType = switch (rawType.toLowerCase()) {
       'dispose' => 'Disposal',
       'dispense' => 'Dispense',
       'transfer' => 'Transfer',
-      _ => parts.first.trim(),
+      _ => rawType,
     };
 
-    if (parts.length == 1) {
-      return friendlyType;
-    }
+    if (parts.length == 1) return friendlyType;
 
-    return <String>[
+    return [
       friendlyType,
       ...parts.skip(1).map((part) => part.trim()),
     ].join(' • ');
   }
 
-  static bool _hasText(String? value) {
-    return value != null && value.trim().isNotEmpty;
-  }
+  static bool _hasText(String? value) =>
+      value != null && value.trim().isNotEmpty;
 }

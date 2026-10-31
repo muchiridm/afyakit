@@ -1,22 +1,25 @@
 // lib/features/admin/widgets/admin_dashboard_screen.dart
 
-import 'package:afyakit/core/capabilities/feature_keys.dart';
-import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';
-import 'package:afyakit/features/retail/meta/widgets/zoho_accounts_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/tests/api_test_screen.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
+import 'package:afyakit/core/auth/auth_user/guards/permission_guard.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_manager_screen.dart';
+
+import 'package:afyakit/core/capabilities/feature_keys.dart';
+import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';
 
 import 'package:afyakit/features/backup/backup_screen.dart';
-import 'package:afyakit/features/inventory/import/importer/import_inventory_screen.dart';
-import 'package:afyakit/features/inventory/preferences/widgets/item_preferences_screen.dart';
-import 'package:afyakit/features/inventory/locations/screens/inventory_locations_screen.dart';
 
-import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_manager_screen.dart';
-import 'package:afyakit/core/auth/auth_user/guards/permission_guard.dart';
+import 'package:afyakit/features/inventory/import/inventory_import_screen.dart';
+import 'package:afyakit/features/inventory/locations/inventory_locations_screen.dart';
+import 'package:afyakit/features/inventory/sources/inventory_sources_screen.dart';
+import 'package:afyakit/features/inventory/preferences/item_preferences_screen.dart';
+
+import 'package:afyakit/features/retail/meta/widgets/zoho_accounts_screen.dart';
 
 import 'package:afyakit/shared/layout/app_header.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -35,32 +38,28 @@ class AdminDashboardScreen extends ConsumerWidget {
         header: AppHeader(title: 'Admin Dashboard'),
         body: Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => AppPage(
+      error: (error, _) => AppPage(
         scrollable: false,
         maxWidth: 800,
         header: const AppHeader(title: 'Admin Dashboard'),
-        body: Center(child: Text('❌ Failed to load current user: $e')),
+        body: Center(child: Text('Failed to load current user: $error')),
       ),
-      data: (me) {
-        return PermissionGuard(
-          user: me,
-          allowed: (u) => u.canAccessAdminPanel,
-          fallback: const AppPage(
-            scrollable: false,
-            maxWidth: 800,
-            header: AppHeader(title: 'Admin Dashboard'),
-            body: Center(
-              child: Text('🚫 You do not have access to this page.'),
-            ),
-          ),
-          child: const AppPage(
-            scrollable: false,
-            maxWidth: 800,
-            header: AppHeader(title: 'Admin Dashboard'),
-            body: Center(child: _AdminActions()),
-          ),
-        );
-      },
+      data: (me) => PermissionGuard(
+        user: me,
+        allowed: (user) => user.canAccessAdminPanel,
+        fallback: const AppPage(
+          scrollable: false,
+          maxWidth: 800,
+          header: AppHeader(title: 'Admin Dashboard'),
+          body: Center(child: Text('You do not have access to this page.')),
+        ),
+        child: const AppPage(
+          scrollable: false,
+          maxWidth: 800,
+          header: AppHeader(title: 'Admin Dashboard'),
+          body: Center(child: _AdminActions()),
+        ),
+      ),
     );
   }
 }
@@ -77,37 +76,43 @@ class _AdminActions extends StatelessWidget {
       children: [
         _adminActionButton(
           context,
-          icon: Icons.manage_accounts,
+          icon: Icons.manage_accounts_outlined,
           label: 'Manage Users',
           destination: const UserProfileManagerScreen(),
         ),
         _adminActionButton(
           context,
-          icon: Icons.settings,
+          icon: Icons.settings_outlined,
           label: 'Item Preferences',
           destination: const ItemPreferencesScreen(),
         ),
         _adminActionButton(
           context,
-          icon: Icons.location_on,
+          icon: Icons.location_on_outlined,
           label: 'Manage Locations',
-          destination: const LocationsScreen(),
+          destination: const InventoryLocationsScreen(),
         ),
         _adminActionButton(
           context,
-          icon: Icons.upload_file,
+          icon: Icons.local_shipping_outlined,
+          label: 'Manage Sources',
+          destination: const InventorySourcesScreen(),
+        ),
+        _adminActionButton(
+          context,
+          icon: Icons.upload_file_outlined,
           label: 'Import Inventory',
-          destination: const ImportInventoryScreen(),
+          destination: const InventoryImportScreen(),
         ),
         _adminActionButton(
           context,
-          icon: Icons.backup,
+          icon: Icons.backup_outlined,
           label: 'Backup Data',
           destination: const BackupScreen(),
         ),
         _adminActionButton(
           context,
-          icon: Icons.api,
+          icon: Icons.api_outlined,
           label: 'Test API',
           destination: const ApiTestScreen(),
         ),
@@ -140,7 +145,7 @@ class _AdminActions extends StatelessWidget {
       onPressed: () {
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => destination));
+        ).push(MaterialPageRoute<void>(builder: (_) => destination));
       },
     );
   }

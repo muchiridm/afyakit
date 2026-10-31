@@ -1,43 +1,15 @@
 // lib/core/auth/auth_user/widgets/user_profile_card.dart
 
-import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:flutter/material.dart';
+
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
-
 import 'package:afyakit/core/auth/auth_user/utils/user_format.dart';
+import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+
 import 'package:afyakit/shared/utils/normalize/normalize_string.dart';
-import 'package:flutter/material.dart';
-import 'package:afyakit/features/inventory/views/widgets/inventory_item_tile_components/editable_chip_list.dart';
 
 class UserProfileCard extends StatelessWidget {
-  /// ✅ Pass the model, not strings
-  final AuthUser user;
-
-  /// Human-facing role label (e.g. "Admin", "Manager / Pharmacist").
-  /// If you don't want to compute this externally anymore, you can pass null
-  /// and we will fall back to primary staff role label.
-  final String? roleLabelOverride;
-
-  /// Backend role key (e.g. "owner", "admin", "manager", "staff", "client").
-  /// Used as the dropdown value when [onRoleChanged] is non-null.
-  final String? roleValue;
-
-  /// Already-resolved store labels (e.g. branch names).
-  final List<String> storeLabels;
-
-  /// Tap on avatar only
-  final VoidCallback? onAvatarTapped;
-
-  /// Tap anywhere on the card
-  final VoidCallback? onTap;
-
-  /// Called with the selected *backend* role key (owner/admin/manager/staff/client).
-  final ValueChanged<String?>? onRoleChanged;
-
-  final VoidCallback? onEditStoresTapped;
-  final ValueChanged<String>? onRemoveStore;
-  final VoidCallback? onDeleteUser;
-
   const UserProfileCard({
     super.key,
     required this.user,
@@ -52,6 +24,18 @@ class UserProfileCard extends StatelessWidget {
     this.onDeleteUser,
   });
 
+  final AuthUser user;
+  final String? roleLabelOverride;
+  final String? roleValue;
+  final List<String> storeLabels;
+
+  final VoidCallback? onAvatarTapped;
+  final VoidCallback? onTap;
+  final ValueChanged<String?>? onRoleChanged;
+  final VoidCallback? onEditStoresTapped;
+  final ValueChanged<String>? onRemoveStore;
+  final VoidCallback? onDeleteUser;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -60,37 +44,70 @@ class UserProfileCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 8),
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildAvatar(theme),
-              const SizedBox(width: 16),
-              Expanded(child: _buildUserInfo(theme)),
-              const SizedBox(width: 8),
-              _buildRightColumn(theme),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 460;
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildAvatar(theme),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildUserInfo(theme)),
+                      ],
+                    ),
+                    if (_hasActions) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _buildActions(),
+                      ),
+                    ],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildAvatar(theme),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildUserInfo(theme)),
+                  if (_hasActions) ...[
+                    const SizedBox(width: 8),
+                    _buildActions(),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  // ───────────────── UI bits ─────────────────
+  bool get _hasActions =>
+      onDeleteUser != null ||
+      onRoleChanged != null ||
+      onEditStoresTapped != null;
 
   Widget _buildAvatar(ThemeData theme) {
-    final displayName = user.computedDisplayName;
-    final initials = initialsFromName(displayName);
+    final initials = initialsFromName(user.computedDisplayName);
 
     return GestureDetector(
       onTap: onAvatarTapped ?? onTap,
       child: CircleAvatar(
         radius: 22,
-        backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+        backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
         child: Text(
           initials,
           style: TextStyle(
@@ -104,139 +121,117 @@ class UserProfileCard extends StatelessWidget {
   }
 
   Widget _buildUserInfo(ThemeData theme) {
-    final safeName = user.computedDisplayName.trim().isNotEmpty
-        ? user.computedDisplayName
-        : 'Unnamed User';
+    final displayName = user.computedDisplayName.trim();
 
-    final safePhone = (user.phoneNumber ?? '').trim();
-    final safePhoneLabel = safePhone.isNotEmpty ? safePhone : '—';
+    final name = displayName.isEmpty ? 'Unnamed User' : displayName;
 
-    final safeEmail = (user.bestEmailForDisplay ?? '').trim();
-    final safeEmailLabel = safeEmail.isNotEmpty ? safeEmail : null;
+    final phone = (user.phoneNumber ?? '').trim();
+    final email = (user.bestEmailForDisplay ?? '').trim();
 
-    final statusLabel = user.status.label;
-
-    // ✅ Truth: staff = governance/roles/superadmin (per your extension).
     final isStaff = user.isStaff;
 
-    // ✅ Baseline: everyone is a member.
-    final typeChips = <Widget>[
-      _pillChip(theme, 'Member'),
-      if (isStaff) _pillChip(theme, 'Staff'),
-    ];
+    final override = (roleLabelOverride ?? '').trim();
 
-    // ✅ Staff-only role logic
-    final roleLabelOverrideSafe = (roleLabelOverride ?? '').trim();
+    final primaryRole = user.staffRoles.primaryRole?.label ?? 'Staff';
 
-    final derivedPrimaryStaffRole =
-        user.staffRoles.primaryRole?.label ?? 'Staff';
+    final roleLabel = override.isNotEmpty ? override : primaryRole;
 
-    final staffRoleLabel = roleLabelOverrideSafe.isNotEmpty
-        ? roleLabelOverrideSafe
-        : derivedPrimaryStaffRole;
-
-    final extraStaffRoleChips = isStaff
+    final extraRoles = isStaff
         ? user.staffRoles
-              .map((r) => r.label.trim())
-              .where((r) => r.isNotEmpty)
-              .where((r) => r.normalize() != staffRoleLabel.normalize())
-              .map((r) => _pillChip(theme, r))
+              .map((role) => role.label.trim())
+              .where((label) => label.isNotEmpty)
+              .where((label) => label.normalize() != roleLabel.normalize())
+              .toSet()
               .toList(growable: false)
-        : const <Widget>[];
+        : const <String>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: _buildLine(safeName, isBold: true, fontSize: 15)),
-            const SizedBox(width: 8),
-            _statusChip(theme, statusLabel),
-          ],
-        ),
-        if (safeEmailLabel != null) _buildLine(safeEmailLabel),
-        _buildLine(safePhoneLabel),
-        const SizedBox(height: 6),
-
         Wrap(
           spacing: 8,
           runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            ...typeChips,
-
-            // ✅ ONLY staff get a role chip (prevents Member|Member)
-            if (isStaff && staffRoleLabel.trim().isNotEmpty)
-              _pillChip(theme, staffRoleLabel),
-
-            ...extraStaffRoleChips,
+            Text(
+              name,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            _statusChip(theme),
           ],
         ),
-
+        if (email.isNotEmpty) ...[const SizedBox(height: 4), Text(email)],
+        const SizedBox(height: 2),
+        Text(phone.isEmpty ? '—' : phone),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _pillChip(theme, 'Member'),
+            if (isStaff) ...[
+              _pillChip(theme, 'Staff'),
+              if (roleLabel.isNotEmpty) _pillChip(theme, roleLabel),
+              for (final role in extraRoles) _pillChip(theme, role),
+            ],
+          ],
+        ),
         if (storeLabels.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          EditableChipList(
-            labelToId: {for (final label in storeLabels) label: label},
-            onRemove: onRemoveStore,
+          const SizedBox(height: 12),
+          Text('Assigned stores', style: theme.textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final label in storeLabels)
+                InputChip(
+                  label: Text(label),
+                  visualDensity: VisualDensity.compact,
+                  onDeleted: onRemoveStore == null
+                      ? null
+                      : () => onRemoveStore!(label),
+                ),
+            ],
           ),
         ],
       ],
     );
   }
 
-  Widget _buildRightColumn(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (onDeleteUser != null) _buildDeleteButton(),
-        if (onRoleChanged != null) ...[
-          const SizedBox(height: 4),
-          _buildRoleDropdown(theme),
-        ],
-        if (onEditStoresTapped != null) ...[
-          const SizedBox(height: 8),
-          _buildEditStoresButton(),
-        ],
-      ],
-    );
-  }
+  Widget _statusChip(ThemeData theme) {
+    final active = user.isActive;
 
-  Widget _statusChip(ThemeData theme, String statusLabel) {
-    final isActive = statusLabel.toLowerCase().contains('active');
-    final bg = isActive
-        ? theme.colorScheme.primary.withOpacity(0.08)
-        : Colors.red.withOpacity(0.06);
-    final border = isActive
-        ? theme.colorScheme.primary.withOpacity(0.4)
-        : Colors.red.withOpacity(0.4);
-    final fg = isActive ? theme.colorScheme.primary : Colors.red[700];
+    final color = active ? theme.colorScheme.primary : theme.colorScheme.error;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bg,
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
-        statusLabel.toPascalCase(),
+        user.status.label.toPascalCase(),
         style: theme.textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w600,
-          color: fg,
+          color: color,
         ),
       ),
     );
   }
 
-  Widget _pillChip(ThemeData theme, String text) {
+  Widget _pillChip(ThemeData theme, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.7),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        text,
+        label,
         style: theme.textTheme.labelSmall?.copyWith(
           fontSize: 11,
           fontWeight: FontWeight.w500,
@@ -245,55 +240,48 @@ class UserProfileCard extends StatelessWidget {
     );
   }
 
-  Widget _buildRoleDropdown(ThemeData theme) {
-    const roleOptions = <String>[
-      'owner',
-      'admin',
-      'manager',
-      'staff',
-      'client',
-    ];
+  Widget _buildActions() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (onRoleChanged != null) _buildRoleDropdown(),
+        if (onEditStoresTapped != null)
+          TextButton.icon(
+            icon: const Icon(Icons.store_outlined),
+            label: const Text('Edit Stores'),
+            onPressed: onEditStoresTapped,
+          ),
+        if (onDeleteUser != null)
+          IconButton(
+            icon: const Icon(
+              Icons.delete_forever_outlined,
+              color: Colors.redAccent,
+            ),
+            tooltip: 'Delete User',
+            onPressed: onDeleteUser,
+          ),
+      ],
+    );
+  }
 
-    final current = roleValue != null && roleOptions.contains(roleValue)
+  Widget _buildRoleDropdown() {
+    const roles = <String>['owner', 'admin', 'manager', 'staff', 'client'];
+
+    final selected = roleValue != null && roles.contains(roleValue)
         ? roleValue
         : null;
 
     return DropdownButton<String>(
-      value: current,
+      value: selected,
       hint: const Text('Change role'),
       onChanged: onRoleChanged,
-      items: roleOptions
-          .map((r) => DropdownMenuItem(value: r, child: Text(r.toPascalCase())))
-          .toList(),
-    );
-  }
-
-  Widget _buildEditStoresButton() {
-    return TextButton.icon(
-      icon: const Icon(Icons.store),
-      label: const Text('Edit Stores'),
-      onPressed: onEditStoresTapped,
-    );
-  }
-
-  Widget _buildLine(String text, {bool isBold = false, double fontSize = 14}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeleteButton() {
-    return IconButton(
-      icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-      tooltip: 'Delete User',
-      onPressed: onDeleteUser,
+      items: [
+        for (final role in roles)
+          DropdownMenuItem(value: role, child: Text(role.toPascalCase())),
+      ],
     );
   }
 }

@@ -1,90 +1,45 @@
-// lib/core/item_preferences/item_preferences_service.dart
-
-import 'dart:convert';
 import 'package:dio/dio.dart';
-
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
-import 'package:afyakit/features/inventory/preferences/utils/item_preference_field.dart';
-import 'package:afyakit/features/inventory/items/extensions/item_type_x.dart';
 
-class ItemPreferenceService {
-  final AfyaKitRoutes routes;
+/// Backend response for every preference operation is a raw JSON string list.
+/// POST/DELETE take {value}; PUT takes a raw JSON array (not {values: ...}).
+class ItemPreferencesService {
+  const ItemPreferencesService({required this.dio, required this.routes});
+
   final Dio dio;
+  final AfyaKitRoutes routes;
 
-  ItemPreferenceService({required this.routes, required this.dio});
+  Uri _uri(String itemType, String field) =>
+      routes.preferenceField(itemType, field);
 
-  // 📥 FETCH VALUES
-  Future<List<String>> fetchValues(
-    ItemType type,
-    ItemPreferenceField field,
-  ) async {
-    final uri = routes.preferenceField(type.key, field.key);
-    final res = await dio.getUri(uri);
-    return _asStringList(res.data);
+  List<String> _read(dynamic data) {
+    if (data is! List) {
+      throw const FormatException('Invalid preference response: expected list');
+    }
+    return data.map((value) => value as String).toList(growable: false);
   }
 
-  // ➕ ADD VALUE
-  Future<void> addValue(
-    ItemType type,
-    ItemPreferenceField field,
-    String value,
-  ) async {
-    final uri = routes.preferenceField(type.key, field.key);
-    final res = await dio.postUri(uri, data: {'value': value});
-    _ensureOk(res.statusCode);
-  }
+  Future<List<String>> get(String itemType, String field) async =>
+      _read((await dio.getUri(_uri(itemType, field))).data);
 
-  // ➖ REMOVE VALUE
-  Future<void> removeValue(
-    ItemType type,
-    ItemPreferenceField field,
-    String value,
-  ) async {
-    final uri = routes.preferenceField(type.key, field.key);
-    // If your backend prefers query param instead of body for DELETE, do:
-    // final uri = routes.preferenceField(type.key, field.key)
-    //     .replace(queryParameters: {'value': value});
-    final res = await dio.deleteUri(uri, data: {'value': value});
-    _ensureOk(res.statusCode);
-  }
+  Future<List<String>> add(String itemType, String field, String value) async =>
+      _read((await dio.postUri(
+        _uri(itemType, field),
+        data: {'value': value.trim()},
+      )).data);
 
-  // 🔁 SET FULL LIST
-  Future<void> setValues(
-    ItemType type,
-    ItemPreferenceField field,
+  Future<List<String>> remove(String itemType, String field, String value) async =>
+      _read((await dio.deleteUri(
+        _uri(itemType, field),
+        data: {'value': value},
+      )).data);
+
+  Future<List<String>> replace(
+    String itemType,
+    String field,
     List<String> values,
-  ) async {
-    final uri = routes.preferenceField(type.key, field.key);
-    final res = await dio.putUri(uri, data: {'values': values});
-    _ensureOk(res.statusCode);
-  }
-
-  // ─────────────────────────────────────
-  // Helpers
-  void _ensureOk(int? sc) {
-    final code = sc ?? 0;
-    if (code < 200 || code >= 300) {
-      throw StateError('Preference API failed with status $code');
-    }
-  }
-
-  List<String> _asStringList(dynamic body) {
-    // Accept: raw List, {items:[...]}, JSON string
-    if (body is List) {
-      return body.map((e) => e.toString()).toList();
-    }
-    if (body is Map && body['items'] is List) {
-      return (body['items'] as List).map((e) => e.toString()).toList();
-    }
-    if (body is String && body.isNotEmpty) {
-      final parsed = jsonDecode(body);
-      if (parsed is List) {
-        return parsed.map((e) => e.toString()).toList();
-      }
-      if (parsed is Map && parsed['items'] is List) {
-        return (parsed['items'] as List).map((e) => e.toString()).toList();
-      }
-    }
-    return const <String>[];
-  }
+  ) async => _read((await dio.putUri(
+    _uri(itemType, field),
+    data: values.map((value) => value.trim()).where((v) => v.isNotEmpty).toSet().toList(),
+  )).data);
 }

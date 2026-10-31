@@ -34,8 +34,9 @@ class ProfileAssociationsSectionState
     super.didUpdateWidget(old);
     if (old.profile.profileId != widget.profile.profileId ||
         old.staffMode != widget.staffMode ||
-        old.profile.isActive != widget.profile.isActive)
+        old.profile.isActive != widget.profile.isActive) {
       _reload();
+    }
   }
 
   void _reload() {
@@ -109,8 +110,9 @@ class ProfileAssociationsSectionState
                   final account = accountCtl.text.trim().toUpperCase();
                   if (!RegExp(
                     r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-                  ).hasMatch(account))
+                  ).hasMatch(account)) {
                     return;
+                  }
                   Navigator.pop(context, (account, relationship));
                 },
                 child: const Text('Link'),
@@ -248,13 +250,16 @@ class ProfileAssociationsSectionState
             FutureBuilder<List<RelatedProfile>>(
               future: _related,
               builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done)
+                if (snapshot.connectionState != ConnectionState.done) {
                   return const LinearProgressIndicator();
-                if (snapshot.hasError)
+                }
+                if (snapshot.hasError) {
                   return Text('Linked profiles unavailable: ${snapshot.error}');
+                }
                 final list = snapshot.data ?? const <RelatedProfile>[];
-                if (list.isEmpty)
+                if (list.isEmpty) {
                   return const Text('No additional profiles linked.');
+                }
                 return Column(
                   children: list
                       .map(
@@ -290,13 +295,16 @@ class ProfileAssociationsSectionState
               FutureBuilder<List<ProfileLinkedContact>>(
                 future: _payers,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done)
+                  if (snapshot.connectionState != ConnectionState.done) {
                     return const LinearProgressIndicator();
-                  if (snapshot.hasError)
+                  }
+                  if (snapshot.hasError) {
                     return Text('Linked payers unavailable: ${snapshot.error}');
+                  }
                   final list = snapshot.data ?? const <ProfileLinkedContact>[];
-                  if (list.isEmpty)
+                  if (list.isEmpty) {
                     return const Text('No Native Contacts linked.');
+                  }
                   return Column(
                     children: list
                         .map(

@@ -9,7 +9,6 @@ import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_brand_logo.dart';
-import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
@@ -24,7 +23,8 @@ class HomeHeader extends ConsumerWidget {
     required this.entry,
     this.greetingName,
     this.memberId,
-    this.showDeliveryBanner = false,
+    this.showDeliveryBanner =
+        false, // Legacy caller option; shortcut moved to Inventory.
     this.showHomeButton = false,
     this.showIdentityActions = true,
     this.centerContent = false,
@@ -73,10 +73,6 @@ class HomeHeader extends ConsumerWidget {
             memberId: memberId,
             centered: centerContent,
           ),
-        ],
-        if (showDeliveryBanner) ...[
-          const SizedBox(height: AppShape.gap8),
-          const DeliveryBanner(),
         ],
       ],
     );

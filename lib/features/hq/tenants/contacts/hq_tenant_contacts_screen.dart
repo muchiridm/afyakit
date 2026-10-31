@@ -145,8 +145,9 @@ class _HqTenantContactsScreenState
             ),
             FilledButton(
               onPressed: () {
-                if (text.text.trim().length >= 15)
+                if (text.text.trim().length >= 15) {
                   Navigator.pop(ctx, text.text.trim());
+                }
               },
               child: const Text('Confirm'),
             ),
@@ -205,10 +206,11 @@ class _HqTenantContactsScreenState
         ),
       );
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     }
   }
 
@@ -284,10 +286,11 @@ class _HqTenantContactsScreenState
         ),
       );
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     }
   }
 
@@ -697,7 +700,7 @@ class _ContactEditorState extends ConsumerState<_ContactEditor> {
                 if (widget.contact == null) ...[
                   _field('App ID for initial enrolment', _app, required: true),
                   DropdownButtonFormField<String>(
-                    value: _entity,
+                    initialValue: _entity,
                     decoration: const InputDecoration(labelText: 'Entity type'),
                     items: const [
                       DropdownMenuItem(value: 'person', child: Text('Person')),
@@ -710,7 +713,7 @@ class _ContactEditorState extends ConsumerState<_ContactEditor> {
                   ),
                 ],
                 DropdownButtonFormField<String>(
-                  value: _type,
+                  initialValue: _type,
                   decoration: const InputDecoration(labelText: 'Contact type'),
                   items: const [
                     DropdownMenuItem(

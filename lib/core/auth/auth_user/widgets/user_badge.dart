@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/shared/utils/resolvers/resolve_user_display.dart';
+import 'package:afyakit/core/auth/auth_user/utils/resolve_user_display.dart';
 
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';

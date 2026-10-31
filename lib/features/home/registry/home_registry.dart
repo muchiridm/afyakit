@@ -1,47 +1,27 @@
 // lib/features/home/registry/home_registry.dart
 
 import 'package:flutter/material.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:afyakit/app/providers/app_profile_providers.dart';
-
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
-
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-
 import 'package:afyakit/core/capabilities/feature_keys.dart';
-
 import 'package:afyakit/core/capabilities/feature_registry.dart';
-
 import 'package:afyakit/features/admin/widgets/admin_dashboard_screen.dart';
-
 import 'package:afyakit/features/home/models/staff_feature_def.dart';
-
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
-
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
-
-import 'package:afyakit/features/inventory/records/shared/records_dashboard_screen.dart';
-
-import 'package:afyakit/features/inventory/reports/screens/stock_report_screen.dart';
-
-import 'package:afyakit/features/inventory/views/screens/stock_screen.dart';
-
-import 'package:afyakit/features/inventory/views/utils/inventory_mode_enum.dart';
-
+import 'package:afyakit/features/inventory/records/deliveries/inventory_deliveries_screen.dart';
+import 'package:afyakit/features/inventory/records/records_dashboard_screen.dart';
+import 'package:afyakit/features/inventory/reports/stock_report_screen.dart';
+import 'package:afyakit/features/inventory/views/stock_screen.dart';
+import 'package:afyakit/features/inventory/views/inventory_view.dart';
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
-
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
-
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
-
 import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
-
 import 'package:afyakit/features/retail/invoices/widgets/invoices_list_screen.dart';
-
 import 'package:afyakit/features/retail/quotes/widgets/quotes_list_screen.dart';
-
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 
 enum HomeScope { staff, member }
@@ -289,6 +269,14 @@ final class HomeRegistry {
 
     StaffFeatureDef(
       featureKey: FeatureKeys.inventory,
+      labelOverride: 'Manage Deliveries',
+      iconOverride: Icons.local_shipping_outlined,
+      destination: _inventoryDeliveries,
+      allowed: _requireStaff,
+    ),
+
+    StaffFeatureDef(
+      featureKey: FeatureKeys.inventory,
       labelOverride: 'Stock Out',
       iconOverride: Icons.exit_to_app,
       destination: _stockOut,
@@ -414,14 +402,19 @@ final class HomeRegistry {
   static Widget _insuranceClaims(BuildContext _) =>
       const InsuranceClaimsScreen();
 
-  static Widget _stockIn(BuildContext _) =>
-      const StockScreen(mode: InventoryMode.stockIn);
+  static Widget _stockIn(BuildContext _) => _inventoryDestination(
+    (appId) => StockScreen(mode: InventoryMode.stockIn, appId: appId),
+  );
 
-  static Widget _stockOut(BuildContext _) =>
-      const StockScreen(mode: InventoryMode.stockOut);
+  static Widget _inventoryDeliveries(BuildContext _) =>
+      const InventoryDeliveriesScreen();
+
+  static Widget _stockOut(BuildContext _) => _inventoryDestination(
+    (appId) => StockScreen(mode: InventoryMode.stockOut, appId: appId),
+  );
 
   static Widget _inventoryRecords(BuildContext _) =>
-      const RecordsDashboardScreen();
+      _inventoryDestination((appId) => RecordsDashboardScreen(appId: appId));
 
   static Widget _stockReport(BuildContext _) => const StockReportScreen();
 
@@ -542,5 +535,19 @@ final class HomeRegistry {
     }
 
     return profile.features.enabled(key);
+  }
+
+  static Widget _inventoryDestination(Widget Function(String appId) builder) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final appId = ref.watch(appIdProvider).trim();
+        if (appId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text('No active application selected.')),
+          );
+        }
+        return builder(appId);
+      },
+    );
   }
 }
