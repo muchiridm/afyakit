@@ -36,10 +36,11 @@ class _InventoryLocationsScreenState
       await action();
       if (mounted) _refresh();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$e')));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -298,7 +299,7 @@ class _InventoryLocationsScreenState
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: selected,
+                    initialValue: selected,
                     decoration: const InputDecoration(
                       labelText: 'Location type',
                     ),

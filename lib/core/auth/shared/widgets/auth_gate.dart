@@ -20,28 +20,40 @@ import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
 
-  Widget _login(String name) => LoginScreen(copy: OtpLoginCopy.tenant(tenantName: name));
+  Widget _login(String name) =>
+      LoginScreen(copy: OtpLoginCopy.tenant(tenantName: name));
 
   void _openLogin(BuildContext context, String name) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _login(name),
-      fullscreenDialog: true,
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _login(name),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   void _prepareOnboarding(WidgetRef ref, AuthUser user, OnboardingNeed need) {
     switch (need) {
       case OnboardingNeed.phone:
-        OnboardingGate.forceStep(ref, LoginStep.phone,
-          hint: 'Verify your phone number first to continue.');
+        OnboardingGate.forceStep(
+          ref,
+          LoginStep.phone,
+          hint: 'Verify your phone number first to continue.',
+        );
         break;
       case OnboardingNeed.email:
-        OnboardingGate.forceStep(ref, LoginStep.emailEntry,
-          hint: 'Add and verify your email for this application.');
+        OnboardingGate.forceStep(
+          ref,
+          LoginStep.emailEntry,
+          hint: 'Add and verify your email for this application.',
+        );
         break;
       case OnboardingNeed.name:
-        OnboardingGate.forceStep(ref, LoginStep.nameEntry,
-          hint: 'Complete your Native Contact to finish setup.');
+        OnboardingGate.forceStep(
+          ref,
+          LoginStep.nameEntry,
+          hint: 'Complete your Native Contact to finish setup.',
+        );
         break;
       case OnboardingNeed.linkContact:
         // No client-side identity claiming. A trusted recovery/provisioning
@@ -61,28 +73,32 @@ class AuthGate extends ConsumerWidget {
     return session.when(
       loading: () => const SplashScreen(),
       error: (error, _) => Blocked(
-        msg: 'We could not load your session.\nCheck your internet connection and try again.\n\nDetails: $error',
+        msg:
+            'We could not load your session.\nCheck your internet connection and try again.\n\nDetails: $error',
         showSignOut: true,
       ),
       data: (user) {
         if (user == null) return const HomeShell();
         if (!user.status.isActive) {
           return Blocked(
-            msg: 'Your account is currently "${user.status.wire}".\nPlease contact an administrator.',
+            msg:
+                'Your account is currently "${user.status.wire}".\nPlease contact an administrator.',
             showSignOut: true,
           );
         }
         final need = OnboardingGate.need(user);
         if (need == OnboardingNeed.linkContact) {
           return const Blocked(
-            msg: 'Your Native Contact link needs verification. Contact support to complete trusted account recovery or provisioning.',
+            msg:
+                'Your Native Contact link needs verification. Contact support to complete trusted account recovery or provisioning.',
             showSignOut: true,
           );
         }
         if (need == OnboardingNeed.none) {
           return NotificationBootstrap(
             key: ValueKey<String>('notifications:${user.uid}:$tenantId:$appId'),
-            user: user.forApp(appId), appId: appId,
+            user: user.forApp(appId),
+            appId: appId,
             child: const HomeShell(),
           );
         }
@@ -97,7 +113,8 @@ class AuthGate extends ConsumerWidget {
           ),
           data: (profile) {
             final name = profile.displayName.trim().isNotEmpty
-                ? profile.displayName.trim() : profile.id;
+                ? profile.displayName.trim()
+                : profile.id;
             final features = profile.features;
             if (features.enabled(FeatureKeys.occupationalHealth)) {
               return GuestHealthLanding(

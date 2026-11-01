@@ -85,11 +85,7 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                         for (final item in page.items)
                           ListTile(
                             title: Text(item.name),
-                            subtitle: Text(
-                              [
-                                type.label,
-                              ].join(' • '),
-                            ),
+                            subtitle: Text([type.label].join(' • ')),
                             onTap: () => _edit(type, existing: item),
                           ),
                         if (page.hasMore)
@@ -143,10 +139,13 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
     final selectedMultiple = <String, Set<String>>{
       for (final field in type.attributes)
         if (field.dataType == 'string_array')
-          field.key: (existing?.attributes[field.key] is List
-                  ? (existing!.attributes[field.key] as List).map((v) => '$v')
-                  : const <String>[])
-              .toSet(),
+          field.key:
+              (existing?.attributes[field.key] is List
+                      ? (existing!.attributes[field.key] as List).map(
+                          (v) => '$v',
+                        )
+                      : const <String>[])
+                  .toSet(),
     };
     try {
       // Reuse the one Preferences provider. No duplicate API code in Items.
@@ -154,7 +153,9 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
         for (final field in type.attributes)
           if (field.dataType == 'string' || field.dataType == 'string_array')
             field.key: ref.read(
-              itemPreferenceValuesProvider(ItemPreferenceKey(type.typeId, field.key)).future,
+              itemPreferenceValuesProvider(
+                ItemPreferenceKey(type.typeId, field.key),
+              ).future,
             ),
       };
       final options = <String, List<String>>{};
@@ -167,7 +168,9 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, refresh) => AlertDialog(
-            title: Text(existing == null ? 'New ${type.label}' : 'Edit ${type.label}'),
+            title: Text(
+              existing == null ? 'New ${type.label}' : 'Edit ${type.label}',
+            ),
             content: SizedBox(
               width: 510,
               child: SingleChildScrollView(
@@ -175,7 +178,10 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextField(controller: name, decoration: const InputDecoration(labelText: 'Name *')),
+                    TextField(
+                      controller: name,
+                      decoration: const InputDecoration(labelText: 'Name *'),
+                    ),
                     for (final field in type.attributes) ...[
                       const SizedBox(height: 12),
                       if (field.dataType == 'boolean')
@@ -183,7 +189,8 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                           contentPadding: EdgeInsets.zero,
                           title: Text(field.label),
                           value: flags[field.key] ?? false,
-                          onChanged: (v) => refresh(() => flags[field.key] = v ?? false),
+                          onChanged: (v) =>
+                              refresh(() => flags[field.key] = v ?? false),
                         )
                       else if (field.dataType == 'string_array' &&
                           (options[field.key]?.isNotEmpty ?? false)) ...[
@@ -197,7 +204,9 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                             })
                               FilterChip(
                                 label: Text(option),
-                                selected: selectedMultiple[field.key]!.contains(option),
+                                selected: selectedMultiple[field.key]!.contains(
+                                  option,
+                                ),
                                 onSelected: (selected) => refresh(() {
                                   if (selected) {
                                     selectedMultiple[field.key]!.add(option);
@@ -212,17 +221,21 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                           (options[field.key]?.isNotEmpty ?? false))
                         DropdownButtonFormField<String>(
                           key: ValueKey('${type.typeId}:${field.key}'),
-                          value: {
-                            ...options[field.key]!,
-                            if (values[field.key]!.text.trim().isNotEmpty)
-                              values[field.key]!.text.trim(),
-                          }.contains(values[field.key]!.text.trim()) &&
+                          initialValue:
+                              {
+                                    ...options[field.key]!,
+                                    if (values[field.key]!.text
+                                        .trim()
+                                        .isNotEmpty)
+                                      values[field.key]!.text.trim(),
+                                  }.contains(values[field.key]!.text.trim()) &&
                                   values[field.key]!.text.trim().isNotEmpty
                               ? values[field.key]!.text.trim()
                               : null,
                           isExpanded: true,
                           decoration: InputDecoration(
-                            labelText: '${field.label}${field.required ? ' *' : ''}',
+                            labelText:
+                                '${field.label}${field.required ? ' *' : ''}',
                           ),
                           items: [
                             for (final option in {
@@ -230,7 +243,10 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                               if (values[field.key]!.text.trim().isNotEmpty)
                                 values[field.key]!.text.trim(),
                             })
-                              DropdownMenuItem(value: option, child: Text(option)),
+                              DropdownMenuItem(
+                                value: option,
+                                child: Text(option),
+                              ),
                           ],
                           onChanged: (value) => refresh(
                             () => values[field.key]!.text = value ?? '',
@@ -240,10 +256,13 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                         TextField(
                           controller: values[field.key],
                           keyboardType: field.dataType == 'number'
-                              ? const TextInputType.numberWithOptions(decimal: true)
+                              ? const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                )
                               : TextInputType.text,
                           decoration: InputDecoration(
-                            labelText: '${field.label}${field.required ? ' *' : ''}',
+                            labelText:
+                                '${field.label}${field.required ? ' *' : ''}',
                             helperText: field.dataType == 'string_array'
                                 ? 'Separate values with commas (configure options in Preferences)'
                                 : null,
@@ -255,7 +274,10 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
                 onPressed: () {
                   if (name.text.trim().isEmpty) return;
@@ -266,7 +288,11 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
                     if (field.dataType == 'string_array') {
                       final chosen = (options[field.key]?.isNotEmpty ?? false)
                           ? selectedMultiple[field.key]!.toList()
-                          : raw.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+                          : raw
+                                .split(',')
+                                .map((v) => v.trim())
+                                .where((v) => v.isNotEmpty)
+                                .toList();
                       if (field.required && chosen.isEmpty) return;
                       if (chosen.isNotEmpty) attrs[field.key] = chosen;
                     } else {
@@ -295,22 +321,28 @@ class _InventoryItemsScreenState extends ConsumerState<InventoryItemsScreen> {
       if (saved == null) return;
       final svc = await ref.read(inventoryItemsServiceProvider.future);
       if (existing == null) {
-        await svc.create(InventoryItemInput(
-          itemType: type.typeId,
-          name: saved['name'] as String,
-          attributes: Map<String, dynamic>.from(saved['attributes'] as Map),
-        ));
+        await svc.create(
+          InventoryItemInput(
+            itemType: type.typeId,
+            name: saved['name'] as String,
+            attributes: Map<String, dynamic>.from(saved['attributes'] as Map),
+          ),
+        );
       } else {
         await svc.update(existing.id, saved);
       }
       ref.invalidate(itemsProvider(type.typeId));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+      }
     } finally {
       name.dispose();
-      for (final c in values.values) { c.dispose(); }
+      for (final c in values.values) {
+        c.dispose();
+      }
     }
   }
 }

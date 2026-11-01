@@ -54,7 +54,8 @@ OtpNextStep _nextFromUser(AuthUser u, {required String appId}) {
   final next = u.onboarding?.next;
   switch (next) {
     case 'verify_email':
-      return OtpNextStep.collectEmail;
+      return OtpNextStep
+          .done; // Optional email registration never blocks login.
     case 'complete_contact':
       return OtpNextStep.collectName;
     case 'link_contact':
@@ -500,7 +501,26 @@ class AuthService {
   // /auth/session/me is the supported source of membership and recovery state.
   // The retired /auth/session/sync-claims route must not be called here.
   // ─────────────────────────────────────────────
+  /// Idempotent member registration for the selected tenant and app.
+  ///
+  /// The backend obtains the phone from Firebase Auth, not from this client.
+  /// A first-time user must have signed in with Firebase Phone Auth; an
+  /// existing verified member may subsequently use their verified email OTP.
+  /// Registration grants only ordinary membership, never staff privileges.
+  Future<void> registerMember() async {
+    final uri = routes.registerMember();
+    try {
+      final authed = await _authHeaderFresh();
+      _logReq(op: 'registerMember', uri: uri, data: null, options: authed);
+      final res = await _dio.postUri(uri, options: authed);
+      _logResp('registerMember', res);
+    } on DioException catch (ex) {
+      _failDio('registerMember', ex);
+    }
+  }
+
   Future<CheckStatusResult> checkUserStatusAfterFirebaseLogin() async {
+    await registerMember();
     final AuthUser user = await loadSession();
     final bool recoveryRequired = user.recoveryRequired;
     final OtpNextStep next = recoveryRequired
@@ -552,7 +572,7 @@ class AuthService {
   // ─────────────────────────────────────────────
   // Session (AUTH REQUIRED, ALWAYS)
   // ─────────────────────────────────────────────
-  Future<AuthUser> loadSession() async {
+  Future<AuthUser> loadSession({bool registerIfMissing = false}) async {
     final uri = routes.getCurrentUser();
     try {
       final authed = await _authHeaderFresh();
@@ -576,6 +596,15 @@ class AuthService {
       _cachedUser = user;
       return user;
     } on DioException catch (ex) {
+      // A newly Firebase-authenticated phone user may not yet have a tenant
+      // AuthUser. Register only for the specific missing-user 404, never for
+      // unauthorized, disabled, missing-app, or other failures.
+      final missingTenantUser = ex.response?.statusCode == 404 &&
+          _readErrorMessage(ex.response?.data) == 'Tenant user not found';
+      if (registerIfMissing && missingTenantUser) {
+        await registerMember();
+        return loadSession(); // Exactly one retry; no recursive enrollment.
+      }
       _failDio('loadSession', ex);
     }
   }
@@ -589,24 +618,50 @@ class AuthService {
   // ─────────────────────────────────────────────
   // Profile save (AUTH REQUIRED)
   // ─────────────────────────────────────────────
-  /// Compatibility entrypoint for the existing name-entry screen.
-  /// Names are saved ONLY to the authenticated user's Native Contact.
-  /// Remove firstName/lastName arguments after migrating all call sites.
+  /// Register a personal or company-facing contact profile. The backend derives
+  /// display_name from the required names; it is never supplied by Flutter.
+  /// A contact email is NOT an authenticated email login identity.
   Future<AuthUser> saveProfile({
-    required String firstName,
-    required String lastName,
-    required String displayName,
+    required bool isCompany,
+    String? firstName,
+    String? lastName,
     String? companyName,
+    String? idNumber,
+    String? email,
   }) async {
-    final name = _requireTrimmed(displayName, 'Display name is required');
+    final payload = <String, dynamic>{'is_company': isCompany};
+    if (isCompany) {
+      payload['company_name'] = _requireTrimmed(
+        companyName ?? '',
+        'Company name is required',
+      );
+    } else {
+      payload['first_name'] = _requireTrimmed(
+        firstName ?? '',
+        'First name is required',
+      );
+      payload['last_name'] = _requireTrimmed(
+        lastName ?? '',
+        'Last name is required',
+      );
+    }
+    final id = (idNumber ?? '').trim();
+    if (appId == 'occuwell' && id.isEmpty) {
+      throw ArgumentError('Identification number is required for Occupational Health');
+    }
+    if (id.isNotEmpty) payload['id_number'] = id;
+    final contactEmail = (email ?? '').trim();
+    if (contactEmail.isNotEmpty) {
+      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(contactEmail)) {
+        throw ArgumentError('Enter a valid email address');
+      }
+      payload['email'] = contactEmail;
+    }
     final uri = nativeContactMeUri();
     try {
       final opts = await _authHeaderFresh();
-      final res = await _dio.patchUri(
-        uri,
-        data: <String, dynamic>{'display_name': name},
-        options: opts,
-      );
+      _logReq(op: 'saveNativeContact', uri: uri, data: payload, options: opts);
+      final res = await _dio.patchUri(uri, data: payload, options: opts);
       _logResp('saveNativeContact', res);
       return loadSession();
     } on DioException catch (ex) {
@@ -629,6 +684,7 @@ class AuthService {
     } catch (_) {
       // ignore
     }
+    await registerMember();
     await loadSession();
     return cred;
   }

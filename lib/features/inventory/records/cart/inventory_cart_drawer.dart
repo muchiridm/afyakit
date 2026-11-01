@@ -67,12 +67,14 @@ class _InventoryCartDrawerState extends ConsumerState<InventoryCartDrawer> {
       Navigator.of(context).maybePop();
     } catch (error) {
       // Do not discard the stable request_key on timeout or failed response.
-      if (ref.read(inventoryCartProvider).isSubmitting)
+      if (ref.read(inventoryCartProvider).isSubmitting) {
         controller.submissionFailed();
-      if (mounted)
+      }
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     }
   }
 

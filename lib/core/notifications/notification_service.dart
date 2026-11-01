@@ -192,6 +192,46 @@ class NotificationService {
     }
   }
 
+  /// Registers the current token, then disables the previous registration.
+  ///
+  /// The previous identity is supplied explicitly so switching accounts or
+  /// apps never disables another device owned by the newly signed-in user.
+  /// This cannot discover stale tokens left by earlier browser sessions.
+  Future<void> replaceDeviceToken({
+    required AuthUser user,
+    required String appId,
+    required String token,
+    AuthUser? previousUser,
+    String? previousAppId,
+    String? previousToken,
+  }) async {
+    await registerDevice(user: user, appId: appId, token: token);
+
+    final oldToken = previousToken?.trim() ?? '';
+    final oldApp = previousAppId?.trim().toLowerCase() ?? '';
+    final oldUser = previousUser;
+    if (oldToken.isEmpty || oldApp.isEmpty || oldUser == null) return;
+
+    final sameRegistration =
+        oldUser.tenantId.trim().toLowerCase() ==
+            user.tenantId.trim().toLowerCase() &&
+        oldUser.uid == user.uid &&
+        oldApp == appId.trim().toLowerCase() &&
+        oldToken == token.trim();
+    if (sameRegistration) return;
+
+    try {
+      await disableDevice(user: oldUser, appId: oldApp, token: oldToken);
+    } catch (error, stackTrace) {
+      // A successful replacement should remain registered even when cleanup
+      // is blocked by permissions or an intermittently unavailable network.
+      debugPrint(
+        '⚠️ Previous notification registration cleanup failed: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Disable device
   // ─────────────────────────────────────────────

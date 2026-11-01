@@ -152,7 +152,6 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       'roles=${u?.staffRoles} '
       'staff=${u?.isStaffResolved} '
       'phoneVerified=${u?.phoneVerified} '
-      'phoneClaimed=${u?.phoneClaimed} '
       'phoneSatisfied=${u?.phoneSatisfied} '
       'appEmailVerified=${u?.activeAppEmailLower != null} '
       'accountNumber=${u?.accountNumber}',
@@ -286,7 +285,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       // The frontend resolves staffRoles for the active app.
 
-      final fresh = await svc.loadSession();
+      final fresh = await svc.loadSession(registerIfMissing: true);
 
       _lastNetworkFetchAt = DateTime.now();
 
@@ -429,11 +428,10 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       await svc.logOut();
     } finally {
-      if (_disposed) return;
-
-      _lastNetworkFetchAt = null;
-
-      state = const AsyncValue.data(null);
+      if (!_disposed) {
+        _lastNetworkFetchAt = null;
+        state = const AsyncValue.data(null);
+      }
     }
   }
 

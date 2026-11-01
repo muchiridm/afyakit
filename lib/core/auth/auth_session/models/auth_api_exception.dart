@@ -49,7 +49,7 @@ String friendlyAuthMessage({
       return 'Please wait a bit before requesting another code.';
 
     case 'EMAIL_REQUIRED':
-      // This is control-flow in your Somalia branch; you generally won't show it as an error.
+      // Legacy server response; email registration is optional.
       return 'Email is required to continue.';
   }
 

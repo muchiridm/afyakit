@@ -3,8 +3,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/inventory/batches/inventory_batch.dart';
 import 'package:afyakit/features/inventory/batches/inventory_batches_providers.dart';
 import 'package:afyakit/features/inventory/locations/inventory_locations_providers.dart';
+import 'package:afyakit/features/inventory/items/inventory_items_providers.dart';
 import 'inventory_issue.dart';
 import 'inventory_issues_providers.dart';
+
+// Resolve display labels from the app-scoped catalogue; retain canonical IDs
+// only in models and API requests.
+final _issueItemNamesProvider = FutureProvider<Map<String, String>>((
+  ref,
+) async {
+  final types = await ref.watch(itemTypesProvider.future);
+  final service = await ref.watch(inventoryItemsServiceProvider.future);
+  final names = <String, String>{};
+  for (final type in types) {
+    for (var page = 1; ; page++) {
+      final result = await service.list(
+        typeId: type.typeId,
+        page: page,
+        perPage: 100,
+      );
+      for (final item in result.items) {
+        names[item.id] = item.name;
+      }
+      if (!result.hasMore) break;
+    }
+  }
+  return names;
+});
+
+String _label(String id, Map<String, String> names, String kind) =>
+    names[id]?.trim().isNotEmpty == true
+    ? names[id]!
+    : '$kind unavailable ($id)';
 
 class InventoryIssuesScreen extends ConsumerWidget {
   const InventoryIssuesScreen({super.key});
@@ -12,6 +42,14 @@ class InventoryIssuesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final issues = ref.watch(inventoryIssuesProvider);
+    final itemNames =
+        ref.watch(_issueItemNamesProvider).valueOrNull ??
+        const <String, String>{};
+    final locations = ref.watch(inventoryLocationsProvider(null)).valueOrNull;
+    final locationNames = <String, String>{
+      if (locations != null)
+        for (final location in locations) location.id: location.name,
+    };
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stock issues'),
@@ -42,10 +80,10 @@ class InventoryIssuesScreen extends ConsumerWidget {
                   final issue = rows[index];
                   return ListTile(
                     title: Text(
-                      '${issue.type.name.toUpperCase()} • ${issue.id}',
+                      '${issue.type.name.toUpperCase()} • ${issue.entries.map((e) => _label(e.itemId, itemNames, 'Item')).toSet().join(', ')}',
                     ),
                     subtitle: Text(
-                      '${issue.status.name} • ${issue.entries.length} batches • ${issue.totalQuantity} units',
+                      '${issue.status.name} • ${_label(issue.fromLocationId, locationNames, 'Location')} • ${issue.entries.length} batches • ${issue.totalQuantity} units',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
@@ -80,10 +118,11 @@ class _IssueDetailsScreenState extends ConsumerState<_IssueDetailsScreen> {
       ref.invalidate(inventoryIssueProvider(widget.id));
       ref.invalidate(inventoryIssuesProvider);
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -92,6 +131,22 @@ class _IssueDetailsScreenState extends ConsumerState<_IssueDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final issue = ref.watch(inventoryIssueProvider(widget.id));
+    final itemNames =
+        ref.watch(_issueItemNamesProvider).valueOrNull ??
+        const <String, String>{};
+    final locations = ref.watch(inventoryLocationsProvider(null)).valueOrNull;
+    final locationNames = <String, String>{
+      if (locations != null)
+        for (final location in locations) location.id: location.name,
+    };
+    final batches = ref.watch(inventoryBatchesProvider(null)).valueOrNull;
+    final batchNames = <String, String>{
+      if (batches != null)
+        for (final batch in batches)
+          batch.id: (batch.batchNumber?.trim().isNotEmpty == true)
+              ? batch.batchNumber!
+              : 'Unnumbered batch',
+    };
     return Scaffold(
       appBar: AppBar(title: const Text('Issue details')),
       body: issue.when(
@@ -119,16 +174,22 @@ class _IssueDetailsScreenState extends ConsumerState<_IssueDetailsScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text('Status: ${record.status.name}'),
-              Text('From: ${record.fromLocationId}'),
+              Text(
+                'From: ${_label(record.fromLocationId, locationNames, 'Location')}',
+              ),
               if (record.toLocationId != null)
-                Text('To: ${record.toLocationId}'),
+                Text(
+                  'To: ${_label(record.toLocationId!, locationNames, 'Location')}',
+                ),
               if (record.note?.isNotEmpty == true) Text('Note: ${record.note}'),
               const SizedBox(height: 16),
               Text('Batches', style: Theme.of(context).textTheme.titleMedium),
               for (final entry in record.entries)
                 ListTile(
-                  title: Text(entry.batchId),
-                  subtitle: Text('Item: ${entry.itemId}'),
+                  title: Text(_label(entry.itemId, itemNames, 'Item')),
+                  subtitle: Text(
+                    'Batch: ${_label(entry.batchId, batchNames, 'Batch')}',
+                  ),
                   trailing: Text('${entry.quantity}'),
                 ),
               const SizedBox(height: 12),
@@ -206,10 +267,11 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
       ref.invalidate(inventoryIssuesProvider);
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -219,12 +281,15 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
   Widget build(BuildContext context) {
     final locationState = ref.watch(inventoryLocationsProvider(null));
     final batchState = ref.watch(inventoryBatchesProvider(fromId));
+    final itemNames =
+        ref.watch(_issueItemNamesProvider).valueOrNull ??
+        const <String, String>{};
     return Scaffold(
       appBar: AppBar(title: const Text('Create stock issue')),
       body: locationState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
-            Center(child: Text('Unable to load stores: $error')),
+            Center(child: Text('Unable to load locations: $error')),
         data: (locations) {
           final stores = locations.where((s) => !s.isArchived).toList();
           return ListView(
@@ -249,7 +314,7 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
               DropdownButtonFormField<String>(
                 key: const ValueKey('source'),
                 initialValue: fromId,
-                decoration: const InputDecoration(labelText: 'Source store'),
+                decoration: const InputDecoration(labelText: 'Source location'),
                 items: [
                   for (final store in stores)
                     DropdownMenuItem(value: store.id, child: Text(store.name)),
@@ -267,7 +332,7 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
                   key: ValueKey('destination-$fromId'),
                   initialValue: toId,
                   decoration: const InputDecoration(
-                    labelText: 'Destination store',
+                    labelText: 'Destination location',
                   ),
                   items: [
                     for (final store in stores.where((s) => s.id != fromId))
@@ -291,7 +356,7 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               if (fromId == null)
-                const ListTile(title: Text('Select a source store first')),
+                const ListTile(title: Text('Select a source location first')),
               if (fromId != null)
                 batchState.when(
                   loading: () => const LinearProgressIndicator(),
@@ -306,9 +371,9 @@ class _NewIssueScreenState extends ConsumerState<_NewIssueScreen> {
                             b.quantity > 0,
                       ))
                         ListTile(
-                          title: Text(batch.batchNumber ?? batch.id),
+                          title: Text(_label(batch.itemId, itemNames, 'Item')),
                           subtitle: Text(
-                            'Item: ${batch.itemId} • Available: ${batch.quantity}',
+                            'Batch: ${batch.batchNumber?.trim().isNotEmpty == true ? batch.batchNumber : 'Unnumbered'} • Available: ${batch.quantity}',
                           ),
                           trailing: SizedBox(
                             width: 90,

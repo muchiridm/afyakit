@@ -76,8 +76,13 @@ class AppEmail {
 
 @immutable
 class SessionIdentity {
-  const SessionIdentity({required this.linkVerified, this.accountNumber,
-    this.displayName, this.verifiedPhone, this.verifiedEmail});
+  const SessionIdentity({
+    required this.linkVerified,
+    this.accountNumber,
+    this.displayName,
+    this.verifiedPhone,
+    this.verifiedEmail,
+  });
   final bool linkVerified;
   final String? accountNumber;
   final String? displayName;
@@ -86,7 +91,8 @@ class SessionIdentity {
 
   factory SessionIdentity.fromMap(Object? value) {
     final map = value is Map ? value : const <String, dynamic>{};
-    String? str(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+    String? str(Object? v) =>
+        v is String && v.trim().isNotEmpty ? v.trim() : null;
     return SessionIdentity(
       linkVerified: map['linkVerified'] == true,
       accountNumber: str(map['accountNumber']),
@@ -99,22 +105,35 @@ class SessionIdentity {
 
 @immutable
 class SessionOnboarding {
-  const SessionOnboarding({required this.required, required this.next, this.missingFields = const []});
+  const SessionOnboarding({
+    required this.required,
+    required this.next,
+    this.missingFields = const [],
+  });
   final bool required;
   final String next;
   final List<String> missingFields;
 
   factory SessionOnboarding.fromMap(Object? value) {
-    if (value is! Map) throw const FormatException('Session missing onboarding state');
+    if (value is! Map)
+      throw const FormatException('Session missing onboarding state');
     final next = value['next'];
-    if (next is! String || !const {'done', 'verify_email', 'complete_contact', 'link_contact'}.contains(next)) {
+    if (next is! String ||
+        !const {
+          'done',
+          'verify_email',
+          'complete_contact',
+          'link_contact',
+        }.contains(next)) {
       throw const FormatException('Invalid session onboarding state');
     }
     return SessionOnboarding(
       required: value['required'] == true || next != 'done',
       next: next,
       missingFields: value['missingFields'] is List
-          ? (value['missingFields'] as List).whereType<String>().toList(growable: false)
+          ? (value['missingFields'] as List).whereType<String>().toList(
+              growable: false,
+            )
           : const [],
     );
   }
@@ -417,7 +436,8 @@ class AuthUser {
   /// Transitional alias; resolves to the Native Contact, not Zoho.
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
-    if (identity?.displayName != null && identity!.displayName!.isNotEmpty) return identity!.displayName!;
+    if (identity?.displayName != null && identity!.displayName!.isNotEmpty)
+      return identity!.displayName!;
     if (dn.isNotEmpty) return dn;
     final f = (firstName ?? '').trim();
     final l = (lastName ?? '').trim();
@@ -500,7 +520,9 @@ class AuthUser {
       previousUids: previousUids,
       recoveredFromAccountNumber: recoveredFromAccountNumber,
       recoveredAt: recoveredAt,
-      identity: json['identity'] is Map ? SessionIdentity.fromMap(json['identity']) : null,
+      identity: json['identity'] is Map
+          ? SessionIdentity.fromMap(json['identity'])
+          : null,
       onboarding: json['onboarding'] is Map
           ? SessionOnboarding.fromMap(json['onboarding'])
           : null,

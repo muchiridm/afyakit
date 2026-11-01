@@ -109,10 +109,11 @@ class _ItemTypeManagerState extends ConsumerState<_ItemTypeManager> {
       ref.invalidate(itemTypesProvider);
       ref.invalidate(allItemTypesProvider);
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Item type operation failed: $error')),
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -315,7 +316,7 @@ class _TypeEditorState extends State<_TypeEditor> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: attributes[i].dataType,
+                            initialValue: attributes[i].dataType,
                             decoration: const InputDecoration(
                               labelText: 'Data type',
                             ),

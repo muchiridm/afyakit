@@ -144,6 +144,7 @@ class LoginController extends StateNotifier<LoginState> {
 
   /// Keep last phone so "Resend code" works without UI re-providing it.
   String? _lastPhoneE164;
+  String? _lastEmailLogin;
 
   // ─────────────────────────────────────────────
   // Helpers
@@ -192,7 +193,7 @@ class LoginController extends StateNotifier<LoginState> {
             ? 'Enter the code sent to $where'
             : 'Enter the email code.';
       case LoginStep.nameEntry:
-        return 'Add your display name to finish setup.';
+        return 'Complete your personal or company details to finish setup.';
       case LoginStep.recoverAccount:
         return 'We found an existing account linked to your verified phone and email. Enter your old account number to recover it.';
     }
@@ -201,7 +202,7 @@ class LoginController extends StateNotifier<LoginState> {
   LoginStep _mapOtpNextToLoginStep(OtpNextStep next) {
     switch (next) {
       case OtpNextStep.collectEmail:
-        return LoginStep.emailEntry;
+        return LoginStep.nameEntry; // Email registration is optional.
       case OtpNextStep.collectName:
         return LoginStep.nameEntry;
       case OtpNextStep.recoverAccount:
@@ -223,6 +224,10 @@ class LoginController extends StateNotifier<LoginState> {
 
   Future<OtpNextStep> _postAuthNextStep(AuthService svc) async {
     final status = await svc.checkUserStatusAfterFirebaseLogin();
+    // The Firebase token listener may have attempted /session/me before
+    // registration finished. Publish the now-registered member to app state.
+    await _ref.read(sessionControllerProvider(_tenantId).notifier)
+        .refresh(forceNetwork: true);
     return status.next;
   }
 
@@ -235,6 +240,7 @@ class LoginController extends StateNotifier<LoginState> {
 
     _resetFirebaseOtpState();
     _lastPhoneE164 = null;
+    _lastEmailLogin = null;
 
     state = LoginState.initial().copyWith(
       stepHint: _hintForStep(LoginStep.phone),
@@ -274,7 +280,36 @@ class LoginController extends StateNotifier<LoginState> {
       stepHint: 'Re-checking your account…',
     );
 
-    await sendCode(phoneE164: phone);
+    if ((state.channel ?? '').toLowerCase() == 'email' &&
+        _lastEmailLogin != null) {
+      await startEmailLogin(phoneE164: phone, email: _lastEmailLogin!);
+    } else {
+      await sendCode(phoneE164: phone);
+    }
+  }
+
+  /// Email OTP is an additional login channel, never a replacement for SMS.
+  /// The backend checks that the supplied phone and verified app email belong
+  /// to the same tenant user; no identity is inferred from an email alone.
+  Future<void> startEmailLogin({
+    required String phoneE164,
+    required String email,
+  }) async {
+    final phone = phoneE164.trim();
+    final address = email.trim();
+    if (!RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(phone)) {
+      SnackService.showError('Enter a valid international phone number.');
+      return;
+    }
+    if (!_looksLikeEmail(address)) {
+      SnackService.showError('Enter your previously verified email address.');
+      return;
+    }
+    if (!mounted || state.busy) return;
+    _lastPhoneE164 = phone;
+    _lastEmailLogin = address;
+    state = state.copyWith(phoneNumber: phone, channel: 'email');
+    await startEmailVerify(email: address);
   }
 
   // ─────────────────────────────────────────────
@@ -292,6 +327,7 @@ class LoginController extends StateNotifier<LoginState> {
     if (!mounted || state.busy) return;
 
     _lastPhoneE164 = phone;
+    _lastEmailLogin = null;
 
     state = state.copyWith(
       sending: true,
@@ -332,18 +368,11 @@ class LoginController extends StateNotifier<LoginState> {
     }
 
     if (start.requiresCollectEmail) {
-      final masked = (start.maskedTo ?? '').trim().isNotEmpty
-          ? start.maskedTo!.trim()
-          : _maskPhone(phone);
-
-      state = state.copyWith(
-        sending: false,
-        step: LoginStep.emailEntry,
-        clearAttemptId: true,
-        channel: (start.channel ?? 'email').trim(),
-        maskedTo: masked,
-        stepHint: _hintForStep(LoginStep.emailEntry),
+      // A legacy server still requires email: do not silently force registration.
+      SnackService.showError(
+        'Please update the backend: email must be optional.',
       );
+      state = state.copyWith(sending: false, step: LoginStep.phone);
       return;
     }
 
@@ -756,51 +785,48 @@ class LoginController extends StateNotifier<LoginState> {
   // ─────────────────────────────────────────────
 
   Future<void> finishOnboardingAfterName({
-    required String firstName,
-    required String lastName,
-    required String displayName,
+    required bool isCompany,
+    String? firstName,
+    String? lastName,
     String? companyName,
+    String? idNumber,
+    String? email,
   }) async {
-    final dn = displayName.trim();
-    if (dn.isEmpty) {
-      SnackService.showError('Display name is required');
+    if (isCompany) {
+      if ((companyName ?? '').trim().isEmpty) {
+        SnackService.showError('Company name is required');
+        return;
+      }
+    } else if ((firstName ?? '').trim().isEmpty ||
+        (lastName ?? '').trim().isEmpty) {
+      SnackService.showError('First and last name are required');
       return;
     }
-
-    // Native Contact uses one canonical display_name; no synthetic first/last names.
-    // The existing UI arguments are retained temporarily for compatibility.
     if (!mounted || state.busy) return;
-
     state = state.copyWith(savingProfile: true, stepHint: 'Saving…');
-
     try {
       final svc = await _auth();
-
       await svc.saveProfile(
+        isCompany: isCompany,
         firstName: firstName,
         lastName: lastName,
-        displayName: dn,
+        companyName: companyName,
+        idNumber: idNumber,
+        email: email,
       );
-      await _ref
-          .read(sessionControllerProvider(_tenantId).notifier)
-          .refresh(forceNetwork: true);
-
       final next = await _postAuthNextStep(svc);
       if (!mounted) return;
-
       if (next == OtpNextStep.done) {
         _closeNow();
         return;
       }
-
       final step = _mapOtpNextToLoginStep(next);
       state = state.copyWith(step: step, stepHint: _hintForStep(step));
     } catch (err) {
       SnackService.showError('Could not save your profile');
       if (kDebugMode) debugPrint('⚠️ [login] saveProfile failed: $err');
     } finally {
-      if (!mounted) return;
-      state = state.copyWith(savingProfile: false);
+      if (mounted) state = state.copyWith(savingProfile: false);
     }
   }
 

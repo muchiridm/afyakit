@@ -54,8 +54,9 @@ class InventoryLocationsService {
   Future<List<InventoryLocationType>> listTypes() async {
     final body = _object((await dio.getUri(_types, options: _options)).data);
     final raw = body['types'];
-    if (raw is! List)
+    if (raw is! List) {
       throw const FormatException('Expected location types list');
+    }
     return raw.map((v) => InventoryLocationType.fromJson(_object(v))).toList();
   }
 

@@ -1,6 +1,7 @@
 // lib/core/auth/auth_session/widgets/login_screen.dart
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_header.dart';
@@ -30,12 +31,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _otpCtrl = TextEditingController();
 
   final _emailCtrl = TextEditingController();
+  bool _useEmailOtp = false;
   final _emailOtpCtrl = TextEditingController();
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
-  final _displayNameCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
+  final _idCtrl = TextEditingController();
+  final _contactEmailCtrl = TextEditingController();
+  bool _isCompany = false;
 
   final _recoverAccountCtrl = TextEditingController();
 
@@ -97,8 +101,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
-    _displayNameCtrl.dispose();
     _companyCtrl.dispose();
+    _idCtrl.dispose();
+    _contactEmailCtrl.dispose();
 
     _recoverAccountCtrl.dispose();
 
@@ -273,6 +278,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _phoneStep(LoginState state) {
+    void submit() {
+      final phone = _phoneCtrl.text.trim();
+      if (_useEmailOtp) {
+        _ctrl.startEmailLogin(phoneE164: phone, email: _emailCtrl.text);
+      } else {
+        _ctrl.sendCode(phoneE164: phone);
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -280,31 +294,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           controller: _phoneCtrl,
           enabled: !state.busy,
           keyboardType: TextInputType.phone,
-          textInputAction: TextInputAction.done,
+          textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
-            labelText: 'Phone number',
+            labelText: 'Verified phone number',
             hintText: '+2547...',
             border: OutlineInputBorder(),
             isDense: true,
           ),
-          onSubmitted: (_) {
-            final phone = _phoneCtrl.text.trim();
-            final can = phone.isNotEmpty && !state.busy;
-            if (can) _ctrl.sendCode(phoneE164: phone);
-          },
         ),
         const SizedBox(height: 12),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _phoneCtrl,
-          builder: (context, value, _) {
-            final phone = value.text.trim();
-            final canContinue = phone.isNotEmpty && !state.busy;
-
+        const Text('Receive your login code by:'),
+        RadioListTile<bool>(
+          title: const Text('SMS'),
+          subtitle: const Text('Available with every verified phone'),
+          value: false,
+          groupValue: _useEmailOtp,
+          onChanged: state.busy
+              ? null
+              : (v) => setState(() => _useEmailOtp = v ?? false),
+          dense: true,
+        ),
+        RadioListTile<bool>(
+          title: const Text('Email'),
+          subtitle: const Text(
+            'Optional — use an email you have already verified',
+          ),
+          value: true,
+          groupValue: _useEmailOtp,
+          onChanged: state.busy
+              ? null
+              : (v) => setState(() => _useEmailOtp = v ?? false),
+          dense: true,
+        ),
+        if (_useEmailOtp) ...[
+          const SizedBox(height: 8),
+          _textField(
+            controller: _emailCtrl,
+            enabled: !state.busy,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Verified email',
+              hintText: 'name@example.com',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (_) => submit(),
+          ),
+        ],
+        const SizedBox(height: 12),
+        ListenableBuilder(
+          listenable: Listenable.merge([_phoneCtrl, _emailCtrl]),
+          builder: (context, _) {
+            final validPhone = RegExp(
+              r'^\+[1-9]\d{6,14}$',
+            ).hasMatch(_phoneCtrl.text.trim());
+            final validEmail =
+                !_useEmailOtp || _looksLikeEmail(_emailCtrl.text);
             return _primaryButton(
-              enabled: canContinue,
-              onPressed: () => _ctrl.sendCode(phoneE164: _phoneCtrl.text),
+              enabled: validPhone && validEmail && !state.busy,
+              onPressed: submit,
               busy: state.sending,
-              label: 'Continue',
+              label: _useEmailOtp ? 'Send email code' : 'Send SMS code',
             );
           },
         ),
@@ -483,6 +534,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _nameStep(LoginState state) {
+    final appId = ref.watch(appIdProvider).trim().toLowerCase();
+    final occupationalHealth = appId == 'occuwell';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -491,81 +544,98 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: const Text('Back'),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _textField(
-                controller: _firstNameCtrl,
-                enabled: !state.busy,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'First name (optional)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _textField(
-                controller: _lastNameCtrl,
-                enabled: !state.busy,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Last name (optional)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-          ],
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Registering as a company'),
+          subtitle: const Text('Otherwise register as an individual'),
+          value: _isCompany,
+          onChanged: state.busy ? null : (value) => setState(() => _isCompany = value ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
         ),
         const SizedBox(height: 10),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _displayNameCtrl,
-          builder: (context, value, _) {
-            final displayName = value.text.trim();
-            final hasDisplayName = displayName.isNotEmpty;
-
-            return _textField(
-              controller: _displayNameCtrl,
-              enabled: !state.busy,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: 'Display name *',
-                hintText: 'e.g. Dr. John Doe / Pharmacy Mpya',
-                border: const OutlineInputBorder(),
-                isDense: true,
-                helperText: 'This is what others will see.',
-                errorText: hasDisplayName ? null : 'Display name is required',
-              ),
-            );
-          },
-        ),
+        if (_isCompany)
+          _textField(
+            controller: _companyCtrl,
+            enabled: !state.busy,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Company name *',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          )
+        else ...[
+          _textField(
+            controller: _firstNameCtrl,
+            enabled: !state.busy,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'First name *',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _textField(
+            controller: _lastNameCtrl,
+            enabled: !state.busy,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Last name *',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
+        if (occupationalHealth) ...[
+          const SizedBox(height: 10),
+          _textField(
+            controller: _idCtrl,
+            enabled: !state.busy,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: _isCompany
+                  ? 'Company registration / ID number *'
+                  : 'National ID / passport number *',
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         _textField(
-          controller: _companyCtrl,
+          controller: _contactEmailCtrl,
           enabled: !state.busy,
+          keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
-            labelText: 'Company (required for companies)',
+            labelText: 'Email (optional)',
+            helperText: 'For contact only; verify later to enable email login.',
             border: OutlineInputBorder(),
             isDense: true,
           ),
           onSubmitted: (_) => _tryFinish(state),
         ),
         const SizedBox(height: 12),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _displayNameCtrl,
-          builder: (context, value, _) {
-            final displayName = value.text.trim();
-            final canFinish = displayName.isNotEmpty && !state.busy;
-
+        ListenableBuilder(
+          listenable: Listenable.merge([
+            _firstNameCtrl, _lastNameCtrl, _companyCtrl, _idCtrl, _contactEmailCtrl,
+          ]),
+          builder: (context, _) {
+            final nameValid = _isCompany
+                ? _companyCtrl.text.trim().isNotEmpty
+                : _firstNameCtrl.text.trim().isNotEmpty &&
+                    _lastNameCtrl.text.trim().isNotEmpty;
+            final idValid = !occupationalHealth || _idCtrl.text.trim().isNotEmpty;
+            final email = _contactEmailCtrl.text.trim();
+            final emailValid = email.isEmpty ||
+                RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+            final canFinish = nameValid && idValid && emailValid && !state.busy;
             return _primaryButton(
               enabled: canFinish,
               onPressed: () => _tryFinish(state),
               busy: state.savingProfile,
-              label: 'Finish',
+              label: 'Complete registration',
             );
           },
         ),
@@ -634,17 +704,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _tryFinish(LoginState state) {
     if (state.busy) return;
-
-    final displayName = _displayNameCtrl.text.trim();
-    if (displayName.isEmpty) return;
-
+    final appId = ref.read(appIdProvider).trim().toLowerCase();
+    if (_isCompany) {
+      if (_companyCtrl.text.trim().isEmpty) return;
+    } else if (_firstNameCtrl.text.trim().isEmpty || _lastNameCtrl.text.trim().isEmpty) {
+      return;
+    }
+    if (appId == 'occuwell' && _idCtrl.text.trim().isEmpty) return;
+    final email = _contactEmailCtrl.text.trim();
+    if (email.isNotEmpty && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) return;
     _ctrl.finishOnboardingAfterName(
-      firstName: _firstNameCtrl.text,
-      lastName: _lastNameCtrl.text,
-      displayName: _displayNameCtrl.text,
-      companyName: _companyCtrl.text,
+      isCompany: _isCompany,
+      firstName: _isCompany ? null : _firstNameCtrl.text,
+      lastName: _isCompany ? null : _lastNameCtrl.text,
+      companyName: _isCompany ? _companyCtrl.text : null,
+      idNumber: appId == 'occuwell' ? _idCtrl.text : null,
+      email: email.isEmpty ? null : email,
     );
   }
+
 }
 
 class _LoginCard extends StatelessWidget {

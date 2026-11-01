@@ -21,6 +21,20 @@ extension AfyaKitAuthRoutes on AfyaKitRoutes {
 
   Uri getCurrentUser() => _uri('auth/session/me');
 
+  /// Register or enrol the Firebase-authenticated phone user
+  /// as an ordinary member of the selected tenant/app.
+  ///
+  /// POST /api/:tenantId/auth/session/register
+  ///
+  /// Requires:
+  /// - Valid Firebase ID token.
+  /// - Firebase-verified phone identity.
+  /// - Active tenant/application.
+  /// - X-App-Id header supplied by AfyaKitClient.
+  ///
+  /// Registration never grants staff roles.
+  Uri registerMember() => _uri('auth/session/register');
+
   Uri syncClaims() => _uri('auth/session/sync-claims');
 
   Uri sessionRecoverAccount() => _uri('auth/session/recover-account');

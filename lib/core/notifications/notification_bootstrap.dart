@@ -34,6 +34,8 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
 
   String? _registeredToken;
   String? _registrationKey;
+  AuthUser? _registeredUser;
+  String? _registeredAppId;
 
   bool _initialising = false;
   bool _registrationPending = false;
@@ -171,24 +173,33 @@ class _NotificationBootstrapState extends State<NotificationBootstrap> {
       return;
     }
 
-    // The current NotificationService still writes
-    // tenant-level device registrations.
-    //
-    // We will add the explicit appId argument when
-    // updating notification_service.dart next.
-    await _service.registerDevice(
-      user: widget.user,
-      appId: _appId,
+    final user = widget.user;
+    final appId = _appId;
+    final currentKey = _registrationKeyFor(user, appId);
+    if (registrationKey != null && registrationKey != currentKey) return;
+
+    await _service.replaceDeviceToken(
+      user: user,
+      appId: appId,
       token: cleanToken,
+      previousUser: _registeredUser,
+      previousAppId: _registeredAppId,
+      previousToken: _registeredToken,
     );
 
     if (!mounted) return;
 
-    _registeredToken = cleanToken;
-
-    if (registrationKey != null) {
-      _registrationKey = registrationKey;
+    // The selected app or account might have changed during the write.
+    // A fresh bootstrap run will register the new session's identity.
+    if (currentKey != _registrationKeyFor(widget.user, widget.appId)) {
+      _registrationPending = true;
+      return;
     }
+
+    _registeredToken = cleanToken;
+    _registeredUser = user;
+    _registeredAppId = appId;
+    _registrationKey = currentKey;
   }
 
   Future<void> _registerRefreshedToken(String token) async {
