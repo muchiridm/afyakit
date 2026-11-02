@@ -56,44 +56,55 @@ LOAD_ENV ?= 1
 # ─────────────────────────────────────────────────────────────────────────────
 # Environment loader
 #
-# Order:
-#   .env.<app>.web -> .env.<app> -> .env
+# Layer shared settings first, then app settings, then web overrides:
+#   .env -> .env.<app> -> .env.<app>.web
 #
-# Canonical identity keys are never read from env files. APP, TENANT_ID,
-# APP_ID and legacy TENANT are supplied explicitly by this Makefile.
+# This matters for shared Firebase settings such as FCM_WEB_VAPID_KEY:
+# app-specific files should not accidentally hide a shared key.
+# Canonical identity is always supplied by APP_BOOT_DEFINES, never env files.
+# No secrets should be printed by env-check.
 # ─────────────────────────────────────────────────────────────────────────────
 
-define resolve_env_file
+define resolve_env_files
 $(strip $(shell \
-  if [ "$(filter 1 yes true,$(LOAD_ENV))" = "1" ]; then \
+  if [ -n "$(filter 1 yes true,$(LOAD_ENV))" ]; then \
     a="$(1)"; \
-    if [ -n "$$a" ] && [ -f ".env.$$a.web" ]; then echo ".env.$$a.web"; \
-    elif [ -n "$$a" ] && [ -f ".env.$$a" ]; then echo ".env.$$a"; \
-    elif [ -f ".env" ]; then echo ".env"; \
-    fi; \
+    for f in .env ".env.$$a" ".env.$$a.web"; do \
+      if [ -f "$$f" ]; then printf '%s ' "$$f"; fi; \
+    done; \
   fi))
 endef
 
 define defines_from_env
 $(strip $(shell \
-  f="$(1)"; \
-  if [ -n "$$f" ] && [ -f "$$f" ]; then \
-    awk 'BEGIN{FS="="} \
-      /^[[:space:]]*#/ {next} \
-      /^[[:space:]]*$$/ {next} \
+  if [ -n "$(strip $(1))" ]; then \
+    awk ' \
+      /^[[:space:]]*(#|$$)/ {next} \
       { \
-        key=$$1; \
-        sub(/^[[:space:]]+|[[:space:]]+$$/, "", key); \
+        equal=index($$0,"="); if (!equal) next; \
+        key=substr($$0,1,equal-1); \
+        sub(/^[[:space:]]+/, "", key); sub(/[[:space:]]+$$/, "", key); \
+        if (key !~ /^[A-Za-z_][A-Za-z0-9_]*$$/) next; \
         if (key == "APP" || key == "TENANT_ID" || key == "APP_ID" || key == "TENANT") next; \
-        val=substr($$0, index($$0,"=")+1); \
-        sub(/^[[:space:]]+|[[:space:]]+$$/, "", val); \
-        if (key != "") printf "--dart-define=%s=%s ", key, val; \
-      }' "$$f"; \
+        val=substr($$0,equal+1); \
+        sub(/^[[:space:]]+/, "", val); sub(/[[:space:]]+$$/, "", val); \
+        values[key]=val; \
+        if (!(key in seen)) { keys[++n]=key; seen[key]=1; } \
+      } \
+      END { for(i=1;i<=n;i++) printf "--dart-define=%s=%s ", keys[i], values[keys[i]]; } \
+    ' $(1); \
   fi))
 endef
 
-ENV_FILE := $(call resolve_env_file,$(APP_KEY))
-DART_DEFINES := $(call defines_from_env,$(ENV_FILE))
+ENV_FILES := $(call resolve_env_files,$(APP_KEY))
+DART_DEFINES := $(call defines_from_env,$(ENV_FILES))
+# Explicit command-line override is supported, e.g.
+#   make dev afya occuwell FCM_WEB_VAPID_KEY=<public-key>
+FCM_WEB_VAPID_KEY ?=
+ifneq ($(strip $(FCM_WEB_VAPID_KEY)),)
+DART_DEFINES := $(filter-out --dart-define=FCM_WEB_VAPID_KEY=%,$(DART_DEFINES)) --dart-define=FCM_WEB_VAPID_KEY=$(FCM_WEB_VAPID_KEY)
+endif
+FCM_VAPID_CONFIGURED := $(if $(findstring --dart-define=FCM_WEB_VAPID_KEY=,$(DART_DEFINES)),yes,no)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Canonical runtime identity
@@ -319,6 +330,7 @@ help:
 	@echo "  make release afya afyatracker"
 	@echo "  make release danabtmc danabtmc"
 	@echo "  make release hq"
+	@echo "  make env-check afya occuwell      Inspect config (values hidden)"
 	@echo ""
 	@echo 'Batch: APP_TARGETS="afya:dawapap afya:afyatracker" make release-web-all'
 
@@ -331,8 +343,9 @@ env-check:
 	  "APP_MODE=$(APP_MODE)" \
 	  "TENANT_ID=$(TENANT_ID)" \
 	  "APP_ID=$(APP_ID)" \
-	  "ENV_FILE=$(ENV_FILE)" \
-	  "DART_DEFINES=$(DART_DEFINES)" \
+	  "ENV_FILES=$(ENV_FILES)" \
+	  "DART_DEFINE_KEYS=$(foreach d,$(DART_DEFINES),$(firstword $(subst =, ,$(patsubst --dart-define=%,%,$(d)))))" \
+	  "FCM_WEB_VAPID_KEY_CONFIGURED=$(FCM_VAPID_CONFIGURED)" \
 	  "APP_BOOT_DEFINES=$(APP_BOOT_DEFINES)" \
 	  "FIREBASE_PROJECT=$(FIREBASE_PROJECT)" \
 	  "HOSTING_SITE=$(HOSTING_SITE)" \

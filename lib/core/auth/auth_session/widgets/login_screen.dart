@@ -155,6 +155,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     TextInputAction? textInputAction,
     bool autofocus = false,
     List<TextInputFormatter>? inputFormatters,
+    Iterable<String>? autofillHints,
     required InputDecoration decoration,
     ValueChanged<String>? onSubmitted,
   }) {
@@ -165,9 +166,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       textInputAction: textInputAction,
       autofocus: autofocus,
       inputFormatters: inputFormatters,
+      autofillHints: autofillHints,
       onSubmitted: onSubmitted,
       autocorrect: false,
-      enableSuggestions: false,
+      enableSuggestions: autofillHints != null,
       decoration: decoration,
     );
   }
@@ -281,7 +283,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     void submit() {
       final phone = _phoneCtrl.text.trim();
       if (_useEmailOtp) {
-        _ctrl.startEmailLogin(phoneE164: phone, email: _emailCtrl.text);
+        _ctrl.startEmailLogin(phoneE164: phone);
       } else {
         _ctrl.sendCode(phoneE164: phone);
       }
@@ -317,7 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         RadioListTile<bool>(
           title: const Text('Email'),
           subtitle: const Text(
-            'Optional — use an email you have already verified',
+            'Send to your verified email (no email entry needed)',
           ),
           value: true,
           groupValue: _useEmailOtp,
@@ -326,33 +328,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               : (v) => setState(() => _useEmailOtp = v ?? false),
           dense: true,
         ),
-        if (_useEmailOtp) ...[
-          const SizedBox(height: 8),
-          _textField(
-            controller: _emailCtrl,
-            enabled: !state.busy,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Verified email',
-              hintText: 'name@example.com',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            onSubmitted: (_) => submit(),
+        if (_useEmailOtp)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('Code sent to your verified email.'),
           ),
-        ],
         const SizedBox(height: 12),
         ListenableBuilder(
-          listenable: Listenable.merge([_phoneCtrl, _emailCtrl]),
+          listenable: _phoneCtrl,
           builder: (context, _) {
             final validPhone = RegExp(
               r'^\+[1-9]\d{6,14}$',
             ).hasMatch(_phoneCtrl.text.trim());
-            final validEmail =
-                !_useEmailOtp || _looksLikeEmail(_emailCtrl.text);
             return _primaryButton(
-              enabled: validPhone && validEmail && !state.busy,
+              enabled: validPhone && !state.busy,
               onPressed: submit,
               busy: state.sending,
               label: _useEmailOtp ? 'Send email code' : 'Send SMS code',
@@ -549,7 +538,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           title: const Text('Registering as a company'),
           subtitle: const Text('Otherwise register as an individual'),
           value: _isCompany,
-          onChanged: state.busy ? null : (value) => setState(() => _isCompany = value ?? false),
+          onChanged: state.busy
+              ? null
+              : (value) => setState(() => _isCompany = value ?? false),
           controlAffinity: ListTileControlAffinity.leading,
         ),
         const SizedBox(height: 10),
@@ -619,16 +610,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 12),
         ListenableBuilder(
           listenable: Listenable.merge([
-            _firstNameCtrl, _lastNameCtrl, _companyCtrl, _idCtrl, _contactEmailCtrl,
+            _firstNameCtrl,
+            _lastNameCtrl,
+            _companyCtrl,
+            _idCtrl,
+            _contactEmailCtrl,
           ]),
           builder: (context, _) {
             final nameValid = _isCompany
                 ? _companyCtrl.text.trim().isNotEmpty
                 : _firstNameCtrl.text.trim().isNotEmpty &&
-                    _lastNameCtrl.text.trim().isNotEmpty;
-            final idValid = !occupationalHealth || _idCtrl.text.trim().isNotEmpty;
+                      _lastNameCtrl.text.trim().isNotEmpty;
+            final idValid =
+                !occupationalHealth || _idCtrl.text.trim().isNotEmpty;
             final email = _contactEmailCtrl.text.trim();
-            final emailValid = email.isEmpty ||
+            final emailValid =
+                email.isEmpty ||
                 RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
             final canFinish = nameValid && idValid && emailValid && !state.busy;
             return _primaryButton(
@@ -707,12 +704,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final appId = ref.read(appIdProvider).trim().toLowerCase();
     if (_isCompany) {
       if (_companyCtrl.text.trim().isEmpty) return;
-    } else if (_firstNameCtrl.text.trim().isEmpty || _lastNameCtrl.text.trim().isEmpty) {
+    } else if (_firstNameCtrl.text.trim().isEmpty ||
+        _lastNameCtrl.text.trim().isEmpty) {
       return;
     }
     if (appId == 'occuwell' && _idCtrl.text.trim().isEmpty) return;
     final email = _contactEmailCtrl.text.trim();
-    if (email.isNotEmpty && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) return;
+    if (email.isNotEmpty &&
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email))
+      return;
     _ctrl.finishOnboardingAfterName(
       isCompany: _isCompany,
       firstName: _isCompany ? null : _firstNameCtrl.text,
@@ -722,7 +722,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       email: email.isEmpty ? null : email,
     );
   }
-
 }
 
 class _LoginCard extends StatelessWidget {

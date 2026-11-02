@@ -120,7 +120,15 @@ class NotificationService {
     );
 
     try {
-      final snapshot = await deviceRef.get();
+      debugPrint('🔎 [notification-device] reading ${deviceRef.path}');
+       late final DocumentSnapshot<Map<String, dynamic>> snapshot;
+       try {
+         snapshot = await deviceRef.get();
+       } on FirebaseException catch (error) {
+         debugPrint('❌ [notification-device] READ denied/failed '
+             'path=${deviceRef.path} code=${error.code}');
+         rethrow;
+       }
 
       // A device document must not silently change
       // ownership between authenticated users.
@@ -164,7 +172,13 @@ class NotificationService {
         'deviceId=${identity.deviceId}',
       );
 
-      await deviceRef.set(values, SetOptions(merge: true));
+      try {
+         await deviceRef.set(values, SetOptions(merge: true));
+       } on FirebaseException catch (error) {
+         debugPrint('❌ [notification-device] WRITE denied/failed '
+             'path=${deviceRef.path} code=${error.code}');
+         rethrow;
+       }
 
       debugPrint(
         '✅ Notification device registered '
@@ -385,7 +399,7 @@ class NotificationService {
       appId: cleanAppId,
       uid: uid,
       token: cleanToken,
-      deviceId: _deviceId(cleanAppId, cleanToken),
+      deviceId: _deviceId(uid, cleanAppId, cleanToken),
     );
   }
 
@@ -400,15 +414,16 @@ class NotificationService {
         .doc(deviceId);
   }
 
-  // App-aware document identity:
+  // Per-user, per-app registration on a shared physical device.
+  // FCM tokens identify a browser/app installation, NOT an authenticated user.
+  // Include uid so different users can register the same token without
+  // reading or overwriting one another's Firestore document.
   //
-  // Two apps can register the same FCM token
-  // without overwriting each other's records.
-  //
-  // Existing legacy token-only document IDs
-  // remain untouched during migration.
-  String _deviceId(String appId, String token) {
-    final input = jsonEncode([appId, token]);
+  // IMPORTANT: The backend must ensure that only the ACTIVE user for a token
+  // is targeted when sending notifications. Existing [appId, token] documents
+  // require trusted backend migration/disablement before full rollout.
+  String _deviceId(String uid, String appId, String token) {
+    final input = jsonEncode([uid, appId, token]);
 
     return sha256.convert(utf8.encode(input)).toString();
   }

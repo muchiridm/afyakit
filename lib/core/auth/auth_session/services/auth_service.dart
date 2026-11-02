@@ -442,15 +442,12 @@ class AuthService {
   }
 
   Future<StartResponse> startEmailLoginOtp({
-    required String email,
     required String phoneNumber,
     int codeLength = 6,
   }) async {
-    final e = _requireTrimmed(email, 'Email is required');
     final p = _requireTrimmed(phoneNumber, 'Phone number is required');
     final uri = routes.emailStart();
     final body = <String, Object?>{
-      'email': e,
       'phoneNumber': p,
       'codeLength': codeLength,
       'purpose': 'login',
@@ -476,7 +473,6 @@ class AuthService {
           userMessage: friendlyAuthMessage(
             status: sc,
             code: serverCode,
-            email: e,
             phone: p,
           ),
           debugMessage: 'POST $uri · HTTP $sc · $serverCode',
@@ -684,8 +680,8 @@ class AuthService {
     } catch (_) {
       // ignore
     }
-    await registerMember();
-    await loadSession();
+    // The caller performs the single membership/session handshake.
+    // Firebase token changes may also wake SessionController.
     return cred;
   }
 

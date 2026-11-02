@@ -41,6 +41,23 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
   bool _disposed = false;
 
+  // During explicit OTP sign-in the login controller owns the session
+  // handshake. The Firebase listener must not race registration.
+  int _explicitLoginDepth = 0;
+  int _sessionGeneration = 0;
+
+  void beginExplicitLogin() {
+    _explicitLoginDepth++;
+    _sessionGeneration++;
+  }
+
+  void endExplicitLogin() {
+    if (_explicitLoginDepth > 0) _explicitLoginDepth--;
+    // If sign-in failed after Firebase authentication, the next normal
+    // refresh or token event can recover the session.
+  }
+
+
   /// Prevent duplicate concurrent loadSession calls.
 
   Future<void>? _inflight;
@@ -63,6 +80,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
     _sub = fb.FirebaseAuth.instance.idTokenChanges().listen(
       (fbUser) async {
+        if (_explicitLoginDepth > 0 && fbUser != null) return;
         // Background refresh (no loading flicker).
 
         await _syncFromFirebaseUser(
@@ -174,6 +192,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
     required bool showLoadingIfNeeded,
   }) async {
     if (_disposed) return;
+    if (_explicitLoginDepth > 0 && fbUser != null) return;
 
     _inflight ??=
         _syncInternal(
@@ -208,6 +227,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
       return;
     }
 
+    final generation = _sessionGeneration;
     final previousUser = state.valueOrNull;
 
     try {
@@ -287,6 +307,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       final fresh = await svc.loadSession(registerIfMissing: true);
 
+      if (_disposed || generation != _sessionGeneration) return;
       _lastNetworkFetchAt = DateTime.now();
 
       if (_disposed) return;
@@ -299,6 +320,7 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       _logSessionUser(appUser, where: 'network');
     } catch (err, st) {
+      if (generation != _sessionGeneration) return;
       if (_shouldTreatAsGuestError(err)) {
         _logSessionError(err, st, where: 'loadSession');
 
@@ -323,6 +345,20 @@ class SessionController extends StateNotifier<AsyncValue<AuthUser?>> {
 
       state = AsyncValue.error(err, st);
     }
+  }
+
+  /// Publish the session returned by the explicit post-login handshake.
+  /// Do not issue a redundant GET /auth/session/me.
+  void acceptAuthenticatedUser(AuthUser user) {
+    if (_disposed) return;
+    final firebaseUid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (firebaseUid == null || firebaseUid != user.uid) return;
+    final appUser = user.forApp(ref.read(appIdProvider));
+    _sessionGeneration++;
+    _initialized = true;
+    _lastNetworkFetchAt = DateTime.now();
+    state = AsyncValue.data(appUser);
+    _logSessionUser(appUser, where: 'post-login');
   }
 
   /// Force a backend session reload.

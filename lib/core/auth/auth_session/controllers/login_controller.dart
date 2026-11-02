@@ -144,7 +144,7 @@ class LoginController extends StateNotifier<LoginState> {
 
   /// Keep last phone so "Resend code" works without UI re-providing it.
   String? _lastPhoneE164;
-  String? _lastEmailLogin;
+  bool _lastLoginViaEmail = false;
 
   // ─────────────────────────────────────────────
   // Helpers
@@ -224,10 +224,10 @@ class LoginController extends StateNotifier<LoginState> {
 
   Future<OtpNextStep> _postAuthNextStep(AuthService svc) async {
     final status = await svc.checkUserStatusAfterFirebaseLogin();
-    // The Firebase token listener may have attempted /session/me before
-    // registration finished. Publish the now-registered member to app state.
-    await _ref.read(sessionControllerProvider(_tenantId).notifier)
-        .refresh(forceNetwork: true);
+    // checkUserStatusAfterFirebaseLogin already registers and retrieves the
+    // authoritative session. Publish it without another HTTP request.
+    _ref.read(sessionControllerProvider(_tenantId).notifier)
+        .acceptAuthenticatedUser(status.user);
     return status.next;
   }
 
@@ -240,7 +240,7 @@ class LoginController extends StateNotifier<LoginState> {
 
     _resetFirebaseOtpState();
     _lastPhoneE164 = null;
-    _lastEmailLogin = null;
+    _lastLoginViaEmail = false;
 
     state = LoginState.initial().copyWith(
       stepHint: _hintForStep(LoginStep.phone),
@@ -280,36 +280,69 @@ class LoginController extends StateNotifier<LoginState> {
       stepHint: 'Re-checking your account…',
     );
 
-    if ((state.channel ?? '').toLowerCase() == 'email' &&
-        _lastEmailLogin != null) {
-      await startEmailLogin(phoneE164: phone, email: _lastEmailLogin!);
+    if (_lastLoginViaEmail) {
+      await startEmailLogin(phoneE164: phone);
     } else {
       await sendCode(phoneE164: phone);
     }
   }
 
-  /// Email OTP is an additional login channel, never a replacement for SMS.
-  /// The backend checks that the supplied phone and verified app email belong
-  /// to the same tenant user; no identity is inferred from an email alone.
-  Future<void> startEmailLogin({
-    required String phoneE164,
-    required String email,
-  }) async {
+  /// Email OTP for the verified address already bound to the phone and app.
+  /// The frontend never requests or supplies that email address.
+  Future<void> startEmailLogin({required String phoneE164}) async {
     final phone = phoneE164.trim();
-    final address = email.trim();
     if (!RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(phone)) {
       SnackService.showError('Enter a valid international phone number.');
       return;
     }
-    if (!_looksLikeEmail(address)) {
-      SnackService.showError('Enter your previously verified email address.');
-      return;
-    }
     if (!mounted || state.busy) return;
     _lastPhoneE164 = phone;
-    _lastEmailLogin = address;
-    state = state.copyWith(phoneNumber: phone, channel: 'email');
-    await startEmailVerify(email: address);
+    _lastLoginViaEmail = true;
+    state = state.copyWith(
+      sending: true,
+      phoneNumber: phone,
+      channel: 'email',
+      stepHint: 'Sending a code to your verified email…',
+    );
+    try {
+      final svc = await _auth();
+      final result = await svc.startEmailLoginOtp(
+        phoneNumber: phone,
+        codeLength: 6,
+      );
+      if (!mounted) return;
+      final attemptId = (result.attemptId ?? '').trim();
+      if (result.throttled == true) {
+        SnackService.showInfo('Please wait before requesting another code.');
+        return;
+      }
+      if (attemptId.isEmpty) {
+        throw StateError('Could not start email OTP.');
+      }
+      state = state.copyWith(
+        step: LoginStep.otp,
+        attemptId: attemptId,
+        channel: 'email',
+        maskedTo: (result.maskedTo ?? '').trim(),
+        stepHint: (result.maskedTo ?? '').trim().isNotEmpty
+            ? 'Enter the code sent to ${result.maskedTo}'
+            : 'Enter the email code.',
+      );
+    } catch (error) {
+      if (error is AuthApiException &&
+          error.code == 'EMAIL_LOGIN_UNAVAILABLE') {
+        SnackService.showError(
+          'Email login is unavailable for this phone number in this app. '
+          'Select SMS or verify your email after signing in.',
+        );
+      } else if (error is AuthApiException) {
+        SnackService.showError(error.userMessage);
+      } else {
+        SnackService.showError('Unable to send email code. Please try SMS.');
+      }
+    } finally {
+      if (mounted) state = state.copyWith(sending: false);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -327,7 +360,7 @@ class LoginController extends StateNotifier<LoginState> {
     if (!mounted || state.busy) return;
 
     _lastPhoneE164 = phone;
-    _lastEmailLogin = null;
+    _lastLoginViaEmail = false;
 
     state = state.copyWith(
       sending: true,
@@ -501,6 +534,8 @@ class LoginController extends StateNotifier<LoginState> {
     }
     if (!mounted || state.busy) return;
 
+    final session = _ref.read(sessionControllerProvider(_tenantId).notifier);
+    session.beginExplicitLogin();
     state = state.copyWith(verifying: true, stepHint: 'Verifying…');
 
     try {
@@ -563,6 +598,7 @@ class LoginController extends StateNotifier<LoginState> {
 
       state = state.copyWith(stepHint: _hintForStep(LoginStep.otp));
     } finally {
+      session.endExplicitLogin();
       if (!mounted) return;
       state = state.copyWith(verifying: false);
     }
@@ -620,7 +656,6 @@ class LoginController extends StateNotifier<LoginState> {
         }
 
         final res = await svc.startEmailLoginOtp(
-          email: e,
           phoneNumber: phone,
           codeLength: 6,
         );
@@ -737,6 +772,8 @@ class LoginController extends StateNotifier<LoginState> {
 
     if (!mounted || state.busy) return;
 
+    final session = _ref.read(sessionControllerProvider(_tenantId).notifier);
+    session.beginExplicitLogin();
     state = state.copyWith(verifying: true, stepHint: 'Verifying…');
 
     try {
@@ -775,6 +812,7 @@ class LoginController extends StateNotifier<LoginState> {
       SnackService.showError('Could not verify email code');
       if (kDebugMode) debugPrint('⚠️ [login] verifyEmailCode failed: $err');
     } finally {
+      session.endExplicitLogin();
       if (!mounted) return;
       state = state.copyWith(verifying: false);
     }
