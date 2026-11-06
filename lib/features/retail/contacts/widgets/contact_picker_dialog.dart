@@ -1,19 +1,15 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/native_contacts_controller.dart';
 import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
-import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 
-/// Staff picker returning a canonical NativeContact (AC-XXXXXX).
-///
-/// For member-scoped quotes, no picker or Zoho lookup is needed: the backend
-/// determines the authenticated payer. Member mode therefore displays a
-/// read-only explanation rather than calling the staff-only contacts GET.
+/// Staff picker returning a canonical NativeContact (AC-XXXXXX or ORG-XXXXXX).
+/// Uses the same first-page Riverpod cache as NativeContactsScreen.
+/// Member-scoped quotes never load the staff contacts directory.
 class ContactPickerDialog extends ConsumerStatefulWidget {
   const ContactPickerDialog({super.key, this.forcePickerMode = false});
 
@@ -25,76 +21,39 @@ class ContactPickerDialog extends ConsumerStatefulWidget {
 }
 
 class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
-  static const int _pageSize = 50;
-
-  final _search = TextEditingController();
-  final _scroll = ScrollController();
-  Timer? _debounce;
-  List<NativeContact> _items = <NativeContact>[];
-  bool _loading = false;
-  bool _hasMore = true;
-  int _page = 1;
-  int _generation = 0;
-  String? _error;
-
-  bool get _memberMode =>
-      !widget.forcePickerMode &&
-      ref.read(quoteContactPolicyProvider) == QuoteContactPolicy.memberScoped;
-
-  @override
-  void initState() {
-    super.initState();
-    _search.addListener(() {
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 250), () {
-        if (mounted) setState(() {});
-      });
-    });
-    _scroll.addListener(() {
-      if (_memberMode || _loading || !_hasMore || !_scroll.hasClients) return;
-      if (_scroll.position.extentAfter < 200) {
-        unawaited(_load(_page + 1));
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_memberMode) unawaited(_load(1));
-    });
-  }
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
-    _generation++;
-    _debounce?.cancel();
     _search.dispose();
-    _scroll.dispose();
     super.dispose();
   }
 
-  Future<void> _load(int page) async {
-    if (!mounted || _memberMode || _loading) return;
-    final generation = ++_generation;
-    setState(() {
-      _loading = true;
-      _error = null;
+  List<NativeContact> _filterContacts(List<NativeContact> contacts) {
+    final query = _query;
+    final filtered = contacts.where((contact) {
+      if (query.isEmpty) return true;
+
+      final searchable = <String>[
+        contact.displayName,
+        contact.accountNumber,
+        contact.phone ?? '',
+        contact.email ?? '',
+        contact.verifiedPhone ?? '',
+        contact.verifiedEmail ?? '',
+      ].join(' ').toLowerCase();
+
+      return searchable.contains(query);
+    }).toList();
+
+    filtered.sort((a, b) {
+      final byName = a.displayName.trim().toLowerCase().compareTo(
+        b.displayName.trim().toLowerCase(),
+      );
+      return byName != 0 ? byName : a.accountNumber.compareTo(b.accountNumber);
     });
-    try {
-      final service = await ref.read(nativeContactsServiceProvider.future);
-      final contacts = await service.list(page: page, perPage: _pageSize);
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _page = page;
-        _hasMore = contacts.length == _pageSize;
-        _items = page == 1 ? contacts : <NativeContact>[..._items, ...contacts];
-      });
-    } catch (error) {
-      if (mounted && generation == _generation) {
-        setState(() => _error = error.toString());
-      }
-    } finally {
-      if (mounted && generation == _generation) {
-        setState(() => _loading = false);
-      }
-    }
+    return filtered;
   }
 
   @override
@@ -103,20 +62,14 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
         !widget.forcePickerMode &&
         ref.watch(quoteContactPolicyProvider) ==
             QuoteContactPolicy.memberScoped;
-    final accountNumber = ref.watch(currentMemberAccountNumberProvider);
-    final query = _search.text.trim().toLowerCase();
-    final visible = query.isEmpty
-        ? _items
-        : _items
-              .where(
-                (contact) =>
-                    contact.displayName.toLowerCase().contains(query) ||
-                    contact.id.toLowerCase().contains(query) ||
-                    (contact.accountNumber).toLowerCase().contains(query) ||
-                    (contact.phone ?? '').toLowerCase().contains(query) ||
-                    (contact.email ?? '').toLowerCase().contains(query),
-              )
-              .toList();
+
+    // Do not subscribe to the staff-only directory in member mode.
+    final contactsAsync = memberMode
+        ? null
+        : ref.watch(nativeContactsListProvider);
+    final accountNumber = memberMode
+        ? ref.watch(currentMemberAccountNumberProvider)
+        : null;
 
     return AlertDialog(
       title: Text(
@@ -144,39 +97,67 @@ class _ContactPickerDialogState extends ConsumerState<ContactPickerDialog> {
                 children: <Widget>[
                   TextField(
                     controller: _search,
+                    onChanged: (value) {
+                      setState(() => _query = value.trim().toLowerCase());
+                    },
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.search),
-                      hintText: 'Filter loaded contacts',
+                      hintText:
+                          'Filter contacts by name, account, phone or email',
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Search filters loaded pages only.',
-                    style: TextStyle(fontSize: 11),
-                  ),
-                  if (_error != null)
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scroll,
-                      itemCount: visible.length,
-                      itemBuilder: (context, index) {
-                        final contact = visible[index];
-                        return ListTile(
-                          title: Text(contact.displayName),
-                          subtitle: Text(contact.accountNumber),
-                          onTap: () =>
-                              Navigator.of(context).pop<NativeContact>(contact),
+                    child: contactsAsync!.when(
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (error, _) => Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text('Unable to load contacts: $error'),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: () =>
+                                  ref.invalidate(nativeContactsListProvider),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      data: (contacts) {
+                        final visible = _filterContacts(contacts);
+                        if (visible.isEmpty) {
+                          return const Center(child: Text('No contacts found'));
+                        }
+                        return ListView.builder(
+                          itemCount: visible.length,
+                          itemBuilder: (context, index) {
+                            final contact = visible[index];
+                            return ListTile(
+                              key: ValueKey(contact.accountNumber),
+                              title: Text(contact.displayName),
+                              subtitle: Text(contact.accountNumber),
+                              onTap: () => Navigator.of(
+                                context,
+                              ).pop<NativeContact>(contact),
+                            );
+                          },
                         );
                       },
                     ),
                   ),
-                  if (_loading) const LinearProgressIndicator(),
+                  if (contactsAsync.hasValue)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Showing ${_filterContacts(contactsAsync.value!).length} '
+                        'of ${contactsAsync.value!.length} loaded contacts. '
+                        'Search filters the loaded first page only.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
                 ],
               ),
       ),

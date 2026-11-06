@@ -261,11 +261,13 @@ class AllUsersService {
     int limit = 50,
   }) async {
     final tenantRoutes = _tenantRoutes(tenantId);
-    final query = search.trim();
-    final uri = tenantRoutes.getAllUsers(
-      search: query.isEmpty ? null : query,
-      limit: limit,
-    );
+    // The tenant auth-users endpoint does not accept search or limit.
+    // Apply these directory controls locally after fetching the full list.
+    final query = search.trim().toLowerCase();
+    if (limit < 1) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive');
+    }
+    final uri = tenantRoutes.getAllUsers();
     if (kDebugMode) {
       debugPrint('🛰️ $_tag GET $uri');
     }
@@ -273,7 +275,27 @@ class AllUsersService {
     if (!_ok(response)) {
       _bad(response, 'List tenant users');
     }
-    final users = _extractList(response.data).map(_userFromMap).toList();
+    final rows = _extractList(response.data);
+    final filtered = query.isEmpty
+        ? rows
+        : rows.where((row) {
+            const searchableFields = <String>[
+              'uid',
+              'id',
+              'phoneNumber',
+              'email',
+              'displayName',
+              'firstName',
+              'lastName',
+              'accountNumber',
+            ];
+            final searchable = searchableFields
+                .map((field) => row[field]?.toString() ?? '')
+                .join(' ')
+                .toLowerCase();
+            return searchable.contains(query);
+          }).toList();
+    final users = filtered.take(limit).map(_userFromMap).toList();
     if (kDebugMode) {
       debugPrint(
         '✅ $_tag Parsed ${users.length} '
@@ -291,15 +313,14 @@ class AllUsersService {
   }) async {
     final tenantRoutes = _tenantRoutes(tenantId);
     final phone = _requireId(phoneNumber, 'phoneNumber');
-    final name = displayName?.trim();
+    // The backend CreateUserSchema is strict and accepts phoneNumber only.
+    // Keep displayName in this signature for existing callers, but do not
+    // send it: a contact's display name is derived from Native Contacts.
     final uri = tenantRoutes.createUser();
-    final body = <String, Object?>{
-      'phoneNumber': phone,
-      if (name != null && name.isNotEmpty) 'displayName': name,
-    };
+    final body = <String, Object?>{'phoneNumber': phone};
     if (kDebugMode) {
       debugPrint('🛰️ $_tag POST $uri');
-      debugPrint('📦 $_tag POST payload=$body');
+      debugPrint('📦 $_tag POST payload=[phone number redacted]');
     }
     final response = await dio.postUri(
       uri,
@@ -343,10 +364,7 @@ class AllUsersService {
     final cleanUid = _requireId(uid, 'uid');
     final cleanApp = _requireId(appId, 'appId').toLowerCase();
     final tenantRoutes = _tenantRoutes(cleanTenant);
-    final base = tenantRoutes.updateUser(cleanUid);
-    final uri = base.replace(
-      path: '${base.path}/apps/${Uri.encodeComponent(cleanApp)}/membership',
-    );
+    final uri = tenantRoutes.setUserAppMembership(cleanUid, cleanApp);
     final response = await dio.putUri(
       uri,
       data: <String, Object?>{'status': active ? 'active' : 'disabled'},
@@ -391,10 +409,7 @@ class AllUsersService {
       );
     }
     final tenantRoutes = _tenantRoutes(cleanTenant);
-    final base = tenantRoutes.updateUser(cleanUid);
-    final uri = base.replace(
-      path: '${base.path}/apps/${Uri.encodeComponent(cleanApp)}/staff-roles',
-    );
+    final uri = tenantRoutes.setUserAppStaffRoles(cleanUid, cleanApp);
     final response = await dio.putUri(
       uri,
       data: <String, Object?>{'staffRoles': roles},
@@ -426,7 +441,7 @@ class AllUsersService {
     final uri = tenantRoutes.updateUser(cleanUid);
     if (kDebugMode) {
       debugPrint('🛰️ $_tag PATCH $uri');
-      debugPrint('📦 $_tag PATCH payload=$patch');
+      debugPrint('📦 $_tag PATCH auth-user fields=${patch.keys.toList()}');
     }
     final response = await dio.patchUri(
       uri,

@@ -10,8 +10,9 @@ class OnboardingGate {
     if (user.recoveryRequired) return OnboardingNeed.linkContact;
     if (!user.isPhoneSatisfiedResolved) return OnboardingNeed.phone;
     final onboarding = user.onboarding;
-    if (onboarding == null)
+    if (onboarding == null) {
       throw const FormatException('Missing server onboarding state');
+    }
     switch (onboarding.next) {
       case 'verify_email':
         return OnboardingNeed.email;
@@ -40,8 +41,9 @@ class OnboardingGate {
           state.step == LoginStep.emailOtp;
       if (step == LoginStep.phone && inPhoneFlow) return;
       if (step == LoginStep.emailEntry && inEmailFlow) return;
-      if (step == LoginStep.nameEntry && state.step == LoginStep.nameEntry)
+      if (step == LoginStep.nameEntry && state.step == LoginStep.nameEntry) {
         return;
+      }
       ctrl.forceStep(step, hint: hint);
     });
   }

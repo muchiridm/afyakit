@@ -86,7 +86,8 @@ class ProfilesService {
     final data = _profileUpsertPayload(input)
       ..remove('account_number')
       ..remove('relationship')
-      ..remove('is_active');
+      ..remove('is_active')
+      ..remove('app_ids');
 
     final response = await api.putUri<Object?>(
       routes.recordsProfileUpdate(id),
@@ -96,6 +97,27 @@ class ProfilesService {
     final body = _asMap(response.data);
 
     return _readProfile(body['profile']);
+  }
+
+  /// App staff explicitly enrol a verified Contact-linked patient in the
+  /// current application. The server validates the app, Contact and link.
+  /// This is NOT a tenant-wide profile search or an authorization bypass.
+  Future<Profile> enrolInCurrentApp({
+    required String profileId,
+    required String accountNumber,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    final account = _requiredId(accountNumber, 'accountNumber');
+    final profileUri = routes.recordsProfileGet(id);
+    final enrolmentUri = profileUri.replace(
+      path: '${profileUri.path}/enrolment',
+      query: null,
+    );
+    final response = await api.postUri<Object?>(
+      enrolmentUri,
+      data: <String, Object?>{'account_number': account},
+    );
+    return _readProfile(_asMap(response.data)['profile']);
   }
 
   Future<void> delete(String profileId) async {

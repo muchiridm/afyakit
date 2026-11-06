@@ -783,7 +783,7 @@ class _QuoteEditorDetailsSheetState
 
     return NativeContact(
       accountNumber: accountNumber,
-      displayName: payerName,
+      companyName: payerName,
       entityType: 'organization',
       contactType: 'customer',
       status: 'active',

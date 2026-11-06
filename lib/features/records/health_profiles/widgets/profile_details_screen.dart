@@ -157,6 +157,13 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   }
 
   Future<void> _deactivateProfile(Profile profile) async {
+    if (profile.isMultiApp) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This patient is enrolled in multiple applications. '
+            'Global deactivation is not available here.'),
+      ));
+      return;
+    }
     final confirmed = await _confirmAction(
       title: 'Deactivate Health Profile',
       message:
@@ -436,11 +443,13 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                     alignment: Alignment.centerLeft,
                     child: visibleProfile.isActive
                         ? TextButton.icon(
-                            onPressed: state.isSaving
+                            onPressed: state.isSaving || visibleProfile.isMultiApp
                                 ? null
                                 : () => _deactivateProfile(visibleProfile),
                             icon: const Icon(Icons.pause_circle_outline),
-                            label: const Text('Deactivate Health Profile'),
+                            label: Text(visibleProfile.isMultiApp
+                                ? 'Shared profile · cannot deactivate here'
+                                : 'Deactivate Health Profile'),
                           )
                         : Wrap(
                             spacing: 12,

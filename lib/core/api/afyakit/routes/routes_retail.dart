@@ -14,6 +14,8 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? q,
     String? accountNumber,
     String? customerId,
+    String? status,
+    String? scope,
   }) {
     final query = <String, String>{'limit': '$limit', 'page': '$page'};
     void add(String key, String? value) {
@@ -22,6 +24,14 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     }
 
     add('q', q);
+    add('status', status);
+    if (scope != null && scope.trim().isNotEmpty) {
+      final value = scope.trim().toLowerCase();
+      if (value != 'all' && value != 'mine') {
+        throw ArgumentError.value(scope, 'scope', 'Expected all or mine');
+      }
+      query['scope'] = value;
+    }
     add('accountNumber', accountNumber);
     // Legacy/accounting filter. The backend expects snake_case.
     add('customer_id', customerId);
@@ -59,6 +69,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? claimPackId,
     String? membershipId,
     String? prescriptionId,
+    String? status,
   }) {
     final query = <String, String>{'limit': '$limit', 'page': '$page'};
     void add(String key, String? value) {
@@ -67,6 +78,7 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     }
 
     add('q', q);
+    add('status', status);
     // Accounting customer_id remains a Zoho customer ID for legacy filters.
     add('customer_id', customerId);
     // Preserve the existing backend fallback filter behaviour.
@@ -107,6 +119,9 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     );
   }
 
+  /// The backend deliberately returns HTTP 410 for GET /zoho/v1/payments.
+  /// List invoices first, then call retailInvoicePayments(invoiceId).
+  @Deprecated('Use retailInvoicePayments(invoiceId) instead.')
   Uri retailPaymentsList({
     int perPage = 200,
     int page = 1,
@@ -114,16 +129,10 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
     String? q,
     String? accountNumber,
   }) {
-    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
-    void add(String key, String? value) {
-      final v = (value ?? '').trim();
-      if (v.isNotEmpty) query[key] = v;
-    }
-
-    add('invoice_id', invoiceId);
-    add('q', q);
-    add('accountNumber', accountNumber);
-    return _uri('zoho/v1/payments', query: query);
+    throw UnsupportedError(
+      'General Zoho payment listing is disabled (HTTP 410). '
+      'Use retailInvoicePayments(invoiceId).',
+    );
   }
 
   Uri retailPaymentsCreate() => _uri('zoho/v1/payments');
@@ -137,6 +146,10 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
   // M-Pesa
   // ─────────────────────────────────────────────
+  /// POST; canonical tenant M-Pesa payment initiation.
+  Uri retailMpesaInitiatePayment() => _uri('mpesa/payments/initiate');
+
+  /// POST; supported alias retained for existing callers.
   Uri retailMpesaStkInitiate() => _uri('mpesa/stk/initiate');
   Uri retailMpesaPaymentStatus(String paymentId) =>
       _uri('mpesa/payments/${_seg(paymentId)}');
@@ -144,23 +157,29 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   // ─────────────────────────────────────────────
   // Retail meta
   // ─────────────────────────────────────────────
+  /// GET /zoho/v1/meta/accounts — only `type` is accepted by the backend.
+  /// Keep optional old arguments for call-site compatibility, but reject them
+  /// rather than pretending the server performs unsupported filtering.
   Uri retailMetaAccounts({String? search, String? type, bool? active}) {
-    final query = <String, String>{};
-    void add(String key, String? value) {
-      final v = (value ?? '').trim();
-      if (v.isNotEmpty) query[key] = v;
+    if (search != null && search.trim().isNotEmpty) {
+      throw UnsupportedError('Zoho meta/accounts does not support search.');
     }
-
-    add('search_text', search);
-    add('type', type);
     if (active != null) {
-      query['active'] = active ? 'true' : 'false';
+      throw UnsupportedError('Zoho meta/accounts does not support active.');
     }
-    return _uri('zoho/v1/meta/accounts', query: query);
+    return _uri(
+      'zoho/v1/meta/accounts',
+      query: {if (type != null && type.trim().isNotEmpty) 'type': type.trim()},
+    );
   }
 
-  Uri retailMetaAccountById(String accountId) =>
-      _uri('zoho/v1/meta/accounts/${_seg(accountId)}');
+  /// No GET /zoho/v1/meta/accounts/:accountId exists in the supplied router.
+  @Deprecated('Fetch the account list and select by ID locally.')
+  Uri retailMetaAccountById(String accountId) {
+    throw UnsupportedError(
+      'Zoho meta account detail endpoint is not registered.',
+    );
+  }
 
   // ─────────────────────────────────────────────
   // DawaIndex retail catalog

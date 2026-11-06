@@ -29,11 +29,7 @@ class NativeContactTile extends StatelessWidget {
   bool get _active => contact.status.trim().toLowerCase() == 'active';
 
   String get _primaryPhone {
-    for (final value in [
-      contact.verifiedPhone,
-      contact.mobile,
-      contact.phone,
-    ]) {
+    for (final value in [contact.verifiedPhone, contact.phone]) {
       if (value != null && value.trim().isNotEmpty) return value.trim();
     }
     return '';
@@ -79,7 +75,9 @@ class NativeContactTile extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              contact.displayName,
+                              contact.displayName.trim().isEmpty
+                                  ? 'Name missing — edit contact'
+                                  : contact.displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleMedium?.copyWith(
@@ -194,8 +192,6 @@ class _ContactDetails extends StatelessWidget {
     final details = <String>[
       if (contact.verifiedPhone?.trim().isNotEmpty == true)
         'Phone: ${contact.verifiedPhone!.trim()}'
-      else if (contact.mobile?.trim().isNotEmpty == true)
-        'Phone: ${contact.mobile!.trim()}'
       else if (contact.phone?.trim().isNotEmpty == true)
         'Phone: ${contact.phone!.trim()}',
       if (contact.appIds.isNotEmpty)

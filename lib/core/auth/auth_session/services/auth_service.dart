@@ -530,39 +530,21 @@ class AuthService {
     );
   }
 
+  /// Account-number recovery was retired from the backend auth router.
+  ///
+  /// Keep this method temporarily so existing callers compile, but fail
+  /// locally instead of attempting the removed /session/recover-account URL.
+  /// A replacement requires a dedicated, authenticated recovery workflow
+  /// with server-side ownership verification.
   Future<SubmitRecoveryResult> submitRecoveryAccountNumber({
     required String accountNumber,
   }) async {
-    final acc = _requireTrimmed(
-      accountNumber,
-      'Account number is required',
-    ).toUpperCase();
-    final authed = await _authHeaderFresh();
-    final uri = routes.sessionRecoverAccount();
-    final payload = <String, dynamic>{'recoverFromAccountNumber': acc};
-    try {
-      _logReq(
-        op: 'submitRecoveryAccountNumber',
-        uri: uri,
-        data: payload,
-        options: authed,
-      );
-      final res = await _dio.postUri(uri, data: payload, options: authed);
-      _logResp('submitRecoveryAccountNumber', res);
-      final user = await loadSession();
-      final recoveryRequired = user.recoveryRequired == true;
-      final next = recoveryRequired
-          ? OtpNextStep.recoverAccount
-          : _nextFromUser(user, appId: appId);
-      return SubmitRecoveryResult(
-        ok: true,
-        next: next,
-        user: user,
-        recoveryRequired: recoveryRequired,
-      );
-    } on DioException catch (ex) {
-      _failDio('submitRecoveryAccountNumber', ex);
-    }
+    _requireTrimmed(accountNumber, 'Account number is required');
+    throw UnsupportedError(
+      'Account-number recovery is unavailable: '
+      'POST /auth/session/recover-account was removed from the backend. '
+      'Use the supported sign-in flow or implement a verified recovery API.',
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -595,7 +577,8 @@ class AuthService {
       // A newly Firebase-authenticated phone user may not yet have a tenant
       // AuthUser. Register only for the specific missing-user 404, never for
       // unauthorized, disabled, missing-app, or other failures.
-      final missingTenantUser = ex.response?.statusCode == 404 &&
+      final missingTenantUser =
+          ex.response?.statusCode == 404 &&
           _readErrorMessage(ex.response?.data) == 'Tenant user not found';
       if (registerIfMissing && missingTenantUser) {
         await registerMember();
@@ -643,7 +626,9 @@ class AuthService {
     }
     final id = (idNumber ?? '').trim();
     if (appId == 'occuwell' && id.isEmpty) {
-      throw ArgumentError('Identification number is required for Occupational Health');
+      throw ArgumentError(
+        'Identification number is required for Occupational Health',
+      );
     }
     if (id.isNotEmpty) payload['id_number'] = id;
     final contactEmail = (email ?? '').trim();

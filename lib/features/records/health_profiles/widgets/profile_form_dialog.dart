@@ -86,7 +86,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
   void _prefillSelf(NativeContact c) {
     if (_name.text.trim().isEmpty) _name.text = c.displayName;
     if (_phone.text.trim().isEmpty) {
-      _phone.text = c.phone ?? c.mobile ?? c.verifiedPhone ?? '';
+      _phone.text = c.phone ?? c.verifiedPhone ?? '';
     }
     if (_email.text.trim().isEmpty) {
       _email.text = c.email ?? c.verifiedEmail ?? '';
@@ -151,8 +151,7 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
       if (_relationship == ProfileContactRelationship.self) {
         // New self profile is identified from the canonical Contact.
         _name.text = chosen.displayName;
-        _phone.text =
-            chosen.phone ?? chosen.mobile ?? chosen.verifiedPhone ?? '';
+        _phone.text = chosen.phone ?? chosen.verifiedPhone ?? '';
         _email.text = chosen.email ?? chosen.verifiedEmail ?? '';
         _nationalId.text = chosen.idNumber ?? '';
       }
@@ -648,7 +647,7 @@ class _ContactSearchDialogState extends ConsumerState<_ContactSearchDialog> {
                   ListTile(
                     title: Text(c.displayName),
                     subtitle: Text(
-                      '${c.accountNumber} · ${c.phone ?? c.mobile ?? c.email ?? ''}',
+                      '${c.accountNumber} · ${c.phone ?? c.verifiedPhone ?? c.email ?? ''}',
                     ),
                     onTap: () => Navigator.pop(context, c),
                   ),

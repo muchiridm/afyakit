@@ -360,6 +360,32 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     }
   }
 
+  /// Trusted staff workflow: register one existing patient in this app.
+  Future<Profile> enrolInCurrentApp({
+    required String profileId,
+    required String accountNumber,
+  }) async {
+    if (isContactScoped) {
+      throw StateError('Only app staff can enrol an existing Health Profile.');
+    }
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.enrolInCurrentApp(
+        profileId: profileId,
+        accountNumber: accountNumber,
+      );
+      await load();
+      state = state.copyWith(isSaving: false, clearError: true);
+      return profile;
+    } catch (error) {
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Failed to enrol Health Profile: $error',
+      );
+      rethrow;
+    }
+  }
+
   /// Administrative hard deletion, never available in member or Contact scope.
   Future<void> permanentlyDelete(
     String profileId, {
@@ -393,6 +419,17 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   Future<void> deactivate(String profileId) async {
     if (isContactScoped) {
       throw StateError('Only unscoped staff may deactivate a profile.');
+    }
+    Profile? profile;
+    for (final item in state.items) {
+      if (item.profileId == profileId) {
+        profile = item;
+        break;
+      }
+    }
+    if (profile?.isMultiApp == true) {
+      throw StateError('This Health Profile belongs to multiple applications. '
+          'Global deactivation is not available here.');
     }
     state = state.copyWith(isSaving: true, clearError: true);
     try {

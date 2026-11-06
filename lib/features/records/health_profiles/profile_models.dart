@@ -354,6 +354,7 @@ class RelatedProfile {
 class Profile {
   const Profile({
     required this.profileId,
+    this.appIds = const <String>[],
     required this.fullName,
     required this.isActive,
     this.dob,
@@ -381,6 +382,10 @@ class Profile {
   });
 
   final String profileId;
+
+  /// Application IDs where this canonical Health Profile is enrolled.
+  final List<String> appIds;
+  bool get isMultiApp => appIds.length > 1;
   final String fullName;
   final String? dob;
   final ProfileGender? gender;
@@ -489,6 +494,11 @@ class Profile {
 
     return Profile(
       profileId: _readRequiredString(json, 'profile_id'),
+      appIds:
+          (json['app_ids'] as List<Object?>?)?.whereType<String>().toList(
+            growable: false,
+          ) ??
+          const <String>[],
       fullName: _readRequiredString(json, 'full_name'),
       dob: _readNullableString(json, 'dob'),
       gender: genderRaw == null ? null : ProfileGender.fromJson(genderRaw),
@@ -527,6 +537,7 @@ class Profile {
 
   Profile copyWith({
     String? profileId,
+    List<String>? appIds,
     String? fullName,
     String? dob,
     ProfileGender? gender,
@@ -554,6 +565,7 @@ class Profile {
   }) {
     return Profile(
       profileId: profileId ?? this.profileId,
+      appIds: appIds ?? this.appIds,
       fullName: fullName ?? this.fullName,
       dob: dob ?? this.dob,
       gender: gender ?? this.gender,

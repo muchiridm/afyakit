@@ -184,7 +184,9 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     if (widget.selectionMode) {
       if (!profile.isActive) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Deactivated profiles cannot be selected.')),
+          const SnackBar(
+            content: Text('Deactivated profiles cannot be selected.'),
+          ),
         );
         return;
       }
@@ -198,8 +200,11 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   Future<void> _openProfileDetails(Profile profile) async {
     // Do not trust a caller-provided admin flag: require current session authority.
     final tenantId = ref.read(tenantIdProvider);
-    final sessionUser = ref.read(sessionControllerProvider(tenantId)).valueOrNull;
-    final canReview = !_memberMode &&
+    final sessionUser = ref
+        .read(sessionControllerProvider(tenantId))
+        .valueOrNull;
+    final canReview =
+        !_memberMode &&
         widget.allowExplicitContactLink &&
         sessionUser?.isSuperAdmin == true;
     await Navigator.of(context).push(
@@ -252,6 +257,88 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
       if (!mounted) return;
 
       _showErrorFromState();
+    }
+  }
+
+  Future<void> _enrolExistingProfile() async {
+    if (_isContactScoped ||
+        !widget.allowExplicitContactLink ||
+        widget.selectionMode) {
+      return;
+    }
+
+    var profileInput = '';
+    var accountInput = '';
+    final values = await showDialog<(String, String)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enrol existing Health Profile'),
+        content: SizedBox(
+          width: 430,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Use the verified HP ID and Native Contact account '
+                'number. The backend will confirm their active relationship '
+                'and enrol the patient in this application.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                onChanged: (value) => profileInput = value,
+                decoration: const InputDecoration(
+                  labelText: 'Health Profile ID (HP-...)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => accountInput = value,
+                decoration: const InputDecoration(
+                  labelText: 'Native Contact account (AC-...)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final hp = profileInput.trim().toUpperCase();
+              final ac = accountInput.trim().toUpperCase();
+              if (!RegExp(r'^HP-[0-9]{8}$').hasMatch(hp) ||
+                  !RegExp(r'^AC-[A-HJ-NP-Z2-9]{6}$').hasMatch(ac)) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Enter valid HP and AC identifiers.'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, (hp, ac));
+            },
+            child: const Text('Enrol'),
+          ),
+        ],
+      ),
+    );
+    if (values == null || !mounted) return;
+    try {
+      await _controller.enrolInCurrentApp(
+        profileId: values.$1,
+        accountNumber: values.$2,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Health Profile enrolled in this app.')),
+      );
+    } catch (_) {
+      if (mounted) _showErrorFromState();
     }
   }
 
@@ -392,6 +479,14 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
           onPressed: state.isLoading ? null : controller.refreshAll,
           icon: const Icon(Icons.refresh),
         ),
+        if (widget.allowExplicitContactLink &&
+            !_isContactScoped &&
+            !widget.selectionMode)
+          TextButton.icon(
+            onPressed: state.isSaving ? null : _enrolExistingProfile,
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text('Enrol existing'),
+          ),
         if (_memberMode && !widget.selectionMode)
           TextButton.icon(
             onPressed: state.isSaving || _missingMemberAccount

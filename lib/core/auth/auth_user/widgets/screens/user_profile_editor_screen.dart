@@ -57,7 +57,6 @@ class _MyContactEditorState extends ConsumerState<_MyContactEditor> {
         _contact = contact;
         _name.text = contact.displayName;
         _phone.text = contact.phone ?? '';
-        _mobile.text = contact.mobile ?? '';
         _email.text = contact.email ?? '';
         _idNumber.text = contact.idNumber ?? '';
         _initialised = true;

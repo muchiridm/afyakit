@@ -16,6 +16,9 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
 
   Uri recordsMyContact() => _uri('records/contacts/me');
 
+  /// PATCH: update the authenticated member's own Native Contact.
+  Uri recordsMyContactUpdate() => _uri('records/contacts/me');
+
   /// Member-only linked profile summaries; account is resolved server-side.
   /// GET /v1/records/contacts/me/health-profiles
   Uri recordsMyContactHealthProfilesList({int page = 1, int perPage = 50}) =>
@@ -110,6 +113,10 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   /// POST: superadmin-only permanent purge, with explicit retention review.
   Uri recordsProfilePurge(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/purge');
+
+  /// POST: trusted staff enrolment of an existing profile into the current app.
+  Uri recordsProfileEnrol(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/enrolment');
 
   Uri recordsProfileLinkSelf(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/link-self');
@@ -265,8 +272,14 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsDocumentCreateCanonical() => _uri('records/documents');
   Uri recordsDocumentById(String documentId) =>
       _uri('records/documents/${_seg(documentId)}');
+
+  /// POST: allocate an ID and storage prefix before uploading.
   Uri recordsDocumentStorageAccess() =>
       _uri('records/documents/storage-access');
+
+  /// POST: obtain a short-lived signed download URL for the document.
+  Uri recordsDocumentStorageDownload(String documentId) =>
+      _uri('records/documents/${_seg(documentId)}/storage-download');
 
   Uri recordsDocumentsListForProfile({
     required String profileId,
@@ -343,6 +356,75 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
       recordsMyDeliveryAddressGet(addressId);
   Uri recordsMyDeliveryAddressArchive(String addressId) =>
       recordsMyDeliveryAddressGet(addressId);
+
+  // ---------------------------------------------------------
+  // Occupational health campaign registration and questionnaires
+  // Mounted inside authenticated records router.
+  // ---------------------------------------------------------
+
+  /// GET (list) / POST (create).
+  Uri recordsCampaignsList({
+    int page = 1,
+    int perPage = 50,
+    bool includeArchived = false,
+  }) => _uri(
+    'records/campaigns',
+    query: {
+      'page': '$page',
+      'per_page': '$perPage',
+      if (includeArchived) 'include_archived': 'true',
+    },
+  );
+
+  Uri recordsCampaignCreate() => _uri('records/campaigns');
+  Uri recordsCampaignGet(String campaignId) =>
+      _uri('records/campaigns/${_seg(campaignId)}');
+
+  /// PATCH.
+  Uri recordsCampaignUpdate(String campaignId) =>
+      recordsCampaignGet(campaignId);
+
+  /// POST.
+  Uri recordsCampaignSetStatus(String campaignId) =>
+      _uri('records/campaigns/${_seg(campaignId)}/status');
+
+  /// GET; authenticated staff access.
+  Uri recordsCampaignSubmissionsList(
+    String campaignId, {
+    int page = 1,
+    int perPage = 50,
+  }) => _uri(
+    'records/campaigns/${_seg(campaignId)}/submissions',
+    query: {'page': '$page', 'per_page': '$perPage'},
+  );
+
+  /// GET (list) / POST (create), authenticated staff access.
+  Uri recordsQuestionnaireTemplatesList() =>
+      _uri('records/questionnaire-templates');
+  Uri recordsQuestionnaireTemplateCreate() =>
+      _uri('records/questionnaire-templates');
+
+  /// GET a specific published version.
+  Uri recordsQuestionnaireTemplateVersionGet(String templateId, int version) =>
+      _uri(
+        'records/questionnaire-templates/${_seg(templateId)}/versions/$version',
+      );
+
+  /// POST a new version.
+  Uri recordsQuestionnaireTemplateVersionCreate(String templateId) =>
+      _uri('records/questionnaire-templates/${_seg(templateId)}/versions');
+
+  // These public paths are defined in campaigns/public_router.ts, which
+  // documents a mount at /api/:tenantId/public/campaigns. The parent public
+  // router mount was not included in the supplied records ZIP.
+  Uri publicCampaignGet(String campaignId, String token) =>
+      _uri('public/campaigns/${_seg(campaignId)}/${_seg(token)}');
+  Uri publicCampaignQuestionnaireGet(String campaignId, String token) =>
+      _uri('public/campaigns/${_seg(campaignId)}/${_seg(token)}/questionnaire');
+
+  /// POST anonymous submission.
+  Uri publicCampaignSubmissionCreate(String campaignId, String token) =>
+      _uri('public/campaigns/${_seg(campaignId)}/${_seg(token)}/submissions');
 
   // ---------------------------------------------------------
   // Shared query helpers

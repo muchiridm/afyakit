@@ -711,8 +711,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (appId == 'occuwell' && _idCtrl.text.trim().isEmpty) return;
     final email = _contactEmailCtrl.text.trim();
     if (email.isNotEmpty &&
-        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email))
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       return;
+    }
     _ctrl.finishOnboardingAfterName(
       isCompany: _isCompany,
       firstName: _isCompany ? null : _firstNameCtrl.text,

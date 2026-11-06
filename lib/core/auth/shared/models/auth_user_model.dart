@@ -115,8 +115,9 @@ class SessionOnboarding {
   final List<String> missingFields;
 
   factory SessionOnboarding.fromMap(Object? value) {
-    if (value is! Map)
+    if (value is! Map) {
       throw const FormatException('Session missing onboarding state');
+    }
     final next = value['next'];
     if (next is! String ||
         !const {
@@ -436,8 +437,9 @@ class AuthUser {
   /// Transitional alias; resolves to the Native Contact, not Zoho.
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
-    if (identity?.displayName != null && identity!.displayName!.isNotEmpty)
+    if (identity?.displayName != null && identity!.displayName!.isNotEmpty) {
       return identity!.displayName!;
+    }
     if (dn.isNotEmpty) return dn;
     final f = (firstName ?? '').trim();
     final l = (lastName ?? '').trim();

@@ -196,8 +196,8 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                       final searchable = [
                         contact.displayName,
                         contact.companyName ?? '',
+                        contact.legacyDisplayName ?? '',
                         contact.phone ?? '',
-                        contact.mobile ?? '',
                         contact.email ?? '',
                         contact.accountNumber,
                         contact.verifiedPhone ?? '',
@@ -212,6 +212,14 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                       return a.accountNumber.compareTo(b.accountNumber);
                     });
 
+                final missingNames = contacts.where((contact) {
+                  if (contact.isOrganization) {
+                    return (contact.companyName ?? '').trim().isEmpty;
+                  }
+                  return (contact.firstName ?? '').trim().isEmpty ||
+                      (contact.lastName ?? '').trim().isEmpty;
+                }).length;
+
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -222,8 +230,8 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                       ),
                       child: Text(
                         _query.isEmpty
-                            ? '${contacts.length} contacts'
-                            : '${filtered.length} of ${contacts.length} contacts',
+                            ? '${contacts.length} contacts${missingNames > 0 ? ' · $missingNames missing names' : ''}'
+                            : '${filtered.length} of ${contacts.length} contacts${missingNames > 0 ? ' · $missingNames missing names' : ''}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -272,37 +280,65 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
   }
 }
 
-/// Owns and disposes text controllers only after the dialog leaves the tree.
+/// Staff editor for canonical Native Contacts.
+/// Person names are stored separately; display_name is derived by the backend.
 class _ContactEditDialog extends StatefulWidget {
   const _ContactEditDialog({this.existing, required this.requireIdForPersons});
+
   final NativeContact? existing;
   final bool requireIdForPersons;
+
   @override
   State<_ContactEditDialog> createState() => _ContactEditDialogState();
 }
 
 class _ContactEditDialogState extends State<_ContactEditDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name;
-  late final TextEditingController _mobile;
+  late final TextEditingController _firstName;
+  late final TextEditingController _lastName;
+  late final TextEditingController _companyName;
+  late final TextEditingController _phone;
   late final TextEditingController _email;
   late final TextEditingController _idNumber;
   late String _entityType;
+
+  /// Normalise recognised Kenyan mobile formats without changing the verified
+  /// authentication identity. Other input is left for validation to reject.
+  static String _normaliseKenyanMobile(String input) {
+    final value = input.trim().replaceAll(RegExp(r'[\s\-()]'), '');
+    if (RegExp(r'^0[17]\d{8}$').hasMatch(value)) {
+      return '+254${value.substring(1)}';
+    }
+    if (RegExp(r'^254[17]\d{8}$').hasMatch(value)) {
+      return '+$value';
+    }
+    if (RegExp(r'^[17]\d{8}$').hasMatch(value)) {
+      return '+254$value';
+    }
+    return value;
+  }
+
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
-    _name = TextEditingController(text: existing?.displayName ?? '');
-    _mobile = TextEditingController(text: existing?.mobile ?? '');
+    _entityType = existing?.entityType ?? 'person';
+    _firstName = TextEditingController(text: existing?.firstName ?? '');
+    _lastName = TextEditingController(text: existing?.lastName ?? '');
+    _companyName = TextEditingController(text: existing?.companyName ?? '');
+    _phone = TextEditingController(
+      text: _normaliseKenyanMobile(existing?.phone ?? ''),
+    );
     _email = TextEditingController(text: existing?.email ?? '');
     _idNumber = TextEditingController(text: existing?.idNumber ?? '');
-    _entityType = existing?.entityType ?? 'person';
   }
 
   @override
   void dispose() {
-    _name.dispose();
-    _mobile.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
+    _companyName.dispose();
+    _phone.dispose();
     _email.dispose();
     _idNumber.dispose();
     super.dispose();
@@ -310,29 +346,44 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    // Preserve verified_phone: editing mobile never verifies authentication identity.
+
     final existing = widget.existing;
+    final normalisedPhone = _normaliseKenyanMobile(_phone.text);
     final body = <String, Object?>{
-      'display_name': _name.text.trim(),
       if (existing == null) 'entity_type': _entityType,
       if (existing == null) 'contact_type': 'customer',
     };
+
+    if (_entityType == 'person') {
+      // Never manufacture a surname or send the derived display_name.
+      body['first_name'] = _firstName.text.trim();
+      body['last_name'] = _lastName.text.trim();
+    } else {
+      body['company_name'] = _companyName.text.trim();
+    }
+
+    // The backend stores phone, not mobile. Verified identity fields are
+    // read-only and are never sent by this editor.
     for (final pair in [
-      ('mobile', _mobile.text),
+      ('phone', normalisedPhone),
       ('email', _email.text),
-      if (widget.requireIdForPersons) ('id_number', _idNumber.text),
+      if (widget.requireIdForPersons && _entityType == 'person')
+        ('id_number', _idNumber.text),
     ]) {
       final value = pair.$2.trim();
       if (existing != null || value.isNotEmpty) {
         body[pair.$1] = value.isEmpty ? null : value;
       }
     }
+
     Navigator.of(context).pop(body);
   }
 
   @override
   Widget build(BuildContext context) {
     final existing = widget.existing;
+    final isPerson = _entityType == 'person';
+
     return AlertDialog(
       title: Text(existing == null ? 'New contact' : 'Edit contact'),
       content: SizedBox(
@@ -343,14 +394,6 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextFormField(
-                  controller: _name,
-                  decoration: const InputDecoration(
-                    labelText: 'Display name *',
-                  ),
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'Required' : null,
-                ),
                 DropdownButtonFormField<String>(
                   initialValue: _entityType,
                   decoration: const InputDecoration(labelText: 'Entity type'),
@@ -361,10 +404,56 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                       child: Text('Organisation'),
                     ),
                   ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _entityType = value);
-                  },
+                  // Backend does not permit changing an entity's type.
+                  onChanged: existing == null
+                      ? (value) {
+                          if (value != null) {
+                            setState(() => _entityType = value);
+                          }
+                        }
+                      : null,
                 ),
+                if (isPerson) ...[
+                  if (existing != null &&
+                      ((existing.firstName ?? '').trim().isEmpty ||
+                          (existing.lastName ?? '').trim().isEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        (existing.legacyDisplayName ?? '').isNotEmpty
+                            ? 'Previous display name: ${existing.legacyDisplayName}. '
+                              'Confirm the correct first and last names separately.'
+                            : 'This contact is missing a first or last name. '
+                              'Enter both names as recorded; do not guess.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  TextFormField(
+                    controller: _firstName,
+                    decoration: const InputDecoration(
+                      labelText: 'First name *',
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'First name is required'
+                        : null,
+                  ),
+                  TextFormField(
+                    controller: _lastName,
+                    decoration: const InputDecoration(labelText: 'Last name *'),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Last name is required'
+                        : null,
+                  ),
+                ] else
+                  TextFormField(
+                    controller: _companyName,
+                    decoration: const InputDecoration(
+                      labelText: 'Company name *',
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Company name is required'
+                        : null,
+                  ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.verified_user_outlined),
@@ -376,16 +465,16 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                   ),
                 ),
                 TextFormField(
-                  controller: _mobile,
+                  controller: _phone,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    labelText: 'Mobile *',
+                    labelText: 'Phone *',
                     hintText: '+254712345678',
                     helperText: 'Kenyan mobile number in international format.',
                   ),
                   validator: (value) {
-                    final mobile = (value ?? '').trim();
-                    if (!RegExp(r'^\+254[17]\d{8}$').hasMatch(mobile)) {
+                    final phone = _normaliseKenyanMobile(value ?? '');
+                    if (!RegExp(r'^\+254[17]\d{8}$').hasMatch(phone)) {
                       return 'Use +254 followed by 9 digits (starting with 7 or 1)';
                     }
                     return null;
@@ -397,6 +486,16 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Email (optional)',
                   ),
+                  validator: (value) {
+                    final email = (value ?? '').trim();
+                    if (email.isNotEmpty &&
+                        !RegExp(
+                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                        ).hasMatch(email)) {
+                      return 'Enter a valid email address';
+                    }
+                    return null;
+                  },
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -407,19 +506,13 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                         : 'Assigned automatically when saved',
                   ),
                 ),
-                if (widget.requireIdForPersons)
+                if (widget.requireIdForPersons && isPerson)
                   TextFormField(
                     controller: _idNumber,
-                    decoration: InputDecoration(
-                      labelText:
-                          widget.requireIdForPersons && _entityType == 'person'
-                          ? 'National ID number *'
-                          : 'National ID number (optional)',
+                    decoration: const InputDecoration(
+                      labelText: 'National ID number *',
                     ),
-                    validator: (value) =>
-                        widget.requireIdForPersons &&
-                            _entityType == 'person' &&
-                            (value ?? '').trim().isEmpty
+                    validator: (value) => (value ?? '').trim().isEmpty
                         ? 'Required for Occuwell'
                         : null,
                   ),

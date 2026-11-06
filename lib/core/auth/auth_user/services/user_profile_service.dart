@@ -18,8 +18,9 @@ final userProfileServiceProvider =
         appId: appId,
         getToken: () async {
           final user = fb.FirebaseAuth.instance.currentUser;
-          if (user == null || user.uid != actorUid)
+          if (user == null || user.uid != actorUid) {
             throw StateError('Account changed. Reopen the profile.');
+          }
           return user.getIdToken();
         },
       );
@@ -44,8 +45,9 @@ class UserProfileService {
   final AfyaKitRoutes routes;
   Dio get _dio => client.dio;
   Uri _scoped(Uri uri) {
-    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId))
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) {
       throw StateError('Invalid app ID');
+    }
     return uri.replace(
       queryParameters: {...uri.queryParameters, 'appId': appId},
     );
@@ -68,8 +70,9 @@ class UserProfileService {
     final user = _parseUser(data);
     if (user.uid != u.uid) throw StateError('Account identity mismatch');
     final token = await u.getIdTokenResult();
-    if (fb.FirebaseAuth.instance.currentUser?.uid != u.uid)
+    if (fb.FirebaseAuth.instance.currentUser?.uid != u.uid) {
       throw StateError('Account changed.');
+    }
     return user.copyWith(isSuperAdmin: token.claims?['superadmin'] == true);
   }
 

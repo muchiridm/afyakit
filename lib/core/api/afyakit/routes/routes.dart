@@ -11,6 +11,7 @@ part 'routes_retail.dart';
 part 'routes_records.dart';
 part 'routes_clinical.dart';
 part 'routes_insurance.dart';
+part 'routes_occupational_health.dart';
 
 class AfyaKitRoutes {
   AfyaKitRoutes(String tenantId) : tenantId = tenantId.trim().toLowerCase();

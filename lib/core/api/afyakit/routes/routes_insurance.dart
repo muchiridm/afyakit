@@ -1,9 +1,17 @@
 part of 'routes.dart';
 
 extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
+  // Insurance endpoints are mounted at /api/:tenantId/insurance.
+  // Memberships: GET/POST collection; GET/PUT/DELETE by ID.
+  // Claim packs: GET/POST collection; GET/PUT/DELETE by ID.
+  // Caller must use PUT (not PATCH) when updating either resource.
+
   Uri insuranceMembershipsList({
     String? search,
     String? profileId,
+    @Deprecated(
+      'patient_no is not supported by the insurance memberships backend.',
+    )
     String? patientNo,
     String? payerContactId,
     String? memberNo,
@@ -21,7 +29,11 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
 
     add('search', search);
     add('profile_id', profileId);
-    add('patient_no', patientNo);
+    if (patientNo != null && patientNo.trim().isNotEmpty) {
+      throw UnsupportedError(
+        'patient_no is not a supported insurance memberships filter; use profileId instead.',
+      );
+    }
     add('payer_contact_id', payerContactId);
     add('member_no', memberNo);
     add('scheme', scheme);
@@ -44,6 +56,7 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
   Uri insuranceMembershipDelete(String membershipId) =>
       _uri('insurance/memberships/${_seg(membershipId)}');
 
+  /// POST requires profile_id and membership_id in the request body.
   Uri insuranceClaimPackCreateCanonical() => _uri('insurance/claim-packs');
   Uri insuranceClaimPackById(String claimPackId) =>
       _uri('insurance/claim-packs/${_seg(claimPackId)}');
@@ -139,6 +152,8 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
     return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 
+  /// Compatibility method: profileId is NOT encoded into the URL.
+  /// POST body must still contain profile_id and membership_id.
   Uri insuranceClaimPackCreate({required String profileId}) {
     return _uri('insurance/claim-packs');
   }

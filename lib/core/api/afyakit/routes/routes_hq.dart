@@ -16,19 +16,47 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
 
   Uri updateTenant(String tenantId) => _hqTenant(tenantId);
 
-  Uri deleteTenant(String tenantId) => _hqTenant(tenantId);
+  /// DELETE /api/hq/tenants/:tenantId; use hard=true for ?hard=1.
+  Uri deleteTenant(String tenantId, {bool hard = false}) => _uriCore(
+    'hq/tenants/${_seg(tenantId)}',
+    query: hard ? {'hard': '1'} : null,
+  );
 
   Uri setTenantStatus(String tenantId) =>
       _uriCore('hq/tenants/${_seg(tenantId)}/status');
 
-  Uri setTenantFlag(String tenantId, String key) =>
-      _uriCore('hq/tenants/${_seg(tenantId)}/flags/${_seg(key)}');
+  /// No corresponding route exists in the supplied HQ backend.
+  /// Retained only to make old callers fail explicitly instead of receiving 404.
+  Uri setTenantFlag(String tenantId, String key) => throw UnsupportedError(
+    'HQ tenant flags endpoint is not registered in the backend.',
+  );
 
   Uri setTenantOwner(String tenantId) =>
       _uriCore('hq/tenants/${_seg(tenantId)}/owner');
 
-  Uri removeTenantOwner(String tenantId) =>
-      _uriCore('hq/tenants/${_seg(tenantId)}/owner');
+  /// DELETE requires exactly one of uid or email; mode is demote or remove.
+  Uri removeTenantOwner(
+    String tenantId, {
+    String? uid,
+    String? email,
+    String? mode,
+  }) {
+    if ((uid == null || uid.trim().isEmpty) ==
+        (email == null || email.trim().isEmpty)) {
+      throw ArgumentError('Specify exactly one of uid or email.');
+    }
+    if (mode != null && mode != 'demote' && mode != 'remove') {
+      throw ArgumentError.value(mode, 'mode', 'Expected demote or remove');
+    }
+    return _uriCore(
+      'hq/tenants/${_seg(tenantId)}/owner',
+      query: {
+        if (uid != null && uid.trim().isNotEmpty) 'uid': uid.trim(),
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        if (mode != null) 'mode': mode,
+      },
+    );
+  }
 
   // ═════════════════════════════════════════════
   // Tenant contacts (HQ-owned shared contact lifecycle)
@@ -46,6 +74,15 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
             'cursor': cursor.trim().toUpperCase(),
         },
       );
+
+  /// POST /api/hq/tenants/:tenantId/contacts
+  /// Body includes app_id and either person or organization data.
+  Uri createHqTenantContact(String tenantId) =>
+      _uriCore('hq/tenants/${_seg(tenantId)}/contacts');
+
+  /// PATCH /api/hq/tenants/:tenantId/contacts/:accountNumber
+  Uri updateHqTenantContact(String tenantId, String accountNumber) =>
+      _hqTenantContact(tenantId, accountNumber);
 
   /// GET /api/hq/tenants/:tenantId/contacts/:accountNumber
   Uri getHqTenantContact(String tenantId, String accountNumber) =>
@@ -96,6 +133,15 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
 
   Uri addAppDomain(String tenantId, String appId) =>
       _hqAppDomains(tenantId, appId);
+
+  /// POST domain transfer. Body requires expectedSourceTenantId,
+  /// expectedSourceAppId, confirmDomain, and reason.
+  Uri transferAppDomain(String tenantId, String appId, String domain) =>
+      _uriCore(
+        'hq/tenants/${_seg(tenantId)}'
+        '/apps/${_seg(appId)}'
+        '/domains/${_seg(domain)}/transfer',
+      );
 
   Uri verifyAppDomain(String tenantId, String appId, String domain) => _uriCore(
     'hq/tenants/${_seg(tenantId)}'

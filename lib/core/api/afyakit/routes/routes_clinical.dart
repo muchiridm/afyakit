@@ -67,4 +67,74 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     required String profileId,
     required String prescriptionId,
   }) => clinicalPrescriptionApprove(prescriptionId);
+
+  // Clinical notes — all endpoints require app-staff access.
+  // GET requires profile_id; encounter_id is optional.
+  Uri clinicalNotesList({
+    required String profileId,
+    String? encounterId,
+    int perPage = 50,
+    int page = 1,
+  }) => _uri(
+    'clinical/notes',
+    query: {
+      'profile_id': profileId,
+      'per_page': '$perPage',
+      'page': '$page',
+      if (encounterId != null && encounterId.trim().isNotEmpty)
+        'encounter_id': encounterId.trim(),
+    },
+  );
+
+  /// POST; request body must contain profile_id, note_type and content.
+  Uri clinicalNoteCreate() => _uri('clinical/notes');
+
+  /// GET.
+  Uri clinicalNoteGet(String noteId) => _uri('clinical/notes/${_seg(noteId)}');
+
+  /// PATCH; only title, content, observed_at are editable.
+  Uri clinicalNoteUpdate(String noteId) => clinicalNoteGet(noteId);
+
+  /// POST.
+  Uri clinicalNoteSign(String noteId) =>
+      _uri('clinical/notes/${_seg(noteId)}/sign');
+
+  /// POST; body requires reason and content.
+  Uri clinicalNoteAmend(String noteId) =>
+      _uri('clinical/notes/${_seg(noteId)}/amendments');
+
+  // Clinical tests — all endpoints require app-staff access.
+  // GET requires profile_id; encounter_id is optional.
+  Uri clinicalTestsList({
+    required String profileId,
+    String? encounterId,
+    int perPage = 50,
+    int page = 1,
+  }) => _uri(
+    'clinical/tests',
+    query: {
+      'profile_id': profileId,
+      'per_page': '$perPage',
+      'page': '$page',
+      if (encounterId != null && encounterId.trim().isNotEmpty)
+        'encounter_id': encounterId.trim(),
+    },
+  );
+
+  /// POST; body requires profile_id, test_type, name, performed_at, results.
+  Uri clinicalTestCreate() => _uri('clinical/tests');
+
+  /// GET.
+  Uri clinicalTestGet(String testId) => _uri('clinical/tests/${_seg(testId)}');
+
+  /// PATCH; editable fields: results, interpretation, units, performed_at.
+  Uri clinicalTestUpdate(String testId) => clinicalTestGet(testId);
+
+  /// POST.
+  Uri clinicalTestSign(String testId) =>
+      _uri('clinical/tests/${_seg(testId)}/sign');
+
+  /// POST; body requires reason and changes (a test patch object).
+  Uri clinicalTestAmend(String testId) =>
+      _uri('clinical/tests/${_seg(testId)}/amendments');
 }

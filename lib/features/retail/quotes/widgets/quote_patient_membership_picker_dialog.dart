@@ -155,7 +155,7 @@ class _QuotePatientMembershipPickerDialogState
     // verify the insurer and resolve its accounting projection.
     final NativeContact payerContact = NativeContact(
       accountNumber: payerAccountNumber,
-      displayName: payerDisplayName,
+      companyName: payerDisplayName,
       entityType: 'organization',
       contactType: 'customer',
       status: 'active',
