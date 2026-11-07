@@ -9,8 +9,8 @@ import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 /// Returns whether [key] is available within the current tenant's
 /// capability ceiling.
 ///
-/// This is tenant/infrastructure configuration, not current-app
-/// feature exposure.
+/// This represents tenant/infrastructure configuration,
+/// not current application feature exposure.
 ///
 /// Runtime product UI should normally use:
 ///
@@ -19,7 +19,7 @@ import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 /// instead.
 final isTenantFeatureEnabledProvider = Provider.autoDispose
     .family<bool, String>((ref, key) {
-      final normalizedKey = key.trim();
+      final normalizedKey = key.trim().toLowerCase();
 
       if (normalizedKey.isEmpty) {
         return false;
@@ -65,8 +65,11 @@ final tenantClinicalEnabledProvider = Provider.autoDispose<bool>((ref) {
   return ref.watch(isTenantModuleEnabledProvider(FeatureKeys.clinical));
 });
 
-final tenantDiagnosticsEnabledProvider = Provider.autoDispose<bool>((ref) {
-  return ref.watch(isTenantModuleEnabledProvider(FeatureKeys.diagnostics));
+/// Tenant-level availability of longitudinal health monitoring.
+///
+/// Independent of Clinical and Occupational Health.
+final tenantHealthMonitoringEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isTenantModuleEnabledProvider(FeatureKeys.healthMonitoring));
 });
 
 final tenantPharmacyEnabledProvider = Provider.autoDispose<bool>((ref) {

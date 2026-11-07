@@ -1,3 +1,5 @@
+// lib/core/capabilities/feature_registry.dart
+
 import 'package:flutter/material.dart';
 
 import 'feature_keys.dart';
@@ -29,25 +31,21 @@ abstract final class FeatureRegistry {
   const FeatureRegistry._();
 
   static const List<FeatureDef> features = [
-    // ─────────────────────────────────────
     // Platform
-    // ─────────────────────────────────────
     FeatureDef(
       key: FeatureKeys.core,
       label: 'Core',
       icon: Icons.apps_rounded,
       description:
-          'Core application services, including identity, '
-          'health profiles, records, metrics and documents.',
+          'Shared application foundations: identity, contacts, '
+          'health profiles, records and documents.',
     ),
-
     FeatureDef(
       key: FeatureKeys.hq,
       label: 'HQ',
       icon: Icons.admin_panel_settings_rounded,
       description: 'Platform administration, users and preferences.',
     ),
-
     FeatureDef(
       key: FeatureKeys.backup,
       label: 'Backup',
@@ -55,75 +53,61 @@ abstract final class FeatureRegistry {
       description: 'Backups, exports and recovery utilities.',
     ),
 
-    // ─────────────────────────────────────
     // Healthcare
-    // ─────────────────────────────────────
     FeatureDef(
       key: FeatureKeys.clinical,
       label: 'Clinical',
       icon: Icons.medical_information_rounded,
       description:
-          'Clinical encounters, consultations, diagnoses, '
-          'treatment and prescriptions.',
+          'Clinical encounters, consultations, notes, diagnoses, '
+          'tests and results, treatments and prescriptions.',
     ),
-
     FeatureDef(
-      key: FeatureKeys.diagnostics,
-      label: 'Diagnostics',
-      icon: Icons.biotech_rounded,
+      key: FeatureKeys.healthMonitoring,
+      label: 'Health Monitoring',
+      icon: Icons.monitor_heart_rounded,
       description:
-          'Laboratory tests, imaging, physiological testing, '
-          'diagnostic requests, results and reports.',
+          'Longitudinal health metrics, trends and wellness tracking. '
+          'Used by Afya Tracker and by other explicitly authorised applications.',
     ),
-
     FeatureDef(
       key: FeatureKeys.pharmacy,
       label: 'Pharmacy',
       icon: Icons.local_pharmacy_rounded,
       description:
-          'Prescription verification, dispensing, '
-          'medication orders and pharmacy services.',
+          'Prescription verification, dispensing, medication orders '
+          'and pharmacy services.',
     ),
-
     FeatureDef(
       key: FeatureKeys.occupationalHealth,
       label: 'Occupational Health',
       icon: Icons.health_and_safety_rounded,
       description:
-          'Employer programmes, screening campaigns, '
+          'Employer programmes, MedEx examinations, screening campaigns, '
           'health surveillance and fitness certification.',
     ),
-
     FeatureDef(
       key: FeatureKeys.insurance,
       label: 'Insurance',
       icon: Icons.verified_user_rounded,
       description:
-          'Memberships, payer links, claims and '
-          'insurance billing.',
+          'Memberships, payer links, claims and insurance billing.',
     ),
 
-    // ─────────────────────────────────────
     // Commerce and operations
-    // ─────────────────────────────────────
     FeatureDef(
       key: FeatureKeys.retail,
       label: 'Retail',
       icon: Icons.storefront_rounded,
       description:
-          'Catalogue, contacts, quotes, invoices, '
-          'payments and sales.',
+          'Catalogue, contacts, quotes, invoices, payments and sales.',
     ),
-
     FeatureDef(
       key: FeatureKeys.inventory,
       label: 'Inventory',
       icon: Icons.inventory_2_rounded,
-      description:
-          'Stock, batches, locations and '
-          'reorder workflows.',
+      description: 'Stock, batches, locations and reorder workflows.',
     ),
-
     FeatureDef(
       key: FeatureKeys.rider,
       label: 'Rider',
@@ -131,16 +115,13 @@ abstract final class FeatureRegistry {
       description: 'Delivery jobs, tracking and confirmations.',
     ),
 
-    // ─────────────────────────────────────
     // Shared services
-    // ─────────────────────────────────────
     FeatureDef(
       key: FeatureKeys.messaging,
       label: 'Messaging',
       icon: Icons.chat_bubble_rounded,
       description: 'Messaging and notifications.',
     ),
-
     FeatureDef(
       key: FeatureKeys.reporting,
       label: 'Reporting',

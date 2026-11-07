@@ -5,10 +5,14 @@ import 'package:afyakit/core/capabilities/feature_keys.dart';
 
 /// Whether a capability is available in the active application.
 ///
-/// Core is mandatory and includes shared Records functionality.
+/// Core is mandatory and includes shared identity, Native Contacts,
+/// Health Profiles and common records infrastructure.
 ///
 /// All optional capabilities are resolved from the application's
-/// AppProfile, never from the tenant-wide configuration.
+/// AppProfile, never from tenant-wide configuration.
+///
+/// Health Monitoring is independent of Clinical.
+/// Tests belong to Clinical and do not require a separate capability.
 final isAppFeatureEnabledProvider = Provider.autoDispose.family<bool, String>((
   ref,
   key,
@@ -57,8 +61,13 @@ final appClinicalEnabledProvider = Provider.autoDispose<bool>((ref) {
   return ref.watch(isAppFeatureEnabledProvider(FeatureKeys.clinical));
 });
 
-final appDiagnosticsEnabledProvider = Provider.autoDispose<bool>((ref) {
-  return ref.watch(isAppFeatureEnabledProvider(FeatureKeys.diagnostics));
+/// Longitudinal health metrics, wellness measurements,
+/// monitoring and trends.
+///
+/// Independent of Clinical. Afya Tracker is a primary
+/// consumer, but other applications may enable it.
+final appHealthMonitoringEnabledProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(isAppFeatureEnabledProvider(FeatureKeys.healthMonitoring));
 });
 
 final appPharmacyEnabledProvider = Provider.autoDispose<bool>((ref) {
@@ -109,18 +118,19 @@ final appReportingEnabledProvider = Provider.autoDispose<bool>((ref) {
 ///
 /// Core Records alone does not imply a public/member-facing UI.
 ///
-/// Employees, patients, pharmacy customers and insured members
-/// may have different experiences depending on app capabilities.
+/// Clinical patients, wellness members, employees, pharmacy customers,
+/// and insured members may have different experiences depending on
+/// the active application's capabilities.
 final appMemberUxEnabledProvider = Provider.autoDispose<bool>((ref) {
   final clinical = ref.watch(appClinicalEnabledProvider);
-  final diagnostics = ref.watch(appDiagnosticsEnabledProvider);
+  final healthMonitoring = ref.watch(appHealthMonitoringEnabledProvider);
   final pharmacy = ref.watch(appPharmacyEnabledProvider);
   final occupationalHealth = ref.watch(appOccupationalHealthEnabledProvider);
   final insurance = ref.watch(appInsuranceEnabledProvider);
   final retail = ref.watch(appRetailEnabledProvider);
 
   return clinical ||
-      diagnostics ||
+      healthMonitoring ||
       pharmacy ||
       occupationalHealth ||
       insurance ||

@@ -17,6 +17,7 @@ import 'package:afyakit/features/inventory/reports/stock_report_screen.dart';
 import 'package:afyakit/features/inventory/views/stock_screen.dart';
 import 'package:afyakit/features/inventory/views/inventory_view.dart';
 import 'package:afyakit/features/records/health_metrics/widgets/health_metrics_dashboard_screen.dart';
+import 'package:afyakit/features/occupational_health/widgets/occupational_health_dashboard_screen.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/retail/catalog/widgets/catalog_screen.dart';
 import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
@@ -56,7 +57,10 @@ final class HomeRegistry {
       final definition = StaffFeatureDef(
         featureKey: feature.key,
 
-        destination: feature.entry,
+        destination: feature.key == FeatureKeys.occupationalHealth &&
+                scope == HomeScope.staff
+            ? _occupationalHealth
+            : feature.entry,
       );
 
       if (!_isVisibleForApp(appProfile, definition)) continue;
@@ -154,10 +158,17 @@ final class HomeRegistry {
   ) {
     final appProfile = ref.watch(appProfileProvider).valueOrNull;
 
-    return _actionsForScope(scope)
+    final visible = _actionsForScope(scope)
         .where((action) => _isVisibleForApp(appProfile, action))
         .where((action) => _isAllowedForScope(ref, user, action, scope))
         .toList(growable: false);
+
+    // Keep administration after every other feature, even when future
+    // actions are added below it in the source registry.
+    return <StaffFeatureDef>[
+      ...visible.where((action) => action.featureKey != FeatureKeys.hq),
+      ...visible.where((action) => action.featureKey == FeatureKeys.hq),
+    ];
   }
 
   static List<StaffFeatureDef> _actionsForScope(HomeScope scope) {
@@ -175,7 +186,7 @@ final class HomeRegistry {
   // ─────────────────────────────────────────────
 
   static const List<StaffFeatureDef> _staffQuickActions = [
-    // Core Records — Contacts, Health Profiles, Health Metrics.
+    // Core records — contacts and health profiles.
     StaffFeatureDef(
       featureKey: FeatureKeys.core,
       labelOverride: 'Contacts',
@@ -193,10 +204,26 @@ final class HomeRegistry {
     ),
 
     StaffFeatureDef(
-      featureKey: FeatureKeys.core,
+      featureKey: FeatureKeys.healthMonitoring,
       labelOverride: 'Health Metrics',
       iconOverride: Icons.monitor_heart_outlined,
       destination: _healthMetrics,
+      allowed: _requireStaff,
+    ),
+
+    // Occupational Health — available only when the active app enables it.
+    StaffFeatureDef(
+      featureKey: FeatureKeys.occupationalHealth,
+      labelOverride: 'Campaigns',
+      iconOverride: Icons.campaign_outlined,
+      destination: _ohCampaigns,
+      allowed: _requireStaff,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.occupationalHealth,
+      labelOverride: 'MedEx',
+      iconOverride: Icons.medical_services_outlined,
+      destination: _ohMedex,
       allowed: _requireStaff,
     ),
 
@@ -317,7 +344,7 @@ final class HomeRegistry {
   // ─────────────────────────────────────────────
 
   static const List<StaffFeatureDef> _memberQuickActions = [
-    // Core Records
+    // Core records and health monitoring
     StaffFeatureDef(
       featureKey: FeatureKeys.core,
       labelOverride: 'My Profiles',
@@ -327,7 +354,7 @@ final class HomeRegistry {
     ),
 
     StaffFeatureDef(
-      featureKey: FeatureKeys.core,
+      featureKey: FeatureKeys.healthMonitoring,
       labelOverride: 'My Health Metrics',
       iconOverride: Icons.monitor_heart_outlined,
       destination: _healthMetrics,
@@ -373,6 +400,15 @@ final class HomeRegistry {
   // Destinations
 
   // ─────────────────────────────────────────────
+
+  static Widget _occupationalHealth(BuildContext _) =>
+      const OccupationalHealthDashboardScreen();
+
+  static Widget _ohCampaigns(BuildContext _) =>
+      const OccupationalHealthDashboardScreen(initialSection: OhSection.campaigns);
+
+  static Widget _ohMedex(BuildContext _) =>
+      const OccupationalHealthDashboardScreen(initialSection: OhSection.medex);
 
   static Widget _healthProfiles(BuildContext _) =>
       const ProfilesScreen(allowExplicitContactLink: true);

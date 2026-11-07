@@ -24,7 +24,7 @@ class HomeStaffBody extends ConsumerWidget {
   final AuthUser? user;
 
   void _openCatalog(BuildContext context, {String? q, bool autofocus = true}) {
-    final String query = (q ?? '').trim();
+    final query = (q ?? '').trim();
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -42,6 +42,8 @@ class HomeStaffBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = user;
 
+    // Display catalogue search only when Retail is available
+    // to staff in the active application.
     final retailEnabled =
         currentUser != null &&
         HomeRegistry.featureTiles(
@@ -56,6 +58,7 @@ class HomeStaffBody extends ConsumerWidget {
         showDeliveryBanner: true,
         showHomeButton: false,
       ),
+
       HomeDashboardTwoColumnLayout(
         leading: const StaffFeaturesPanel(),
         trailing: _StaffMainColumn(
@@ -65,10 +68,15 @@ class HomeStaffBody extends ConsumerWidget {
               _openCatalog(context, q: query, autofocus: query.trim().isEmpty),
         ),
       ),
+
       const SizedBox(height: AppShape.gap12),
     ], gap: AppShape.gap14);
   }
 }
+
+// ─────────────────────────────────────────
+// Right column: Search and Latest Activities
+// ─────────────────────────────────────────
 
 class _StaffMainColumn extends StatelessWidget {
   const _StaffMainColumn({
@@ -84,18 +92,18 @@ class _StaffMainColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return homeVerticalStack([
+      // The search field already contains its icon and hint.
+      // No separate Search heading is necessary.
       if (retailEnabled)
-        HomeSection(
-          title: 'Search',
-          icon: Icons.search_rounded,
-          child: HomeCatalogSearchHero(
-            autofocus: false,
-            hintText: 'Search medicines, brands, patients or customers',
-            footerText: 'Search the catalogue',
-            onSearch: onSearch,
-            onBrowse: onBrowseCatalog,
-          ),
+        HomeCatalogSearchHero(
+          autofocus: false,
+          hintText: 'Search medicines, brands, patients or customers',
+          footerText: 'Search the catalogue',
+          onSearch: onSearch,
+          onBrowse: onBrowseCatalog,
         ),
+
+      // Latest Activities remains unchanged.
       QuietHomePanel(
         child: StaffLatestActivityPanel(
           onTitleTap: () => Navigator.of(context).push(

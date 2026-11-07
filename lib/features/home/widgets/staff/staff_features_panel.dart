@@ -104,6 +104,14 @@ class StaffFeaturesPanel extends ConsumerWidget {
     final ordered = [...features];
 
     ordered.sort((a, b) {
+      // Admin must always be the final staff-panel section, even when
+      // future capabilities receive an unknown/fallback group rank.
+      final aIsAdmin = _featureKeyText(a) == FeatureKeys.hq;
+      final bIsAdmin = _featureKeyText(b) == FeatureKeys.hq;
+      if (aIsAdmin != bIsAdmin) {
+        return aIsAdmin ? 1 : -1;
+      }
+
       final byGroup = _featureGroupRank(a).compareTo(_featureGroupRank(b));
 
       if (byGroup != 0) {
