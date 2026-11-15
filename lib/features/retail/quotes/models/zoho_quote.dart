@@ -1,5 +1,6 @@
 // lib/features/retail/quotes/models/zoho_quote.dart
 
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/models/zoho_quote_line_item.dart';
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
@@ -20,6 +21,7 @@ class ZohoQuote {
     this.fulfilmentMethod = QuoteFulfilmentMethod.delivery,
     this.expiryDate,
     this.accountNumber,
+    this.reference,
     this.currencyCode,
     this.customerId,
     this.notes,
@@ -46,6 +48,7 @@ class ZohoQuote {
   final QuoteFulfilmentMethod fulfilmentMethod;
 
   final String? accountNumber;
+  final String? reference;
 
   final String? currencyCode;
   final String? customerId;
@@ -187,11 +190,11 @@ class ZohoQuote {
         ? parsedDeliveryAddress
         : null;
 
-    final String? accountNumber = _asCleanOrNull(
-      json['account_number'] ??
-          json['accountNumber'] ??
-          json['reference_number'],
-    );
+    final String? rawAccount = _asCleanOrNull(json['account_number']);
+    final String? accountNumber = rawAccount == null
+        ? null
+        : NativeContact.requireAccountNumber(rawAccount);
+    final String? reference = _asCleanOrNull(json['reference_number']);
 
     final String? currencyCode = _asCleanOrNull(
       json['currency_code'] ?? json['currencyCode'],
@@ -247,6 +250,7 @@ class ZohoQuote {
       paymentContext: paymentContext,
       fulfilmentMethod: fulfilmentMethod,
       accountNumber: accountNumber,
+      reference: reference,
       currencyCode: currencyCode,
       customerId: customerId,
       notes: notes,
@@ -283,6 +287,7 @@ class ZohoQuote {
       'fulfilment_method': fulfilmentMethod.apiValue,
 
       'account_number': accountNumber,
+      'reference_number': reference,
       'currency_code': currencyCode,
       'customer_id': customerId,
       'notes': notes,
@@ -315,6 +320,8 @@ class ZohoQuote {
     QuoteFulfilmentMethod? fulfilmentMethod,
     String? accountNumber,
     bool clearAccountNumber = false,
+    String? reference,
+    bool clearReference = false,
     String? currencyCode,
     bool clearCurrencyCode = false,
     String? customerId,
@@ -363,6 +370,7 @@ class ZohoQuote {
       accountNumber: clearAccountNumber
           ? null
           : (accountNumber ?? this.accountNumber),
+      reference: clearReference ? null : (reference ?? this.reference),
       currencyCode: clearCurrencyCode
           ? null
           : (currencyCode ?? this.currencyCode),

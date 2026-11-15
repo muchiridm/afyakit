@@ -12,9 +12,6 @@ import 'package:flutter/foundation.dart';
 @immutable
 class QuoteDraft {
   const QuoteDraft({
-    this.contact,
-    this.contactId,
-    this.nativeContactId,
     this.accountNumber,
     this.contactName,
     this.customerNotes,
@@ -30,14 +27,6 @@ class QuoteDraft {
     this.lines = const <QuoteLineDraft>[],
     this.currencyCode,
   });
-  final NativeContact? contact;
-
-  /// Historical Zoho customer ID from a previously saved quote.
-  /// Do not populate this for a newly selected Native Contact.
-  final String? contactId;
-
-  /// Canonical Native Contact identity (not a Zoho customer ID).
-  final String? nativeContactId;
 
   /// Canonical Native Contact account of the payer, distinct from the historical Zoho customer ID.
   final String? accountNumber;
@@ -66,14 +55,10 @@ class QuoteDraft {
   final String? prescriptionId;
   final String? currencyCode;
   final List<QuoteLineDraft> lines;
-  String get customerIdResolved {
-    return (contactId ?? '').trim();
-  }
-
   String get accountNumberResolved =>
-      (accountNumber ?? contact?.accountNumber ?? '').trim();
+      NativeContact.normalizeAccountNumber(accountNumber);
   bool get hasCustomer =>
-      accountNumberResolved.isNotEmpty || customerIdResolved.isNotEmpty;
+      NativeContact.isValidAccountNumber(accountNumberResolved);
   bool get hasDeliveryAddress => deliveryAddress?.isUsable == true;
   bool get hasLines {
     return lines.any((QuoteLineDraft line) => line.safeQty > 0);
@@ -147,20 +132,12 @@ class QuoteDraft {
   }
 
   String get displayContactName {
-    final String displayName = (contact?.displayName ?? '').trim();
-    if (displayName.isNotEmpty) return displayName;
     final String fallbackName = (contactName ?? '').trim();
     if (fallbackName.isNotEmpty) return fallbackName;
     return '';
   }
 
   QuoteDraft copyWith({
-    NativeContact? contact,
-    bool clearContact = false,
-    String? contactId,
-    bool clearContactId = false,
-    String? nativeContactId,
-    bool clearNativeContactId = false,
     String? accountNumber,
     bool clearAccountNumber = false,
     String? contactName,
@@ -199,11 +176,6 @@ class QuoteDraft {
         ? null
         : (deliveryAddress ?? this.deliveryAddress);
     return QuoteDraft(
-      contact: clearContact ? null : (contact ?? this.contact),
-      contactId: clearContactId ? null : (contactId ?? this.contactId),
-      nativeContactId: clearNativeContactId
-          ? null
-          : (nativeContactId ?? this.nativeContactId),
       accountNumber: clearAccountNumber
           ? null
           : (accountNumber ?? this.accountNumber),
@@ -268,9 +240,6 @@ class QuoteDraft {
 
   QuoteDraft clearCustomer() {
     return copyWith(
-      clearContact: true,
-      clearContactId: true,
-      clearNativeContactId: true,
       clearAccountNumber: true,
       clearContactName: true,
     );
@@ -363,15 +332,12 @@ class QuoteDraft {
         })
         .toList(growable: false);
     return QuoteDraft(
-      // Historical ID is retained only for editing this existing quote.
-      contactId: (quote.customerId ?? '').trim().isEmpty
-          ? null
-          : quote.customerId,
+      accountNumber: quote.accountNumber,
       contactName: quote.customerName.trim().isEmpty
           ? null
           : quote.customerName.trim(),
       customerNotes: quote.notes,
-      reference: quote.accountNumber,
+      reference: quote.reference,
       purchaseContext: quote.purchaseContext,
       paymentContext: quote.paymentContext,
       fulfilmentMethod: quote.fulfilmentMethod,

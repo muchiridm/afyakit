@@ -1,3 +1,4 @@
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -80,7 +81,7 @@ class ProfileAssociationsSectionState
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
                     labelText: 'Native Contact account',
-                    hintText: 'AC-XXXXXX',
+                    hintText: 'AC-XXXXXX or ORG-XXXXXX',
                   ),
                 ),
                 DropdownButtonFormField<ProfileContactRelationship>(
@@ -107,10 +108,11 @@ class ProfileAssociationsSectionState
               ),
               FilledButton(
                 onPressed: () {
-                  final account = accountCtl.text.trim().toUpperCase();
-                  if (!RegExp(
-                    r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-                  ).hasMatch(account)) {
+                  final account = NativeContact.normalizeAccountNumber(accountCtl.text);
+                  if (!NativeContact.isValidAccountNumber(account)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Enter a valid Native Contact account number.')),
+                    );
                     return;
                   }
                   Navigator.pop(context, (account, relationship));
@@ -121,7 +123,7 @@ class ProfileAssociationsSectionState
           ),
         ),
       );
-      if (result == null) return;
+      if (result == null || !mounted) return;
       await ref
           .read(profilesServiceProvider)
           .linkContact(
@@ -189,7 +191,7 @@ class ProfileAssociationsSectionState
         ),
       ),
     );
-    if (updated == null || updated == contact.relationship) return;
+    if (!mounted || updated == null || updated == contact.relationship) return;
     try {
       await ref
           .read(profilesServiceProvider)

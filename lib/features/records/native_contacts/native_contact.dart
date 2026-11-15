@@ -22,7 +22,6 @@ class NativeContact {
     this.firstName,
     this.lastName,
     this.companyName,
-    this.legacyDisplayName,
     this.phone,
     this.email,
     this.verifiedPhone,
@@ -64,10 +63,6 @@ class NativeContact {
 
   /// Required for organization contacts.
   final String? companyName;
-
-  /// Read-only migration hint from older API responses, never used to invent
-  /// first_name/last_name or as the canonical derived displayName.
-  final String? legacyDisplayName;
 
   /// Derived display name.
   ///
@@ -122,12 +117,19 @@ class NativeContact {
     return text.isEmpty ? null : text;
   }
 
-  static String _requiredAccountNumber(Object? raw) {
-    final value = raw?.toString().trim().toUpperCase() ?? '';
+  static final _accountNumberPattern = RegExp(
+    r'^(?:AC|ORG)-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
+  );
 
-    if (!RegExp(
-      r'^(?:AC|ORG)-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-    ).hasMatch(value)) {
+  static String normalizeAccountNumber(Object? raw) =>
+      raw?.toString().trim().toUpperCase() ?? '';
+
+  static bool isValidAccountNumber(Object? raw) =>
+      _accountNumberPattern.hasMatch(normalizeAccountNumber(raw));
+
+  static String requireAccountNumber(Object? raw) {
+    final value = normalizeAccountNumber(raw);
+    if (!isValidAccountNumber(value)) {
       throw const FormatException(
         'Expected canonical Native Contact account_number',
       );
@@ -143,7 +145,7 @@ class NativeContact {
   factory NativeContact.fromJson(Map<String, dynamic> json) {
     final entityType = _optional(json['entity_type']) ?? 'person';
 
-    final accountNumber = _requiredAccountNumber(json['account_number']);
+    final accountNumber = requireAccountNumber(json['account_number']);
 
     return NativeContact(
       accountNumber: accountNumber,
@@ -162,7 +164,6 @@ class NativeContact {
 
       // Canonical organisation identity
       companyName: _optional(json['company_name']),
-      legacyDisplayName: _optional(json['display_name']),
 
       // Contact details
       phone: _optional(json['phone']),

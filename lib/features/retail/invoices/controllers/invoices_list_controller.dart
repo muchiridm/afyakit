@@ -1,10 +1,13 @@
+// lib/features/retail/invoices/controllers/invoices_list_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
-import 'package:afyakit/shared/state/paged_query_controller.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
 import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
+import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
+import 'package:afyakit/shared/state/paged_query_controller.dart';
 
 final invoicesListControllerProvider = StateNotifierProvider.autoDispose
     .family<
@@ -20,6 +23,8 @@ final invoicesListControllerProvider = StateNotifierProvider.autoDispose
 class InvoicesListController extends PagedQueryController<ZohoInvoice> {
   InvoicesListController(this._ref, {required this.scope});
 
+  static const int _maxPageSize = 25;
+
   final Ref _ref;
   final RetailDocScope scope;
 
@@ -29,6 +34,8 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
 
   String? get searchQuery => _searchQuery;
 
+  bool get hasSearch => _searchQuery != null;
+
   void applySearch(String value) {
     final next = _clean(value);
     if (_searchQuery == next) return;
@@ -37,12 +44,7 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
     refresh(reset: true);
   }
 
-  void clearSearch() {
-    if (_searchQuery == null) return;
-
-    _searchQuery = null;
-    refresh(reset: true);
-  }
+  void clearSearch() => applySearch('');
 
   @override
   Future<PageResult<ZohoInvoice>> fetchPage({
@@ -50,42 +52,23 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
     required int page,
     required int limit,
   }) async {
-    final service = await _ref.read(zohoInvoicesServiceProvider.future);
+    final accountNumber = _isMine ? _resolveMemberAccountNumber() : null;
 
-    final effectiveLimit = limit.clamp(1, 25).toInt();
-    final search = _searchQuery ?? _clean(q);
-
-    // Staff: retain the existing invoice directory behaviour.
-    if (!_isMine) {
-      final items = await service.list(
-        limit: effectiveLimit,
-        page: page,
-        q: search,
-      );
-
-      return PageResult<ZohoInvoice>(
-        items: items,
-        hasMore: items.length == effectiveLimit,
-      );
-    }
-
-    // Member: resolve the canonical account from authenticated state.
-    // Do not query Zoho Contacts or retrieve accounting mappings.
-    final accountNumber = _resolveMemberAccountNumber();
-
-    if (accountNumber == null) {
+    if (_isMine && accountNumber == null) {
       return const PageResult<ZohoInvoice>(
         items: <ZohoInvoice>[],
         hasMore: false,
       );
     }
 
-    // The backend must enforce member ownership and resolve
-    // the Native Contact -> Zoho customer mapping.
+    final service = await _ref.read(zohoInvoicesServiceProvider.future);
+
+    final effectiveLimit = limit.clamp(1, _maxPageSize).toInt();
+
     final items = await service.list(
       limit: effectiveLimit,
       page: page,
-      q: search,
+      q: _searchQuery ?? _clean(q),
       accountNumber: accountNumber,
     );
 
@@ -97,16 +80,14 @@ class InvoicesListController extends PagedQueryController<ZohoInvoice> {
 
   String? _resolveMemberAccountNumber() {
     final user = _ref.read(currentUserValueProvider);
-    final accountNumber = _clean(user?.accountNumber);
+    final raw = _clean(user?.accountNumber);
 
-    if (accountNumber == null) return null;
+    if (raw == null) return null;
 
-    final canonicalPattern = RegExp(
-      r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-    );
+    final accountNumber = NativeContact.requireAccountNumber(raw);
 
-    if (!canonicalPattern.hasMatch(accountNumber)) {
-      throw StateError('Invalid Native Contact account number');
+    if (!accountNumber.startsWith('AC-')) {
+      throw StateError('Member accounts must belong to a person.');
     }
 
     return accountNumber;

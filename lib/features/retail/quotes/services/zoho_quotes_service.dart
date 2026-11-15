@@ -1,5 +1,6 @@
 // lib/features/retail/quotes/services/zoho_quotes_service.dart
 import 'dart:typed_data';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
@@ -151,7 +152,6 @@ class ZohoQuotesService {
   }) async {
     final JsonMap body = _buildDraftPayload(
       draft,
-      requireCustomer: true,
       requireQuoteDate: true,
       requirePatient: draft.requiresPatient,
       requireFulfilment: true,
@@ -180,7 +180,6 @@ class ZohoQuotesService {
     }
     final JsonMap body = _buildDraftPayload(
       draft,
-      requireCustomer: false,
       requireQuoteDate: false,
       requirePatient: false,
       requireFulfilment: false,
@@ -315,37 +314,17 @@ class ZohoQuotesService {
 
   JsonMap _buildDraftPayload(
     QuoteDraft draft, {
-    required bool requireCustomer,
     required bool requireQuoteDate,
     required bool requirePatient,
     required bool requireFulfilment,
     DateTime? quoteDate,
     DateTime? expiryDate,
   }) {
-    final String customerId = draft.customerIdResolved.trim();
-    final String accountNumber = draft.accountNumberResolved.trim();
-    // Member direct-pay creation is scoped by the authenticated backend identity.
-    // Staff and insurance creation must supply a payer; backend enforces this.
-    // The backend resolves account_number to the app-scoped Zoho customer.
-    // Member direct-pay quotes are bound to the authenticated member by the API.
-    // For insurance, the selected payer must be an explicit Native account.
     final bool serverSelectsMember = memberMode &&
-        draft.isPrivateUse &&
-        !draft.isInsurancePayment;
-    if (requireCustomer && accountNumber.isEmpty && !serverSelectsMember) {
-      throw StateError(
-        draft.isInsurancePayment
-            ? 'Select an insurance payer with a Native account number.'
-            : 'Select a customer with a Native account number.',
-      );
-    }
-    // Do not accept a raw Zoho ID as a substitute for canonical selection
-    // when creating a new quote. Historical IDs are retained only for edits.
-    if (requireCustomer && !serverSelectsMember &&
-        !RegExp(r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$')
-            .hasMatch(accountNumber.toUpperCase())) {
-      throw StateError('A valid Native Contact account number is required.');
-    }
+        draft.isPrivateUse && !draft.isInsurancePayment;
+    final String? accountNumber = serverSelectsMember
+        ? null
+        : NativeContact.requireAccountNumber(draft.accountNumberResolved);
     if (!draft.hasLines) {
       throw StateError(
         'Please add at least one item before requesting a quote.',
@@ -403,11 +382,7 @@ class ZohoQuotesService {
       'sale_context': draft.purchaseContext.apiValue,
       'payment_context': paymentContext.apiValue,
       'fulfilment_method': draft.fulfilmentMethod.apiValue,
-      if (accountNumber.isNotEmpty)
-        'account_number': accountNumber.toUpperCase(),
-      // Zoho IDs are only retained while editing historical quotes.
-      if (!requireCustomer && accountNumber.isEmpty && customerId.isNotEmpty)
-        'customer_id': customerId,
+      if (accountNumber != null) 'account_number': accountNumber,
       if (quoteDateValue != null) 'date': quoteDateValue,
       if (expiryDateValue != null) 'expiry_date': expiryDateValue,
       if (reference != null) 'reference_number': reference,

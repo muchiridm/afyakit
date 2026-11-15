@@ -1,13 +1,9 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
-import 'package:afyakit/features/records/native_contacts/native_contact.dart';
-import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
-import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
-import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/quotes/providers/zoho_quote_provider.dart';
 import 'package:afyakit/features/retail/quotes/services/zoho_quotes_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
@@ -115,7 +111,6 @@ final quoteControllerProvider =
 class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
-    // The member identity comes from AuthUser.accountNumber; no Zoho lookup.
   }
 
   final Ref _ref;
@@ -126,12 +121,13 @@ class QuoteController extends StateNotifier<QuoteState> {
   QuoteMetaController get _metaCtl =>
       _ref.read(quoteMetaControllerProvider.notifier);
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
-  QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
-  bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
 
   void setError(String? message) {
     final String msg = (message ?? '').trim();
-    state = state.copyWith(error: msg.isEmpty ? null : msg);
+    state = state.copyWith(
+      error: msg.isEmpty ? null : msg,
+      clearError: msg.isEmpty,
+    );
   }
 
   void reset() {
@@ -159,23 +155,6 @@ class QuoteController extends StateNotifier<QuoteState> {
     _metaCtl.clearDeliveryAddress();
   }
 
-  void patchDraft({
-    NativeContact? contact,
-    String? reference,
-    String? customerNotes,
-    DateTime? quoteDate,
-    DateTime? expiryDate,
-    SalesDocumentAddress? deliveryAddress,
-  }) {
-    if (_busy) return;
-    if (contact != null) _metaCtl.setNativePayer(contact);
-    if (reference != null) _metaCtl.setReference(reference);
-    if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
-    if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
-    if (expiryDate != null) _metaCtl.setExpiryDate(expiryDate);
-    if (deliveryAddress != null) _metaCtl.setDeliveryAddress(deliveryAddress);
-  }
-
   Future<void> ensureReady({
     String? editingQuoteId,
     required bool requirePrices,
@@ -190,6 +169,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       nextEditingId: nextId,
     );
     if (nextId.isEmpty) {
+      if (shouldClearLines) _linesCtl.clear();
       _metaCtl.beginNew();
       state = const QuoteState();
       await ensureDraftFromLines(requirePrices: requirePrices);
@@ -211,7 +191,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       }
       _metaCtl.beginEdit(nextId);
     }
-    if (shouldClearLines) _linesCtl.clear();
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
@@ -243,24 +222,7 @@ class QuoteController extends StateNotifier<QuoteState> {
       final q = await _engine.loadQuote(id);
       _engine.setLinesFromZoho(q);
       final QuoteMetaState meta = _engine.metaFromZoho(q);
-      _metaCtl.applyZohoMeta(
-        editingQuoteId: id,
-        contact: meta.contact,
-        nativeContactId: meta.nativeContactId,
-        zohoContactId: meta.zohoContactId,
-        mappedCustomerName: meta.mappedCustomerName,
-        reference: meta.reference,
-        customerNotes: meta.customerNotes,
-        purchaseContext: meta.purchaseContext,
-        paymentContext: meta.paymentContext,
-        quoteDate: meta.quoteDate,
-        expiryDate: meta.expiryDate,
-        deliveryAddress: meta.deliveryAddress,
-        patientSnapshot: meta.patientSnapshot,
-        membershipId: meta.membershipId,
-        prescriptionId: meta.prescriptionId,
-        prescriptionLabel: meta.prescriptionLabel,
-      );
+      _metaCtl.applyState(meta.copyWith(editingQuoteId: id));
       state = state.copyWith(loadingEdit: false, loadedEditId: id);
       await ensureDraftFromLines(requirePrices: requirePrices);
     } catch (e) {
@@ -270,33 +232,9 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
-    // Member direct-pay uses the authenticated canonical account. Insurance
-    // continues to bill the insurer Native Contact selected via membership.
-    if (_isMemberScoped && !_meta.isInsurancePayment && !state.isEditing) {
-      final accountNumber =
-          (_ref.read(currentMemberAccountNumberProvider) ?? '').trim();
-      if (accountNumber.isEmpty) {
-        SnackService.showError('Your account has no linked Native Contact.');
-        return null;
-      }
-      _metaCtl.applyState(
-        _meta.copyWith(
-          clearPayer: true,
-          clearCustomerMapping: true,
-          nativeContactId: accountNumber,
-        ),
-      );
-    }
-
-    // Staff and insurance payer selections are Native Contacts. Never fetch
-    // a Zoho contact or accounting mapping from Flutter: the API resolves it.
-    final selectedPayer = _meta.payer;
-    if (selectedPayer != null && !state.isEditing) {
-      final accountNumber = (selectedPayer.accountNumber).trim();
-      if (accountNumber.isEmpty) {
-        SnackService.showError('Selected payer has no Native account number.');
-        return null;
-      }
+    if (state.isEditing && !state.hasLoadedEdit) {
+      SnackService.showError('Load the quote before submitting changes.');
+      return null;
     }
 
     final QuoteMetaState meta = _meta;
@@ -310,16 +248,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       SnackService.showError(validationError);
       return null;
     }
-    debugPrint(
-      '[QuoteSubmit] '
-      'sale=${meta.purchaseContext.apiValue} '
-      'payment=${meta.effectivePaymentContext.apiValue} '
-      'accountNumber=${meta.payer?.accountNumber ?? meta.nativeContactId ?? ''} '
-      'customer=${meta.displayContactName} '
-      'patient=${meta.resolvedProfileId ?? ''} '
-      'membership=${meta.resolvedMembershipId ?? ''} '
-      'prescription=${meta.resolvedPrescriptionId ?? ''}',
-    );
     state = state.copyWith(
       submitting: true,
       clearError: true,
@@ -524,9 +452,10 @@ class QuoteController extends StateNotifier<QuoteState> {
     final String raw = error.toString().trim();
     if (raw.isEmpty) return fallback;
     final String cleaned = raw
-        .replaceFirst(RegExp(r'^Exception:\s\*'), '')
-        .replaceFirst(RegExp(r'^StateError:\s\*'), '')
-        .replaceFirst(RegExp(r'^Bad state:\s\*'), '')
+        .replaceFirst(
+          RegExp(r'^(?:Exception|StateError|Bad state|FormatException):\s*'),
+          '',
+        )
         .trim();
     return cleaned.isEmpty ? fallback : cleaned;
   }

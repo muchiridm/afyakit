@@ -53,10 +53,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 
-    final bool hasContact =
-        meta.payer != null ||
-        (meta.nativeContactId ?? '').trim().isNotEmpty ||
-        (meta.zohoContactId ?? '').trim().isNotEmpty;
+    final bool hasContact = meta.hasCustomerSelection;
 
     Future<void> pickContact() async {
       final bool ok = await onEnsureAuthed();
@@ -68,7 +65,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
         builder: (_) => const ContactPickerDialog(),
       );
 
-      if (picked == null) return;
+      if (picked == null || !context.mounted) return;
 
       onContactPicked(picked);
     }
@@ -84,7 +81,7 @@ class QuoteEditorHeaderActions extends StatelessWidget {
           forceLabel: tight ? null : (isEdit ? 'editing' : 'draft'),
         );
 
-        final Widget? payerButton = isMemberScoped
+        final Widget? payerButton = isMemberScoped || meta.isInsurancePayment
             ? null
             : OutlinedButton.icon(
                 style: pickStyle,
@@ -171,13 +168,9 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       return 'Some items are missing prices';
     }
 
-    final bool hasNativePayer =
-        meta.payerAccountNumber.isNotEmpty ||
-        (meta.nativeContactId ?? '').trim().isNotEmpty;
-    // In member direct-pay mode, the API supplies the authenticated customer.
-    if (!hasNativePayer &&
-        !(isMemberScoped && !meta.isInsurancePayment) &&
-        !(isEdit && meta.customerIdResolved.isNotEmpty)) {
+    final bool serverSelectsMember =
+        isMemberScoped && meta.isPrivateUse && !meta.isInsurancePayment;
+    if (!serverSelectsMember && !meta.hasCustomerSelection) {
       return meta.isInsurancePayment
           ? 'Select an insurer from Native Contacts'
           : 'Pick a payer/customer';
@@ -187,7 +180,8 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       return 'Select a quote date';
     }
 
-    if (meta.requiresPatient && !meta.hasPatientContext) {
+    if (meta.requiresPatient &&
+        (!meta.hasPatientContext || meta.patientSnapshot == null)) {
       return 'Select who the quote is for';
     }
 
@@ -242,7 +236,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       enableQty: true,
     );
 
-    if (result == null) return;
+    if (result == null || !context.mounted) return;
 
     ref
         .read(quoteLinesControllerProvider.notifier)
@@ -271,7 +265,7 @@ class QuoteEditorFooterBar extends ConsumerWidget {
       enableQty: true,
     );
 
-    if (result == null) return;
+    if (result == null || !context.mounted) return;
 
     ref
         .read(quoteLinesControllerProvider.notifier)

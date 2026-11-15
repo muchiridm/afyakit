@@ -1,3 +1,4 @@
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 // lib/features/records/health_profiles/widgets/profiles_screen.dart
 
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
@@ -5,7 +6,7 @@ import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_form_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_link_dialog.dart';
-import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_self_link_dialog.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/existing_profile_link_request_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_list_tile.dart';
 import 'package:flutter/material.dart';
@@ -295,7 +296,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
               TextField(
                 onChanged: (value) => accountInput = value,
                 decoration: const InputDecoration(
-                  labelText: 'Native Contact account (AC-...)',
+                  labelText: 'Native Contact account (AC- or ORG-)',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -310,12 +311,14 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
           FilledButton(
             onPressed: () {
               final hp = profileInput.trim().toUpperCase();
-              final ac = accountInput.trim().toUpperCase();
+              final ac = NativeContact.normalizeAccountNumber(accountInput);
               if (!RegExp(r'^HP-[0-9]{8}$').hasMatch(hp) ||
-                  !RegExp(r'^AC-[A-HJ-NP-Z2-9]{6}$').hasMatch(ac)) {
+                  !NativeContact.isValidAccountNumber(ac)) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(
-                    content: Text('Enter valid HP and AC identifiers.'),
+                    content: Text(
+                      'Enter valid HP and Native Contact identifiers.',
+                    ),
                   ),
                 );
                 return;

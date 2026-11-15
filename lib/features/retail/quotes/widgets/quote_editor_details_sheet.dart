@@ -5,49 +5,27 @@ import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
-
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
-
 import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
-
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
-
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
-
 import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
-
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
-
 import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
-
 import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
-
 import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
-
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
-
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
-
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
-
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
-
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
-
 import 'package:afyakit/shared/widgets/app_bottom_sheet.dart';
-
 import 'package:file_picker/file_picker.dart';
-
 import 'package:flutter/material.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'quote_editor_details_components.dart';
 
 class QuoteEditorDetailsSheet extends ConsumerStatefulWidget {
@@ -350,7 +328,13 @@ class _QuoteEditorDetailsSheetState
     if (_draft.purchaseContext == context) return;
 
     setState(() {
-      _draft = _draft.copyWith(purchaseContext: context);
+      final bool clearInsurer = context.isCompany && _draft.isInsurancePayment;
+      _draft = _draft.copyWith(
+        purchaseContext: context,
+        clearPayer: clearInsurer,
+        clearCustomerMapping: clearInsurer,
+        clearDeliveryAddress: clearInsurer,
+      );
 
       if (context == QuotePurchaseContext.company) {
         _paymentContext = QuotePaymentContext.directPay;
@@ -365,57 +349,62 @@ class _QuoteEditorDetailsSheetState
   }
 
   void _setPaymentContext(QuotePaymentContext context) {
+    if (_paymentContext == context) return;
     setState(() {
       _paymentContext = context;
-
-      if (context == QuotePaymentContext.directPay) {
-        _membership = null;
-
-        _draft = _draft.copyWith(
-          paymentContext: context,
-
-          clearMembershipId: true,
-        );
-      } else {
-        _draft = _draft.copyWith(paymentContext: context);
-      }
+      _membership = null;
+      _draft = _draft.copyWith(
+        paymentContext: context,
+        clearPayer: true,
+        clearCustomerMapping: true,
+        clearMembershipId: true,
+        clearPatientSnapshot: _profile == null,
+        patientSnapshot: _profile == null
+            ? null
+            : _snapshotFromProfile(_profile!),
+        clearDeliveryAddress: true,
+      );
     });
   }
 
   void _setMembership(InsuranceMembership membership) {
+    final String accountNumber = NativeContact.normalizeAccountNumber(
+      membership.payerAccountNumber,
+    );
+    if (!NativeContact.isValidAccountNumber(accountNumber)) {
+      _snack('Insurance payer has no valid Native Contact account number.');
+      return;
+    }
+    final String profileId = membership.profileId.trim();
+    final bool patientChanged = _profileId != profileId;
     final Profile profile =
-        _findLoadedProfileById(membership.profileId) ??
-        _profile ??
+        _findLoadedProfileById(profileId) ??
+        (_profile?.profileId.trim() == profileId ? _profile : null) ??
         Profile(
-          profileId: membership.profileId,
-
-          fullName:
-              _clean(membership.profileDisplayName) ?? membership.profileId,
-
+          profileId: profileId,
+          fullName: _clean(membership.profileDisplayName) ?? profileId,
           isActive: true,
         );
 
     setState(() {
       _paymentContext = QuotePaymentContext.insurance;
-
       _membership = membership;
-
       _profile = profile;
-
+      if (patientChanged) _prescription = null;
       _draft = _draft.copyWith(
         purchaseContext: QuotePurchaseContext.privateUse,
-
         paymentContext: QuotePaymentContext.insurance,
-
-        contact: _payerContactFromMembership(membership),
-
+        payer: _payerContactFromMembership(membership),
+        clearCustomerMapping: true,
         patientSnapshot: _snapshotFromMembership(membership, patient: profile),
-
         membershipId: membership.membershipId,
+        clearPrescriptionId: patientChanged,
+        clearPrescriptionLabel: patientChanged,
+        clearDeliveryAddress:
+            _draft.payerAccountNumber != accountNumber || patientChanged,
       );
     });
-
-    _loadPrescriptions(membership.profileId);
+    _loadPrescriptions(profileId);
   }
 
   void _setPrescription(Prescription? prescription) {
@@ -538,7 +527,7 @@ class _QuoteEditorDetailsSheetState
     if (scope == null || !scope.isUsable) {
       _snack(
         widget.isStaffMode
-            ? 'This customer does not yet have a verified native Contact link.'
+            ? 'Staff delivery address selection is not available in this editor.'
             : 'Your delivery addresses are not available. Please try signing in again.',
       );
 
@@ -569,23 +558,23 @@ class _QuoteEditorDetailsSheetState
   }
 
   DeliveryAddressScope? _deliveryAddressScope() {
-    final tenantId = widget.tenantId.trim();
-
-    if (tenantId.isEmpty) return null;
-
-    // Members use their authenticated identity.
-
-    // The backend resolves their native Contact through /me.
-
-    if (!widget.isStaffMode) {
+    if (_isMemberScoped) {
       return ref.read(currentUserDeliveryAddressScopeProvider);
     }
 
-    // Staff must use a verified native Contact ID.
+    final tenantId = widget.tenantId.trim().toLowerCase();
+    final accountNumber = _draft.payerAccountNumber;
+    if (tenantId.isEmpty ||
+        !NativeContact.isValidAccountNumber(accountNumber) ||
+        _draft.payer?.isActive == false) {
+      return null;
+    }
 
-    // A Zoho Contact ID must never be substituted here.
-
-    return null;
+    return DeliveryAddressScope(
+      tenantId: tenantId,
+      contactId: accountNumber,
+      ownerLabel: _draft.displayContactName,
+    );
   }
 
   Future<void> _pickQuoteDate() async {
@@ -669,7 +658,8 @@ class _QuoteEditorDetailsSheetState
 
     if (!_requiresInsurance) return true;
 
-    return _membership != null || _clean(_draft.resolvedMembershipId) != null;
+    return _draft.hasCustomerSelection &&
+        _clean(_draft.resolvedMembershipId) != null;
   }
 
   bool get _hasPrescription {
@@ -707,7 +697,7 @@ class _QuoteEditorDetailsSheetState
       if (!_profileComplete) {
         _snack('Select who the quote is for.');
       } else if (!_paymentComplete) {
-        _snack('Select an insurance membership.');
+        _snack('Select an insurance membership with a valid payer.');
       } else if (!_prescriptionComplete) {
         _snack('Select or upload a prescription.');
       } else if (!_fulfilmentComplete) {
@@ -766,18 +756,14 @@ class _QuoteEditorDetailsSheetState
       scheme: membership.scheme,
 
       payerName:
-          _clean(membership.payerDisplayName) ?? membership.payerContactId,
+          _clean(membership.payerDisplayName) ?? membership.payerAccountNumber,
     );
   }
 
   NativeContact _payerContactFromMembership(InsuranceMembership membership) {
-    final accountNumber = (membership.payerAccountNumber ?? '')
-        .trim()
-        .toUpperCase();
-
-    if (accountNumber.isEmpty) {
-      throw StateError('Insurance payer has no Native Contact account number.');
-    }
+    final accountNumber = NativeContact.requireAccountNumber(
+      membership.payerAccountNumber,
+    );
 
     final payerName = _clean(membership.payerDisplayName) ?? accountNumber;
 
@@ -891,7 +877,6 @@ class _QuoteEditorDetailsSheetState
             accountNumber: _isMemberScoped ? _memberAccountNumber : null,
             forcePickerMode: widget.isStaffMode,
             onChanged: (Profile profile) {
-              _profile = profile;
               _pickProfileResult(profile);
             },
           ),
@@ -1202,37 +1187,33 @@ class _QuoteEditorDetailsSheetState
   }
 
   void _pickProfileResult(Profile profile) {
-    final String? previousProfileId = _clean(_draft.resolvedProfileId);
-
     final String nextProfileId = profile.profileId.trim();
+    final bool patientChanged = _profileId != nextProfileId;
+    final bool clearInsurer = patientChanged && _requiresInsurance;
 
     setState(() {
       _profile = profile;
-
-      if (previousProfileId != null && previousProfileId != nextProfileId) {
+      if (patientChanged) {
         _membership = null;
-
         _prescription = null;
       }
-
       _draft = _draft.copyWith(
         purchaseContext: QuotePurchaseContext.privateUse,
-
         paymentContext: _paymentContext,
-
-        patientSnapshot: _snapshotFromProfile(profile),
-
-        clearMembershipId:
-            previousProfileId != null && previousProfileId != nextProfileId,
-
-        clearPrescriptionId:
-            previousProfileId != null && previousProfileId != nextProfileId,
-
-        clearPrescriptionLabel:
-            previousProfileId != null && previousProfileId != nextProfileId,
+        patientSnapshot:
+            !patientChanged &&
+                _requiresInsurance &&
+                _draft.patientSnapshot != null
+            ? _draft.patientSnapshot
+            : _snapshotFromProfile(profile),
+        clearPayer: clearInsurer,
+        clearCustomerMapping: clearInsurer,
+        clearMembershipId: patientChanged,
+        clearPrescriptionId: patientChanged,
+        clearPrescriptionLabel: patientChanged,
+        clearDeliveryAddress: patientChanged,
       );
     });
-
     _loadPrescriptions(nextProfileId);
   }
 }

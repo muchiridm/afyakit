@@ -1,5 +1,8 @@
 // lib/features/retail/quotes/controllers/quote_engine.dart
 import 'dart:typed_data';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
+import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
 import 'package:afyakit/features/retail/catalog/models/di_sales_tile.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
@@ -86,7 +89,8 @@ class QuoteEngine {
   QuoteMetaState metaFromZoho(ZohoQuote quote) {
     final QuoteDraft draft = QuoteDraft.fromZohoQuote(quote);
     return QuoteMetaState(
-      zohoContactId: _cleanNullable(quote.customerId),
+      editingQuoteId: quote.quoteId,
+      accountNumber: draft.accountNumber,
       mappedCustomerName: _cleanNullable(quote.customerName),
       reference: _cleanNullable(draft.reference),
       customerNotes: _cleanNullable(draft.customerNotes),
@@ -119,10 +123,11 @@ class QuoteEngine {
       return lineError;
     }
 
-    if (!isEditing &&
-        (meta.payerAccountNumber.isEmpty &&
-            (meta.nativeContactId ?? '').trim().isEmpty &&
-            meta.customerIdResolved.isEmpty)) {
+    final bool serverSelectsMember =
+        ref.read(quoteContactPolicyProvider) == QuoteContactPolicy.memberScoped &&
+        meta.isPrivateUse && !meta.isInsurancePayment;
+    if (!serverSelectsMember &&
+        !NativeContact.isValidAccountNumber(meta.payerAccountNumber)) {
       return meta.isInsurancePayment
           ? 'Please select an insurer Native Contact'
           : 'Please select a Native Contact';
@@ -186,21 +191,14 @@ class QuoteEngine {
     required QuoteMetaState meta,
     required bool requirePrices,
   }) {
-    final String customerId = meta.payerAccountNumber.isNotEmpty
-        ? ''
-        : meta.customerIdResolved; // Historical quote editing only.
     final String customerName = meta.displayContactName;
-    final String? nativeId = _cleanNullable(meta.nativeContactId);
-    final String? accountNumber =
-        _cleanNullable(meta.payerAccountNumber) ?? nativeId;
+    final String? accountNumber = _cleanNullable(meta.payerAccountNumber);
     final QuotePaymentContext paymentContext = meta.isCompany
         ? QuotePaymentContext.directPay
         : meta.effectivePaymentContext;
     final SalesDocumentAddress? deliveryAddress =
         meta.fulfilmentMethod.isDelivery ? meta.deliveryAddress : null;
     return QuoteDraft(
-      contactId: customerId.isEmpty ? null : customerId,
-      nativeContactId: nativeId,
       accountNumber: accountNumber,
       contactName: customerName.isEmpty ? null : customerName,
       reference: _cleanNullable(meta.reference),

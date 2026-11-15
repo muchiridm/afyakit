@@ -1,8 +1,9 @@
+// lib/features/retail/payments/controllers/payments_by_invoice_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/features/retail/invoices/controllers/invoices_list_controller.dart';
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
-import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
 import 'package:afyakit/shared/state/paged_query_controller.dart';
 
@@ -17,109 +18,6 @@ final paymentsByInvoiceControllerProvider = StateNotifierProvider.autoDispose
       return controller;
     });
 
-class PaymentsByInvoiceController extends PagedQueryController<ZohoInvoice> {
-  PaymentsByInvoiceController(this._ref, {required this.scope});
-
-  static const int _maxPageSize = 25;
-
-  final Ref _ref;
-  final RetailDocScope scope;
-
-  String? _searchQuery;
-
-  bool get _isMine => scope == RetailDocScope.mine;
-
-  String? get searchQuery => _searchQuery;
-
-  bool get hasSearch => _searchQuery != null;
-
-  void applySearch(String value) {
-    final next = _clean(value);
-    if (_searchQuery == next) return;
-
-    _searchQuery = next;
-    refresh(reset: true);
-  }
-
-  void clearSearch() {
-    if (_searchQuery == null) return;
-
-    _searchQuery = null;
-    refresh(reset: true);
-  }
-
-  @override
-  Future<PageResult<ZohoInvoice>> fetchPage({
-    required String? q,
-    required int page,
-    required int limit,
-  }) async {
-    final service = await _ref.read(zohoInvoicesServiceProvider.future);
-
-    final search = _searchQuery ?? _clean(q);
-    final effectiveLimit = limit.clamp(1, _maxPageSize).toInt();
-
-    // Staff: preserve the existing invoice listing.
-    if (!_isMine) {
-      final items = await service.list(
-        limit: effectiveLimit,
-        page: page,
-        q: search,
-      );
-
-      return PageResult<ZohoInvoice>(
-        items: items,
-        hasMore: items.length == effectiveLimit,
-      );
-    }
-
-    // Member: use the authenticated Native Contact account.
-    // No frontend Zoho Contacts lookup is required.
-    final accountNumber = _resolveMemberAccountNumber();
-
-    if (accountNumber == null) {
-      return const PageResult<ZohoInvoice>(
-        items: <ZohoInvoice>[],
-        hasMore: false,
-      );
-    }
-
-    // Backend must verify member ownership and resolve the
-    // app-scoped Native Contact -> Zoho customer mapping.
-    final items = await service.list(
-      limit: effectiveLimit,
-      page: page,
-      q: search,
-      accountNumber: accountNumber,
-    );
-
-    return PageResult<ZohoInvoice>(
-      items: items,
-      hasMore: items.length == effectiveLimit,
-    );
-  }
-
-  String? _resolveMemberAccountNumber() {
-    final user = _ref.read(currentUserValueProvider);
-    final accountNumber = _clean(user?.accountNumber);
-
-    if (accountNumber == null) {
-      return null;
-    }
-
-    final canonicalPattern = RegExp(
-      r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-    );
-
-    if (!canonicalPattern.hasMatch(accountNumber)) {
-      throw StateError('Invalid Native Contact account number');
-    }
-
-    return accountNumber;
-  }
-
-  static String? _clean(String? value) {
-    final text = (value ?? '').trim();
-    return text.isEmpty ? null : text;
-  }
+class PaymentsByInvoiceController extends InvoicesListController {
+  PaymentsByInvoiceController(super.ref, {required super.scope});
 }

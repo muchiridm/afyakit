@@ -5,6 +5,7 @@ import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final profilesServiceProvider = Provider<ProfilesService>((ref) {
@@ -107,7 +108,7 @@ class ProfilesService {
     required String accountNumber,
   }) async {
     final id = _requiredId(profileId, 'profileId');
-    final account = _requiredId(accountNumber, 'accountNumber');
+    final account = NativeContact.requireAccountNumber(accountNumber);
     final profileUri = routes.recordsProfileGet(id);
     final enrolmentUri = profileUri.replace(
       path: '${profileUri.path}/enrolment',
@@ -160,10 +161,14 @@ class ProfilesService {
   }) async {
     final id = _requiredId(profileId, 'profileId');
     if (confirmation.trim() != id) {
-      throw ArgumentError('Type the exact Health Profile ID to confirm deletion');
+      throw ArgumentError(
+        'Type the exact Health Profile ID to confirm deletion',
+      );
     }
     if (reason.trim().length < 10) {
-      throw ArgumentError('Provide a deletion reason of at least 10 characters');
+      throw ArgumentError(
+        'Provide a deletion reason of at least 10 characters',
+      );
     }
     if (!retentionReviewed) {
       throw ArgumentError('Clinical retention review must be confirmed');
@@ -178,33 +183,13 @@ class ProfilesService {
     );
   }
 
-  @Deprecated('Use deactivate or an explicit member delink instead.')
-  Future<void> remove(String profileId) => deactivate(profileId);
-
-  // ---------------------------------------------------------
-  // Member Profile Linking
-  // ---------------------------------------------------------
-
-  /// Legacy entry point: direct member linking is no longer authorised.
-  /// Use createLinkRequest() and await staff approval instead.
-  Future<Profile> linkToSelf(
-    String profileId,
-    ProfileLinkToSelfInput input,
-  ) async {
-    // The backend intentionally disables demographics-only instant linking.
-    // Existing callers should migrate to createLinkRequest(...).
-    throw StateError(
-      'Direct linking is disabled. Submit a Health Profile link request for staff review.',
-    );
-  }
-
   // ---------------------------------------------------------
   // Staff Profile–Native Contact Links
   // ---------------------------------------------------------
 
   /// Links a Health Profile to a canonical Native Contact.
   ///
-  /// The account number must represent AC-XXXXXX.
+  /// The account number identifies a person or organisation contact.
   ///
   /// The backend validates Contact identity, app enrolment,
   /// relationship permissions and any required authorisation.
@@ -214,7 +199,7 @@ class ProfilesService {
   ) async {
     final id = _requiredId(profileId, 'profileId');
 
-    final account = _requiredAccountNumber(accountNumber: input.accountNumber);
+    final account = NativeContact.requireAccountNumber(input.accountNumber);
 
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkedContactCreate(id),
@@ -239,7 +224,7 @@ class ProfilesService {
   }) async {
     final pid = _requiredId(profileId, 'profileId');
 
-    final account = _requiredAccountNumber(accountNumber: accountNumber);
+    final account = NativeContact.requireAccountNumber(accountNumber);
 
     final response = await api.deleteUri<Object?>(
       routes.recordsProfileLinkedContactDelete(
@@ -359,34 +344,19 @@ class ProfilesService {
   // Native Contact Identity Helpers
   // ---------------------------------------------------------
 
-  static final RegExp _accountNumberPattern = RegExp(
-    r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-  );
-
   static String? _optionalAccountNumber({String? accountNumber}) {
-    final account = _nullable(accountNumber)?.toUpperCase();
-    if (account != null && !_accountNumberPattern.hasMatch(account)) {
-      throw ArgumentError.value(
-        account,
-        'accountNumber',
-        'Expected canonical Native Contact account number (AC-XXXXXX)',
-      );
-    }
-    return account;
-  }
-
-  static String _requiredAccountNumber({String? accountNumber}) {
-    final account = _optionalAccountNumber(accountNumber: accountNumber);
-    if (account == null) {
-      throw ArgumentError('A Native Contact account number is required');
-    }
-    return account;
+    final account = _nullable(accountNumber);
+    return account == null ? null : NativeContact.requireAccountNumber(account);
   }
 
   static Map<String, Object?> _profileUpsertPayload(ProfileUpsertInput input) {
     final data = Map<String, Object?>.from(input.toJson());
     final account = _optionalAccountNumber(accountNumber: input.accountNumber);
-    if (account != null) data['account_number'] = account;
+    if (account != null) {
+      data['account_number'] = account;
+    } else {
+      data.remove('account_number');
+    }
     return data;
   }
 
@@ -493,7 +463,8 @@ class ProfilePurgeReport {
     final blockers = <String, bool>{};
     if (raw is Map) {
       for (final entry in raw.entries) {
-        if (entry.value is bool) blockers[entry.key.toString()] = entry.value as bool;
+        if (entry.value is bool)
+          blockers[entry.key.toString()] = entry.value as bool;
       }
     }
     return ProfilePurgeReport(
@@ -502,7 +473,9 @@ class ProfilePurgeReport {
       blockers: blockers,
       references: _readBoolMap(json['references']),
       unchecked: (json['unchecked'] is List)
-          ? (json['unchecked'] as List).map((e) => e.toString()).toList(growable: false)
+          ? (json['unchecked'] as List)
+                .map((e) => e.toString())
+                .toList(growable: false)
           : const <String>[],
       canPurge: json['can_purge'] == true,
     );

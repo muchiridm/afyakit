@@ -1,14 +1,13 @@
-// lib/core/home/widgets/staff/staff_home_quick_actions.dart
+// lib/features/home/widgets/staff/staff_home_quick_actions.dart
 
-import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
-
-import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
+import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_quick_action_button.dart';
 import 'package:afyakit/features/messaging/providers/messaging_providers.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
+import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
 
 class StaffHomeQuickActions extends ConsumerWidget {
   const StaffHomeQuickActions({super.key, this.onChat});
@@ -17,9 +16,9 @@ class StaffHomeQuickActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final VoidCallback? chatAction = onChat;
+    final chatAction = onChat;
 
-    final int chatUnreadCount = chatAction == null
+    final chatUnreadCount = chatAction == null
         ? 0
         : ref.watch(staffUnreadMessagesProvider);
 
@@ -31,8 +30,7 @@ class StaffHomeQuickActions extends ConsumerWidget {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) =>
-                    const NativeContactsScreen(allowAdminPurge: true),
+                builder: (_) => const NativeContactsScreen(),
               ),
             );
           },

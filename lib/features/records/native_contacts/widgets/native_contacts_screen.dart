@@ -14,18 +14,10 @@ import 'contact_linked_profiles_screen.dart';
 
 /// Staff-facing canonical Native Contacts, independent of Retail accounting.
 class NativeContactsScreen extends ConsumerStatefulWidget {
-  const NativeContactsScreen({
-    super.key,
-    this.requireIdForPersons = false,
-    this.allowAdminPurge = false,
-  });
+  const NativeContactsScreen({super.key, this.requireIdForPersons = false});
 
   /// UI hint only; server enforces the Occuwell identity policy.
   final bool requireIdForPersons;
-
-  /// Deprecated compatibility flag. Lifecycle administration moved to HQ.
-  /// Ignored by this staff-facing directory.
-  final bool allowAdminPurge;
 
   @override
   ConsumerState<NativeContactsScreen> createState() =>
@@ -34,11 +26,13 @@ class NativeContactsScreen extends ConsumerStatefulWidget {
 
 class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
   String _query = '';
-  String? _expandedContactId;
+  String? _expandedAccountNumber;
 
-  void _toggleContact(String contactId) {
+  void _toggleContact(String accountNumber) {
     setState(() {
-      _expandedContactId = _expandedContactId == contactId ? null : contactId;
+      _expandedAccountNumber = _expandedAccountNumber == accountNumber
+          ? null
+          : accountNumber;
     });
   }
 
@@ -75,9 +69,11 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
 
   Future<void> _openDeliveryAddresses(NativeContact contact) async {
     final tenantId = ref.read(tenantIdProvider).trim().toLowerCase();
-    // Native Contact account number is the canonical contact document ID.
-    final contactId = (contact.accountNumber).trim();
-    if (tenantId.isEmpty || contactId.isEmpty) {
+    final accountNumber = NativeContact.normalizeAccountNumber(
+      contact.accountNumber,
+    );
+    if (tenantId.isEmpty ||
+        !NativeContact.isValidAccountNumber(accountNumber)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -87,7 +83,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       );
       return;
     }
-    if (contact.status != 'active') {
+    if (!contact.isActive) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This Contact is not active.')),
       );
@@ -98,7 +94,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
         builder: (_) => DeliveryAddressesScreen(
           scope: DeliveryAddressScope(
             tenantId: tenantId,
-            contactId: contactId,
+            contactId: accountNumber,
             ownerLabel: contact.displayName,
           ),
           memberMode: false,
@@ -129,7 +125,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       ),
     );
     if (confirmed == true && mounted) {
-      if ((contact.accountNumber).trim().isEmpty) {
+      if (!NativeContact.isValidAccountNumber(contact.accountNumber)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contact account number is missing.')),
         );
@@ -137,7 +133,7 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
       }
       await ref
           .read(nativeContactsControllerProvider.notifier)
-          .removeFromApp((contact.accountNumber).trim());
+          .removeFromApp(contact.accountNumber);
     }
   }
 
@@ -196,7 +192,6 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                       final searchable = [
                         contact.displayName,
                         contact.companyName ?? '',
-                        contact.legacyDisplayName ?? '',
                         contact.phone ?? '',
                         contact.email ?? '',
                         contact.accountNumber,
@@ -249,17 +244,20 @@ class _NativeContactsScreenState extends ConsumerState<NativeContactsScreen> {
                                 itemBuilder: (context, index) {
                                   final contact = filtered[index];
                                   return NativeContactTile(
-                                    key: ValueKey(contact.id),
+                                    key: ValueKey(contact.accountNumber),
                                     contact: contact,
-                                    expanded: _expandedContactId == contact.id,
+                                    expanded:
+                                        _expandedAccountNumber ==
+                                        contact.accountNumber,
                                     busy: actions.busy,
-                                    onToggle: () => _toggleContact(contact.id),
+                                    onToggle: () =>
+                                        _toggleContact(contact.accountNumber),
                                     onAddresses: () =>
                                         _openDeliveryAddresses(contact),
                                     onProfiles: () =>
                                         _openLinkedProfiles(contact),
                                     onEdit: () {
-                                      if (contact.status == 'active') {
+                                      if (contact.isActive) {
                                         _edit(existing: contact);
                                       }
                                     },
@@ -420,11 +418,8 @@ class _ContactEditDialogState extends State<_ContactEditDialog> {
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Text(
-                        (existing.legacyDisplayName ?? '').isNotEmpty
-                            ? 'Previous display name: ${existing.legacyDisplayName}. '
-                              'Confirm the correct first and last names separately.'
-                            : 'This contact is missing a first or last name. '
-                              'Enter both names as recorded; do not guess.',
+                        'This contact is missing a first or last name. '
+                        'Enter both names as recorded; do not guess.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),

@@ -51,10 +51,11 @@ class _CampaignEditorScreenState extends ConsumerState<CampaignEditorScreen> {
       ref.invalidate(campaignsProvider);
       if (mounted) Navigator.of(context).pop(result);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Unable to create campaign: $e')),
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

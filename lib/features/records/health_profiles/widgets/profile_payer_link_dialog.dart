@@ -3,6 +3,7 @@
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:flutter/material.dart';
 
 class ProfilePayerLinkDialog {
@@ -163,9 +164,15 @@ class ProfilePayerLinkDialog {
                               width: 260,
                               child: TextFormField(
                                 controller: accountNumberCtl,
+                                validator: (value) {
+                                  final account = NativeContact.normalizeAccountNumber(value);
+                                  return account.isEmpty || NativeContact.isValidAccountNumber(account)
+                                      ? null
+                                      : 'Invalid Native Contact account number';
+                                },
                                 decoration: const InputDecoration(
                                   labelText: 'Native Contact account number',
-                                  hintText: 'Optional AC-XXXXXX',
+                                  hintText: 'AC-XXXXXX or ORG-XXXXXX',
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                 ),
@@ -323,11 +330,12 @@ class ProfilePayerLinkDialog {
             ),
             FilledButton(
               onPressed: () {
+                if (formKey.currentState?.validate() != true) return;
                 Navigator.of(context).pop(
                   ProfileLinkRequestCreateInput(
                     relationship: relationship.value,
                     targetContactDisplayName: payerNameCtl.text.trim(),
-                    targetAccountNumber: accountNumberCtl.text.trim(),
+                    targetAccountNumber: NativeContact.normalizeAccountNumber(accountNumberCtl.text),
                     targetPhone: payerPhoneCtl.text.trim(),
                     targetEmail: payerEmailCtl.text.trim(),
                     reason: reasonCtl.text.trim(),
@@ -407,7 +415,7 @@ class ProfilePayerLinkDialog {
                           decoration: const InputDecoration(
                             labelText: 'Native Contact account number',
                             helperText: 'Required canonical Native Contact ID',
-                            hintText: 'AC-XXXXXX',
+                            hintText: 'AC-XXXXXX or ORG-XXXXXX',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -486,17 +494,14 @@ class ProfilePayerLinkDialog {
             ),
             FilledButton(
               onPressed: () {
-                final accountNumber = _cleanNullable(
+                final accountNumber = NativeContact.normalizeAccountNumber(
                   accountNumberCtl.text,
-                )?.toUpperCase();
-                if (accountNumber == null ||
-                    !RegExp(
-                      r'^AC-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$',
-                    ).hasMatch(accountNumber)) {
+                );
+                if (!NativeContact.isValidAccountNumber(accountNumber)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'Enter a valid Native Contact account number (AC-XXXXXX).',
+                        'Enter a valid Native Contact account number (AC-XXXXXX or ORG-XXXXXX).',
                       ),
                     ),
                   );

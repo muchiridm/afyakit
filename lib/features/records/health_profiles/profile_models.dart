@@ -700,45 +700,6 @@ class ProfileUpsertInput {
 }
 
 @immutable
-class ProfileLinkToSelfInput {
-  const ProfileLinkToSelfInput({
-    this.relationship = ProfileContactRelationship.self,
-    this.confirmFullName,
-    this.confirmGender,
-    this.confirmDob,
-    this.confirmPhone,
-    this.confirmEmail,
-    this.confirmNationalId,
-  });
-
-  final ProfileContactRelationship relationship;
-  final String? confirmFullName;
-  final ProfileGender? confirmGender;
-  final String? confirmDob;
-  final String? confirmPhone;
-  final String? confirmEmail;
-  final String? confirmNationalId;
-
-  static String? _nullable(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'relationship': relationship.name,
-      'confirm_full_name': _nullable(confirmFullName),
-      'confirm_gender': confirmGender?.name,
-      'confirm_dob': _nullable(confirmDob),
-      'confirm_phone': _nullable(confirmPhone),
-      'confirm_email': _nullable(confirmEmail),
-      'confirm_national_id': _nullable(confirmNationalId),
-    };
-  }
-}
-
-@immutable
 class ProfileContactLinkInput {
   const ProfileContactLinkInput({
     this.accountNumber,

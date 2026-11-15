@@ -295,29 +295,6 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     }
   }
 
-  Future<Profile> linkToSelf(
-    String profileId,
-    ProfileLinkToSelfInput input,
-  ) async {
-    _requireMemberAccount();
-    state = state.copyWith(isSaving: true, clearError: true);
-
-    try {
-      final linked = await _service.linkToSelf(profileId, input);
-      final items = _upsertProfile(state.items, linked);
-
-      state = state.copyWith(items: items, isSaving: false, clearError: true);
-
-      return linked;
-    } catch (e) {
-      state = state.copyWith(
-        isSaving: false,
-        error: 'Failed to link Health Profile: $e',
-      );
-      rethrow;
-    }
-  }
-
   Future<Profile> update(String profileId, ProfileUpsertInput input) async {
     _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
@@ -334,27 +311,6 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       state = state.copyWith(
         isSaving: false,
         error: 'Failed to update profile: $e',
-      );
-      rethrow;
-    }
-  }
-
-  Future<void> remove(String profileId) async {
-    _requireMemberAccount();
-    state = state.copyWith(isSaving: true, clearError: true);
-
-    try {
-      await _service.remove(profileId);
-
-      final items = state.items
-          .where((p) => p.profileId != profileId)
-          .toList(growable: false);
-
-      state = state.copyWith(items: items, isSaving: false, clearError: true);
-    } catch (e) {
-      state = state.copyWith(
-        isSaving: false,
-        error: 'Failed to delete profile: $e',
       );
       rethrow;
     }
@@ -394,7 +350,9 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     required bool retentionReviewed,
   }) async {
     if (isContactScoped) {
-      throw StateError('Permanent deletion is restricted to platform administration.');
+      throw StateError(
+        'Permanent deletion is restricted to platform administration.',
+      );
     }
     state = state.copyWith(isSaving: true, clearError: true);
     try {
@@ -405,12 +363,17 @@ class ProfilesController extends StateNotifier<ProfilesState> {
         retentionReviewed: retentionReviewed,
       );
       state = state.copyWith(
-        items: state.items.where((p) => p.profileId != profileId).toList(growable: false),
+        items: state.items
+            .where((p) => p.profileId != profileId)
+            .toList(growable: false),
         isSaving: false,
         clearError: true,
       );
     } catch (error) {
-      state = state.copyWith(isSaving: false, error: 'Permanent deletion failed: $error');
+      state = state.copyWith(
+        isSaving: false,
+        error: 'Permanent deletion failed: $error',
+      );
       rethrow;
     }
   }
@@ -428,8 +391,10 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       }
     }
     if (profile?.isMultiApp == true) {
-      throw StateError('This Health Profile belongs to multiple applications. '
-          'Global deactivation is not available here.');
+      throw StateError(
+        'This Health Profile belongs to multiple applications. '
+        'Global deactivation is not available here.',
+      );
     }
     state = state.copyWith(isSaving: true, clearError: true);
     try {
@@ -438,7 +403,8 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       state = state.copyWith(isSaving: false, clearError: true);
     } catch (e) {
       state = state.copyWith(
-        isSaving: false, error: 'Failed to deactivate profile: $e',
+        isSaving: false,
+        error: 'Failed to deactivate profile: $e',
       );
       rethrow;
     }
@@ -457,7 +423,8 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       return profile;
     } catch (e) {
       state = state.copyWith(
-        isSaving: false, error: 'Failed to reactivate profile: $e',
+        isSaving: false,
+        error: 'Failed to reactivate profile: $e',
       );
       rethrow;
     }

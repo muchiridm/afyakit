@@ -18,10 +18,8 @@ final quoteMetaControllerProvider =
 class QuoteMetaState {
   const QuoteMetaState({
     this.editingQuoteId,
-    this.contact,
     this.payer,
-    this.nativeContactId,
-    this.zohoContactId,
+    this.accountNumber,
     this.mappedCustomerName,
     this.reference,
     this.customerNotes,
@@ -38,31 +36,21 @@ class QuoteMetaState {
   });
   final String? editingQuoteId;
 
-  /// Transitional alias for older quote-editor callers. Always a Native Contact.
-  /// New code should use [payer] and [setNativePayer].
-  final NativeContact? contact;
-
   /// Canonical payer selected from the Native Contacts directory.
   final NativeContact? payer;
 
-  /// Legacy metadata from an already-loaded accounting document.
-  /// These are not evidence of a verified mapping for new selections.
-  final String? nativeContactId;
-  final String? zohoContactId;
+  /// Canonical payer identity restored from a saved quotation.
+  final String? accountNumber;
   final String? mappedCustomerName;
 
-  /// Canonical account of the selected payer. Never substitute a Zoho ID.
-  String get payerAccountNumber =>
-      (payer?.accountNumber ?? contact?.accountNumber ?? '').trim();
+  String get payerAccountNumber => NativeContact.normalizeAccountNumber(
+    payer?.accountNumber ?? accountNumber,
+  );
 
   String get accountNumberResolved => payerAccountNumber;
 
-  /// Legacy accounting ID, usable only for an unchanged historical quote.
-  String get historicalZohoCustomerId => (zohoContactId ?? '').trim();
-
   bool get hasCustomerSelection =>
-      accountNumberResolved.isNotEmpty ||
-      (isEditing && historicalZohoCustomerId.isNotEmpty);
+      NativeContact.isValidAccountNumber(payerAccountNumber);
   final String? reference;
   final String? customerNotes;
 
@@ -132,16 +120,12 @@ class QuoteMetaState {
     return isPrivateUse && effectivePaymentContext.requiresPrescription;
   }
 
-  /// Compatibility getter for historical accounting documents only.
-  /// New quote submissions must use [accountNumberResolved].
-  String get customerIdResolved => historicalZohoCustomerId;
-
   /// Display name of the selected payer.
   String get displayContactName {
     final String? name =
         _clean(payer?.displayName) ?? _clean(mappedCustomerName);
     if (name != null) return name;
-    return _clean(contact?.displayName) ?? 'Customer';
+    return 'Customer';
   }
 
   /// Canonical AfyaKit Health Profile ID for the person in the patient role.
@@ -215,12 +199,9 @@ class QuoteMetaState {
   QuoteMetaState copyWith({
     String? editingQuoteId,
     bool clearEditingQuoteId = false,
-    NativeContact? contact,
-    bool clearContact = false,
     NativeContact? payer,
+    String? accountNumber,
     bool clearPayer = false,
-    String? nativeContactId,
-    String? zohoContactId,
     String? mappedCustomerName,
     bool clearCustomerMapping = false,
     String? reference,
@@ -281,14 +262,10 @@ class QuoteMetaState {
       editingQuoteId: clearEditingQuoteId
           ? null
           : (editingQuoteId ?? this.editingQuoteId),
-      contact: clearContact ? null : (contact ?? this.contact),
       payer: clearPayer ? null : (payer ?? this.payer),
-      nativeContactId: clearCustomerMapping
+      accountNumber: clearCustomerMapping
           ? null
-          : (nativeContactId ?? this.nativeContactId),
-      zohoContactId: clearCustomerMapping
-          ? null
-          : (zohoContactId ?? this.zohoContactId),
+          : (accountNumber ?? this.accountNumber),
       mappedCustomerName: clearCustomerMapping
           ? null
           : (mappedCustomerName ?? this.mappedCustomerName),
@@ -345,6 +322,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     if (_isMemberScoped) {
       state = state.copyWith(
         clearEditingQuoteId: true,
+        clearPayer: state.isEditing,
+        clearCustomerMapping: state.isEditing,
         quoteDate: quoteDate,
         expiryDate: expiryDate,
       );
@@ -361,7 +340,6 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       paymentContext: wasEditing
           ? QuotePaymentContext.directPay
           : state.effectivePaymentContext,
-      clearContact: wasEditing,
       clearPayer: wasEditing,
       clearCustomerMapping: wasEditing,
       clearPatientSnapshot: wasEditing,
@@ -389,6 +367,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
       paymentContext: isCompany
           ? QuotePaymentContext.directPay
           : state.effectivePaymentContext,
+      clearPayer: isCompany && state.isInsurancePayment,
+      clearCustomerMapping: isCompany && state.isInsurancePayment,
       clearPatientSnapshot: isCompany,
       clearMembershipId: isCompany,
       clearPrescriptionId: isCompany,
@@ -403,24 +383,26 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     state = state.copyWith(
       purchaseContext: QuotePurchaseContext.privateUse,
       paymentContext: paymentContext,
+      clearPayer: true,
+      clearCustomerMapping: true,
       clearMembershipId: isDirectPay,
     );
   }
-
-  /// Compatibility method used by older editor call sites.
-  void setContact(NativeContact? contact) => setNativePayer(contact);
 
   /// Sets the canonical payer for new quotation requests.
   /// The corresponding Native -> Zoho mapping is resolved by the API.
   void setNativePayer(NativeContact? payer) {
     if (_isMemberScoped) return;
-    if (payer != null && (payer.accountNumber).trim().isEmpty) {
-      throw StateError('Selected payer has no Native account number');
+    if (payer != null &&
+        !NativeContact.isValidAccountNumber(payer.accountNumber)) {
+      throw StateError('Selected payer has an invalid Native account number');
+    }
+    if (payer != null && state.isInsurancePayment && !payer.isInsurancePayer) {
+      throw StateError('Select an insurance payer');
     }
     state = state.copyWith(
       payer: payer,
       clearPayer: payer == null,
-      clearContact: true,
       clearCustomerMapping: true,
     );
   }
@@ -430,11 +412,7 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
 
   void clearContact() {
     if (_isMemberScoped) return;
-    state = state.copyWith(
-      clearContact: true,
-      clearPayer: true,
-      clearCustomerMapping: true,
-    );
+    state = state.copyWith(clearPayer: true, clearCustomerMapping: true);
   }
 
   void setReference(String value) {
@@ -528,9 +506,10 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
           ? QuotePaymentContext.insurance
           : QuotePaymentContext.directPay,
       payer: insurancePayer,
-      clearPayer: !isInsurance,
-      clearContact: isInsurance,
-      clearCustomerMapping: isInsurance,
+      clearPayer: isInsurance
+          ? insurancePayer == null
+          : state.isInsurancePayment,
+      clearCustomerMapping: isInsurance || state.isInsurancePayment,
       patientSnapshot: patientSnapshot,
       membershipId: resolvedMembershipId,
       clearMembershipId: resolvedMembershipId == null,
@@ -569,9 +548,10 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
           ? QuotePaymentContext.insurance
           : QuotePaymentContext.directPay,
       payer: insurancePayer,
-      clearPayer: !isInsurance,
-      clearContact: isInsurance,
-      clearCustomerMapping: isInsurance,
+      clearPayer: isInsurance
+          ? insurancePayer == null
+          : state.isInsurancePayment,
+      clearCustomerMapping: isInsurance || state.isInsurancePayment,
       patientSnapshot: patientSnapshot,
       // Membership is only retained for insurance quotes.
       membershipId: isInsurance ? resolvedMembershipId : null,
@@ -588,6 +568,8 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   void clearPatientContext() {
     state = state.copyWith(
       paymentContext: QuotePaymentContext.directPay,
+      clearPayer: state.isInsurancePayment,
+      clearCustomerMapping: state.isInsurancePayment,
       clearPatientSnapshot: true,
       clearMembershipId: true,
       clearPrescriptionId: true,
@@ -612,17 +594,18 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
   }
 
   void applyState(QuoteMetaState next) {
-    final NativeContact? safeContact = _safeContactForPolicy(next.contact);
+    final NativeContact? safePayer = _safePayerForPolicy(
+      next.payer,
+      next.isInsurancePayment,
+    );
     final QuotePaymentContext safePaymentContext =
         next.purchaseContext.isCompany
         ? QuotePaymentContext.directPay
         : next.paymentContext;
     state = QuoteMetaState(
       editingQuoteId: next.editingQuoteId,
-      contact: safeContact,
-      payer: next.payer ?? safeContact,
-      nativeContactId: next.nativeContactId,
-      zohoContactId: next.zohoContactId,
+      payer: safePayer,
+      accountNumber: next.isEditing ? next.accountNumber : null,
       mappedCustomerName: next.mappedCustomerName,
       reference: _clean(next.reference),
       customerNotes: _clean(next.customerNotes),
@@ -650,67 +633,16 @@ class QuoteMetaController extends StateNotifier<QuoteMetaState> {
     );
   }
 
-  void applyZohoMeta({
-    required String editingQuoteId,
-    NativeContact? contact,
-    String? nativeContactId,
-    String? zohoContactId,
-    String? mappedCustomerName,
-    String? reference,
-    String? customerNotes,
-    QuotePurchaseContext purchaseContext = QuotePurchaseContext.privateUse,
-    QuotePaymentContext paymentContext = QuotePaymentContext.directPay,
-    QuoteFulfilmentMethod fulfilmentMethod = QuoteFulfilmentMethod.delivery,
-    DateTime? quoteDate,
-    DateTime? expiryDate,
-    SalesDocumentAddress? deliveryAddress,
-    SalesDocumentPatientSnapshot? patientSnapshot,
-    String? membershipId,
-    String? prescriptionId,
-    String? prescriptionLabel,
-  }) {
-    final String? id = _clean(editingQuoteId);
-    final NativeContact? safeContact = _safeContactForPolicy(contact);
-    final String? resolvedMembershipId = patientSnapshot == null
-        ? _clean(membershipId)
-        : _resolveMembershipId(
-            membershipId: membershipId,
-            patientSnapshot: patientSnapshot,
-          );
-    final QuotePaymentContext safePaymentContext = purchaseContext.isCompany
-        ? QuotePaymentContext.directPay
-        : paymentContext;
-    state = QuoteMetaState(
-      editingQuoteId: id,
-      contact: safeContact,
-      payer: safeContact,
-      nativeContactId: _clean(nativeContactId),
-      zohoContactId: _clean(zohoContactId),
-      mappedCustomerName: _clean(mappedCustomerName),
-      reference: _clean(reference),
-      customerNotes: _clean(customerNotes),
-      purchaseContext: purchaseContext,
-      paymentContext: safePaymentContext,
-      fulfilmentMethod: fulfilmentMethod,
-      quoteDate: QuoteMetaState.normalizeDate(quoteDate),
-      expiryDate: QuoteMetaState.normalizeDate(expiryDate),
-      deliveryAddress: deliveryAddress,
-      patientSnapshot: patientSnapshot,
-      membershipId: resolvedMembershipId,
-      prescriptionId: _clean(prescriptionId),
-      prescriptionLabel: _clean(prescriptionLabel),
-    );
-  }
-
   /// Member payer identity is never inferred from an untrusted editor selection.
-  NativeContact? _safeContactForPolicy(NativeContact? contact) {
+  NativeContact? _safePayerForPolicy(NativeContact? payer, bool insurance) {
+    if (insurance) return _requiredInsurancePayerContact(payer);
     if (_isMemberScoped) return null;
-    return contact;
+    return payer;
   }
 
   NativeContact? _requiredInsurancePayerContact(NativeContact? payer) {
     if (payer == null ||
-        (payer.accountNumber).trim().isEmpty ||
+        !NativeContact.isValidAccountNumber(payer.accountNumber) ||
         !payer.isInsurancePayer) {
       return null;
     }

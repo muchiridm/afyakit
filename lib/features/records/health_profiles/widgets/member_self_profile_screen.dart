@@ -81,8 +81,8 @@ class _MemberSelfProfileScreenState
         _profile = verified.isEmpty ? null : verified.first;
         // Do not offer creation if a record was returned whose self-link
         // cannot be verified from the API response, or duplicates exist.
-        _hasUnverifiedResults = results.length != verified.length ||
-            verified.length > 1;
+        _hasUnverifiedResults =
+            results.length != verified.length || verified.length > 1;
         _loading = false;
       });
     } catch (error) {
@@ -111,8 +111,13 @@ class _MemberSelfProfileScreenState
   }
 
   Future<void> _createSelfProfile() async {
-    if (_loading || _creating || _profile != null ||
-        _hasUnverifiedResults || _error != null) return;
+    if (_loading ||
+        _creating ||
+        _profile != null ||
+        _hasUnverifiedResults ||
+        _error != null) {
+      return;
+    }
     setState(() => _creating = true);
     try {
       final service = await ref.read(profilesServiceReadyProvider.future);
@@ -141,26 +146,28 @@ class _MemberSelfProfileScreenState
         if (mounted) await _load();
         return;
       }
-      await service.create(ProfileUpsertInput(
-        fullName: input.fullName,
-        dob: input.dob,
-        gender: input.gender,
-        accountNumber: _account,
-        relationship: ProfileContactRelationship.self,
-        phone: input.phone,
-        email: input.email,
-        nationalId: input.nationalId,
-        notes: input.notes,
-        pastMedicalHistory: input.pastMedicalHistory,
-        surgicalHistory: input.surgicalHistory,
-        familyHistory: input.familyHistory,
-        socialHistory: input.socialHistory,
-        currentMedications: input.currentMedications,
-        allergyStatus: input.allergyStatus,
-        allergies: input.allergies,
-        vaccinations: input.vaccinations,
-        conditions: input.conditions,
-      ));
+      await service.create(
+        ProfileUpsertInput(
+          fullName: input.fullName,
+          dob: input.dob,
+          gender: input.gender,
+          accountNumber: _account,
+          relationship: ProfileContactRelationship.self,
+          phone: input.phone,
+          email: input.email,
+          nationalId: input.nationalId,
+          notes: input.notes,
+          pastMedicalHistory: input.pastMedicalHistory,
+          surgicalHistory: input.surgicalHistory,
+          familyHistory: input.familyHistory,
+          socialHistory: input.socialHistory,
+          currentMedications: input.currentMedications,
+          allergyStatus: input.allergyStatus,
+          allergies: input.allergies,
+          vaccinations: input.vaccinations,
+          conditions: input.conditions,
+        ),
+      );
       if (mounted) await _load();
     } catch (error) {
       // A server-side duplicate-link / ownership rejection is expected
@@ -196,76 +203,85 @@ class _MemberSelfProfileScreenState
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(_error!, textAlign: TextAlign.center),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: _load,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Retry'),
-                          ),
-                        ],
-                      )
-                    : _hasUnverifiedResults
-                        ? const Center(
-                            child: Text(
-                              'Your self-profile link needs review. '
-                              'Please contact support; no new profile '
-                              'will be created until it is resolved.',
-                              textAlign: TextAlign.center,
-                            ),
-                          )
-                        : profile != null
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.person_outline, size: 48,
-                                      color: theme.colorScheme.primary),
-                                  const SizedBox(height: 12),
-                                  Text(profile.fullName,
-                                      style: theme.textTheme.titleLarge,
-                                      textAlign: TextAlign.center),
-                                  const SizedBox(height: 8),
-                                  const Text('Your linked health profile',
-                                      textAlign: TextAlign.center),
-                                  const SizedBox(height: 20),
-                                  FilledButton.icon(
-                                    onPressed: _openDetails,
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text('Open My Profile'),
-                                  ),
-                                ],
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.person_add_alt_1_outlined,
-                                      size: 48,
-                                      color: theme.colorScheme.primary),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'No self-linked health profile was found.',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'If you already created a profile in '
-                                    'another AfyaKit application, it should '
-                                    'appear here automatically.',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 20),
-                                  FilledButton.icon(
-                                    onPressed: _creating ? null : _createSelfProfile,
-                                    icon: const Icon(Icons.add),
-                                    label: Text(_creating
-                                        ? 'Creating…'
-                                        : 'Create My Profile'),
-                                  ),
-                                ],
-                              ),
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                : _hasUnverifiedResults
+                ? const Center(
+                    child: Text(
+                      'Your self-profile link needs review. '
+                      'Please contact support; no new profile '
+                      'will be created until it is resolved.',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : profile != null
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.person_outline,
+                        size: 48,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        profile.fullName,
+                        style: theme.textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Your linked health profile',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: _openDetails,
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Open My Profile'),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.person_add_alt_1_outlined,
+                        size: 48,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No self-linked health profile was found.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'If you already created a profile in '
+                        'another AfyaKit application, it should '
+                        'appear here automatically.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: _creating ? null : _createSelfProfile,
+                        icon: const Icon(Icons.add),
+                        label: Text(
+                          _creating ? 'Creating…' : 'Create My Profile',
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
