@@ -1,6 +1,6 @@
 // lib/core/home/widgets/shared/home_dashboard/home_shared.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_brand_logo.dart';
@@ -280,7 +280,7 @@ class QuietHomePanel extends StatelessWidget {
       opacity: 0.84,
       child: Material(
         elevation: 0,
-        color: scheme.surface.withOpacity(0.64),
+        color: scheme.surface.withValues(alpha: 0.64),
         borderRadius: BorderRadius.circular(14),
         child: child,
       ),

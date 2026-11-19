@@ -1,7 +1,7 @@
 // lib/features/home/widgets/shared/home_dashboard/home_screen.dart
 
 import 'package:afyakit/app/providers/app_profile_providers.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';

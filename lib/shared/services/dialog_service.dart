@@ -2,7 +2,7 @@
 
 import 'package:afyakit/app/app_navigator.dart';
 import 'package:afyakit/features/inventory/locations/inventory_location.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class DialogService {
   static BuildContext? _ctx(BuildContext? context) {

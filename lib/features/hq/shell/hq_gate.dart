@@ -9,7 +9,7 @@ import 'package:afyakit/core/auth/shared/widgets/onboarding_gate.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/hq/shell/hq_shell.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Firebase Auth's verified `superadmin` custom claim is the platform

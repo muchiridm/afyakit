@@ -1,6 +1,6 @@
 // lib/features/hq/tenants/widgets/tenant_profile_editor_sections.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/core/capabilities/feature_registry.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
@@ -26,8 +26,8 @@ class TenantProfileEditorHeader extends StatelessWidget {
           Chip(
             label: Text(initial!.status.value),
             backgroundColor: initial!.isActive
-                ? Colors.green.withOpacity(0.12)
-                : Colors.red.withOpacity(0.12),
+                ? Colors.green.withValues(alpha: 0.12)
+                : Colors.red.withValues(alpha: 0.12),
             labelStyle: TextStyle(
               color: initial!.isActive ? Colors.green : Colors.red,
             ),

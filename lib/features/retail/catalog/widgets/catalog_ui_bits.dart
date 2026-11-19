@@ -3,7 +3,7 @@
 import 'dart:math' as math;
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shared, lightweight UI pieces used across the Catalog screen and sheets:
 /// - Search bar
@@ -79,13 +79,17 @@ class SearchBarField extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: 'Search for any medicine or health product',
                       hintStyle: theme.textTheme.titleMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.45),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.45,
+                        ),
                         fontWeight: FontWeight.w400,
                       ),
                       prefixIcon: Icon(
                         Icons.search_rounded,
                         size: 22,
-                        color: theme.colorScheme.onSurface.withOpacity(0.62),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.62,
+                        ),
                       ),
                       suffixIcon: showClear
                           ? IconButton(
@@ -94,8 +98,8 @@ class SearchBarField extends StatelessWidget {
                               icon: Icon(
                                 Icons.close_rounded,
                                 size: 20,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.62,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.62,
                                 ),
                               ),
                             )
@@ -142,7 +146,7 @@ class SearchBarField extends StatelessWidget {
             child: Text(
               resultsLabel,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.55),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -213,10 +217,12 @@ class _SkeletonCardState extends State<_SkeletonCard>
       animation: _ac,
       builder: (_, __) {
         final t = (math.sin(_ac.value * 2 * math.pi) + 1) / 2;
-        final base = theme.colorScheme.surfaceContainerHighest.withOpacity(
-          0.28,
+        final base = theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.28,
         );
-        final hi = theme.colorScheme.surfaceContainerHighest.withOpacity(0.48);
+        final hi = theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.48,
+        );
 
         return Container(
           decoration: BoxDecoration(
@@ -266,7 +272,7 @@ class SheetHeader extends StatelessWidget {
         Icon(
           Icons.medication_outlined,
           size: 24,
-          color: theme.colorScheme.onSurface.withOpacity(0.82),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.82),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -287,7 +293,7 @@ class SheetHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.66),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.66),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -325,7 +331,7 @@ class SheetHeader extends StatelessWidget {
               Text(
                 'KES',
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.56),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.56),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -350,13 +356,15 @@ class _PillChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.42),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.42,
+        ),
       ),
       child: Text(
         label,
         style: theme.textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w600,
-          color: theme.colorScheme.onSurface.withOpacity(0.76),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
         ),
       ),
     );
@@ -375,7 +383,7 @@ class _SoftBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.10),
+        color: theme.colorScheme.primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

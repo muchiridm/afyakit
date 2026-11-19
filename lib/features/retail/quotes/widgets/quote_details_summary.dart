@@ -1,7 +1,7 @@
 // lib/features/retail/quotes/widgets/quote_details_summary.dart
 
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class QuoteDetailsSummary extends StatelessWidget {
   const QuoteDetailsSummary({

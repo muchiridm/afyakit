@@ -1,7 +1,7 @@
 // lib/features/retail/sales/shared/sales_doc/header.dart
 
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'layout.dart';
 import 'models.dart';
@@ -115,7 +115,9 @@ class SalesDocHeader extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: t.bodySmall?.copyWith(
-                              color: t.bodySmall?.color?.withOpacity(0.75),
+                              color: t.bodySmall?.color?.withValues(
+                                alpha: 0.75,
+                              ),
                             ),
                           ),
                         ],

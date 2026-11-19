@@ -24,7 +24,7 @@ import 'package:afyakit/features/retail/shared/models/sales_document_address.dar
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
 import 'package:afyakit/shared/widgets/app_bottom_sheet.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'quote_editor_details_components.dart';
 

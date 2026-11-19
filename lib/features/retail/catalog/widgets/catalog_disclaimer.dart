@@ -1,6 +1,6 @@
 // lib/features/retail/catalog/widgets/catalog_disclaimer.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class CatalogDisclaimer extends StatelessWidget {
   const CatalogDisclaimer({super.key});

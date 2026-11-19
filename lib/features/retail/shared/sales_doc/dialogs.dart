@@ -2,7 +2,7 @@
 // (typo note: "sared" looks unintended — but leaving your path as-is)
 
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class SalesDocDialogs {
   SalesDocDialogs._();

@@ -1,6 +1,6 @@
 // lib/features/messaging/widgets/chat_conversation_screen.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/providers/app_profile_providers.dart';
@@ -204,7 +204,7 @@ class _ChatConversationScreenState
           color: Theme.of(context).colorScheme.surface,
           border: Border.symmetric(
             vertical: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.22),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.22),
             ),
           ),
         ),

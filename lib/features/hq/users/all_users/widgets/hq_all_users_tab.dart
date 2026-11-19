@@ -8,7 +8,7 @@ import 'package:afyakit/features/hq/users/all_users/controllers/all_users_contro
 import 'package:afyakit/features/hq/users/all_users/widgets/user_editor_screen.dart';
 import 'package:afyakit/features/hq/users/all_users/widgets/user_row_tile.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class HqAllUsersTab extends ConsumerStatefulWidget {

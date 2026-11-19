@@ -1,6 +1,6 @@
 // lib/features/admin/widgets/admin_dashboard_screen.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/tests/api_test_screen.dart';

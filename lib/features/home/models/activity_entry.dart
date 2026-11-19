@@ -1,6 +1,6 @@
 // lib/core/home/models/activity_entry.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ActivityEntry {
   const ActivityEntry({required this.date, required this.widget});

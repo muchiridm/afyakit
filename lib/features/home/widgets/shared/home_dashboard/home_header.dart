@@ -11,7 +11,7 @@ import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_brand_logo.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

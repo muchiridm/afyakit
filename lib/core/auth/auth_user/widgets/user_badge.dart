@@ -3,7 +3,7 @@
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';

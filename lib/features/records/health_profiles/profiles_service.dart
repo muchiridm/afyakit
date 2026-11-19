@@ -463,8 +463,9 @@ class ProfilePurgeReport {
     final blockers = <String, bool>{};
     if (raw is Map) {
       for (final entry in raw.entries) {
-        if (entry.value is bool)
+        if (entry.value is bool) {
           blockers[entry.key.toString()] = entry.value as bool;
+        }
       }
     }
     return ProfilePurgeReport(

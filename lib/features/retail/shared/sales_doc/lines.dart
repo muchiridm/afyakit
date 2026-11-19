@@ -1,6 +1,6 @@
 // lib/features/retail/sales/shared/sales_doc/lines.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'helpers.dart';
 import 'layout.dart';
 import 'models.dart';
@@ -183,7 +183,7 @@ class _WideHeaderRow extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final style = t.bodySmall?.copyWith(
       fontWeight: FontWeight.w700,
-      color: t.bodySmall?.color?.withOpacity(0.75),
+      color: t.bodySmall?.color?.withValues(alpha: 0.75),
     );
 
     final trailingW = showActionCol ? (kActionRailGap + kActionRailW) : 0.0;
@@ -405,8 +405,8 @@ class _TwoRowLineBody extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         height: 1.2,
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(
-                          0.8,
+                        color: theme.textTheme.bodySmall?.color?.withValues(
+                          alpha: 0.8,
                         ),
                       ),
                     ),
@@ -442,7 +442,7 @@ class _TwoRowLineBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.6)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
       ),
       child: Text(
         text,

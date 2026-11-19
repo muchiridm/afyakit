@@ -1,7 +1,7 @@
 // lib/features/insurance/memberships/widgets/insurance_membership_form_dialog.dart
 
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class InsuranceMembershipFormDialog extends StatefulWidget {
   const InsuranceMembershipFormDialog({

@@ -2,7 +2,7 @@ import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/records/native_contacts/native_contacts_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Creates/edit profiles and (staff creation only) selects an existing Native Contact.

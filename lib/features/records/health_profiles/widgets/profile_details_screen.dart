@@ -6,7 +6,7 @@ import 'package:afyakit/features/records/health_profiles/widgets/profile_form_di
 import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_associations_section.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -158,10 +158,14 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
 
   Future<void> _deactivateProfile(Profile profile) async {
     if (profile.isMultiApp) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('This patient is enrolled in multiple applications. '
-            'Global deactivation is not available here.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This patient is enrolled in multiple applications. '
+            'Global deactivation is not available here.',
+          ),
+        ),
+      );
       return;
     }
     final confirmed = await _confirmAction(
@@ -207,7 +211,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
 
   Future<void> _reviewDeletionDependencies(Profile profile) async {
     try {
-      final report = await ref.read(profilesServiceProvider)
+      final report = await ref
+          .read(profilesServiceProvider)
           .inspectPurgeDependencies(profile.profileId);
       if (!mounted) return;
       await showDialog<void>(
@@ -223,16 +228,22 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                 children: [
                   Text('Health Profile ${report.profileId}'),
                   const SizedBox(height: 12),
-                  Text(report.canPurge
-                      ? 'No technical blockers detected. Retention review is still required.'
-                      : 'Permanent deletion is blocked by the backend.'),
+                  Text(
+                    report.canPurge
+                        ? 'No technical blockers detected. Retention review is still required.'
+                        : 'Permanent deletion is blocked by the backend.',
+                  ),
                   for (final entry in report.blockers.entries)
-                    if (entry.value) Text('Blocked: ${entry.key.replaceAll('_', ' ')}'),
+                    if (entry.value)
+                      Text('Blocked: ${entry.key.replaceAll('_', ' ')}'),
                   if (report.references.values.any((found) => found)) ...[
                     const SizedBox(height: 12),
-                    const Text('Independent or historical references retained:'),
+                    const Text(
+                      'Independent or historical references retained:',
+                    ),
                     for (final entry in report.references.entries)
-                      if (entry.value) Text('• ${entry.key.replaceAll('_', ' ')}'),
+                      if (entry.value)
+                        Text('• ${entry.key.replaceAll('_', ' ')}'),
                   ],
                   if (report.unchecked.isNotEmpty) ...[
                     const SizedBox(height: 12),
@@ -245,8 +256,10 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Close')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
           ],
         ),
       );
@@ -259,13 +272,19 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   }
 
   Future<void> _permanentlyDeleteProfile(Profile profile) async {
-    if (_memberMode || widget.allowExplicitContactLink == false || profile.isActive) return;
-    final report = await ref.read(profilesServiceProvider)
+    if (_memberMode ||
+        widget.allowExplicitContactLink == false ||
+        profile.isActive)
+      return;
+    final report = await ref
+        .read(profilesServiceProvider)
         .inspectPurgeDependencies(profile.profileId);
     if (!mounted) return;
     if (!report.canPurge) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Deletion blocked. Review profile dependencies.')),
+        const SnackBar(
+          content: Text('Deletion blocked. Review profile dependencies.'),
+        ),
       );
       await _reviewDeletionDependencies(profile);
       return;
@@ -286,26 +305,35 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('This permanently removes ${profile.profileId}. '
-                        'Independent medical, financial and audit records remain.'),
+                    Text(
+                      'This permanently removes ${profile.profileId}. '
+                      'Independent medical, financial and audit records remain.',
+                    ),
                     const SizedBox(height: 12),
                     Text('Type ${profile.profileId} to confirm:'),
                     TextField(
                       controller: idController,
                       onChanged: (_) => update(() {}),
-                      decoration: const InputDecoration(labelText: 'Health Profile ID'),
+                      decoration: const InputDecoration(
+                        labelText: 'Health Profile ID',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: reasonController,
                       onChanged: (_) => update(() {}),
                       maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Reason (at least 10 characters)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Reason (at least 10 characters)',
+                      ),
                     ),
                     CheckboxListTile(
                       value: reviewed,
-                      onChanged: (value) => update(() => reviewed = value ?? false),
-                      title: const Text('I have reviewed clinical retention, independent records and legal requirements.'),
+                      onChanged: (value) =>
+                          update(() => reviewed = value ?? false),
+                      title: const Text(
+                        'I have reviewed clinical retention, independent records and legal requirements.',
+                      ),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ],
@@ -318,7 +346,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: reviewed && idController.text.trim() == profile.profileId &&
+                onPressed:
+                    reviewed &&
+                        idController.text.trim() == profile.profileId &&
                         reasonController.text.trim().length >= 10
                     ? () => Navigator.of(dialogContext).pop(true)
                     : null,
@@ -443,13 +473,16 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                     alignment: Alignment.centerLeft,
                     child: visibleProfile.isActive
                         ? TextButton.icon(
-                            onPressed: state.isSaving || visibleProfile.isMultiApp
+                            onPressed:
+                                state.isSaving || visibleProfile.isMultiApp
                                 ? null
                                 : () => _deactivateProfile(visibleProfile),
                             icon: const Icon(Icons.pause_circle_outline),
-                            label: Text(visibleProfile.isMultiApp
-                                ? 'Shared profile · cannot deactivate here'
-                                : 'Deactivate Health Profile'),
+                            label: Text(
+                              visibleProfile.isMultiApp
+                                  ? 'Shared profile · cannot deactivate here'
+                                  : 'Deactivate Health Profile',
+                            ),
                           )
                         : Wrap(
                             spacing: 12,
@@ -479,8 +512,12 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                                 TextButton.icon(
                                   onPressed: state.isSaving
                                       ? null
-                                      : () => _permanentlyDeleteProfile(visibleProfile),
-                                  icon: const Icon(Icons.delete_forever_outlined),
+                                      : () => _permanentlyDeleteProfile(
+                                          visibleProfile,
+                                        ),
+                                  icon: const Icon(
+                                    Icons.delete_forever_outlined,
+                                  ),
                                   label: const Text('Delete permanently'),
                                 ),
                             ],
@@ -671,8 +708,8 @@ class _StatusChip extends StatelessWidget {
       label: Text(label),
       visualDensity: VisualDensity.compact,
       backgroundColor: active
-          ? scheme.primaryContainer.withOpacity(0.55)
-          : scheme.errorContainer.withOpacity(0.55),
+          ? scheme.primaryContainer.withValues(alpha: 0.55)
+          : scheme.errorContainer.withValues(alpha: 0.55),
     );
   }
 }

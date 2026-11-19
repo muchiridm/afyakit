@@ -1,7 +1,7 @@
 // lib/shared/widgets/pdf/pdf_preview_screen.dart
 
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'pdf_saver.dart';
 import 'pdf_viewer.dart';

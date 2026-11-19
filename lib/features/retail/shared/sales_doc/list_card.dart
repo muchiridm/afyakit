@@ -3,7 +3,7 @@
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class SalesListCard extends StatelessWidget {
   const SalesListCard({

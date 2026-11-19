@@ -1,6 +1,6 @@
 // lib/features/hq/tenants/widgets/tenant_profile_editor.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/capabilities/feature_registry.dart';

@@ -14,7 +14,7 @@ import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

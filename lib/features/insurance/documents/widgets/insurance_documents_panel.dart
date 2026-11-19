@@ -4,7 +4,7 @@ import 'package:afyakit/features/insurance/documents/controllers/insurance_docum
 import 'package:afyakit/features/insurance/documents/models/insurance_document.dart';
 import 'package:afyakit/features/insurance/documents/services/insurance_documents_service.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 

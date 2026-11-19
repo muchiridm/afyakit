@@ -12,7 +12,7 @@ import 'package:afyakit/features/retail/shared/sales_doc/feedback.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/header.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'quote_details_summary.dart';

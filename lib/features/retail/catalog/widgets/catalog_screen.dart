@@ -21,7 +21,7 @@ import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart'
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/utils/app_error_message.dart';
 import 'package:afyakit/shared/widgets/app_error_pane.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 

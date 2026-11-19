@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:afyakit/features/retail/quotes/widgets/quote_detail_screen.dart';
 import 'package:afyakit/features/retail/quotes/widgets/quote_editor_screen.dart';
 import 'package:afyakit/features/retail/shared/extensions/retail_doc_scope_x.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 

@@ -1,6 +1,6 @@
 // lib/core/home/activities/shared/member_activity_history_screen.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/features/home/activities/shared/member_latest_activity_panel.dart';
 import 'package:afyakit/shared/layout/app_header.dart';

@@ -1,6 +1,6 @@
 // lib/features/home/widgets/shared/home_shell.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/app_identity.dart';

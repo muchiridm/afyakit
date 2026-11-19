@@ -6,7 +6,7 @@ import 'package:afyakit/features/retail/payments/widgets/payment_detail_screen.d
 import 'package:afyakit/features/retail/payments/widgets/payment_editor_sheet.dart';
 import 'package:afyakit/features/retail/payments/widgets/payment_history_section.dart';
 import 'package:afyakit/shared/services/dialog_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PaymentFooter extends ConsumerWidget {

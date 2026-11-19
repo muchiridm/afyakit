@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class AppErrorPane extends StatelessWidget {
   final String message;
@@ -31,7 +31,7 @@ class AppErrorPane extends StatelessWidget {
               Icon(
                 icon,
                 size: 36,
-                color: theme.colorScheme.onSurface.withOpacity(0.68),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.68),
               ),
               if (title != null) ...[
                 const SizedBox(height: 10),
@@ -40,7 +40,7 @@ class AppErrorPane extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface.withOpacity(0.88),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.88),
                   ),
                 ),
               ],
@@ -49,7 +49,7 @@ class AppErrorPane extends StatelessWidget {
                 message,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.76),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
                 ),
               ),
               if (onRetry != null) ...[

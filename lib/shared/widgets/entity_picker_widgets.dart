@@ -1,6 +1,6 @@
 // lib/shared/widgets/pickers/entity_picker_widgets.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 typedef PickerRefreshCallback = Future<void> Function();
 
@@ -36,10 +36,7 @@ class PickerHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
                 count == 1
@@ -89,8 +86,9 @@ class PickerSearchField extends StatelessWidget {
     return TextField(
       controller: controller,
       enabled: enabled,
-      textInputAction:
-          submitAction ? TextInputAction.search : TextInputAction.done,
+      textInputAction: submitAction
+          ? TextInputAction.search
+          : TextInputAction.done,
       decoration: InputDecoration(
         isDense: true,
         labelText: labelText,
@@ -146,10 +144,7 @@ class PickerBody<T> extends StatelessWidget {
     }
 
     if (items.isEmpty) {
-      return PickerEmptyState(
-        text: emptyText,
-        icon: emptyIcon,
-      );
+      return PickerEmptyState(text: emptyText, icon: emptyIcon);
     }
 
     return ListView.separated(
@@ -163,11 +158,7 @@ class PickerBody<T> extends StatelessWidget {
 }
 
 class PickerEmptyState extends StatelessWidget {
-  const PickerEmptyState({
-    super.key,
-    required this.text,
-    required this.icon,
-  });
+  const PickerEmptyState({super.key, required this.text, required this.icon});
 
   final String text;
   final IconData icon;

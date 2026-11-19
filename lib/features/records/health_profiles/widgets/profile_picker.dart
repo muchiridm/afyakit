@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 Future<Profile?> showProfilePickerScreen({
   required BuildContext context,

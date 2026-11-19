@@ -1,6 +1,6 @@
 // lib/features/clinical/health_metrics/widgets/health_metric_history_list.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_card.dart';

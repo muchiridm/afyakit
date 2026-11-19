@@ -8,7 +8,7 @@ import 'package:afyakit/features/insurance/memberships/controllers/insurance_mem
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InsuranceClaimsScreen extends ConsumerStatefulWidget {

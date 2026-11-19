@@ -1,7 +1,7 @@
 // lib/core/hq/shell/hq_shell.dart
 
 import 'package:afyakit/features/hq/tenants/widgets/hq_tenants_tab.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'hq_controller.dart';
@@ -69,7 +69,7 @@ class HqShell extends ConsumerWidget {
         if (state.busy)
           AbsorbPointer(
             child: Container(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               alignment: Alignment.center,
               child: const SizedBox(
                 width: 28,

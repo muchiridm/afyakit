@@ -4,7 +4,7 @@ import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dar
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 typedef PaymentTap = void Function(ZohoInvoicePayment payment);
 typedef PaymentAction = Future<void> Function(ZohoInvoicePayment payment);
@@ -244,13 +244,13 @@ class PaymentHistoryTile extends StatelessWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
 
     final Color background = isSelected
-        ? scheme.primary.withOpacity(0.08)
+        ? scheme.primary.withValues(alpha: 0.08)
         : scheme.surface;
 
     final Border border = Border.all(
       color: isSelected
-          ? scheme.primary.withOpacity(0.35)
-          : scheme.outlineVariant.withOpacity(0.25),
+          ? scheme.primary.withValues(alpha: 0.35)
+          : scheme.outlineVariant.withValues(alpha: 0.25),
     );
 
     final EdgeInsets padding = compact

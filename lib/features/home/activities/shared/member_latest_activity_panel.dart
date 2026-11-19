@@ -1,7 +1,7 @@
 // lib/core/home/activities/shared/member_latest_activity_panel.dart
 
 import 'package:afyakit/features/records/native_contacts/widgets/native_contacts_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/home/activities/feed/activity_feed_adapter.dart';

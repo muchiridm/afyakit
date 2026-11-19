@@ -1,6 +1,6 @@
 // lib/features/messaging/widgets/chat_message_bubble.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:intl/intl.dart';
 
 import '../models/chat_conversation.dart';
@@ -73,7 +73,9 @@ class ChatMessageBubble extends StatelessWidget {
               ),
               border: isMine
                   ? null
-                  : Border.all(color: theme.dividerColor.withOpacity(0.25)),
+                  : Border.all(
+                      color: theme.dividerColor.withValues(alpha: 0.25),
+                    ),
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
@@ -91,7 +93,7 @@ class ChatMessageBubble extends StatelessWidget {
                             ? Icons.local_pharmacy_outlined
                             : Icons.person_outline_rounded,
                         size: 14,
-                        color: foregroundColor.withOpacity(0.78),
+                        color: foregroundColor.withValues(alpha: 0.78),
                       ),
                       const SizedBox(width: 5),
                       Flexible(
@@ -100,7 +102,7 @@ class ChatMessageBubble extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: foregroundColor.withOpacity(0.82),
+                            color: foregroundColor.withValues(alpha: 0.82),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -120,7 +122,7 @@ class ChatMessageBubble extends StatelessWidget {
                   Text(
                     _formatTime(message.createdAt),
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: foregroundColor.withOpacity(0.65),
+                      color: foregroundColor.withValues(alpha: 0.65),
                     ),
                   ),
                 ],

@@ -4,7 +4,7 @@ import 'package:afyakit/features/records/health_profiles/profile_link_request_mo
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ProfilePayerLinkDialog {
   const ProfilePayerLinkDialog._();
@@ -165,8 +165,14 @@ class ProfilePayerLinkDialog {
                               child: TextFormField(
                                 controller: accountNumberCtl,
                                 validator: (value) {
-                                  final account = NativeContact.normalizeAccountNumber(value);
-                                  return account.isEmpty || NativeContact.isValidAccountNumber(account)
+                                  final account =
+                                      NativeContact.normalizeAccountNumber(
+                                        value,
+                                      );
+                                  return account.isEmpty ||
+                                          NativeContact.isValidAccountNumber(
+                                            account,
+                                          )
                                       ? null
                                       : 'Invalid Native Contact account number';
                                 },
@@ -335,7 +341,9 @@ class ProfilePayerLinkDialog {
                   ProfileLinkRequestCreateInput(
                     relationship: relationship.value,
                     targetContactDisplayName: payerNameCtl.text.trim(),
-                    targetAccountNumber: NativeContact.normalizeAccountNumber(accountNumberCtl.text),
+                    targetAccountNumber: NativeContact.normalizeAccountNumber(
+                      accountNumberCtl.text,
+                    ),
                     targetPhone: payerPhoneCtl.text.trim(),
                     targetEmail: payerEmailCtl.text.trim(),
                     reason: reasonCtl.text.trim(),

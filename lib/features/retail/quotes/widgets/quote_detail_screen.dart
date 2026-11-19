@@ -18,7 +18,7 @@ import 'package:afyakit/features/retail/shared/sales_doc/totals.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QuoteDetailScreen extends ConsumerStatefulWidget {
@@ -446,7 +446,7 @@ class _DraftEditHint extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      color: scheme.primaryContainer.withOpacity(0.35),
+      color: scheme.primaryContainer.withValues(alpha: 0.35),
       child: Row(
         children: <Widget>[
           Icon(Icons.edit_note_outlined, size: 18, color: scheme.primary),

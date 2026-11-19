@@ -1,7 +1,7 @@
 // lib/features/retail/payments/zoho/widgets/payment_receipt_summary_card.dart
 
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/shared/theme/app_shape.dart';
 import 'package:afyakit/shared/widgets/app_tile.dart';
@@ -246,9 +246,9 @@ class _PaymentDetails extends StatelessWidget {
     final amount = money(payment.amount, currencyCode);
 
     // amount centered; label right; no “ref”
-    final bg = scheme.primary.withOpacity(0.06);
-    final border = Border.all(color: scheme.primary.withOpacity(0.20));
-    final receiptLabelColor = scheme.error.withOpacity(0.90);
+    final bg = scheme.primary.withValues(alpha: 0.06);
+    final border = Border.all(color: scheme.primary.withValues(alpha: 0.20));
+    final receiptLabelColor = scheme.error.withValues(alpha: 0.90);
 
     return Container(
       decoration: BoxDecoration(

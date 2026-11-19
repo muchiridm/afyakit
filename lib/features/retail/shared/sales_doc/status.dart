@@ -1,6 +1,6 @@
 // lib/features/retail/sales/shared/sales_doc/status.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Reusable status chip for invoices + quotes (list + details).
 ///
@@ -106,7 +106,7 @@ class SalesDocStatusTone {
   static SalesDocStatusTone of(String normalizedStatus, ColorScheme scheme) {
     final s = normalizedStatus;
 
-    Color stroke(Color c) => c.withOpacity(0.38);
+    Color stroke(Color c) => c.withValues(alpha: 0.38);
 
     // Paid
     if (SalesDocStatusX.isPaid(s)) {

@@ -1,6 +1,6 @@
 // lib/features/retail/catalog/widgets/catalog_discovery.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class CatalogDiscovery extends StatelessWidget {
   const CatalogDiscovery({super.key, this.onExampleTap});
@@ -17,7 +17,7 @@ class CatalogDiscovery extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurface.withOpacity(0.64);
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.64);
 
     return Center(
       child: ConstrainedBox(
@@ -95,13 +95,15 @@ class _QuickHintChip extends StatelessWidget {
     final child = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.30),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.30,
+        ),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withOpacity(0.74),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.74),
           fontWeight: FontWeight.w500,
         ),
       ),

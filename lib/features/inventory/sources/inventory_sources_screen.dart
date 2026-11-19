@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'inventory_source.dart';
 import 'inventory_sources_providers.dart';
@@ -7,10 +7,12 @@ class InventorySourcesScreen extends ConsumerStatefulWidget {
   const InventorySourcesScreen({super.key});
 
   @override
-  ConsumerState<InventorySourcesScreen> createState() => _InventorySourcesScreenState();
+  ConsumerState<InventorySourcesScreen> createState() =>
+      _InventorySourcesScreenState();
 }
 
-class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen> {
+class _InventorySourcesScreenState
+    extends ConsumerState<InventorySourcesScreen> {
   bool showArchived = false;
   bool busy = false;
 
@@ -22,7 +24,9 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
   Future<void> _edit({InventorySource? existing}) async {
     final name = TextEditingController(text: existing?.name ?? '');
     final type = TextEditingController(text: existing?.sourceType ?? '');
-    final description = TextEditingController(text: existing?.description ?? '');
+    final description = TextEditingController(
+      text: existing?.description ?? '',
+    );
     final formKey = GlobalKey<FormState>();
     try {
       final input = await showDialog<InventorySourceInput>(
@@ -41,9 +45,12 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
                       controller: name,
                       autofocus: true,
                       maxLength: 160,
-                      decoration: const InputDecoration(labelText: 'Source name *'),
+                      decoration: const InputDecoration(
+                        labelText: 'Source name *',
+                      ),
                       validator: (value) => (value?.trim().length ?? 0) < 2
-                          ? 'Enter at least 2 characters' : null,
+                          ? 'Enter at least 2 characters'
+                          : null,
                     ),
                     TextFormField(
                       controller: type,
@@ -57,7 +64,9 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
                       controller: description,
                       maxLength: 500,
                       maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Description (optional)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Description (optional)',
+                      ),
                     ),
                   ],
                 ),
@@ -65,13 +74,21 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
               onPressed: () {
                 if (!(formKey.currentState?.validate() ?? false)) return;
-                Navigator.pop(dialogContext, InventorySourceInput(
-                  name: name.text, sourceType: type.text, description: description.text,
-                ));
+                Navigator.pop(
+                  dialogContext,
+                  InventorySourceInput(
+                    name: name.text,
+                    sourceType: type.text,
+                    description: description.text,
+                  ),
+                );
               },
               child: const Text('Save'),
             ),
@@ -107,10 +124,18 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Archive source?'),
-          content: Text('Archive ${source.name}? Historical stock records will be preserved.'),
+          content: Text(
+            'Archive ${source.name}? Historical stock records will be preserved.',
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Archive')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Archive'),
+            ),
           ],
         ),
       );
@@ -134,9 +159,9 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
 
   void _error(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Inventory sources: $error')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Inventory sources: $error')));
   }
 
   @override
@@ -146,12 +171,17 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
       appBar: AppBar(
         title: const Text('Inventory sources'),
         actions: [
-          IconButton(onPressed: busy ? null : _refresh, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: busy ? null : _refresh,
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: busy ? null : () => _edit(),
-        icon: const Icon(Icons.add), label: const Text('Add source'),
+        icon: const Icon(Icons.add),
+        label: const Text('Add source'),
       ),
       body: Column(
         children: [
@@ -161,42 +191,69 @@ class _InventorySourcesScreenState extends ConsumerState<InventorySourcesScreen>
             onChanged: (value) => setState(() => showArchived = value),
           ),
           if (busy) const LinearProgressIndicator(),
-          Expanded(child: sourcesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Could not load sources: $error')),
-            data: (sources) {
-              final visible = sources.where((s) => showArchived || !s.isArchived).toList()
-                ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-              if (visible.isEmpty) return const Center(child: Text('No inventory sources found.'));
-              return ListView.builder(
-                padding: const EdgeInsets.only(bottom: 90),
-                itemCount: visible.length,
-                itemBuilder: (context, index) {
-                  final source = visible[index];
-                  return ListTile(
-                    title: Text(source.name),
-                    subtitle: Text([
-                      if (source.sourceType?.isNotEmpty == true) source.sourceType!,
-                      if (source.description?.isNotEmpty == true) source.description!,
-                      if (source.isArchived) 'Archived',
-                    ].join(' • ')),
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (!source.isArchived)
-                        IconButton(
-                          tooltip: 'Edit', icon: const Icon(Icons.edit_outlined),
-                          onPressed: busy ? null : () => _edit(existing: source),
+          Expanded(
+            child: sourcesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) =>
+                  Center(child: Text('Could not load sources: $error')),
+              data: (sources) {
+                final visible =
+                    sources.where((s) => showArchived || !s.isArchived).toList()
+                      ..sort(
+                        (a, b) => a.name.toLowerCase().compareTo(
+                          b.name.toLowerCase(),
                         ),
-                      IconButton(
-                        tooltip: source.isArchived ? 'Restore' : 'Archive',
-                        icon: Icon(source.isArchived ? Icons.restore : Icons.archive_outlined),
-                        onPressed: busy ? null : () => _toggleArchived(source),
-                      ),
-                    ]),
+                      );
+                if (visible.isEmpty)
+                  return const Center(
+                    child: Text('No inventory sources found.'),
                   );
-                },
-              );
-            },
-          )),
+                return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 90),
+                  itemCount: visible.length,
+                  itemBuilder: (context, index) {
+                    final source = visible[index];
+                    return ListTile(
+                      title: Text(source.name),
+                      subtitle: Text(
+                        [
+                          if (source.sourceType?.isNotEmpty == true)
+                            source.sourceType!,
+                          if (source.description?.isNotEmpty == true)
+                            source.description!,
+                          if (source.isArchived) 'Archived',
+                        ].join(' • '),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!source.isArchived)
+                            IconButton(
+                              tooltip: 'Edit',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: busy
+                                  ? null
+                                  : () => _edit(existing: source),
+                            ),
+                          IconButton(
+                            tooltip: source.isArchived ? 'Restore' : 'Archive',
+                            icon: Icon(
+                              source.isArchived
+                                  ? Icons.restore
+                                  : Icons.archive_outlined,
+                            ),
+                            onPressed: busy
+                                ? null
+                                : () => _toggleArchived(source),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

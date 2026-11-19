@@ -1,6 +1,6 @@
 // lib/core/auth/auth_user/widgets/user_profile_card.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';

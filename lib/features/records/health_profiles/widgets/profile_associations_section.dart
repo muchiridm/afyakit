@@ -1,5 +1,5 @@
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
@@ -108,10 +108,16 @@ class ProfileAssociationsSectionState
               ),
               FilledButton(
                 onPressed: () {
-                  final account = NativeContact.normalizeAccountNumber(accountCtl.text);
+                  final account = NativeContact.normalizeAccountNumber(
+                    accountCtl.text,
+                  );
                   if (!NativeContact.isValidAccountNumber(account)) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Enter a valid Native Contact account number.')),
+                      const SnackBar(
+                        content: Text(
+                          'Enter a valid Native Contact account number.',
+                        ),
+                      ),
                     );
                     return;
                   }

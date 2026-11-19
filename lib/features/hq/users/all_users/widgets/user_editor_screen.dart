@@ -5,7 +5,7 @@ import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/user_editor_controller.dart';
 import 'package:afyakit/features/hq/users/all_users/widgets/app_email_change_dialog.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class UserEditorScreen extends ConsumerWidget {

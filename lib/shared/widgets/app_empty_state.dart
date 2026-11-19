@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 class AppEmptyState extends StatelessWidget {

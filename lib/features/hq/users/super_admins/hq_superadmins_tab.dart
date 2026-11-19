@@ -1,5 +1,5 @@
 // lib/hq/users/super_admins/widgets/hq_superadmins_tab.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/hq/users/super_admins/super_admins_controller.dart';
 import 'package:afyakit/features/hq/users/super_admins/super_admin_model.dart';

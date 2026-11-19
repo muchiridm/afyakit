@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/date_pill.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class QuoteDetailsQuestionSection extends StatelessWidget {
   const QuoteDetailsQuestionSection({

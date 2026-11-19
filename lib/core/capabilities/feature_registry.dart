@@ -1,6 +1,6 @@
 // lib/core/capabilities/feature_registry.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'feature_keys.dart';
 

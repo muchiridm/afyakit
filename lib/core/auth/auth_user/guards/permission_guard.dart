@@ -1,6 +1,6 @@
 // lib/shared/widgets/permission_guard.dart
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PermissionGuard extends StatelessWidget {
   final AuthUser? user; // allow null

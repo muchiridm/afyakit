@@ -8,7 +8,7 @@ import 'package:afyakit/features/home/widgets/shared/home_dashboard/home_header.
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -221,7 +221,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Full-screen loading overlay.
         if (state.savingProfile)
           Container(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             child: const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -263,7 +263,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           textAlign: TextAlign.center,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: scheme.primary.withOpacity(0.86),
+            color: scheme.primary.withValues(alpha: 0.86),
           ),
         ),
         const SizedBox(height: AppShape.gap10),
@@ -741,7 +741,7 @@ class _LoginCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(0.7)),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.7)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),

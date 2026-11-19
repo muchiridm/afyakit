@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -269,7 +269,7 @@ class _ErrorBanner extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Material(
-        color: Colors.red.withOpacity(0.10),
+        color: Colors.red.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),

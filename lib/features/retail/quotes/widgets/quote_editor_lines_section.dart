@@ -4,7 +4,7 @@ import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controlle
 import 'package:afyakit/features/retail/shared/sales_doc/dialogs.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/lines.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/models.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum QuoteEditorLineKind { catalog, manual, unknown }

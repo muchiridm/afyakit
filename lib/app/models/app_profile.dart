@@ -1,6 +1,6 @@
 // lib/app/models/app_profile.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/app/models/app_details.dart';
 import 'package:afyakit/core/branding/models/branding_assets.dart';

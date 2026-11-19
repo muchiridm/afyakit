@@ -1,7 +1,7 @@
 // lib/features/hq/apps/app_domains_screen.dart
 
 import 'package:afyakit/features/hq/apps/app_domains_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/models/app_profile.dart';

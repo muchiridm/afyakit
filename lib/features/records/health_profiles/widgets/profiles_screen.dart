@@ -9,7 +9,7 @@ import 'package:afyakit/features/records/health_profiles/widgets/profile_payer_l
 import 'package:afyakit/features/records/health_profiles/widgets/existing_profile_link_request_dialog.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profiles_screen_widgets.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_list_tile.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';

@@ -1,6 +1,6 @@
 // lib/features/hq/apps/widgets/app_profiles_screen.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/app/models/app_profile.dart';

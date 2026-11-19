@@ -1,6 +1,6 @@
 // lib/shared/layout/app_header.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
@@ -78,7 +78,7 @@ class AppHeader extends StatelessWidget {
             color: theme.colorScheme.surface,
             border: Border(
               bottom: BorderSide(
-                color: theme.dividerColor.withOpacity(0.35),
+                color: theme.dividerColor.withValues(alpha: 0.35),
                 width: 0.5,
               ),
             ),

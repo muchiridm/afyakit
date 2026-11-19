@@ -1,6 +1,6 @@
 // lib/features/clinical/health_metrics/widgets/health_metric_entry_dialog.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../models/health_metric_entry.dart';
 import '../models/health_metric_type.dart';

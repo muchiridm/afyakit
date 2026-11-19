@@ -2,7 +2,7 @@
 // Personal, cross-application Health Profile entry for Occupational Health.
 // Identity and uniqueness MUST also be enforced by the backend.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';

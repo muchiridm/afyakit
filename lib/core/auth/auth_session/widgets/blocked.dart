@@ -1,7 +1,7 @@
 // lib/core/auth/auth_session/widgets/blocked.dart
 
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class Blocked extends StatelessWidget {
   const Blocked({super.key, required this.msg, this.showSignOut = false});

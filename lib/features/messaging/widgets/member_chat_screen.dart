@@ -1,6 +1,6 @@
 // lib/features/messaging/widgets/member_chat_screen.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 

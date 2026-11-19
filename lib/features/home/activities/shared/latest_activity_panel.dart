@@ -1,7 +1,7 @@
 // lib/core/home/activities/shared/latest_activity_panel.dart
 
 import 'package:collection/collection.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/features/home/models/activity_entry.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
@@ -219,9 +219,9 @@ class _ClickableActivityTitle extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: AppShape.tileRadius,
-        hoverColor: scheme.primary.withOpacity(0.06),
-        splashColor: scheme.primary.withOpacity(0.10),
-        highlightColor: scheme.primary.withOpacity(0.08),
+        hoverColor: scheme.primary.withValues(alpha: 0.06),
+        splashColor: scheme.primary.withValues(alpha: 0.10),
+        highlightColor: scheme.primary.withValues(alpha: 0.08),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             vertical: AppShape.gap8,

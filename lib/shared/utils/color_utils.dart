@@ -1,5 +1,5 @@
 // lib/shared/utils/color_utils.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// "#RGB", "#RRGGBB", or "#AARRGGBB" → Color, with a safe fallback.
 Color colorFromHex(

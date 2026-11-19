@@ -3,7 +3,7 @@
 import 'package:afyakit/features/insurance/claim_packs/controllers/insurance_claim_packs_controller.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:afyakit/shared/widgets/entity_picker_widgets.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InsuranceClaimPickerCard extends ConsumerStatefulWidget {

@@ -2,7 +2,7 @@
 
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
 import 'package:afyakit/features/retail/shared/sales_doc/helpers.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PaymentEditorSheet extends ConsumerStatefulWidget {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'hq_tenant_contacts_controller.dart';
 import 'hq_tenant_contacts_service.dart';

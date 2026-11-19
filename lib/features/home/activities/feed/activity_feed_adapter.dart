@@ -1,6 +1,6 @@
 // lib/features/home/activities/feed/activity_feed_adapter.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:afyakit/features/home/activities/feed/activity_feed_record.dart';
 import 'package:afyakit/features/home/activities/shared/activity_event_tile.dart';

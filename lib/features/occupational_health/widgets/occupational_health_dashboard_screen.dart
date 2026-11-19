@@ -1,5 +1,5 @@
 // lib/features/occupational_health/widgets/occupational_health_dashboard_screen.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 enum OhSection { overview, campaigns, medex, certificates, reports }
 
@@ -41,7 +41,9 @@ class _OccupationalHealthDashboardScreenState
         children: [
           Text('Occuwell', style: theme.textTheme.headlineSmall),
           const SizedBox(height: 4),
-          const Text('Campaign management, occupational examinations and fitness decisions.'),
+          const Text(
+            'Campaign management, occupational examinations and fitness decisions.',
+          ),
           const SizedBox(height: 20),
           Wrap(
             spacing: 8,
@@ -129,7 +131,10 @@ class _OccupationalHealthDashboardScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_label(section), style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              _label(section),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Text(explanation),
             const SizedBox(height: 12),
@@ -145,10 +150,10 @@ class _OccupationalHealthDashboardScreenState
   }
 
   String _label(OhSection section) => switch (section) {
-        OhSection.overview => 'Overview',
-        OhSection.campaigns => 'Campaigns',
-        OhSection.medex => 'MedEx',
-        OhSection.certificates => 'Certificates',
-        OhSection.reports => 'Reports',
-      };
+    OhSection.overview => 'Overview',
+    OhSection.campaigns => 'Campaigns',
+    OhSection.medex => 'MedEx',
+    OhSection.certificates => 'Certificates',
+    OhSection.reports => 'Reports',
+  };
 }

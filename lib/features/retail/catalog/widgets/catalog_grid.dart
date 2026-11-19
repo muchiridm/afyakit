@@ -1,7 +1,7 @@
 // lib/features/retail/catalog/widgets/catalog_grid.dart
 
 import 'package:afyakit/features/retail/catalog/models/catalog_models.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class CatalogGrid extends StatelessWidget {
   const CatalogGrid({

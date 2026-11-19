@@ -8,7 +8,7 @@ import 'package:afyakit/features/retail/payments/models/zoho_invoice_payment.dar
 import 'package:afyakit/features/retail/payments/models/zoho_payment_draft.dart';
 import 'package:afyakit/features/retail/shared/models/zoho_email_draft.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final invoiceControllerProvider =

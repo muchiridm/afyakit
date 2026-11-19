@@ -1,5 +1,5 @@
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A global user row with tenant- and application-scoped email summaries.
 /// Never derives an app email from a tenant or Firebase Auth email.

@@ -1,6 +1,6 @@
 // lib/core/home/widgets/shared/home_dashboard/home_quick_action_button.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class HomeQuickAction {
   const HomeQuickAction({

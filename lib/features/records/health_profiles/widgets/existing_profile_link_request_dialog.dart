@@ -3,7 +3,7 @@
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_labels.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Request association with an existing Profile without reading its records.
 /// The server resolves the member's Contact from their authenticated session.

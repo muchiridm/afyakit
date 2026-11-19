@@ -1,6 +1,6 @@
 // lib/features/retail/shared/sales_doc/totals.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'helpers.dart';
 
 /// Simple single-line total row (quotes, drafts, editors)
@@ -77,7 +77,7 @@ class SalesDocTotalsStack extends StatelessWidget {
                 label,
                 style: t.labelSmall?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: t.labelSmall?.color?.withOpacity(0.75),
+                  color: t.labelSmall?.color?.withValues(alpha: 0.75),
                 ),
               ),
             ),

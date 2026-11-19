@@ -3,7 +3,7 @@
 import 'dart:typed_data';
 import 'dart:html' as html;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PdfViewer extends StatelessWidget {
   const PdfViewer({super.key, required this.bytes});

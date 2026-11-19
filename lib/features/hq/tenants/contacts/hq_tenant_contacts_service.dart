@@ -115,8 +115,9 @@ class HqTenantContactsService {
     int limit = 50,
     String? cursor,
   }) async {
-    if (limit < 1 || limit > 100)
+    if (limit < 1 || limit > 100) {
       throw RangeError.range(limit, 1, 100, 'limit');
+    }
     final response = await _dio.getUri(
       _routes.listHqTenantContacts(
         _tenant(tenantId),

@@ -1,6 +1,6 @@
 // lib/features/retail/sales/shared/sales_doc/feedback.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ErrorBanner extends StatelessWidget {
   const ErrorBanner(this.message, {super.key, this.padding});

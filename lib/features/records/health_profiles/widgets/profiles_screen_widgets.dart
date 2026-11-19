@@ -3,10 +3,9 @@
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
 import 'package:afyakit/features/records/health_profiles/profile_link_request_models.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'profile_labels.dart';
 export 'profile_labels.dart';
-
 
 class ProfilesFilterBar extends StatelessWidget {
   const ProfilesFilterBar({

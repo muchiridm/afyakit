@@ -1,6 +1,6 @@
 // lib/features/retail/sales/shared/sales_doc/layout.dart
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Breakpoint used by header + lines list.
 const double kWideRowBreakpoint = 720;

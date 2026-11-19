@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 abstract final class AppShape {
   // ─────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ abstract final class AppShape {
   // Borders / shapes
   // ─────────────────────────────────────────────────────────────
   static BorderSide hairline(ThemeData theme, {double opacity = 0.25}) {
-    return BorderSide(color: theme.dividerColor.withOpacity(opacity));
+    return BorderSide(color: theme.dividerColor.withValues(alpha: opacity));
   }
 
   static RoundedRectangleBorder cardShape(ThemeData theme) {
@@ -53,7 +53,7 @@ abstract final class AppShape {
     return BoxDecoration(
       color: theme.colorScheme.surface,
       borderRadius: BorderRadius.circular(tileR),
-      border: Border.all(color: theme.dividerColor.withOpacity(0.20)),
+      border: Border.all(color: theme.dividerColor.withValues(alpha: 0.20)),
     );
   }
 }
