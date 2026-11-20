@@ -1,4 +1,8 @@
+
+# ============================================================
 # Miscellaneous
+# ============================================================
+
 .env*
 *.class
 *.log
@@ -8,22 +12,31 @@
 .atom/
 .build/
 .buildlog/
-.env*
 .history
 .svn/
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# ============================================================
+# IntelliJ / Android Studio
+# ============================================================
+
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# VS Code (optional — uncomment if you want to ignore local configs)
+# ============================================================
+# VS Code
+# ============================================================
+
+# Uncomment to ignore local VS Code configurations
 #.vscode/
 
-# Flutter/Dart/Pub related
+# ============================================================
+# Flutter / Dart / Pub
+# ============================================================
+
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -35,30 +48,72 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# Firebase Hosting cache (keep configs)
+# ============================================================
+# Firebase Hosting
+# ============================================================
+
 .firebase/
+
+# Keep Firebase configuration files
 !firebase.json
 !.firebaserc
 
-# Symbolication related
-app.*.symbols
+# ============================================================
+# Symbolication and obfuscation
+# ============================================================
 
-# Obfuscation related
+app.*.symbols
 app.*.map.json
 
-# Android Studio build outputs
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ============================================================
+# Android
+# ============================================================
 
-# iOS/macOS ephemeral build dirs
+# Generated build outputs
+/android/build/
+/android/app/build/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Gradle caches
+/android/.gradle/
+/android/.kotlin/
+/android/captures/
+
+# Machine-specific SDK configuration
+/android/local.properties
+
+# Signing credentials
+/android/key.properties
+*.jks
+*.keystore
+
+# ============================================================
+# iOS
+# ============================================================
+
 **/ios/Flutter/ephemeral/
-**/macos/Flutter/ephemeral/
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Pods/
+/ios/.symlinks/
 
-# Linux ephemeral build dir
+# ============================================================
+# macOS
+# ============================================================
+
+**/macos/Flutter/ephemeral/
+/macos/Pods/
+
+# ============================================================
+# Linux
+# ============================================================
+
 **/linux/flutter/ephemeral/
 
-# Windows ephemeral build dir
-**/windows/flutter/ephemeral/
+# ============================================================
+# Windows
+# ============================================================
 
-# Generated Dart files
+**/windows/flutter/ephemeral/
