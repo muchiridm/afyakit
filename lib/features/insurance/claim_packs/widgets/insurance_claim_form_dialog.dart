@@ -1,10 +1,10 @@
 // lib/features/insurance/claim_packs/widgets/insurance_claim_form_dialog.dart
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
-import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_service.dart';
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';

@@ -115,11 +115,12 @@ class _CampaignDetailScreenState extends ConsumerState<CampaignDetailScreen> {
     try {
       final svc = await ref.read(campaignsServiceProvider.future);
       final campaign = await svc.get(widget.campaignId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _campaign = campaign;
           _error = null;
         });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
@@ -130,12 +131,13 @@ class _CampaignDetailScreenState extends ConsumerState<CampaignDetailScreen> {
     try {
       final svc = await ref.read(campaignsServiceProvider.future);
       final updated = await svc.setStatus(widget.campaignId, status);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _campaign = updated;
           _token = updated.publicToken;
           _error = null;
         });
+      }
       ref.invalidate(campaignsProvider);
     } catch (e) {
       if (mounted) setState(() => _error = e);

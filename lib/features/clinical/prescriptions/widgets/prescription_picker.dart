@@ -1,6 +1,6 @@
 // lib/features/clinical/prescriptions/widgets/prescription_picker.dart
 
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PrescriptionPickerCard extends StatelessWidget {

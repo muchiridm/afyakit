@@ -237,87 +237,33 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   }) => recordsHealthMetricDelete(metricId);
 
   // ---------------------------------------------------------
-  // Documents — tenant-level independent records
+  // Documents — canonical records v2
   // ---------------------------------------------------------
 
   Uri recordsDocumentsList({
+    required String profileId,
     String? search,
-    String? profileId,
-    String? claimPackId,
     String? documentType,
-    String? membershipId,
-    String? payerContactId,
     String? status,
     bool? isActive,
     int perPage = 50,
     int page = 1,
-  }) => _uri(
-    'records/documents',
-    query: _recordsQuery(
-      search: search,
-      isActive: isActive,
-      perPage: perPage,
-      page: page,
-      extras: {
-        'profile_id': profileId,
-        'claim_pack_id': claimPackId,
-        'document_type': documentType,
-        'membership_id': membershipId,
-        'payer_contact_id': payerContactId,
-        'status': status,
-      },
-    ),
-  );
+  }) => _uri('records/documents', query: {
+    'profile_id': profileId,
+    if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    if (documentType != null) 'document_type': documentType,
+    if (status != null) 'status': status,
+    if (isActive != null) 'is_active': '$isActive',
+    'page': '$page',
+    'per_page': '$perPage',
+  });
 
-  Uri recordsDocumentCreateCanonical() => _uri('records/documents');
+  Uri recordsDocuments() => _uri('records/documents');
   Uri recordsDocumentById(String documentId) =>
       _uri('records/documents/${_seg(documentId)}');
-
-  /// POST: allocate an ID and storage prefix before uploading.
-  Uri recordsDocumentStorageAccess() =>
-      _uri('records/documents/storage-access');
-
-  /// POST: obtain a short-lived signed download URL for the document.
+  Uri recordsDocumentStorageAccess() => _uri('records/documents/storage-access');
   Uri recordsDocumentStorageDownload(String documentId) =>
       _uri('records/documents/${_seg(documentId)}/storage-download');
-
-  Uri recordsDocumentsListForProfile({
-    required String profileId,
-    String? search,
-    String? claimPackId,
-    String? documentType,
-    String? membershipId,
-    String? payerContactId,
-    String? status,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) => recordsDocumentsList(
-    search: search,
-    profileId: profileId,
-    claimPackId: claimPackId,
-    documentType: documentType,
-    membershipId: membershipId,
-    payerContactId: payerContactId,
-    status: status,
-    isActive: isActive,
-    perPage: perPage,
-    page: page,
-  );
-  Uri recordsDocumentGet({
-    required String profileId,
-    required String documentId,
-  }) => recordsDocumentById(documentId);
-  Uri recordsDocumentCreate({required String profileId}) =>
-      recordsDocumentCreateCanonical();
-  Uri recordsDocumentUpdate({
-    required String profileId,
-    required String documentId,
-  }) => recordsDocumentById(documentId);
-  Uri recordsDocumentDelete({
-    required String profileId,
-    required String documentId,
-  }) => recordsDocumentById(documentId);
 
   // ---------------------------------------------------------
   // Delivery addresses — staff and member

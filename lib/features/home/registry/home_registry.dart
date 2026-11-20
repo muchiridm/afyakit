@@ -8,6 +8,7 @@ import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/feature_registry.dart';
 import 'package:afyakit/features/admin/widgets/admin_dashboard_screen.dart';
+import 'package:afyakit/features/clinical/prescriptions/widgets/prescriptions_screen.dart';
 import 'package:afyakit/features/home/models/staff_feature_def.dart';
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claims_screen.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_memberships_screen.dart';
@@ -31,16 +32,12 @@ final class HomeRegistry {
   const HomeRegistry._();
 
   // ─────────────────────────────────────────────
-
   // Feature tiles
-
   // ─────────────────────────────────────────────
 
   static List<StaffFeatureDef> featureTiles(
     WidgetRef ref,
-
     AuthUser user, {
-
     required HomeScope scope,
   }) {
     final appProfile = ref.watch(appProfileProvider).valueOrNull;
@@ -57,31 +54,30 @@ final class HomeRegistry {
       final definition = StaffFeatureDef(
         featureKey: feature.key,
 
-        destination: feature.key == FeatureKeys.occupationalHealth &&
-                scope == HomeScope.staff
+        destination: scope == HomeScope.member
+            ? null
+            : feature.key == FeatureKeys.occupationalHealth
             ? _occupationalHealth
             : feature.entry,
       );
 
       if (!_isVisibleForApp(appProfile, definition)) continue;
 
-      if (!_isAllowedForScope(ref, user, definition, scope)) {
-        continue;
-      }
-
       final hasActions = actions.any(
         (action) => action.featureKey == feature.key,
       );
 
-      if (definition.destination == null && !hasActions) {
-        continue;
+      if (scope == HomeScope.member) {
+        if (!hasActions) continue;
+      } else {
+        if (!_isAllowedForScope(ref, user, definition, scope)) continue;
+        if (definition.destination == null && !hasActions) continue;
       }
 
       tiles.add(definition);
     }
 
     // HQ remains available to authorised staff regardless
-
     // of the active application's configured capabilities.
 
     if (scope == HomeScope.staff && user.canAccessAdminPanel) {
@@ -106,16 +102,12 @@ final class HomeRegistry {
   }
 
   // ─────────────────────────────────────────────
-
   // Quick actions
-
   // ─────────────────────────────────────────────
 
   static List<StaffFeatureDef> quickActions(
     WidgetRef ref,
-
     AuthUser user, {
-
     required HomeScope scope,
   }) {
     return List<StaffFeatureDef>.unmodifiable(
@@ -125,9 +117,7 @@ final class HomeRegistry {
 
   static List<StaffFeatureDef> actionsFor(
     WidgetRef ref,
-
     AuthUser user,
-
     String featureKey, {
 
     required HomeScope scope,
@@ -151,9 +141,7 @@ final class HomeRegistry {
 
   static List<StaffFeatureDef> _visibleActions(
     WidgetRef ref,
-
     AuthUser user,
-
     HomeScope scope,
   ) {
     final appProfile = ref.watch(appProfileProvider).valueOrNull;
@@ -180,9 +168,7 @@ final class HomeRegistry {
   }
 
   // ─────────────────────────────────────────────
-
   // Staff quick actions
-
   // ─────────────────────────────────────────────
 
   static const List<StaffFeatureDef> _staffQuickActions = [
@@ -227,11 +213,19 @@ final class HomeRegistry {
       allowed: _requireStaff,
     ),
 
-    // Clinical
+    // Prescriptions are shared by Clinical and Pharmacy.
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'Prescriptions',
       iconOverride: Icons.description_outlined,
+      destination: _prescriptions,
+      allowed: _requireStaff,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.pharmacy,
+      labelOverride: 'Prescriptions',
+      iconOverride: Icons.description_outlined,
+      destination: _prescriptions,
       allowed: _requireStaff,
     ),
 
@@ -338,9 +332,7 @@ final class HomeRegistry {
   ];
 
   // ─────────────────────────────────────────────
-
   // Member quick actions
-
   // ─────────────────────────────────────────────
 
   static const List<StaffFeatureDef> _memberQuickActions = [
@@ -361,12 +353,20 @@ final class HomeRegistry {
       allowed: _requireMember,
     ),
 
-    // Clinical
+    // Prescriptions are shared by Clinical and Pharmacy.
     StaffFeatureDef(
       featureKey: FeatureKeys.clinical,
       labelOverride: 'My Prescriptions',
       iconOverride: Icons.description_outlined,
-      allowedRef: _allowMemberClinical,
+      destination: _prescriptions,
+      allowed: _requireMember,
+    ),
+    StaffFeatureDef(
+      featureKey: FeatureKeys.pharmacy,
+      labelOverride: 'My Prescriptions',
+      iconOverride: Icons.description_outlined,
+      destination: _prescriptions,
+      allowed: _requireMember,
     ),
 
     // Retail
@@ -396,16 +396,16 @@ final class HomeRegistry {
   ];
 
   // ─────────────────────────────────────────────
-
   // Destinations
-
   // ─────────────────────────────────────────────
 
   static Widget _occupationalHealth(BuildContext _) =>
       const OccupationalHealthDashboardScreen();
 
   static Widget _ohCampaigns(BuildContext _) =>
-      const OccupationalHealthDashboardScreen(initialSection: OhSection.campaigns);
+      const OccupationalHealthDashboardScreen(
+        initialSection: OhSection.campaigns,
+      );
 
   static Widget _ohMedex(BuildContext _) =>
       const OccupationalHealthDashboardScreen(initialSection: OhSection.medex);
@@ -414,6 +414,8 @@ final class HomeRegistry {
       const ProfilesScreen(allowExplicitContactLink: true);
 
   static Widget _myProfiles(BuildContext _) => const ProfilesScreen();
+
+  static Widget _prescriptions(BuildContext _) => PrescriptionsScreen();
 
   static Widget _healthMetrics(BuildContext _) =>
       const HealthMetricsDashboardScreen();
@@ -457,9 +459,7 @@ final class HomeRegistry {
   static Widget _admin(BuildContext _) => const AdminDashboardScreen();
 
   // ─────────────────────────────────────────────
-
   // Access checks
-
   // ─────────────────────────────────────────────
 
   static bool _requireStaff(AuthUser user) => user.isStaff;
@@ -469,9 +469,7 @@ final class HomeRegistry {
   static bool _canAccessAdmin(AuthUser user) => user.canAccessAdminPanel;
 
   // Temporary pilot split: DawaPap currently has Retail/Zoho enabled.
-
   // Switch to an explicit app-level contact backend selector before
-
   // another app activates Retail.
 
   static bool _allowNativeContacts(WidgetRef ref, AuthUser user) =>
@@ -491,32 +489,18 @@ final class HomeRegistry {
     return profile?.features.enabled(FeatureKeys.insurance) == true;
   }
 
-  static bool _allowMemberClinical(WidgetRef ref, AuthUser user) {
-    if (!_requireMember(user)) return false;
-
-    final profile = ref.watch(appProfileProvider).valueOrNull;
-
-    return profile?.features.enabled(FeatureKeys.clinical) == true;
-  }
-
   // ─────────────────────────────────────────────
-
   // Scope visibility
-
   // ─────────────────────────────────────────────
 
   static bool _isAllowedForScope(
     WidgetRef ref,
-
     AuthUser user,
-
     StaffFeatureDef definition,
-
     HomeScope scope,
   ) {
     if (scope == HomeScope.member) {
       // Only explicitly defined member actions are exposed.
-
       // A general feature entry is not sufficient.
 
       if (!_memberQuickActions.contains(definition)) {
@@ -540,9 +524,7 @@ final class HomeRegistry {
   }
 
   // ─────────────────────────────────────────────
-
   // Application capability visibility
-
   // ─────────────────────────────────────────────
 
   static bool _isVisibleForApp(dynamic profile, StaffFeatureDef definition) {

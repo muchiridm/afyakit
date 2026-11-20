@@ -1,12 +1,11 @@
 // lib/features/insurance/claim_packs/widgets/insurance_claim_detail_screen.dart
 
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
-import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_service.dart';
 import 'package:afyakit/features/insurance/claim_packs/controllers/insurance_claim_packs_controller.dart';
 import 'package:afyakit/features/insurance/claim_packs/models/insurance_claim_pack.dart';
 import 'package:afyakit/features/insurance/claim_packs/widgets/insurance_claim_form_dialog.dart';
-import 'package:afyakit/features/insurance/documents/widgets/insurance_documents_panel.dart';
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/retail/invoices/widgets/invoice_detail_screen.dart';
@@ -174,7 +173,9 @@ class _InsuranceClaimDetailScreenState
 
       if (!mounted) return;
 
-      final String url = await svc.downloadUrl(prescription.storagePath);
+      final String url = await svc.downloadUrl(
+        prescriptionId: prescription.prescriptionId,
+      );
 
       if (!mounted) return;
 
@@ -288,14 +289,12 @@ class _InsuranceClaimDetailScreenState
                 onAmend: _amendPrescription,
               ),
               const SizedBox(height: 12),
-              InsuranceDocumentsPanel(
-                profileId: pack.profileId,
-                claimPackId: pack.claimPackId,
-                membershipId: pack.membershipId,
-                payerContactId: pack.payerContactId,
-                payerDisplayName: pack.payerDisplayName,
-                title: 'Claim pack documents',
-                emptyText: 'No supporting documents uploaded.',
+              const Card.outlined(
+                child: ListTile(
+                  leading: Icon(Icons.description_outlined),
+                  title: Text('Claim pack documents'),
+                  subtitle: Text('Document linking is pending integration.'),
+                ),
               ),
               const SizedBox(height: 12),
               _ClaimPackDetailsCard(pack: pack),

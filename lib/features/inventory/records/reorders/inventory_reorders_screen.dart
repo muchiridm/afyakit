@@ -67,8 +67,9 @@ class _InventoryReordersScreenState
               ? _selectedType
               : null;
           final filtered = items.where((item) {
-            if (selectedType != null && item.itemType != selectedType)
+            if (selectedType != null && item.itemType != selectedType) {
               return false;
+            }
             final q = _query.trim().toLowerCase();
             return q.isEmpty ||
                 item.name.toLowerCase().contains(q) ||

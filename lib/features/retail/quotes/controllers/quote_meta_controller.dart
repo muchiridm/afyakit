@@ -1,5 +1,5 @@
 // lib/features/retail/quotes/controllers/quote_meta_controller.dart
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';

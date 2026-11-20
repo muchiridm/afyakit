@@ -3,10 +3,10 @@
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
-import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
-import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_controller.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_providers.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_service.dart';
 import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:file_picker/file_picker.dart';

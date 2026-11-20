@@ -274,8 +274,9 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   Future<void> _permanentlyDeleteProfile(Profile profile) async {
     if (_memberMode ||
         widget.allowExplicitContactLink == false ||
-        profile.isActive)
+        profile.isActive) {
       return;
+    }
     final report = await ref
         .read(profilesServiceProvider)
         .inspectPurgeDependencies(profile.profileId);

@@ -644,7 +644,7 @@ class AuthService {
       _logReq(op: 'saveNativeContact', uri: uri, data: payload, options: opts);
       final res = await _dio.patchUri(uri, data: payload, options: opts);
       _logResp('saveNativeContact', res);
-      return loadSession();
+      return await loadSession();
     } on DioException catch (ex) {
       _failDio('saveNativeContact', ex);
     }

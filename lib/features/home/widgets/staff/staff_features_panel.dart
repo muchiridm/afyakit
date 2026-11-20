@@ -477,7 +477,8 @@ class _ActionChip extends StatelessWidget {
   }
 
   bool get _isPrescriptionsAction {
-    return action.featureKey == FeatureKeys.clinical &&
+    return (action.featureKey == FeatureKeys.clinical ||
+            action.featureKey == FeatureKeys.pharmacy) &&
         action.label.trim().toLowerCase().contains('prescription');
   }
 

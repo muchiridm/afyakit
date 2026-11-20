@@ -1,4 +1,4 @@
-// lib/features/clinical/prescriptions/models/prescription_model.dart
+// lib/features/clinical/prescriptions/prescription_model.dart
 
 enum PrescriptionStatus {
   uploaded,
@@ -225,6 +225,7 @@ class Prescription {
 class PrescriptionCreateInput {
   const PrescriptionCreateInput({
     required this.profileId,
+    required this.prescriptionId,
     required this.fileName,
     required this.storagePath,
     this.originalStoragePath,
@@ -241,6 +242,7 @@ class PrescriptionCreateInput {
   });
 
   final String profileId;
+  final String prescriptionId;
 
   final String fileName;
   final String storagePath;
@@ -265,6 +267,7 @@ class PrescriptionCreateInput {
   Map<String, Object?> toJson() {
     return {
       'profile_id': profileId,
+      'prescription_id': prescriptionId,
       'file_name': fileName,
       'storage_path': storagePath,
 

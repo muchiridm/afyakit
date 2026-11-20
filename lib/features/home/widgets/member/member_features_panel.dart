@@ -146,9 +146,9 @@ class MemberFeaturesPanel extends ConsumerWidget {
       ],
 
       // ─────────────────────────────────────
-      // Clinical
+      // Prescriptions — shared by Clinical and Pharmacy
       // ─────────────────────────────────────
-      if (clinicalEnabled)
+      if (clinicalEnabled || pharmacyEnabled)
         HomeActionChip(
           icon: Icons.description_outlined,
           label: 'My Prescriptions',

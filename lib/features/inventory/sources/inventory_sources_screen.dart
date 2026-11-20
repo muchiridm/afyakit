@@ -204,10 +204,11 @@ class _InventorySourcesScreenState
                           b.name.toLowerCase(),
                         ),
                       );
-                if (visible.isEmpty)
+                if (visible.isEmpty) {
                   return const Center(
                     child: Text('No inventory sources found.'),
                   );
+                }
                 return ListView.builder(
                   padding: const EdgeInsets.only(bottom: 90),
                   itemCount: visible.length,

@@ -1,10 +1,10 @@
-// lib/features/clinical/prescriptions/controllers/prescriptions_controller.dart
+// lib/features/clinical/prescriptions/prescriptions_controller.dart
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
-import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
+import 'package:afyakit/features/clinical/prescriptions/prescriptions_service.dart';
 
 @immutable
 class PrescriptionsState {
@@ -256,7 +256,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
   }
 
   Future<String> downloadUrl(Prescription prescription) {
-    return _service.downloadUrl(prescription.storagePath);
+    return _service.downloadUrl(prescriptionId: prescription.prescriptionId);
   }
 
   void _patchInState(Prescription prescription) {
