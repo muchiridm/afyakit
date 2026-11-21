@@ -25,7 +25,8 @@ String resolveUserDisplay({
 /// Nice, reusable sugar wherever you already have an AuthUser.
 extension AuthUserDisplayX on AuthUser {
   String displayLabel() => resolveUserDisplay(
-    displayName: displayName,
+    displayName: identity?.displayName,
+    email: activeAppEmailLower,
     phone: phoneNumber,
     uid: uid,
   );

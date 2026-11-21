@@ -60,7 +60,10 @@ class AppEmail {
   static AppEmail? tryParse(Object? raw) {
     if (raw is! Map || raw['verified'] != true) return null;
     final email = (raw['emailLower'] ?? '').toString().trim().toLowerCase();
-    if (email.isEmpty || !email.contains('@')) return null;
+    if (email.length > 254 ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      return null;
+    }
     return AppEmail(
       emailLower: email,
       verifiedAt: raw['verifiedAt']?.toString(),
@@ -72,6 +75,38 @@ class AppEmail {
     'verified': true,
     if (verifiedAt != null) 'verifiedAt': verifiedAt,
   };
+}
+
+enum LoginChannel {
+  sms,
+  email;
+
+  String get wire => name;
+
+  static LoginChannel? tryParse(Object? value) {
+    final v = (value ?? '').toString().trim().toLowerCase();
+    return switch (v) {
+      'sms' => LoginChannel.sms,
+      'email' => LoginChannel.email,
+      _ => null,
+    };
+  }
+}
+
+@immutable
+class AppAuthPreference {
+  const AppAuthPreference({required this.preferredChannel});
+  final LoginChannel preferredChannel;
+
+  static AppAuthPreference? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final channel = LoginChannel.tryParse(raw['preferredChannel']);
+    return channel == null
+        ? null
+        : AppAuthPreference(preferredChannel: channel);
+  }
+
+  Map<String, dynamic> toMap() => {'preferredChannel': preferredChannel.wire};
 }
 
 @immutable
@@ -120,12 +155,7 @@ class SessionOnboarding {
     }
     final next = value['next'];
     if (next is! String ||
-        !const {
-          'done',
-          'verify_email',
-          'complete_contact',
-          'link_contact',
-        }.contains(next)) {
+        !const {'done', 'complete_contact', 'link_contact'}.contains(next)) {
       throw const FormatException('Invalid session onboarding state');
     }
     return SessionOnboarding(
@@ -155,9 +185,6 @@ class AuthUser {
     this.phoneHistory = const [],
     this.phoneVerified = false,
     this.phoneVerifiedAt,
-    this.phoneClaimed = false,
-    this.phoneClaimedAt,
-    this.phoneSatisfied,
     this.isCompany = false,
     this.companyName,
     this.accountNumber,
@@ -172,6 +199,7 @@ class AuthUser {
     this.staffRolesByApp = const {},
     this.appMembershipsByApp = const {},
     this.emailsByApp = const {},
+    this.authPreferencesByApp = const {},
     this.activeAppId,
     this.recoveryRequired = false,
     this.disabledAt,
@@ -192,9 +220,6 @@ class AuthUser {
   final List<String> phoneHistory;
   final bool phoneVerified;
   final String? phoneVerifiedAt;
-  final bool phoneClaimed;
-  final String? phoneClaimedAt;
-  final bool? phoneSatisfied;
   final bool isCompany;
   final String? companyName;
 
@@ -241,6 +266,18 @@ class AuthUser {
   /// A user may belong to multiple apps. Membership does not imply staff access.
   final Map<String, AppMembership> appMembershipsByApp;
   final Map<String, AppEmail> emailsByApp;
+  final Map<String, AppAuthPreference> authPreferencesByApp;
+
+  /// Effective UI preference. Email remains optional and SMS is always fallback.
+  LoginChannel preferredLoginChannelForApp(String appId) {
+    final key = appId.trim().toLowerCase();
+    if (authPreferencesByApp[key]?.preferredChannel == LoginChannel.email &&
+        emailForApp(key) != null) {
+      return LoginChannel.email;
+    }
+    return LoginChannel.sms;
+  }
+
   AppEmail? emailForApp(String appId) =>
       emailsByApp[appId.trim().toLowerCase()];
   String? get activeAppEmailLower =>
@@ -283,6 +320,19 @@ class AuthUser {
       if (email != null) result[appId] = email;
     }
     return Map<String, AppEmail>.unmodifiable(result);
+  }
+
+  static Map<String, AppAuthPreference> _parseAuthPreferences(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, AppAuthPreference>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final appId = (entry.key as String).trim().toLowerCase();
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) continue;
+      final preference = AppAuthPreference.tryParse(entry.value);
+      if (preference != null) result[appId] = preference;
+    }
+    return Map<String, AppAuthPreference>.unmodifiable(result);
   }
 
   static Map<String, AppMembership> _parseAppMemberships(Object? raw) {
@@ -401,19 +451,6 @@ class AuthUser {
     }
   }
 
-  static bool _isSomaliaPhone(String? phoneE164) =>
-      phoneE164 != null && phoneE164.trim().startsWith('+252');
-
-  static bool _computePhoneSatisfied({
-    required String? phoneNumber,
-    required bool phoneVerified,
-    required bool phoneClaimed,
-  }) {
-    if (phoneNumber == null || phoneNumber.trim().isEmpty) return false;
-    if (!_isSomaliaPhone(phoneNumber)) return phoneVerified == true;
-    return phoneVerified == true || phoneClaimed == true;
-  }
-
   bool get isStaffResolved => staffRoles.isNotEmpty;
   bool get isMemberResolved => !isStaffResolved;
   bool get hasRecoveryTrail {
@@ -454,15 +491,15 @@ class AuthUser {
     return uid;
   }
 
-  bool get isPhoneSatisfiedResolved {
-    final explicit = phoneSatisfied;
-    if (explicit != null) return explicit;
-    return _computePhoneSatisfied(
-      phoneNumber: phoneNumber,
-      phoneVerified: phoneVerified,
-      phoneClaimed: phoneClaimed,
-    );
-  }
+  /// Phone ownership is the mandatory authentication foundation for every app.
+  /// Historical claimed-phone values and country-specific exceptions are never
+  /// accepted as verification evidence.
+  bool get isPhoneSatisfiedResolved =>
+      phoneNumber != null && phoneNumber!.trim().isNotEmpty && phoneVerified;
+
+  /// Read-only compatibility with consumers expecting a phoneSatisfied value.
+  /// Never trust a serialized phoneSatisfied flag over actual verification.
+  bool get phoneSatisfied => isPhoneSatisfiedResolved;
 
   bool get hasVerifiedEmail => activeAppEmailLower != null;
   String? get bestVerifiedEmailLower => activeAppEmailLower;
@@ -481,13 +518,8 @@ class AuthUser {
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
     final phoneVerified = _bool(json['phoneVerified']);
-    final phoneClaimed = _bool(json['phoneClaimed']);
     final isCompany = _bool(json['isCompany']);
     final recoveryRequired = _bool(json['recoveryRequired']);
-    final phoneSatisfiedRaw = json['phoneSatisfied'];
-    final bool? phoneSatisfied = phoneSatisfiedRaw == null
-        ? null
-        : _bool(phoneSatisfiedRaw);
     final accountNumber =
         _optUpperStr(json['accountNumber']) ??
         _optUpperStr(json['account_number']);
@@ -512,9 +544,6 @@ class AuthUser {
       phoneHistory: _normalizeStringList(json['phoneHistory']),
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
-      phoneClaimed: phoneClaimed,
-      phoneClaimedAt: _optStr(json['phoneClaimedAt']),
-      phoneSatisfied: phoneSatisfied,
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
       accountNumber: accountNumber,
@@ -533,6 +562,7 @@ class AuthUser {
       staffRolesByApp: _parseAppRoles(json['staffRolesByApp']),
       appMembershipsByApp: _parseAppMemberships(json['appMembershipsByApp']),
       emailsByApp: _parseAppEmails(json['emailsByApp']),
+      authPreferencesByApp: _parseAuthPreferences(json['authPreferencesByApp']),
       recoveryRequired: recoveryRequired,
       disabledAt: _optStr(json['disabledAt']),
       disabledReason: _optStr(json['disabledReason']),
@@ -555,9 +585,6 @@ class AuthUser {
     List<String>? phoneHistory,
     bool? phoneVerified,
     String? phoneVerifiedAt,
-    bool? phoneClaimed,
-    String? phoneClaimedAt,
-    bool? phoneSatisfied,
     bool? isCompany,
     String? companyName,
     String? accountNumber,
@@ -572,6 +599,7 @@ class AuthUser {
     Map<String, List<StaffRole>>? staffRolesByApp,
     Map<String, AppMembership>? appMembershipsByApp,
     Map<String, AppEmail>? emailsByApp,
+    Map<String, AppAuthPreference>? authPreferencesByApp,
     String? activeAppId,
     bool? recoveryRequired,
     String? disabledAt,
@@ -593,9 +621,6 @@ class AuthUser {
       phoneHistory: phoneHistory ?? this.phoneHistory,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
-      phoneClaimed: phoneClaimed ?? this.phoneClaimed,
-      phoneClaimedAt: phoneClaimedAt ?? this.phoneClaimedAt,
-      phoneSatisfied: phoneSatisfied ?? this.phoneSatisfied,
       isCompany: isCompany ?? this.isCompany,
       companyName: companyName ?? this.companyName,
       accountNumber: accountNumber ?? this.accountNumber,
@@ -612,6 +637,7 @@ class AuthUser {
       staffRolesByApp: staffRolesByApp ?? this.staffRolesByApp,
       appMembershipsByApp: appMembershipsByApp ?? this.appMembershipsByApp,
       emailsByApp: emailsByApp ?? this.emailsByApp,
+      authPreferencesByApp: authPreferencesByApp ?? this.authPreferencesByApp,
       activeAppId: activeAppId ?? this.activeAppId,
       recoveryRequired: recoveryRequired ?? this.recoveryRequired,
       disabledAt: disabledAt ?? this.disabledAt,
@@ -632,8 +658,6 @@ class AuthUser {
     // Native Contact owns name fields.
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
-    if (phoneClaimed) 'phoneClaimed': true,
-    if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
 
     if (accountNumber != null) 'accountNumber': accountNumber,
 
@@ -641,6 +665,9 @@ class AuthUser {
     'staffRolesByApp': staffRolesByApp.map(
       (appId, roles) =>
           MapEntry(appId, roles.map((r) => r.wire).toList(growable: false)),
+    ),
+    'authPreferencesByApp': authPreferencesByApp.map(
+      (appId, pref) => MapEntry(appId, pref.toMap()),
     ),
     'emailsByApp': emailsByApp.map(
       (appId, email) => MapEntry(appId, email.toMap()),

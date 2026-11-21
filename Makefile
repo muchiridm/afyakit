@@ -210,11 +210,12 @@ WEB_REQUIRED_FILES := \
   index.html \
   flutter_bootstrap.js \
   main.dart.js \
-  assets/AssetManifest.json \
+  assets/AssetManifest.bin \
+  assets/AssetManifest.bin.json \
   assets/FontManifest.json
 
 WEB_JSON_FILES := \
-  assets/AssetManifest.json \
+  assets/AssetManifest.bin.json \
   assets/FontManifest.json
 
 WEB_SW_CHECK_FILES := \
@@ -596,7 +597,7 @@ deploy-verify:
 	fi
 	@echo "🔎 Verifying live host: https://$(HOST)"
 	@for path in \
-	  /assets/AssetManifest.json \
+	  /assets/AssetManifest.bin.json \
 	  /assets/FontManifest.json \
 	  /main.dart.js \
 	  /flutter_bootstrap.js \
@@ -604,7 +605,7 @@ deploy-verify:
 	  ct=$$(curl -fsSI "https://$(HOST)$$path" | awk 'BEGIN{IGNORECASE=1} /^content-type:/ {print $$0; exit}'); \
 	  echo "   $$path → $$ct"; \
 	  case "$$path:$$ct" in \
-	    *AssetManifest.json*application/json*|\
+	    *AssetManifest.bin.json*application/json*|\
 	    *FontManifest.json*application/json*|\
 	    *main.dart.js*javascript*|\
 	    *flutter_bootstrap.js*javascript*|\

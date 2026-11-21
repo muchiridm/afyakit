@@ -7,7 +7,7 @@ import 'package:afyakit/core/api/afyakit/tests/api_test_screen.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/guards/permission_guard.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_manager_screen.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/user_profile_manager_screen.dart';
 
 import 'package:afyakit/core/capabilities/feature_keys.dart';
 import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';

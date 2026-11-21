@@ -60,22 +60,6 @@ class UserProfileService {
     return user.forApp(appId);
   }
 
-  Future<AuthUser> getCurrentUser() async {
-    final u = fb.FirebaseAuth.instance.currentUser;
-    if (u == null) throw StateError('Sign in to load account');
-    final res = await _dio.getUri(_scoped(routes.updateUser(u.uid)));
-    final data = res.data is Map && (res.data as Map).containsKey('user')
-        ? (res.data as Map)['user']
-        : res.data;
-    final user = _parseUser(data);
-    if (user.uid != u.uid) throw StateError('Account identity mismatch');
-    final token = await u.getIdTokenResult();
-    if (fb.FirebaseAuth.instance.currentUser?.uid != u.uid) {
-      throw StateError('Account changed.');
-    }
-    return user.copyWith(isSuperAdmin: token.claims?['superadmin'] == true);
-  }
-
   Future<List<AuthUser>> listTenantUsers() async {
     final res = await _dio.getUri(_scoped(routes.getAllUsers()));
     if (res.data is! List) throw StateError('Invalid account list response');

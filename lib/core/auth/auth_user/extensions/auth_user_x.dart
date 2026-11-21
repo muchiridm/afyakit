@@ -131,7 +131,7 @@ extension AuthUserX on AuthUser {
 
   bool get canEditUserAccounts => isActive && isSuperAdmin;
 
-  bool get canViewUsers => canEditUserAccounts;
+  bool get canViewUsers => canManageUsers;
 
   bool _sameTenant(AuthUser target) => tenantId == target.tenantId;
 
@@ -142,8 +142,6 @@ extension AuthUserX on AuthUser {
       canEditUserAccounts && _sameTenant(target) && uid != target.uid;
 
   bool canDisableUser(AuthUser target) => canChangeStatusFor(target);
-
-  bool canEditUserStoresFor(AuthUser target) => canChangeStatusFor(target);
 
   bool canEditUserRolesFor(AuthUser target) {
     if (!isActive || !_sameTenant(target) || activeAppId == null) {

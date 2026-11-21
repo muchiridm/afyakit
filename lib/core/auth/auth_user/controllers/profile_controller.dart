@@ -10,12 +10,10 @@ import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
 import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
 import 'package:afyakit/core/auth/auth_user/services/user_profile_service.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
-import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Sentinel to allow copyWith(null) for overrides.
@@ -30,59 +28,42 @@ class ProfileFormState {
   final bool loading;
   final AuthUser? user;
 
-  // Controllers live here by design in your app.
-  // We MUST dispose them in the notifier.
-  final TextEditingController nameController;
-  final TextEditingController phoneController;
-
   /// True when a privileged user is editing via the "admin" path
-  /// (roles/stores/status visible for the target).
+  /// (roles/status visible for the target).
   final bool isAdminEditing;
 
   /// Admin overrides (null = use user.* from model)
   final UserStatus? statusOverride;
   final List<StaffRole>? staffRoleOverrides;
-  final List<String>? storeOverrides;
 
   const ProfileFormState({
     required this.loading,
     required this.user,
-    required this.nameController,
-    required this.phoneController,
     required this.isAdminEditing,
     required this.statusOverride,
     required this.staffRoleOverrides,
-    required this.storeOverrides,
   });
 
   factory ProfileFormState.initial() => ProfileFormState(
     loading: true,
     user: null,
-    nameController: TextEditingController(),
-    phoneController: TextEditingController(),
     isAdminEditing: false,
     statusOverride: null,
     staffRoleOverrides: null,
-    storeOverrides: null,
   );
 
   ProfileFormState copyWith({
     bool? loading,
     AuthUser? user,
-    TextEditingController? nameController,
-    TextEditingController? phoneController,
     bool? isAdminEditing,
 
     // Use sentinel so we can clear overrides to null.
     Object? statusOverride = _unset,
     Object? staffRoleOverrides = _unset,
-    Object? storeOverrides = _unset,
   }) {
     return ProfileFormState(
       loading: loading ?? this.loading,
       user: user ?? this.user,
-      nameController: nameController ?? this.nameController,
-      phoneController: phoneController ?? this.phoneController,
       isAdminEditing: isAdminEditing ?? this.isAdminEditing,
       statusOverride: identical(statusOverride, _unset)
           ? this.statusOverride
@@ -90,9 +71,6 @@ class ProfileFormState {
       staffRoleOverrides: identical(staffRoleOverrides, _unset)
           ? this.staffRoleOverrides
           : staffRoleOverrides as List<StaffRole>?,
-      storeOverrides: identical(storeOverrides, _unset)
-          ? this.storeOverrides
-          : storeOverrides as List<String>?,
     );
   }
 }
@@ -124,7 +102,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   String? _actorUid;
 
   void _afterFrame(VoidCallback fn) {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) fn();
     });
   }
@@ -201,11 +179,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
         user: baseUser,
         isAdminEditing: isAdminEditing,
       );
-
-      final u = baseUser;
-      // Use displayName field for editing (not computed fallback)
-      state.nameController.text = (u.displayName ?? '').trim();
-      state.phoneController.text = (u.phoneNumber ?? '').trim();
     });
   }
 
@@ -215,11 +188,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
 
   void clearAdminOverrides() {
     if (!mounted) return;
-    state = state.copyWith(
-      statusOverride: null,
-      staffRoleOverrides: null,
-      storeOverrides: null,
-    );
+    state = state.copyWith(statusOverride: null, staffRoleOverrides: null);
   }
 
   // ────────────────────────────────────────────
@@ -287,10 +256,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     state = state.copyWith(staffRoleOverrides: roles);
   }
 
-  void toggleStore(String storeId) {
-    SnackService.showError('Legacy store assignments are no longer editable.');
-  }
-
   // ────────────────────────────────────────────
   // Save / PATCH via UserProfileService
   // ────────────────────────────────────────────
@@ -318,8 +283,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       }
       fields['status'] = nextStatus.wire;
     }
-    // Legacy stores is not an authoritative permission grant.
-    // Store access will be managed separately when app-scoped grants exist.
     final desiredRoles = _effectiveTargetRoles(target);
     final oldRoles = target.rolesForApp(target.activeAppId!);
     final rolesChanged = !setEquals(desiredRoles.toSet(), oldRoles.toSet());
@@ -367,16 +330,9 @@ class ProfileController extends StateNotifier<ProfileFormState> {
       }
       if (!mounted || !context.mounted) return;
       if (!sessionMatches()) return;
-      SnackService.showSuccess('Profile updated');
+      SnackService.showSuccess('Account access updated');
       ref.invalidate(currentUserProvider);
-      if (state.isAdminEditing) {
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-      } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeShell()),
-          (_) => false,
-        );
-      }
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (_) {
       if (mounted) {
         // Two API writes are not atomic. Keep role overrides so they can be retried.
@@ -384,7 +340,6 @@ class ProfileController extends StateNotifier<ProfileFormState> {
           state = state.copyWith(
             user: target.copyWith(status: nextStatus),
             statusOverride: null,
-            storeOverrides: null,
           );
         }
         SnackService.showError(
@@ -396,12 +351,5 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     } finally {
       if (mounted) state = state.copyWith(loading: false);
     }
-  }
-
-  @override
-  void dispose() {
-    state.nameController.dispose();
-    state.phoneController.dispose();
-    super.dispose();
   }
 }

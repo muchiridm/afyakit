@@ -47,7 +47,7 @@ final currentUserValueProvider = Provider<AuthUser?>((ref) {
 final userDisplayNameProvider = Provider<String?>((ref) {
   final user = ref.watch(currentUserValueProvider);
   if (user == null) return null;
-  final displayName = (user.displayName ?? '').trim();
+  final displayName = (user.identity?.displayName ?? '').trim();
   if (displayName.isNotEmpty) return displayName;
   final full = user.computedDisplayName.trim();
   return full.isEmpty ? null : full;

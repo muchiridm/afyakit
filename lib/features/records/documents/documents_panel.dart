@@ -1,5 +1,5 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'document_model.dart';
@@ -46,10 +46,11 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
   }
 
   void _message(String message) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   Future<void> _run(
@@ -178,8 +179,9 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
     );
     if (draft == null ||
         !_sameScope(service, doc.profileId) ||
-        !widget.canManage)
+        !widget.canManage) {
       return;
+    }
     await service.update(
       doc,
       DocumentUpdateInput(
@@ -216,16 +218,20 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
         ],
       ),
     );
-    if (yes != true || !_sameScope(service, doc.profileId) || !widget.canManage)
+    if (yes != true ||
+        !_sameScope(service, doc.profileId) ||
+        !widget.canManage) {
       return;
+    }
     await service.archive(doc);
     _refresh();
   });
 
   @override
   Widget build(BuildContext context) {
-    if (widget.profileId.trim().isEmpty)
+    if (widget.profileId.trim().isEmpty) {
       return const Text('Profile ID is required.');
+    }
     final query = _query;
     final result = ref.watch(documentsControllerProvider(query));
     final service = ref.watch(documentsServiceProvider).asData?.value;

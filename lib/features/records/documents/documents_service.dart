@@ -34,8 +34,9 @@ class DocumentsService {
   final SignedDocumentUploadService uploader;
 
   static Map<String, Object?> _map(Object? value) {
-    if (value is! Map)
+    if (value is! Map) {
       throw const FormatException('Invalid Documents API response');
+    }
     return Map<String, Object?>.from(value);
   }
 
@@ -169,8 +170,9 @@ class DocumentsService {
     final res = await api.deleteUri<Object?>(
       routes.recordsDocumentById(document.documentId),
     );
-    if (_map(res.data)['ok'] != true)
+    if (_map(res.data)['ok'] != true) {
       throw StateError('Archive was not confirmed');
+    }
   }
 
   Future<Uri> download(Document document) async {
@@ -187,8 +189,9 @@ class DocumentsService {
   }
 
   void _assertScope(Document doc) {
-    if (doc.tenantId != tenantId || doc.appId != appId)
+    if (doc.tenantId != tenantId || doc.appId != appId) {
       throw StateError('Document scope mismatch');
+    }
   }
 }
 

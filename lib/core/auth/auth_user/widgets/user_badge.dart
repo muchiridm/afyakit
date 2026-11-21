@@ -1,128 +1,108 @@
 // lib/core/auth/auth_user/widgets/user_badge.dart
-
-import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
-import 'package:afyakit/features/home/enums/entry_mode.dart';
-import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
-import 'package:material_ui/material_ui.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:afyakit/core/auth/auth_user/widgets/screens/user_profile_editor_screen.dart';
-import 'package:afyakit/core/auth/auth_user/utils/resolve_user_display.dart';
-
-import 'package:afyakit/core/capabilities/feature_keys.dart';
-import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';
+// Presentation only: current session identity, app role and optional UX switch.
+// Contact details are edited in Native Contacts via the self-profile route.
 
 import 'package:afyakit/core/auth/auth_user/extensions/auth_user_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/utils/resolve_user_display.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/user_profile_editor_screen.dart';
+import 'package:afyakit/core/capabilities/feature_keys.dart';
+import 'package:afyakit/core/capabilities/widgets/feature_gate.dart';
+import 'package:afyakit/features/home/enums/entry_mode.dart';
+import 'package:afyakit/features/home/providers/entry_mode_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 class UserBadge extends ConsumerWidget {
   const UserBadge({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final meAsync = ref.watch(currentUserProvider);
+    final currentUser = ref.watch(currentUserProvider);
 
-    return meAsync.when(
+    return currentUser.when(
       loading: () => const SizedBox(
         width: 18,
         height: 18,
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
-      error: (_, __) => const Text(
-        'Error',
-        style: TextStyle(fontSize: 12, color: Colors.red),
-      ),
+      error: (_, __) => const Text('Account unavailable'),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
 
-        final displayName = user.displayLabel();
+        final name = user.displayLabel();
+        final profileAction = () => _openProfile(context);
 
-        // ✅ Use your canonical rule
-        final hasStaffWorkspace = user.hasStaffWorkspace;
-
-        final staffLabel = user.staffRoles.primaryRole?.label ?? 'Staff';
-
-        if (!hasStaffWorkspace) {
-          return _buildBadge(
+        if (!user.hasStaffWorkspace) {
+          return _badge(
             context,
-            displayName: displayName,
-            roleLabel: 'Member',
-            showSwitcher: false,
-            onToggleView: null,
-            onTapProfile: () => _openProfile(context),
+            name: name,
+            role: 'Member',
+            onProfile: profileAction,
           );
         }
 
-        final viewMode = ref.watch(staffViewModeProvider);
-
-        final badgeWithSwitch = _buildBadge(
-          context,
-          displayName: displayName,
-          roleLabel: viewMode == EntryMode.member ? 'Member' : staffLabel,
-          showSwitcher: true,
-          onToggleView: () => _toggleStaffViewMode(ref, viewMode),
-          onTapProfile: () => _openProfile(context),
-        );
-
-        final badgeNoSwitch = _buildBadge(
-          context,
-          displayName: displayName,
-          roleLabel: staffLabel,
-          showSwitcher: false,
-          onToggleView: null,
-          onTapProfile: () => _openProfile(context),
-        );
+        final staffRole = user.staffRoles.primaryRole?.label ?? 'Staff';
+        final currentMode = ref.watch(staffViewModeProvider);
 
         return FeatureGate(
+          // Keep existing retail-only switch behavior; app permissions do
+          // not change when the staff member switches the home UX.
           featureKey: FeatureKeys.retail,
-          fallback: badgeNoSwitch,
-          child: badgeWithSwitch,
+          fallback: _badge(
+            context,
+            name: name,
+            role: staffRole,
+            onProfile: profileAction,
+          ),
+          child: _badge(
+            context,
+            name: name,
+            role: currentMode == EntryMode.member ? 'Member' : staffRole,
+            onProfile: profileAction,
+            onSwitch: () {
+              ref
+                  .read(staffViewModeProvider.notifier)
+                  .state = currentMode == EntryMode.staff
+                  ? EntryMode.member
+                  : EntryMode.staff;
+            },
+          ),
         );
       },
     );
   }
 
-  void _toggleStaffViewMode(WidgetRef ref, EntryMode current) {
-    final next = current == EntryMode.staff
-        ? EntryMode.member
-        : EntryMode.staff;
-    ref.read(staffViewModeProvider.notifier).state = next;
-  }
-
   void _openProfile(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const UserProfileEditorScreen()),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const UserProfileEditorScreen()),
     );
   }
 
-  Widget _buildBadge(
+  Widget _badge(
     BuildContext context, {
-    required String displayName,
-    required String roleLabel,
-    required bool showSwitcher,
-    required VoidCallback? onToggleView,
-    required VoidCallback onTapProfile,
+    required String name,
+    required String role,
+    required VoidCallback onProfile,
+    VoidCallback? onSwitch,
   }) {
     final theme = Theme.of(context);
-
-    final Color bg = Colors.grey.shade100;
-    final BorderRadius radius = BorderRadius.circular(12);
+    final radius = BorderRadius.circular(12);
 
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
+        color: Colors.grey.shade100,
         borderRadius: radius,
         border: Border.all(color: Colors.grey.shade300),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           InkWell(
-            onTap: onTapProfile,
             borderRadius: radius,
+            onTap: onProfile,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Row(
@@ -133,7 +113,7 @@ class UserBadge extends ConsumerWidget {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),
                     child: Text(
-                      displayName,
+                      name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -152,15 +132,30 @@ class UserBadge extends ConsumerWidget {
             color: Colors.grey.shade300,
           ),
           InkWell(
-            onTap: showSwitcher ? onToggleView : null,
             borderRadius: radius,
+            onTap: onSwitch,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _roleChip(theme, roleLabel),
-                  if (showSwitcher) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      role,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (onSwitch != null) ...[
                     const SizedBox(width: 6),
                     const Icon(
                       Icons.swap_horiz,
@@ -173,22 +168,6 @@ class UserBadge extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _roleChip(ThemeData theme, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.indigo.shade50,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
       ),
     );
   }

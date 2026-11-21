@@ -7,7 +7,7 @@ import 'package:afyakit/core/auth/auth_session/controllers/session_controller.da
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/blocked.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
-import 'package:afyakit/core/auth/auth_user/widgets/screens/splash_screen.dart';
+import 'package:afyakit/core/auth/auth_user/widgets/splash_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/auth/shared/widgets/onboarding_gate.dart';
 import 'package:afyakit/core/capabilities/feature_keys.dart';
