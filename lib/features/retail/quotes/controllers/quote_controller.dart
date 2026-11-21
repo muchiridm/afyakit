@@ -1,15 +1,9 @@
 // lib/features/retail/quotes/controllers/quote_controller.dart
-
-import 'dart:async';
-
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_engine.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_lines_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/quote_member_binding_controller.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_state.dart';
 import 'package:afyakit/features/retail/quotes/controllers/quotes_list_controller.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_draft.dart';
@@ -23,6 +17,96 @@ import 'package:afyakit/shared/services/snack_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+@immutable
+class QuoteState {
+  const QuoteState({
+    this.submitting = false,
+    this.loadingEdit = false,
+    this.downloadingPdf = false,
+    this.sending = false,
+    this.converting = false,
+    this.error,
+    this.lastCreatedQuoteId,
+    this.editingQuoteId,
+    this.loadedEditId,
+  });
+
+  final bool submitting;
+  final bool loadingEdit;
+  final bool downloadingPdf;
+  final bool sending;
+  final bool converting;
+
+  final String? error;
+  final String? lastCreatedQuoteId;
+
+  final String? editingQuoteId;
+  final String? loadedEditId;
+
+  bool get isEditing => (editingQuoteId ?? '').trim().isNotEmpty;
+
+  bool get hasLoadedEdit {
+    final String editing = (editingQuoteId ?? '').trim();
+    final String loaded = (loadedEditId ?? '').trim();
+
+    return editing.isNotEmpty && loaded == editing;
+  }
+
+  bool get hasError => (error ?? '').trim().isNotEmpty;
+
+  bool get hasLastCreatedQuote {
+    return (lastCreatedQuoteId ?? '').trim().isNotEmpty;
+  }
+
+  bool get busy {
+    return submitting || loadingEdit || downloadingPdf || sending || converting;
+  }
+
+  bool get canSubmit => !busy;
+
+  bool get canEdit => !busy;
+
+  bool get canDownloadPdf => !busy;
+
+  bool get canSend => !busy;
+
+  bool get canConvert => !busy;
+
+  QuoteState copyWith({
+    bool? submitting,
+    bool? loadingEdit,
+    bool? downloadingPdf,
+    bool? sending,
+    bool? converting,
+    String? error,
+    bool clearError = false,
+    String? lastCreatedQuoteId,
+    bool clearLastCreatedId = false,
+    String? editingQuoteId,
+    bool clearEditingQuoteId = false,
+    String? loadedEditId,
+    bool clearLoadedEditId = false,
+  }) {
+    return QuoteState(
+      submitting: submitting ?? this.submitting,
+      loadingEdit: loadingEdit ?? this.loadingEdit,
+      downloadingPdf: downloadingPdf ?? this.downloadingPdf,
+      sending: sending ?? this.sending,
+      converting: converting ?? this.converting,
+      error: clearError ? null : (error ?? this.error),
+      lastCreatedQuoteId: clearLastCreatedId
+          ? null
+          : (lastCreatedQuoteId ?? this.lastCreatedQuoteId),
+      editingQuoteId: clearEditingQuoteId
+          ? null
+          : (editingQuoteId ?? this.editingQuoteId),
+      loadedEditId: clearLoadedEditId
+          ? null
+          : (loadedEditId ?? this.loadedEditId),
+    );
+  }
+}
+
 final quoteControllerProvider =
     StateNotifierProvider<QuoteController, QuoteState>(
       (Ref ref) => QuoteController(ref),
@@ -31,58 +115,19 @@ final quoteControllerProvider =
 class QuoteController extends StateNotifier<QuoteState> {
   QuoteController(this._ref) : super(const QuoteState()) {
     _engine = QuoteEngine(_ref);
-
-    _ref.listen<ZohoMemberCustomerScope?>(zohoMemberCustomerScopeProvider, (
-      ZohoMemberCustomerScope? previous,
-      ZohoMemberCustomerScope? next,
-    ) {
-      final String prevKey = previous?.bindKey ?? '';
-      final String nextKey = next?.bindKey ?? '';
-
-      if (prevKey == nextKey) return;
-      if (!_shouldAutoBindMemberCustomer) return;
-
-      unawaited(_memberBinding.resolve(showError: false));
-    });
-
-    _ref.listen<QuoteContactPolicy>(quoteContactPolicyProvider, (
-      QuoteContactPolicy? previous,
-      QuoteContactPolicy next,
-    ) {
-      if (previous == next) return;
-      if (!_shouldAutoBindMemberCustomer) return;
-
-      unawaited(_memberBinding.resolve(showError: false));
-    });
+    // The member identity comes from AuthUser.accountNumber; no Zoho lookup.
   }
 
   final Ref _ref;
   late final QuoteEngine _engine;
-
   bool get _busy => state.busy;
-
   QuoteLinesController get _linesCtl =>
       _ref.read(quoteLinesControllerProvider.notifier);
-
   QuoteMetaController get _metaCtl =>
       _ref.read(quoteMetaControllerProvider.notifier);
-
   QuoteMetaState get _meta => _ref.read(quoteMetaControllerProvider);
-
   QuoteContactPolicy get _policy => _ref.read(quoteContactPolicyProvider);
-
-  QuoteMemberBindingController get _memberBinding =>
-      _ref.read(quoteMemberBindingControllerProvider);
-
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
-
-  bool get _shouldAutoBindMemberCustomer {
-    if (!_isMemberScoped) return false;
-
-    // Insurance is special: the quote customer must remain the insurer/payer
-    // selected from the membership, not the logged-in member/customer.
-    return !_meta.isInsurancePayment;
-  }
 
   void setError(String? message) {
     final String msg = (message ?? '').trim();
@@ -91,7 +136,6 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   void reset() {
     if (_busy) return;
-
     state = const QuoteState();
     _linesCtl.clear();
     _metaCtl.clearAll();
@@ -99,11 +143,9 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   void cancelEdit() {
     if (_busy) return;
-
     state = const QuoteState();
     _linesCtl.clear();
     _metaCtl.clearAll();
-
     SnackService.showSuccess('Edits cancelled');
   }
 
@@ -118,7 +160,7 @@ class QuoteController extends StateNotifier<QuoteState> {
   }
 
   void patchDraft({
-    ZohoContact? contact,
+    NativeContact? contact,
     String? reference,
     String? customerNotes,
     DateTime? quoteDate,
@@ -126,8 +168,7 @@ class QuoteController extends StateNotifier<QuoteState> {
     SalesDocumentAddress? deliveryAddress,
   }) {
     if (_busy) return;
-
-    if (contact != null) _metaCtl.setContact(contact);
+    if (contact != null) _metaCtl.setNativePayer(contact);
     if (reference != null) _metaCtl.setReference(reference);
     if (customerNotes != null) _metaCtl.setCustomerNotes(customerNotes);
     if (quoteDate != null) _metaCtl.setQuoteDate(quoteDate);
@@ -140,37 +181,26 @@ class QuoteController extends StateNotifier<QuoteState> {
     required bool requirePrices,
   }) async {
     if (_busy) return;
-
     final String nextId = (editingQuoteId ?? '').trim();
     final String prevEditingId = (state.editingQuoteId ?? '').trim();
     final String prevLoadedId = (state.loadedEditId ?? '').trim();
-
     final bool shouldClearLines = _engine.shouldClearLinesOnSwitch(
       prevEditingId: prevEditingId.isEmpty ? null : prevEditingId,
       prevLoadedId: prevLoadedId.isEmpty ? null : prevLoadedId,
       nextEditingId: nextId,
     );
-
     if (nextId.isEmpty) {
       _metaCtl.beginNew();
       state = const QuoteState();
-
-      if (_shouldAutoBindMemberCustomer) {
-        unawaited(_memberBinding.resolve(showError: false));
-      }
-
       await ensureDraftFromLines(requirePrices: requirePrices);
       return;
     }
-
     final bool switchingTarget =
         prevEditingId != nextId || prevLoadedId != nextId;
-
     if (switchingTarget) {
       _linesCtl.clear();
       _metaCtl.clearAll();
       _metaCtl.beginEdit(nextId);
-
       state = const QuoteState().copyWith(
         editingQuoteId: nextId,
         loadingEdit: true,
@@ -179,19 +209,15 @@ class QuoteController extends StateNotifier<QuoteState> {
       if ((state.editingQuoteId ?? '').trim().isEmpty) {
         state = state.copyWith(editingQuoteId: nextId);
       }
-
       _metaCtl.beginEdit(nextId);
     }
-
     if (shouldClearLines) _linesCtl.clear();
-
     await ensureLoadedForEdit(nextId, requirePrices: requirePrices);
   }
 
   Future<void> ensureDraftFromLines({required bool requirePrices}) async {
     if (_busy) return;
     if (!requirePrices) return;
-
     final int missing = _engine.missingPriceLineCount();
     if (missing > 0) {
       SnackService.showInfo(
@@ -208,23 +234,21 @@ class QuoteController extends StateNotifier<QuoteState> {
     if (id.isEmpty) return;
     if (_busy && !state.loadingEdit) return;
     if ((state.loadedEditId ?? '').trim() == id) return;
-
     state = state.copyWith(
       loadingEdit: true,
       clearError: true,
       editingQuoteId: id,
     );
-
     try {
       final q = await _engine.loadQuote(id);
-
       _engine.setLinesFromZoho(q);
-
       final QuoteMetaState meta = _engine.metaFromZoho(q);
-
       _metaCtl.applyZohoMeta(
         editingQuoteId: id,
         contact: meta.contact,
+        nativeContactId: meta.nativeContactId,
+        zohoContactId: meta.zohoContactId,
+        mappedCustomerName: meta.mappedCustomerName,
         reference: meta.reference,
         customerNotes: meta.customerNotes,
         purchaseContext: meta.purchaseContext,
@@ -237,9 +261,7 @@ class QuoteController extends StateNotifier<QuoteState> {
         prescriptionId: meta.prescriptionId,
         prescriptionLabel: meta.prescriptionLabel,
       );
-
       state = state.copyWith(loadingEdit: false, loadedEditId: id);
-
       await ensureDraftFromLines(requirePrices: requirePrices);
     } catch (e) {
       _failLoadingEdit(e);
@@ -248,19 +270,31 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<String?> submit({required bool requirePrices}) async {
     if (_busy) return null;
-
-    final QuoteMetaState metaBeforeBinding = _meta;
-
-    final bool shouldBindMemberCustomer =
-        _isMemberScoped && !metaBeforeBinding.isInsurancePayment;
-
-    if (shouldBindMemberCustomer) {
-      final ZohoContact? contact = await _memberBinding.resolve(
-        showError: true,
+    // Member direct-pay uses the authenticated canonical account. Insurance
+    // continues to bill the insurer Native Contact selected via membership.
+    if (_isMemberScoped && !_meta.isInsurancePayment && !state.isEditing) {
+      final accountNumber =
+          (_ref.read(currentMemberAccountNumberProvider) ?? '').trim();
+      if (accountNumber.isEmpty) {
+        SnackService.showError('Your account has no linked Native Contact.');
+        return null;
+      }
+      _metaCtl.applyState(
+        _meta.copyWith(
+          clearPayer: true,
+          clearCustomerMapping: true,
+          nativeContactId: accountNumber,
+        ),
       );
+    }
 
-      if (contact == null) {
-        SnackService.showError('Could not resolve your customer profile.');
+    // Staff and insurance payer selections are Native Contacts. Never fetch
+    // a Zoho contact or accounting mapping from Flutter: the API resolves it.
+    final selectedPayer = _meta.payer;
+    if (selectedPayer != null && !state.isEditing) {
+      final accountNumber = (selectedPayer.accountNumber).trim();
+      if (accountNumber.isEmpty) {
+        SnackService.showError('Selected payer has no Native account number.');
         return null;
       }
     }
@@ -272,35 +306,30 @@ class QuoteController extends StateNotifier<QuoteState> {
       requirePrices: requirePrices,
       isEditing: state.isEditing,
     );
-
     if (validationError != null) {
       SnackService.showError(validationError);
       return null;
     }
-
     debugPrint(
       '[QuoteSubmit] '
       'sale=${meta.purchaseContext.apiValue} '
       'payment=${meta.effectivePaymentContext.apiValue} '
-      'customerId=${meta.customerIdResolved} '
-      'customer=${meta.contact?.title ?? ''} '
+      'accountNumber=${meta.payer?.accountNumber ?? meta.nativeContactId ?? ''} '
+      'customer=${meta.displayContactName} '
       'patient=${meta.resolvedProfileId ?? ''} '
       'membership=${meta.resolvedMembershipId ?? ''} '
       'prescription=${meta.resolvedPrescriptionId ?? ''}',
     );
-
     state = state.copyWith(
       submitting: true,
       clearError: true,
       clearLastCreatedId: true,
     );
-
     try {
       final QuoteDraft payload = _engine.buildPayloadDraftFromMeta(
         meta: meta,
         requirePrices: requirePrices,
       );
-
       if (state.isEditing) {
         return await _updateCurrentQuote(
           payload,
@@ -308,7 +337,6 @@ class QuoteController extends StateNotifier<QuoteState> {
           expiryDate: meta.expiryDate,
         );
       }
-
       return await _createQuote(
         payload,
         quoteDate: meta.quoteDate,
@@ -321,7 +349,6 @@ class QuoteController extends StateNotifier<QuoteState> {
             ? 'Failed to update quote'
             : 'Failed to create quote',
       );
-
       return null;
     }
   }
@@ -332,25 +359,20 @@ class QuoteController extends StateNotifier<QuoteState> {
     DateTime? expiryDate,
   }) async {
     final String id = (state.editingQuoteId ?? '').trim();
-
     if (id.isEmpty) {
       state = state.copyWith(submitting: false);
       SnackService.showError('Missing quote id');
       return null;
     }
-
     await _engine.update(
       id,
       payload,
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
-
     _invalidateQuoteCaches(id);
-
     state = state.copyWith(submitting: false);
     SnackService.showSuccess('Quote updated');
-
     return id;
   }
 
@@ -364,41 +386,30 @@ class QuoteController extends StateNotifier<QuoteState> {
       quoteDate: quoteDate,
       expiryDate: expiryDate,
     );
-
     final String createdId = created.quoteId.trim();
-
     _linesCtl.clear();
     _metaCtl.clearAll();
-
     if (createdId.isNotEmpty) {
       _invalidateQuoteCaches(createdId);
     } else {
       _invalidateQuotesList();
     }
-
     state = state.copyWith(
       submitting: false,
       lastCreatedQuoteId: createdId.isEmpty ? null : createdId,
     );
-
     SnackService.showSuccess('Quote created');
-
     return createdId.isEmpty ? null : createdId;
   }
 
   Future<bool> deleteQuote(String quoteId) async {
     if (_busy) return false;
-
     final String id = quoteId.trim();
     if (id.isEmpty) return false;
-
     state = state.copyWith(submitting: true, clearError: true);
-
     try {
       await _engine.delete(id);
-
       _invalidateQuoteCaches(id);
-
       if ((state.editingQuoteId ?? '').trim() == id) {
         _linesCtl.clear();
         _metaCtl.clearAll();
@@ -406,7 +417,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       } else {
         state = state.copyWith(submitting: false);
       }
-
       SnackService.showSuccess('Quote deleted');
       return true;
     } catch (e) {
@@ -417,12 +427,9 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<Uint8List?> getPdfBytes(String quoteId) async {
     if (_busy) return null;
-
     final String id = quoteId.trim();
     if (id.isEmpty) return null;
-
     state = state.copyWith(downloadingPdf: true, clearError: true);
-
     try {
       final Uint8List bytes = await _engine.getPdf(id);
       state = state.copyWith(downloadingPdf: false);
@@ -435,20 +442,14 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<bool> emailQuote(String quoteId) async {
     if (_busy) return false;
-
     final String id = quoteId.trim();
     if (id.isEmpty) return false;
-
     state = state.copyWith(sending: true, clearError: true);
-
     try {
       await _engine.email(id);
-
       _invalidateQuoteCaches(id);
-
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Quote sent');
-
       return true;
     } catch (e) {
       _failSending(e, fallback: 'Failed to send quote');
@@ -458,20 +459,14 @@ class QuoteController extends StateNotifier<QuoteState> {
 
   Future<bool> markQuoteSent(String quoteId) async {
     if (_busy) return false;
-
     final String id = quoteId.trim();
     if (id.isEmpty) return false;
-
     state = state.copyWith(sending: true, clearError: true);
-
     try {
       await _engine.markSent(id);
-
       _invalidateQuoteCaches(id);
-
       state = state.copyWith(sending: false);
       SnackService.showSuccess('Marked as sent');
-
       return true;
     } catch (e) {
       _failSending(e, fallback: 'Failed to mark as sent');
@@ -489,12 +484,9 @@ class QuoteController extends StateNotifier<QuoteState> {
     SalesDocumentAddress? deliveryAddress,
   }) async {
     if (_busy) return null;
-
     final String id = quoteId.trim();
     if (id.isEmpty) return null;
-
     state = state.copyWith(converting: true, clearError: true);
-
     try {
       final QuoteConversionResult result = await _engine.convertToInvoice(
         id,
@@ -505,13 +497,9 @@ class QuoteController extends StateNotifier<QuoteState> {
         patientSnapshot: patientSnapshot,
         deliveryAddress: deliveryAddress,
       );
-
       _invalidateQuoteCaches(id);
-
       state = state.copyWith(converting: false);
-
       SnackService.showSuccess('Converted to invoice');
-
       return result;
     } catch (e) {
       _failConverting(e);
@@ -528,7 +516,6 @@ class QuoteController extends StateNotifier<QuoteState> {
   void _invalidateQuoteCaches(String quoteId) {
     final String id = quoteId.trim();
     if (id.isEmpty) return;
-
     _invalidateQuotesList();
     _ref.invalidate(zohoQuoteProvider(id));
   }
@@ -536,19 +523,16 @@ class QuoteController extends StateNotifier<QuoteState> {
   String _friendlyError(Object error, {required String fallback}) {
     final String raw = error.toString().trim();
     if (raw.isEmpty) return fallback;
-
     final String cleaned = raw
-        .replaceFirst(RegExp(r'^Exception:\s*'), '')
-        .replaceFirst(RegExp(r'^StateError:\s*'), '')
-        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .replaceFirst(RegExp(r'^Exception:\s\*'), '')
+        .replaceFirst(RegExp(r'^StateError:\s\*'), '')
+        .replaceFirst(RegExp(r'^Bad state:\s\*'), '')
         .trim();
-
     return cleaned.isEmpty ? fallback : cleaned;
   }
 
   void _failSubmitting(Object error, {required String fallback}) {
     final String message = _friendlyError(error, fallback: fallback);
-
     state = state.copyWith(submitting: false, error: message);
     SnackService.showError(message);
   }
@@ -558,7 +542,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       error,
       fallback: 'Failed to load quote',
     );
-
     state = state.copyWith(loadingEdit: false, error: message);
     SnackService.showError(message);
   }
@@ -568,14 +551,12 @@ class QuoteController extends StateNotifier<QuoteState> {
       error,
       fallback: 'Failed to load PDF',
     );
-
     state = state.copyWith(downloadingPdf: false, error: message);
     SnackService.showError(message);
   }
 
   void _failSending(Object error, {required String fallback}) {
     final String message = _friendlyError(error, fallback: fallback);
-
     state = state.copyWith(sending: false, error: message);
     SnackService.showError(message);
   }
@@ -585,7 +566,6 @@ class QuoteController extends StateNotifier<QuoteState> {
       error,
       fallback: 'Failed to convert to invoice',
     );
-
     state = state.copyWith(converting: false, error: message);
     SnackService.showError(message);
   }

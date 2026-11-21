@@ -1,32 +1,31 @@
 // lib/features/insurance/documents/services/insurance_documents_service.dart
 
 import 'dart:typed_data';
-import 'package:afyakit/core/storage/profile_storage_access.dart';
 
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
+import 'package:afyakit/core/storage/document_app_provider.dart';
+import 'package:afyakit/core/storage/document_storage_paths.dart';
+import 'package:afyakit/core/storage/document_upload_service.dart';
+import 'package:afyakit/core/storage/profile_storage_access.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/insurance/documents/models/insurance_document.dart';
-import 'package:afyakit/features/insurance/documents/services/insurance_document_storage_paths.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:afyakit/core/storage/document_app_provider.dart';
 
 final insuranceDocumentsServiceProvider =
     FutureProvider<InsuranceDocumentsService>((ref) async {
-      final String tenantId = ref.watch(tenantIdProvider);
+      final tenantId = ref.watch(tenantIdProvider);
       final appId = ref.watch(documentAppIdProvider);
-      final AfyaKitRoutes routes = AfyaKitRoutes(tenantId);
-      final AfyaKitClient api = await ref.watch(
-        afyakitClientFutureProvider.future,
-      );
+
+      final api = await ref.watch(afyakitClientFutureProvider.future);
 
       return InsuranceDocumentsService(
-        appId: appId,
         tenantId: tenantId,
+        appId: appId,
         api: api,
-        routes: routes,
+        routes: AfyaKitRoutes(tenantId),
       );
     });
 
@@ -80,8 +79,9 @@ class UploadedInsuranceDocumentFile {
       fileName: fileName,
       storagePath: storagePath,
       originalStoragePath: originalStoragePath,
-      // Neither an ungenerated thumbnail nor a short-lived URL is persisted.
-      thumbnailStoragePath: thumbnailStoragePath.isEmpty ? null : thumbnailStoragePath,
+      thumbnailStoragePath: thumbnailStoragePath.isEmpty
+          ? null
+          : thumbnailStoragePath,
       contentType: contentType,
       sizeBytes: sizeBytes,
       membershipId: membershipId,
@@ -106,13 +106,22 @@ class InsuranceDocumentsService {
 
   final String tenantId;
   final String appId;
-  Uri _scopeUri(Uri uri) => ProfileStorageAccess.scopedUri(uri, appId);
-
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
   final FirebaseStorage? _storage;
 
-  FirebaseStorage get storage => _storage ?? FirebaseStorage.instance;
+  Uri _scopeUri(Uri uri) => ProfileStorageAccess.scopedUri(uri, appId);
+
+  DocumentUploadService get _uploader => DocumentUploadService(
+    api: api,
+    tenantId: tenantId,
+    appId: appId,
+    storage: _storage,
+  );
+
+  // ─────────────────────────────────────────────
+  // Document CRUD
+  // ─────────────────────────────────────────────
 
   Future<List<InsuranceDocument>> list({
     String? search,
@@ -126,7 +135,7 @@ class InsuranceDocumentsService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final Uri uri = routes.insuranceDocumentsList(
+    final uri = routes.recordsDocumentsList(
       search: _nullable(search),
       profileId: _nullable(profileId),
       claimPackId: _nullable(claimPackId),
@@ -140,8 +149,8 @@ class InsuranceDocumentsService {
     );
 
     final response = await api.getUri<Object?>(_scopeUri(uri));
-    final Map<String, Object?> body = _asMap(response.data);
 
+    final body = _asMap(response.data);
     return _readDocuments(body['documents']);
   }
 
@@ -157,10 +166,10 @@ class InsuranceDocumentsService {
     int perPage = 50,
     int page = 1,
   }) async {
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
+    final pid = _requiredId(profileId, 'profileId');
 
-    final Uri uri = routes.insuranceDocumentsListForProfile(
-      profileId: cleanProfileId,
+    final uri = routes.recordsDocumentsListForProfile(
+      profileId: pid,
       search: _nullable(search),
       claimPackId: _nullable(claimPackId),
       documentType: documentType?.wire,
@@ -173,8 +182,8 @@ class InsuranceDocumentsService {
     );
 
     final response = await api.getUri<Object?>(_scopeUri(uri));
-    final Map<String, Object?> body = _asMap(response.data);
 
+    final body = _asMap(response.data);
     return _readDocuments(body['documents']);
   }
 
@@ -182,31 +191,32 @@ class InsuranceDocumentsService {
     required String profileId,
     required String documentId,
   }) async {
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
-    final String cleanDocumentId = _requiredId(documentId, 'documentId');
-
-    final response = await api.getUri<Object?>(_scopeUri(routes.insuranceDocumentGet(
-        profileId: cleanProfileId,
-        documentId: cleanDocumentId,
-      )),
+    final response = await api.getUri<Object?>(
+      _scopeUri(
+        routes.recordsDocumentGet(
+          profileId: _requiredId(profileId, 'profileId'),
+          documentId: _requiredId(documentId, 'documentId'),
+        ),
+      ),
     );
 
-    final Map<String, Object?> body = _asMap(response.data);
-    return _readDocument(body['document']);
+    return _readDocument(_asMap(response.data)['document']);
   }
 
   Future<InsuranceDocument> create({
     required String profileId,
     required InsuranceDocumentCreateInput input,
   }) async {
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
-
-    final response = await api.postUri<Object?>(_scopeUri(routes.insuranceDocumentCreate(profileId: cleanProfileId)),
+    final response = await api.postUri<Object?>(
+      _scopeUri(
+        routes.recordsDocumentCreate(
+          profileId: _requiredId(profileId, 'profileId'),
+        ),
+      ),
       data: input.toJson(),
     );
 
-    final Map<String, Object?> body = _asMap(response.data);
-    return _readDocument(body['document']);
+    return _readDocument(_asMap(response.data)['document']);
   }
 
   Future<InsuranceDocument> update({
@@ -214,33 +224,36 @@ class InsuranceDocumentsService {
     required String documentId,
     required InsuranceDocumentUpdateInput input,
   }) async {
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
-    final String cleanDocumentId = _requiredId(documentId, 'documentId');
-
-    final response = await api.putUri<Object?>(_scopeUri(routes.insuranceDocumentUpdate(
-        profileId: cleanProfileId,
-        documentId: cleanDocumentId,
-      )),
+    final response = await api.putUri<Object?>(
+      _scopeUri(
+        routes.recordsDocumentUpdate(
+          profileId: _requiredId(profileId, 'profileId'),
+          documentId: _requiredId(documentId, 'documentId'),
+        ),
+      ),
       data: input.toJson(),
     );
 
-    final Map<String, Object?> body = _asMap(response.data);
-    return _readDocument(body['document']);
+    return _readDocument(_asMap(response.data)['document']);
   }
 
   Future<void> delete({
     required String profileId,
     required String documentId,
   }) async {
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
-    final String cleanDocumentId = _requiredId(documentId, 'documentId');
-
-    await api.deleteUri<Object?>(_scopeUri(routes.insuranceDocumentDelete(
-        profileId: cleanProfileId,
-        documentId: cleanDocumentId,
-      )),
+    await api.deleteUri<Object?>(
+      _scopeUri(
+        routes.recordsDocumentDelete(
+          profileId: _requiredId(profileId, 'profileId'),
+          documentId: _requiredId(documentId, 'documentId'),
+        ),
+      ),
     );
   }
+
+  // ─────────────────────────────────────────────
+  // File Upload
+  // ─────────────────────────────────────────────
 
   Future<UploadedInsuranceDocumentFile> uploadDocumentFile({
     required String profileId,
@@ -248,70 +261,49 @@ class InsuranceDocumentsService {
     required InsuranceDocumentType documentType,
     String? claimPackId,
   }) async {
-    final String cleanTenantId = _requiredId(tenantId, 'tenantId');
-    final String cleanProfileId = _requiredId(profileId, 'profileId');
+    final pid = _requiredId(profileId, 'profileId');
 
-    if (file.sizeBytes == 0 || file.sizeBytes > InsuranceDocumentStoragePaths.maxFileBytes) {
-      throw ArgumentError('Choose a non-empty file no larger than 20 MiB');
-    }
+    final uploadId = DocumentStoragePaths.newUploadId();
 
-    final String uploadId = InsuranceDocumentStoragePaths.newUploadId();
-    final String ext = InsuranceDocumentStoragePaths.cleanExt(file.extension);
-    final String contentType = InsuranceDocumentStoragePaths.contentTypeForExt(
-      ext,
-    );
+    final extension = DocumentStoragePaths.cleanExt(file.extension);
 
-    final String originalPath = InsuranceDocumentStoragePaths.originalPath(
-      tenantId: cleanTenantId,
+    final originalPath = DocumentStoragePaths.originalPath(
+      tenantId: tenantId,
       appId: appId,
-      profileId: cleanProfileId,
+      profileId: pid,
+      kind: 'insurance_documents',
       uploadId: uploadId,
-      ext: ext,
+      ext: extension,
     );
 
-    final context = await ProfileStorageAccess.uploadMetadata(
-      api: api,
-      collectionUri: routes.insuranceDocumentCreate(profileId: cleanProfileId),
-      tenantId: cleanTenantId,
-      profileId: cleanProfileId,
-      appId: appId,
-    );
-
-    final Map<String, String> customMetadata = <String, String>{
-      ...context,
-      'tenant_id': cleanTenantId,
-      'profile_id': cleanProfileId,
+    final metadata = <String, String>{
       'upload_id': uploadId,
       'document_type': documentType.wire,
-      'original_file_name': file.fileName,
     };
 
-    final String? cleanClaimPackId = _nullable(claimPackId);
-    if (cleanClaimPackId != null) {
-      customMetadata['claim_pack_id'] = cleanClaimPackId;
+    final claimId = _nullable(claimPackId);
+
+    if (claimId != null) {
+      metadata['claim_pack_id'] = claimId;
     }
 
-    final SettableMetadata metadata = SettableMetadata(
-      contentType: contentType,
-      customMetadata: customMetadata,
-    );
-
-    final Reference ref = storage.ref(originalPath);
-
-    await ref.putData(file.bytes, metadata);
-
-    final String downloadUrl = await this.downloadUrl(
-      profileId: cleanProfileId, storagePath: originalPath,
+    final uploaded = await _uploader.upload(
+      profileId: pid,
+      kind: 'insurance_documents',
+      collectionUri: routes.recordsDocumentCreate(profileId: pid),
+      storagePath: originalPath,
+      file: DocumentUploadFile(fileName: file.fileName, bytes: file.bytes),
+      metadata: metadata,
     );
 
     return UploadedInsuranceDocumentFile(
-      fileName: file.fileName,
-      storagePath: originalPath,
-      originalStoragePath: originalPath,
+      fileName: uploaded.fileName,
+      storagePath: uploaded.storagePath,
+      originalStoragePath: uploaded.storagePath,
       thumbnailStoragePath: '',
-      downloadUrl: downloadUrl,
-      contentType: contentType,
-      sizeBytes: file.sizeBytes,
+      downloadUrl: uploaded.downloadUrl,
+      contentType: uploaded.contentType,
+      sizeBytes: uploaded.sizeBytes,
     );
   }
 
@@ -328,7 +320,7 @@ class InsuranceDocumentsService {
     InsuranceDocumentStatus? status,
     bool? isActive,
   }) async {
-    final UploadedInsuranceDocumentFile uploaded = await uploadDocumentFile(
+    final uploaded = await uploadDocumentFile(
       profileId: profileId,
       file: file,
       documentType: documentType,
@@ -351,18 +343,22 @@ class InsuranceDocumentsService {
     );
   }
 
-  /// Refresh on open; returned URLs expire after five minutes.
+  /// Refresh on open. Private URLs expire after five minutes.
   Future<String> downloadUrl({
     required String profileId,
     required String storagePath,
-  }) => ProfileStorageAccess.downloadUrl(
-    appId: appId,
-    api: api,
-    collectionUri: routes.insuranceDocumentCreate(
-      profileId: _requiredId(profileId, 'profileId'),
-    ),
-    storagePath: _requiredId(storagePath, 'storagePath'),
-  );
+  }) {
+    return _uploader.downloadUrl(
+      collectionUri: routes.recordsDocumentCreate(
+        profileId: _requiredId(profileId, 'profileId'),
+      ),
+      storagePath: _requiredId(storagePath, 'storagePath'),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Response Parsing
+  // ─────────────────────────────────────────────
 
   static InsuranceDocument _readDocument(Object? value) {
     return InsuranceDocument.fromJson(_asMap(value));
@@ -378,35 +374,31 @@ class InsuranceDocumentsService {
     if (value is Map<String, Object?>) return value;
 
     if (value is Map) {
-      final Map<String, Object?> output = <String, Object?>{};
-
-      for (final MapEntry<Object?, Object?> entry
-          in value.entries.cast<MapEntry<Object?, Object?>>()) {
-        output[entry.key.toString()] = entry.value;
-      }
-
-      return output;
+      return value.map(
+        (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+      );
     }
 
     throw const FormatException('Expected object map');
   }
 
   static List<Map<String, Object?>> _asListOfMaps(Object? value) {
-    if (value is! List) return const <Map<String, Object?>>[];
-
-    final List<Map<String, Object?>> output = <Map<String, Object?>>[];
-
-    for (final Object? item in value) {
-      if (item is Map || item is Map<String, Object?>) {
-        output.add(_asMap(item));
-      }
+    if (value is! List) {
+      return const <Map<String, Object?>>[];
     }
 
-    return output;
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => item.map(
+            (key, dynamic value) => MapEntry(key.toString(), value as Object?),
+          ),
+        )
+        .toList(growable: false);
   }
 
   static String _requiredId(String value, String name) {
-    final String id = value.trim();
+    final id = value.trim();
 
     if (id.isEmpty) {
       throw ArgumentError.value(value, name, '$name is empty');
@@ -416,8 +408,8 @@ class InsuranceDocumentsService {
   }
 
   static String? _nullable(String? value) {
-    final String? trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    return trimmed;
+    final cleaned = value?.trim();
+
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 }

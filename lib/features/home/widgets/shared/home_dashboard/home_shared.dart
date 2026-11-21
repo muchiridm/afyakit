@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
-import 'package:afyakit/features/hq/branding/widgets/app_brand_logo.dart';
+import 'package:afyakit/features/hq/apps/widgets/app_brand_logo.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 
 const double homeDashboardTwoColBreakpoint = 900;

@@ -20,6 +20,8 @@ class NotificationService {
     'FCM_WEB_VAPID_KEY',
   );
 
+  static final RegExp _idPattern = RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$');
+
   final FirebaseFirestore _firestore;
   final FirebaseMessaging _messaging;
 
@@ -100,12 +102,16 @@ class NotificationService {
 
   Future<void> registerDevice({
     required AuthUser user,
+    required String appId,
     required String token,
   }) async {
-    final identity = _resolveIdentity(user: user, token: token);
+    final identity = _resolveIdentity(user: user, appId: appId, token: token);
 
     if (identity == null) {
-      return;
+      throw StateError(
+        'Cannot register notification device: '
+        'invalid tenant, app, user or token.',
+      );
     }
 
     final deviceRef = _deviceRef(
@@ -116,15 +122,26 @@ class NotificationService {
     try {
       final snapshot = await deviceRef.get();
 
+      // A device document must not silently change
+      // ownership between authenticated users.
+      if (snapshot.exists) {
+        final existingUid = _clean(snapshot.data()?['uid']);
+
+        if (existingUid.isNotEmpty && existingUid != identity.uid) {
+          throw StateError(
+            'Notification device belongs to '
+            'another user.',
+          );
+        }
+      }
+
       final values = <String, dynamic>{
         'uid': identity.uid,
         'token': identity.token,
+        'app_id': identity.appId,
         'platform': _platform,
         'enabled': true,
         'isStaff': user.isStaffResolved,
-
-        if ((user.contactId ?? '').trim().isNotEmpty)
-          'contactId': user.contactId!.trim(),
 
         if ((user.accountNumber ?? '').trim().isNotEmpty)
           'accountNumber': user.accountNumber!.trim(),
@@ -139,6 +156,7 @@ class NotificationService {
       debugPrint(
         '🔔 Registering notification device '
         'tenant=${identity.tenantId} '
+        'app=${identity.appId} '
         'uid=${identity.uid} '
         'isStaff=${user.isStaffResolved} '
         'platform=$_platform '
@@ -151,6 +169,7 @@ class NotificationService {
       debugPrint(
         '✅ Notification device registered '
         'tenant=${identity.tenantId} '
+        'app=${identity.appId} '
         'uid=${identity.uid} '
         'isStaff=${user.isStaffResolved} '
         'platform=$_platform '
@@ -160,6 +179,7 @@ class NotificationService {
       debugPrint(
         '❌ Notification device registration failed '
         'tenant=${identity.tenantId} '
+        'app=${identity.appId} '
         'uid=${identity.uid} '
         'platform=$_platform '
         'deviceId=${identity.deviceId} '
@@ -172,12 +192,18 @@ class NotificationService {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Disable device
+  // ─────────────────────────────────────────────
+
   Future<void> disableDevice({
     required AuthUser user,
+    required String appId,
     required String token,
   }) async {
     final identity = _resolveIdentity(
       user: user,
+      appId: appId,
       token: token,
       logInvalid: false,
     );
@@ -199,6 +225,7 @@ class NotificationService {
           'ℹ️ Notification device disable skipped: '
           'document missing '
           'tenant=${identity.tenantId} '
+          'app=${identity.appId} '
           'uid=${identity.uid} '
           'deviceId=${identity.deviceId}',
         );
@@ -206,15 +233,18 @@ class NotificationService {
         return;
       }
 
-      final registeredUid = (snapshot.data()?['uid'] as String? ?? '').trim();
+      final data = snapshot.data();
 
-      if (registeredUid.isNotEmpty && registeredUid != identity.uid) {
+      final registeredUid = _clean(data?['uid']);
+      final registeredAppId = _clean(data?['app_id']).toLowerCase();
+
+      if (registeredUid != identity.uid || registeredAppId != identity.appId) {
         debugPrint(
           '⚠️ Notification device disable skipped: '
-          'UID mismatch '
+          'identity mismatch '
           'tenant=${identity.tenantId} '
-          'currentUid=${identity.uid} '
-          'registeredUid=$registeredUid '
+          'app=${identity.appId} '
+          'uid=${identity.uid} '
           'deviceId=${identity.deviceId}',
         );
 
@@ -229,6 +259,7 @@ class NotificationService {
       debugPrint(
         '🔕 Notification device disabled '
         'tenant=${identity.tenantId} '
+        'app=${identity.appId} '
         'uid=${identity.uid} '
         'platform=$_platform '
         'deviceId=${identity.deviceId}',
@@ -237,6 +268,7 @@ class NotificationService {
       debugPrint(
         '❌ Notification device disable failed '
         'tenant=${identity.tenantId} '
+        'app=${identity.appId} '
         'uid=${identity.uid} '
         'platform=$_platform '
         'deviceId=${identity.deviceId} '
@@ -255,11 +287,13 @@ class NotificationService {
 
   _NotificationDeviceIdentity? _resolveIdentity({
     required AuthUser user,
+    required String appId,
     required String token,
     bool logInvalid = true,
   }) {
     final cleanToken = token.trim();
     final tenantId = user.tenantId.trim().toLowerCase();
+    final cleanAppId = appId.trim().toLowerCase();
     final uid = user.uid.trim();
 
     if (cleanToken.isEmpty) {
@@ -273,11 +307,22 @@ class NotificationService {
       return null;
     }
 
-    if (tenantId.isEmpty) {
+    if (!_idPattern.hasMatch(tenantId)) {
       if (logInvalid) {
         debugPrint(
           '⚠️ Notification device operation skipped: '
-          'empty tenantId',
+          'invalid tenantId',
+        );
+      }
+
+      return null;
+    }
+
+    if (!_idPattern.hasMatch(cleanAppId)) {
+      if (logInvalid) {
+        debugPrint(
+          '⚠️ Notification device operation skipped: '
+          'invalid appId',
         );
       }
 
@@ -297,9 +342,10 @@ class NotificationService {
 
     return _NotificationDeviceIdentity(
       tenantId: tenantId,
+      appId: cleanAppId,
       uid: uid,
       token: cleanToken,
-      deviceId: _deviceId(cleanToken),
+      deviceId: _deviceId(cleanAppId, cleanToken),
     );
   }
 
@@ -314,8 +360,21 @@ class NotificationService {
         .doc(deviceId);
   }
 
-  String _deviceId(String token) {
-    return sha256.convert(utf8.encode(token)).toString();
+  // App-aware document identity:
+  //
+  // Two apps can register the same FCM token
+  // without overwriting each other's records.
+  //
+  // Existing legacy token-only document IDs
+  // remain untouched during migration.
+  String _deviceId(String appId, String token) {
+    final input = jsonEncode([appId, token]);
+
+    return sha256.convert(utf8.encode(input)).toString();
+  }
+
+  String _clean(Object? value) {
+    return value is String ? value.trim() : '';
   }
 
   String _tokenPrefix(String token) {
@@ -345,12 +404,14 @@ class NotificationService {
 class _NotificationDeviceIdentity {
   const _NotificationDeviceIdentity({
     required this.tenantId,
+    required this.appId,
     required this.uid,
     required this.token,
     required this.deviceId,
   });
 
   final String tenantId;
+  final String appId;
   final String uid;
   final String token;
   final String deviceId;

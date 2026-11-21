@@ -36,7 +36,6 @@
 
     <!-- Mobile / PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
-
     <meta name="apple-mobile-web-app-capable" content="yes" />
 
     <meta
@@ -58,6 +57,93 @@
   </head>
 
   <body>
+    <!--
+      Legacy Flutter service-worker cleanup.
+
+      Older Flutter releases registered a root-scoped
+      flutter_service_worker.js that could cache an outdated
+      application's JavaScript and configuration.
+
+      New builds use PWA_STRATEGY=none.
+
+      This cleanup:
+        - Targets only the legacy Flutter worker.
+        - Preserves Firebase Messaging.
+        - Avoids repeated reloads.
+        - Completes before starting Flutter.
+    -->
+    <script>
+      window.__afyakitLegacyWorkerCleanup = (async () => {
+        if (!("serviceWorker" in navigator)) {
+          return;
+        }
+
+        const CLEANUP_KEY = "afyakit-legacy-flutter-sw-cleanup-v1";
+
+        try {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+
+          let removed = false;
+
+          for (const registration of registrations) {
+            const workers = [
+              registration.active,
+              registration.waiting,
+              registration.installing,
+            ].filter(Boolean);
+
+            const isLegacyFlutterWorker = workers.some((worker) => {
+              try {
+                const url = new URL(worker.scriptURL);
+
+                return (
+                  url.origin === window.location.origin &&
+                  url.pathname === "/flutter_service_worker.js" &&
+                  new URL(registration.scope).pathname === "/"
+                );
+              } catch (_) {
+                return false;
+              }
+            });
+
+            if (!isLegacyFlutterWorker) {
+              continue;
+            }
+
+            const success = await registration.unregister();
+
+            if (success) {
+              removed = true;
+
+              console.info(
+                "🧹 Removed legacy Flutter service worker:",
+                registration.scope,
+              );
+            }
+          }
+
+          if (removed && !sessionStorage.getItem(CLEANUP_KEY)) {
+            sessionStorage.setItem(CLEANUP_KEY, "1");
+
+            console.info("🔄 Reloading with the current Flutter application.");
+
+            window.location.reload();
+
+            // Prevent this page from starting Flutter
+            // while the reload is pending.
+            return new Promise(() => {});
+          }
+        } catch (error) {
+          console.warn(
+            "⚠️ Legacy Flutter service worker cleanup failed:",
+            error,
+          );
+        }
+      })();
+    </script>
+
+    <!-- Runtime branding from the app manifest -->
     <script>
       (() => {
         const MANIFEST_URL = "manifest.webmanifest";
@@ -134,7 +220,6 @@
           setMetaContent("app-theme-color", manifest.theme_color);
 
           setHref("apple-touch-icon", icon);
-
           setHref("app-favicon", icon);
         };
 
@@ -170,7 +255,6 @@
       (() => {
         if (!("serviceWorker" in navigator)) {
           console.warn("🔕 Service workers are not supported by this browser.");
-
           return;
         }
 
@@ -201,6 +285,28 @@
       })();
     </script>
 
-    <script src="flutter_bootstrap.js" defer></script>
+    <!--
+      Start Flutter only after the legacy-worker cleanup
+      has completed. Do not allow an outdated worker to
+      continue controlling the bootstrap sequence.
+    -->
+    <script>
+      (async () => {
+        try {
+          await window.__afyakitLegacyWorkerCleanup;
+        } catch (error) {
+          console.warn(
+            "⚠️ Continuing Flutter startup after cleanup error:",
+            error,
+          );
+        }
+
+        const script = document.createElement("script");
+        script.src = "flutter_bootstrap.js";
+        script.async = false;
+
+        document.body.appendChild(script);
+      })();
+    </script>
   </body>
 </html>

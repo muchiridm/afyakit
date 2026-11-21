@@ -1,6 +1,6 @@
 // lib/features/retail/quotes/widgets/quote_details_summary.dart
 
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
 import 'package:flutter/material.dart';
 
 class QuoteDetailsSummary extends StatelessWidget {

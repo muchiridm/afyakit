@@ -139,8 +139,7 @@ class AppDomainService {
   ///
   /// Returns the DNS verification token when created.
   ///
-  /// A 409 `domain-exists` is treated as idempotent success.
-  /// A domain owned by another app remains an error.
+  /// A 409 is accepted only when listing confirms a binding for this app.
   Future<String> addAppDomain(
     String tenantId,
     String appId,
@@ -182,7 +181,12 @@ class AppDomainService {
           );
         }
 
-        return '';
+        // The global index may exist without an app binding (legacy data).
+        // Do not silently interpret that conflict as a successful registration.
+        final registered = await listAppDomains(cleanTenantId, cleanAppId);
+        if (registered.any((item) => item.domain == cleanDomain)) {
+          return '';
+        }
       }
     }
 

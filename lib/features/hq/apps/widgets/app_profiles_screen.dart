@@ -6,10 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/app/models/app_profile.dart';
 import 'package:afyakit/core/tenancy/models/tenant_profile.dart';
 
-import 'package:afyakit/features/hq/apps/controllers/app_profile_controller.dart';
-import 'package:afyakit/features/hq/apps/providers/hq_app_profiles_provider.dart';
+import 'package:afyakit/features/hq/apps/app_profile_controller.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_branding_screen.dart';
 import 'package:afyakit/features/hq/apps/widgets/app_profile_editor.dart';
+import 'package:afyakit/features/hq/apps/widgets/app_domains_screen.dart';
 
 class AppProfilesScreen extends ConsumerWidget {
   const AppProfilesScreen({super.key, required this.tenant});
@@ -35,6 +36,14 @@ class AppProfilesScreen extends ConsumerWidget {
 
     // Reload app metadata after branding changes.
     ref.invalidate(hqAppProfilesProvider(tenant.id));
+  }
+
+  void _openDomains(BuildContext context, AppProfile app) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => AppDomainsScreen(tenantId: tenant.id, app: app),
+      ),
+    );
   }
 
   Future<void> _openEditor(
@@ -125,6 +134,7 @@ class AppProfilesScreen extends ConsumerWidget {
                 return _AppTile(
                   profile: app,
                   onBranding: () => _openBranding(context, ref, app),
+                  onDomains: () => _openDomains(context, app),
                   onEdit: () => _openEditor(context, ref, app),
                 );
               },
@@ -150,11 +160,13 @@ class _AppTile extends StatelessWidget {
   const _AppTile({
     required this.profile,
     required this.onBranding,
+    required this.onDomains,
     required this.onEdit,
   });
 
   final AppProfile profile;
   final VoidCallback onBranding;
+  final VoidCallback onDomains;
   final VoidCallback onEdit;
 
   @override
@@ -296,6 +308,12 @@ class _AppTile extends StatelessWidget {
           onPressed: onBranding,
           icon: const Icon(Icons.palette_outlined, size: 18),
           label: const Text('Branding'),
+        ),
+
+        OutlinedButton.icon(
+          onPressed: onDomains,
+          icon: const Icon(Icons.language_outlined, size: 18),
+          label: const Text('Domains'),
         ),
 
         OutlinedButton.icon(

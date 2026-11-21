@@ -1,3 +1,5 @@
+// lib/shared/utils/normalize/normalize_email.dart
+
 class EmailHelper {
   static String normalize(String input) => input.trim().toLowerCase();
 

@@ -2,7 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 
-import 'package:afyakit/features/hq/tenants/utils/tenant_util.dart';
+import 'package:afyakit/shared/utils/tenant_util.dart';
 
 /// App-owned domain binding returned by:
 /// GET /api/hq/tenants/:tenantId/apps/:appId/domains

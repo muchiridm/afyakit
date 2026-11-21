@@ -1,12 +1,11 @@
 // lib/features/retail/quotes/widgets/quote_patient_membership_picker_dialog.dart
-
-import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
 import 'package:afyakit/features/retail/quotes/extensions/quote_contact_policy_enum.dart';
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
 import 'package:afyakit/features/retail/quotes/providers/quote_contact_policy_provider.dart';
@@ -21,25 +20,21 @@ class QuotePatientContextSelection {
     this.membershipId,
     this.payerContact,
   });
-
   final SalesDocumentPatientSnapshot patientSnapshot;
 
   /// Direct-pay means the selected quote customer/contact pays.
   /// Insurance means the payerContact should become the quote customer.
   final QuotePaymentContext paymentContext;
-
   final String? membershipId;
 
   /// Present only when the selected context came from an insurance membership.
   ///
   /// Insurance quotes must be billed to the payer/insurer, not the patient.
-  final ZohoContact? payerContact;
-
+  final NativeContact? payerContact;
   bool get isInsurance => paymentContext == QuotePaymentContext.insurance;
-
   bool get hasMembership => (membershipId ?? '').trim().isNotEmpty;
-
-  bool get hasPayerContact => (payerContact?.contactId ?? '').trim().isNotEmpty;
+  bool get hasPayerContact =>
+      (payerContact?.accountNumber ?? '').trim().isNotEmpty;
 }
 
 class QuotePatientMembershipPickerDialog extends ConsumerStatefulWidget {
@@ -49,11 +44,9 @@ class QuotePatientMembershipPickerDialog extends ConsumerStatefulWidget {
     this.initialMembershipId,
     this.initialPaymentContext = QuotePaymentContext.directPay,
   });
-
   final String? initialProfileId;
   final String? initialMembershipId;
   final QuotePaymentContext initialPaymentContext;
-
   @override
   ConsumerState<QuotePatientMembershipPickerDialog> createState() =>
       _QuotePatientMembershipPickerDialogState();
@@ -63,24 +56,19 @@ class _QuotePatientMembershipPickerDialogState
     extends ConsumerState<QuotePatientMembershipPickerDialog>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtl;
-
-  static const String _missingMemberContactId = '__missing_member_contact__';
-
   Profile? _selectedPatient;
-
   QuoteContactPolicy get _policy => ref.read(quoteContactPolicyProvider);
-
   bool get _isMemberScoped => _policy == QuoteContactPolicy.memberScoped;
-
-  String get _memberContactId {
-    return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
+  String get _memberAccountNumber {
+    return (ref.read(currentMemberAccountNumberProvider) ?? '').trim();
   }
 
   ProfilesScope get _memberProfileScope {
-    final String contactId = _memberContactId;
+    final accountNumber = _memberAccountNumber.trim();
 
     return ProfilesScope(
-      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
+      accountNumber: accountNumber.isEmpty ? null : accountNumber,
+      memberMode: true,
       allowExplicitContactLink: false,
     );
   }
@@ -88,15 +76,11 @@ class _QuotePatientMembershipPickerDialogState
   @override
   void initState() {
     super.initState();
-
     _tabCtl = TabController(length: 2, vsync: this);
-
     final bool openInsurance =
         widget.initialPaymentContext == QuotePaymentContext.insurance ||
         (widget.initialMembershipId ?? '').trim().isNotEmpty;
-
     if (openInsurance) _tabCtl.index = 1;
-
     final String initialProfileId = _clean(widget.initialProfileId);
     if (initialProfileId.isNotEmpty) {
       _selectedPatient = Profile(
@@ -105,7 +89,6 @@ class _QuotePatientMembershipPickerDialogState
         isActive: true,
       );
     }
-
     if (_isMemberScoped) {
       Future<void>.microtask(_loadLinkedProfilesForMembershipGuard);
     }
@@ -121,18 +104,14 @@ class _QuotePatientMembershipPickerDialogState
     final controller = ref.read(
       profilesControllerProvider(_memberProfileScope).notifier,
     );
-
     controller.setIsActive(true);
     await controller.load();
   }
 
   String _clean(String? value) => (value ?? '').trim();
-
   Set<String>? _allowedProfileIdsForMemberships() {
     if (!_isMemberScoped) return null;
-
     final state = ref.watch(profilesControllerProvider(_memberProfileScope));
-
     return state.items
         .where((Profile p) => p.isActive)
         .map((Profile p) => p.profileId.trim())
@@ -143,7 +122,6 @@ class _QuotePatientMembershipPickerDialogState
   QuotePatientContextSelection _selectionFromPatient(Profile patient) {
     final String? gender = patient.gender?.name;
     final String? relationship = patient.relationship?.name;
-
     return QuotePatientContextSelection(
       paymentContext: QuotePaymentContext.directPay,
       patientSnapshot: SalesDocumentPatientSnapshot(
@@ -163,22 +141,27 @@ class _QuotePatientMembershipPickerDialogState
     final String patientName = _clean(membership.profileDisplayName).isNotEmpty
         ? membership.profileDisplayName!.trim()
         : membership.profileId.trim();
-
     final String payerDisplayName =
         _clean(membership.payerDisplayName).isNotEmpty
         ? membership.payerDisplayName!.trim()
         : membership.payerContactId.trim();
-
-    final ZohoContact payerContact = ZohoContact(
-      contactId: membership.payerContactId.trim(),
+    final String payerAccountNumber = _clean(
+      membership.payerAccountNumber,
+    ).toUpperCase();
+    if (payerAccountNumber.isEmpty) {
+      throw StateError('Insurance payer has no Native Contact account number.');
+    }
+    // This is a UI-only contact selection. The backend must independently
+    // verify the insurer and resolve its accounting projection.
+    final NativeContact payerContact = NativeContact(
+      accountNumber: payerAccountNumber,
       displayName: payerDisplayName,
-      accountNumber: _clean(membership.payerAccountNumber).isEmpty
-          ? null
-          : membership.payerAccountNumber!.trim(),
+      entityType: 'organization',
       contactType: 'customer',
+      status: 'active',
+      appIds: const <String>[],
       isInsurancePayer: true,
     );
-
     return QuotePatientContextSelection(
       paymentContext: QuotePaymentContext.insurance,
       membershipId: membership.membershipId,
@@ -200,21 +183,26 @@ class _QuotePatientMembershipPickerDialogState
   }
 
   void _selectMembership(InsuranceMembership membership) {
-    Navigator.of(context).pop(_selectionFromMembership(membership));
+    try {
+      final selection = _selectionFromMembership(membership);
+      Navigator.of(context).pop(selection);
+    } on StateError catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final Set<String>? allowedProfileIds = _allowedProfileIdsForMemberships();
-
     final bool memberContactMissing =
-        _isMemberScoped && _memberContactId.isEmpty;
-
+        _isMemberScoped && _memberAccountNumber.isEmpty;
     return AlertDialog(
       title: Text(
         _isMemberScoped
-            ? 'Select your patient / insurance'
-            : 'Select patient / insurance',
+            ? 'Select your profile / insurance'
+            : 'Select profile / insurance',
       ),
       content: SizedBox(
         width: 760,
@@ -245,7 +233,9 @@ class _QuotePatientMembershipPickerDialogState
                 children: <Widget>[
                   _DirectPayPatientTab(
                     memberScoped: _isMemberScoped,
-                    contactId: _isMemberScoped ? _memberContactId : null,
+                    accountNumber: _isMemberScoped
+                        ? _memberAccountNumber
+                        : null,
                     selectedPatient: _selectedPatient,
                     onSelected: (Profile patient) {
                       setState(() => _selectedPatient = patient);
@@ -278,16 +268,14 @@ class _QuotePatientMembershipPickerDialogState
 class _DirectPayPatientTab extends StatelessWidget {
   const _DirectPayPatientTab({
     required this.memberScoped,
-    required this.contactId,
+    required this.accountNumber,
     required this.selectedPatient,
     required this.onSelected,
   });
-
   final bool memberScoped;
-  final String? contactId;
+  final String? accountNumber;
   final Profile? selectedPatient;
   final ValueChanged<Profile> onSelected;
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -302,7 +290,7 @@ class _DirectPayPatientTab extends StatelessWidget {
         ProfilePickerCard(
           selectedProfile: selectedPatient,
           busy: false,
-          contactId: memberScoped ? contactId : null,
+          accountNumber: memberScoped ? accountNumber?.trim() : null,
           forcePickerMode: !memberScoped,
           onChanged: onSelected,
         ),
@@ -319,12 +307,10 @@ class _InsuranceMembershipTab extends StatelessWidget {
     required this.allowedProfileIds,
     required this.onSelected,
   });
-
   final bool memberScoped;
   final String? initialMembershipId;
   final Set<String>? allowedProfileIds;
   final ValueChanged<InsuranceMembership> onSelected;
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -356,14 +342,11 @@ class _InsuranceMembershipTab extends StatelessWidget {
 
 class _TabHint extends StatelessWidget {
   const _TabHint({required this.icon, required this.text});
-
   final IconData icon;
   final String text;
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -377,9 +360,7 @@ class _TabHint extends StatelessWidget {
 
 class _ErrorText extends StatelessWidget {
   const _ErrorText(this.message);
-
   final String message;
-
   @override
   Widget build(BuildContext context) {
     return Text(

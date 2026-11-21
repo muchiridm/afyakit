@@ -1,4 +1,4 @@
-// lib/features/insurance/documents/models/insurance_document.dart
+// lib/features/records/documents/models/insurance_document.dart
 
 enum InsuranceDocumentType {
   claimForm,

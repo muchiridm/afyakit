@@ -1,28 +1,51 @@
 // lib/features/retail/quotes/widgets/quote_editor_details_sheet.dart
 
-import 'package:afyakit/features/clinical/profiles/controllers/profiles_controller.dart';
-import 'package:afyakit/features/clinical/profiles/models/profile_models.dart';
-import 'package:afyakit/features/clinical/profiles/widgets/profile_picker.dart';
+import 'package:afyakit/features/records/delivery_addresses/providers/delivery_address_providers.dart';
+import 'package:afyakit/features/records/native_contacts/native_contact.dart';
+import 'package:afyakit/features/records/native_contacts/member_native_contact_provider.dart';
+
+import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
+
+import 'package:afyakit/features/records/health_profiles/profile_models.dart';
+
+import 'package:afyakit/features/records/health_profiles/widgets/profile_picker.dart';
+
 import 'package:afyakit/features/clinical/prescriptions/controllers/prescriptions_controller.dart';
+
 import 'package:afyakit/features/clinical/prescriptions/models/prescription_model.dart';
+
 import 'package:afyakit/features/clinical/prescriptions/providers/prescriptions_providers.dart';
+
 import 'package:afyakit/features/clinical/prescriptions/services/prescriptions_service.dart';
+
 import 'package:afyakit/features/clinical/prescriptions/widgets/prescription_picker.dart';
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
-import 'package:afyakit/features/delivery_addresses/models/delivery_address_scope.dart';
-import 'package:afyakit/features/delivery_addresses/widgets/delivery_addresses_screen.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address_scope.dart';
+
+import 'package:afyakit/features/records/delivery_addresses/widgets/delivery_addresses_screen.dart';
+
 import 'package:afyakit/features/insurance/memberships/controllers/insurance_memberships_controller.dart';
+
 import 'package:afyakit/features/insurance/memberships/models/insurance_membership.dart';
+
 import 'package:afyakit/features/insurance/memberships/widgets/insurance_membership_picker.dart';
-import 'package:afyakit/features/retail/contacts/models/zoho_contact.dart';
-import 'package:afyakit/features/retail/contacts/providers/zoho_contacts_providers.dart';
-import 'package:afyakit/features/retail/quotes/controllers/states/quote_meta_state.dart';
+
+import 'package:afyakit/features/retail/quotes/controllers/quote_meta_controller.dart';
+
 import 'package:afyakit/features/retail/quotes/models/quote_context.dart';
+
 import 'package:afyakit/features/retail/shared/models/sales_document_address.dart';
+
 import 'package:afyakit/features/retail/shared/sales_doc/patient_snapshot.dart';
+
 import 'package:afyakit/shared/widgets/app_bottom_sheet.dart';
+
 import 'package:file_picker/file_picker.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'quote_editor_details_components.dart';
@@ -30,32 +53,49 @@ import 'quote_editor_details_components.dart';
 class QuoteEditorDetailsSheet extends ConsumerStatefulWidget {
   const QuoteEditorDetailsSheet({
     super.key,
+
     required this.initial,
+
     required this.tenantId,
+
     required this.isStaffMode,
+
     required this.onEnsureAuthed,
   });
 
   final QuoteMetaState initial;
+
   final String tenantId;
+
   final bool isStaffMode;
+
   final Future<bool> Function() onEnsureAuthed;
 
   static Future<QuoteMetaState?> open(
     BuildContext context, {
+
     required QuoteMetaState initial,
+
     required String tenantId,
+
     required bool isStaffMode,
+
     required Future<bool> Function() onEnsureAuthed,
   }) {
     return showAppBottomSheet<QuoteMetaState>(
       context: context,
+
       maxWidth: 820,
+
       maxHeightFactor: 0.96,
+
       builder: (_) => QuoteEditorDetailsSheet(
         initial: initial,
+
         tenantId: tenantId,
+
         isStaffMode: isStaffMode,
+
         onEnsureAuthed: onEnsureAuthed,
       ),
     );
@@ -68,25 +108,28 @@ class QuoteEditorDetailsSheet extends ConsumerStatefulWidget {
 
 class _QuoteEditorDetailsSheetState
     extends ConsumerState<QuoteEditorDetailsSheet> {
-  static const String _missingMemberContactId = '__missing_member_contact__';
-
   late QuoteMetaState _draft;
+
   late QuotePaymentContext _paymentContext;
 
   Profile? _profile;
+
   InsuranceMembership? _membership;
+
   Prescription? _prescription;
 
   bool _initialHydrationAttempted = false;
+
   bool _uploadingPrescription = false;
 
   late final TextEditingController _referenceController;
+
   late final TextEditingController _notesController;
 
   bool get _isMemberScoped => !widget.isStaffMode;
 
-  String get _memberContactId {
-    return (ref.read(zohoMemberCustomerScopeProvider)?.contactId ?? '').trim();
+  String get _memberAccountNumber {
+    return (ref.read(currentMemberAccountNumberProvider) ?? '').trim();
   }
 
   String? get _profileId {
@@ -98,10 +141,11 @@ class _QuoteEditorDetailsSheetState
   }
 
   ProfilesScope get _memberProfileScope {
-    final String contactId = _memberContactId;
+    final accountNumber = _memberAccountNumber;
 
     return ProfilesScope(
-      contactId: contactId.isEmpty ? _missingMemberContactId : contactId,
+      accountNumber: accountNumber.isEmpty ? null : accountNumber,
+      memberMode: true,
       allowExplicitContactLink: false,
     );
   }
@@ -111,17 +155,22 @@ class _QuoteEditorDetailsSheetState
     super.initState();
 
     _draft = widget.initial;
+
     _paymentContext = widget.initial.effectivePaymentContext;
 
     final SalesDocumentPatientSnapshot? snapshot =
         widget.initial.patientSnapshot;
+
     final String? snapshotProfileId = _clean(snapshot?.profileId);
 
     if (snapshotProfileId != null) {
       _profile = Profile(
         profileId: snapshotProfileId,
+
         fullName: _clean(snapshot?.fullName) ?? snapshotProfileId,
+
         dob: _clean(snapshot?.dob),
+
         isActive: true,
       );
     }
@@ -139,6 +188,7 @@ class _QuoteEditorDetailsSheetState
     }
 
     final String? profileId = _profileId;
+
     if (profileId != null) {
       Future<void>.microtask(() => _loadPrescriptions(profileId));
     }
@@ -147,7 +197,9 @@ class _QuoteEditorDetailsSheetState
   @override
   void dispose() {
     _referenceController.dispose();
+
     _notesController.dispose();
+
     super.dispose();
   }
 
@@ -165,6 +217,7 @@ class _QuoteEditorDetailsSheetState
     );
 
     controller.setIsActive(true);
+
     await controller.load();
   }
 
@@ -176,20 +229,24 @@ class _QuoteEditorDetailsSheetState
 
   void _hydrateInitialSelections({
     required List<InsuranceMembership> memberships,
+
     required List<Prescription> prescriptions,
   }) {
     if (_initialHydrationAttempted) return;
 
     final String? membershipId = _clean(_draft.resolvedMembershipId);
+
     final String? prescriptionId = _clean(_draft.resolvedPrescriptionId);
 
     final InsuranceMembership? membership = _findMembershipById(
       memberships,
+
       membershipId,
     );
 
     final Prescription? prescription = _findPrescriptionById(
       prescriptions,
+
       prescriptionId,
     );
 
@@ -198,14 +255,18 @@ class _QuoteEditorDetailsSheetState
 
       setState(() {
         _initialHydrationAttempted = true;
+
         _membership ??= membership;
+
         _prescription ??= prescription;
 
         if (_profile == null && membership != null) {
           _profile = Profile(
             profileId: membership.profileId,
+
             fullName:
                 _clean(membership.profileDisplayName) ?? membership.profileId,
+
             isActive: true,
           );
         }
@@ -215,9 +276,11 @@ class _QuoteEditorDetailsSheetState
 
   InsuranceMembership? _findMembershipById(
     List<InsuranceMembership> memberships,
+
     String? membershipId,
   ) {
     final String? id = _clean(membershipId);
+
     if (id == null) return null;
 
     for (final InsuranceMembership membership in memberships) {
@@ -229,9 +292,11 @@ class _QuoteEditorDetailsSheetState
 
   Prescription? _findPrescriptionById(
     List<Prescription> prescriptions,
+
     String? prescriptionId,
   ) {
     final String? id = _clean(prescriptionId);
+
     if (id == null) return null;
 
     for (final Prescription prescription in prescriptions) {
@@ -243,6 +308,7 @@ class _QuoteEditorDetailsSheetState
 
   Profile? _findLoadedProfileById(String? profileId) {
     final String? id = _clean(profileId);
+
     if (id == null || !_isMemberScoped) return null;
 
     final ProfilesState state = ref.read(
@@ -272,8 +338,11 @@ class _QuoteEditorDetailsSheetState
 
   double _membershipPickerHeight(int count) {
     if (count <= 0) return 220;
+
     if (count == 1) return 250;
+
     if (count == 2) return 320;
+
     return 420;
   }
 
@@ -285,8 +354,11 @@ class _QuoteEditorDetailsSheetState
 
       if (context == QuotePurchaseContext.company) {
         _paymentContext = QuotePaymentContext.directPay;
+
         _profile = null;
+
         _membership = null;
+
         _prescription = null;
       }
     });
@@ -301,6 +373,7 @@ class _QuoteEditorDetailsSheetState
 
         _draft = _draft.copyWith(
           paymentContext: context,
+
           clearMembershipId: true,
         );
       } else {
@@ -315,21 +388,29 @@ class _QuoteEditorDetailsSheetState
         _profile ??
         Profile(
           profileId: membership.profileId,
+
           fullName:
               _clean(membership.profileDisplayName) ?? membership.profileId,
+
           isActive: true,
         );
 
     setState(() {
       _paymentContext = QuotePaymentContext.insurance;
+
       _membership = membership;
+
       _profile = profile;
 
       _draft = _draft.copyWith(
         purchaseContext: QuotePurchaseContext.privateUse,
+
         paymentContext: QuotePaymentContext.insurance,
+
         contact: _payerContactFromMembership(membership),
+
         patientSnapshot: _snapshotFromMembership(membership, patient: profile),
+
         membershipId: membership.membershipId,
       );
     });
@@ -345,10 +426,13 @@ class _QuoteEditorDetailsSheetState
 
       _draft = _draft.copyWith(
         prescriptionId: id,
+
         prescriptionLabel: prescription == null
             ? null
             : _prescriptionLabel(prescription),
+
         clearPrescriptionId: id == null,
+
         clearPrescriptionLabel: id == null,
       );
     });
@@ -359,26 +443,33 @@ class _QuoteEditorDetailsSheetState
 
     if (profileId == null) {
       _snack('Select a profile first.');
+
       return;
     }
 
     final bool authenticated = await widget.onEnsureAuthed();
+
     if (!authenticated || !mounted) return;
 
     final FilePickerResult? picked = await FilePicker.platform.pickFiles(
       allowMultiple: false,
+
       withData: true,
+
       type: FileType.custom,
+
       allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     );
 
     if (!mounted || picked == null || picked.files.isEmpty) return;
 
     final PlatformFile file = picked.files.single;
+
     final bytes = file.bytes;
 
     if (bytes == null || bytes.isEmpty) {
       _snack('Could not read the selected file.');
+
       return;
     }
 
@@ -386,17 +477,24 @@ class _QuoteEditorDetailsSheetState
 
     try {
       final provider = prescriptionsControllerProvider(profileId);
+
       final PrescriptionsController controller = ref.read(provider.notifier);
 
       await controller.upload(
         tenantId: widget.tenantId.trim(),
+
         profileId: profileId,
+
         file: PickedPrescriptionFile(
           fileName: file.name,
+
           extension: file.extension ?? 'jpg',
+
           bytes: bytes,
         ),
+
         note: null,
+
         prescribedOn: null,
       );
 
@@ -406,6 +504,7 @@ class _QuoteEditorDetailsSheetState
 
       if (state.error != null) {
         _snack(state.error!);
+
         return;
       }
 
@@ -430,54 +529,63 @@ class _QuoteEditorDetailsSheetState
   }
 
   Future<void> _pickDeliveryLocation() async {
-    final bool authenticated = await widget.onEnsureAuthed();
+    final authenticated = await widget.onEnsureAuthed();
+
     if (!authenticated || !mounted) return;
 
-    final DeliveryAddressScope? scope = _deliveryAddressScope();
+    final scope = _deliveryAddressScope();
 
     if (scope == null || !scope.isUsable) {
-      _snack('Select a customer before choosing a delivery location.');
+      _snack(
+        widget.isStaffMode
+            ? 'This customer does not yet have a verified native Contact link.'
+            : 'Your delivery addresses are not available. Please try signing in again.',
+      );
+
       return;
     }
 
-    final DeliveryAddress? result = await Navigator.of(context)
-        .push<DeliveryAddress>(
-          MaterialPageRoute<DeliveryAddress>(
-            builder: (_) =>
-                DeliveryAddressesScreen(pickerMode: true, scope: scope),
-          ),
-        );
+    final result = await Navigator.of(context).push<DeliveryAddress>(
+      MaterialPageRoute<DeliveryAddress>(
+        builder: (_) => DeliveryAddressesScreen(
+          pickerMode: true,
+
+          memberMode: !widget.isStaffMode,
+
+          scope: scope,
+        ),
+      ),
+    );
 
     if (result == null || !mounted) return;
 
     _patch(
       _draft.copyWith(
         fulfilmentMethod: QuoteFulfilmentMethod.delivery,
+
         deliveryAddress: SalesDocumentAddress.fromDeliveryAddress(result),
       ),
     );
   }
 
   DeliveryAddressScope? _deliveryAddressScope() {
-    final String tenantId = widget.tenantId.trim();
-    final String accountNumber = (_draft.contact?.accountNumber ?? '').trim();
-    final String contactId = (_draft.contact?.contactId ?? '').trim();
-    final String customerName = (_draft.contact?.title ?? '').trim();
+    final tenantId = widget.tenantId.trim();
 
-    final String ownerUid = accountNumber.isNotEmpty
-        ? 'acct_$accountNumber'
-        : contactId.isNotEmpty
-        ? 'zoho_$contactId'
-        : '';
+    if (tenantId.isEmpty) return null;
 
-    if (tenantId.isEmpty || ownerUid.isEmpty) return null;
+    // Members use their authenticated identity.
 
-    return DeliveryAddressScope(
-      tenantId: tenantId,
-      ownerUid: ownerUid,
-      ownerAccountNumber: accountNumber.isEmpty ? null : accountNumber,
-      ownerLabel: customerName.isEmpty ? null : customerName,
-    );
+    // The backend resolves their native Contact through /me.
+
+    if (!widget.isStaffMode) {
+      return ref.read(currentUserDeliveryAddressScopeProvider);
+    }
+
+    // Staff must use a verified native Contact ID.
+
+    // A Zoho Contact ID must never be substituted here.
+
+    return null;
   }
 
   Future<void> _pickQuoteDate() async {
@@ -485,6 +593,7 @@ class _QuoteEditorDetailsSheetState
 
     final DateTime? picked = await _pickDate(
       initial: initial,
+
       helpText: 'Select quote date',
     );
 
@@ -497,11 +606,14 @@ class _QuoteEditorDetailsSheetState
 
   Future<void> _pickExpiryDate() async {
     final DateTime quoteDate = _draft.quoteDate ?? _dateOnly(DateTime.now());
+
     final DateTime initial = _draft.expiryDate ?? _defaultExpiry(quoteDate);
 
     final DateTime? picked = await _pickDate(
       initial: initial,
+
       firstDate: quoteDate,
+
       helpText: 'Select expiry date',
     );
 
@@ -512,16 +624,22 @@ class _QuoteEditorDetailsSheetState
 
   Future<DateTime?> _pickDate({
     required DateTime initial,
+
     DateTime? firstDate,
+
     required String helpText,
   }) async {
     final DateTime now = DateTime.now();
 
     final DateTime? result = await showDatePicker(
       context: context,
+
       initialDate: _dateOnly(initial),
+
       firstDate: firstDate ?? DateTime(now.year - 5, 1, 1),
+
       lastDate: DateTime(now.year + 10, 12, 31),
+
       helpText: helpText,
     );
 
@@ -548,7 +666,9 @@ class _QuoteEditorDetailsSheetState
 
   bool get _paymentComplete {
     if (_draft.isCompany) return true;
+
     if (!_requiresInsurance) return true;
+
     return _membership != null || _clean(_draft.resolvedMembershipId) != null;
   }
 
@@ -559,6 +679,7 @@ class _QuoteEditorDetailsSheetState
 
   bool get _prescriptionComplete {
     if (_draft.isCompany) return true;
+
     if (!_requiresInsurance) return true;
 
     return _hasPrescription;
@@ -592,6 +713,7 @@ class _QuoteEditorDetailsSheetState
       } else if (!_fulfilmentComplete) {
         _snack('Select a delivery location.');
       }
+
       return;
     }
 
@@ -601,47 +723,71 @@ class _QuoteEditorDetailsSheetState
   SalesDocumentPatientSnapshot _snapshotFromProfile(Profile profile) {
     return SalesDocumentPatientSnapshot(
       profileId: profile.profileId,
+
       patientNo: null,
+
       fullName: profile.fullName,
+
       dob: profile.dob,
+
       gender: profile.gender?.name,
+
       relationship: profile.relationship?.name,
     );
   }
 
   SalesDocumentPatientSnapshot _snapshotFromMembership(
     InsuranceMembership membership, {
+
     required Profile patient,
   }) {
     final String profileId = membership.profileId.trim();
 
     return SalesDocumentPatientSnapshot(
       profileId: profileId,
+
       patientNo: _clean(membership.patientNo),
+
       fullName:
           _clean(patient.fullName) ??
           _clean(membership.profileDisplayName) ??
           profileId,
+
       dob: patient.dob,
+
       gender: patient.gender?.name,
+
       relationship: patient.relationship?.name,
+
       membershipId: membership.membershipId,
+
       memberNo: membership.memberNo,
+
       scheme: membership.scheme,
+
       payerName:
           _clean(membership.payerDisplayName) ?? membership.payerContactId,
     );
   }
 
-  ZohoContact _payerContactFromMembership(InsuranceMembership membership) {
-    final String payerName =
-        _clean(membership.payerDisplayName) ?? membership.payerContactId;
+  NativeContact _payerContactFromMembership(InsuranceMembership membership) {
+    final accountNumber = (membership.payerAccountNumber ?? '')
+        .trim()
+        .toUpperCase();
 
-    return ZohoContact(
-      contactId: membership.payerContactId.trim(),
+    if (accountNumber.isEmpty) {
+      throw StateError('Insurance payer has no Native Contact account number.');
+    }
+
+    final payerName = _clean(membership.payerDisplayName) ?? accountNumber;
+
+    return NativeContact(
+      accountNumber: accountNumber,
       displayName: payerName,
-      accountNumber: _clean(membership.payerAccountNumber),
+      entityType: 'organization',
       contactType: 'customer',
+      status: 'active',
+      appIds: const [],
       isInsurancePayer: true,
     );
   }
@@ -668,11 +814,13 @@ class _QuoteEditorDetailsSheetState
 
     _hydrateInitialSelections(
       memberships: membershipsState.items,
+
       prescriptions: prescriptionState.items,
     );
 
     final int membershipCount = membershipsState.visibleActiveCount(
       profileId: profileId,
+
       allowedProfileIds: allowedProfileIds,
     );
 
@@ -685,25 +833,37 @@ class _QuoteEditorDetailsSheetState
     final List<Widget> children = <Widget>[
       QuoteDetailsQuestionSection(
         number: ++question,
+
         complete: true,
+
         title: 'What is this purchase for?',
+
         child: SegmentedButton<QuotePurchaseContext>(
           showSelectedIcon: false,
+
           segments: const <ButtonSegment<QuotePurchaseContext>>[
             ButtonSegment<QuotePurchaseContext>(
               value: QuotePurchaseContext.privateUse,
+
               icon: Icon(Icons.person_outline),
+
               label: Text('Private use'),
             ),
+
             ButtonSegment<QuotePurchaseContext>(
               value: QuotePurchaseContext.company,
+
               icon: Icon(Icons.business_outlined),
+
               label: Text('Company'),
             ),
           ],
+
           selected: <QuotePurchaseContext>{_draft.purchaseContext},
+
           onSelectionChanged: (Set<QuotePurchaseContext> selected) {
             if (selected.isEmpty) return;
+
             _setPurchaseContext(selected.first);
           },
         ),
@@ -713,17 +873,22 @@ class _QuoteEditorDetailsSheetState
     if (_draft.isPrivateUse) {
       children.addAll(<Widget>[
         const SizedBox(height: 18),
+
         QuoteDetailsQuestionSection(
           number: ++question,
+
           complete: _profileComplete,
+
           title: 'Who is the quote for?',
+
           subtitle: _isMemberScoped
               ? 'Choose from your linked profiles.'
               : 'Choose the patient receiving the medicine.',
+
           child: ProfilePickerCard(
             selectedProfile: _profile,
             busy: false,
-            contactId: _isMemberScoped ? _memberContactId : null,
+            accountNumber: _isMemberScoped ? _memberAccountNumber : null,
             forcePickerMode: widget.isStaffMode,
             onChanged: (Profile profile) {
               _profile = profile;
@@ -731,28 +896,42 @@ class _QuoteEditorDetailsSheetState
             },
           ),
         ),
+
         const SizedBox(height: 18),
+
         QuoteDetailsQuestionSection(
           number: ++question,
+
           complete: !_requiresInsurance || _paymentComplete,
+
           title: 'How will this quote be paid?',
+
           child: SegmentedButton<QuotePaymentContext>(
             showSelectedIcon: false,
+
             segments: const <ButtonSegment<QuotePaymentContext>>[
               ButtonSegment<QuotePaymentContext>(
                 value: QuotePaymentContext.directPay,
+
                 icon: Icon(Icons.payments_outlined),
+
                 label: Text('Direct pay'),
               ),
+
               ButtonSegment<QuotePaymentContext>(
                 value: QuotePaymentContext.insurance,
+
                 icon: Icon(Icons.health_and_safety_outlined),
+
                 label: Text('Insurance'),
               ),
             ],
+
             selected: <QuotePaymentContext>{_paymentContext},
+
             onSelectionChanged: (Set<QuotePaymentContext> selected) {
               if (selected.isEmpty) return;
+
               _setPaymentContext(selected.first);
             },
           ),
@@ -762,23 +941,33 @@ class _QuoteEditorDetailsSheetState
       if (_requiresInsurance) {
         children.addAll(<Widget>[
           const SizedBox(height: 18),
+
           QuoteDetailsQuestionSection(
             number: ++question,
+
             complete: _paymentComplete,
+
             title: 'Which insurance membership applies?',
+
             child: SizedBox(
               height: membershipPickerHeight,
+
               child: InsuranceMembershipPickerCard(
                 initialMembershipId:
                     _membership?.membershipId ?? _draft.resolvedMembershipId,
+
                 profileId: profileId,
+
                 allowedProfileIds: allowedProfileIds,
+
                 title: _isMemberScoped
                     ? 'Your insurance memberships'
                     : 'Insurance memberships',
+
                 emptyText: _isMemberScoped
                     ? 'No insurance memberships found for your linked profiles.'
                     : 'No active insurance memberships found.',
+
                 onSelected: _setMembership,
               ),
             ),
@@ -788,28 +977,42 @@ class _QuoteEditorDetailsSheetState
 
       children.addAll(<Widget>[
         const SizedBox(height: 18),
+
         QuoteDetailsQuestionSection(
           number: ++question,
+
           complete: _requiresInsurance
               ? _prescriptionComplete
               : _hasPrescription,
+
           requiredQuestion: _requiresInsurance,
+
           title: 'Is there a prescription?',
+
           subtitle: _requiresInsurance
               ? 'Required for an insurance quote.'
               : 'Optional for a direct-pay quote.',
+
           child: PrescriptionPickerCard(
             profileId: profileId,
+
             prescriptions: prescriptionState.items,
+
             selectedPrescriptionId:
                 _prescription?.prescriptionId ?? _draft.resolvedPrescriptionId,
+
             busy: prescriptionState.busy || _uploadingPrescription,
+
             error: prescriptionState.error,
+
             requiredForClaim: _requiresInsurance,
+
             onRefresh: profileId == null
                 ? null
                 : () => _loadPrescriptions(profileId),
+
             onUpload: profileId == null ? null : _uploadPrescription,
+
             onChanged: _setPrescription,
           ),
         ),
@@ -817,10 +1020,14 @@ class _QuoteEditorDetailsSheetState
     } else {
       children.addAll(<Widget>[
         const SizedBox(height: 18),
+
         QuoteDetailsQuestionSection(
           number: ++question,
+
           complete: true,
+
           title: 'Who will be billed?',
+
           child: const QuoteDetailsCompanyTile(),
         ),
       ]);
@@ -828,38 +1035,56 @@ class _QuoteEditorDetailsSheetState
 
     children.addAll(<Widget>[
       const SizedBox(height: 18),
+
       QuoteDetailsQuestionSection(
         number: ++question,
+
         complete: _fulfilmentComplete,
+
         title: 'How will the order be received?',
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+
           children: <Widget>[
             SegmentedButton<QuoteFulfilmentMethod>(
               showSelectedIcon: false,
+
               segments: const <ButtonSegment<QuoteFulfilmentMethod>>[
                 ButtonSegment<QuoteFulfilmentMethod>(
                   value: QuoteFulfilmentMethod.delivery,
+
                   icon: Icon(Icons.local_shipping_outlined),
+
                   label: Text('Delivery'),
                 ),
+
                 ButtonSegment<QuoteFulfilmentMethod>(
                   value: QuoteFulfilmentMethod.pickup,
+
                   icon: Icon(Icons.storefront_outlined),
+
                   label: Text('Pickup'),
                 ),
               ],
+
               selected: <QuoteFulfilmentMethod>{_draft.fulfilmentMethod},
+
               onSelectionChanged: (Set<QuoteFulfilmentMethod> selected) {
                 if (selected.isEmpty) return;
+
                 _setFulfilmentMethod(selected.first);
               },
             ),
+
             const SizedBox(height: 10),
+
             if (_draft.fulfilmentMethod.isDelivery)
               QuoteDetailsDeliveryLocationTile(
                 address: _draft.deliveryAddress,
+
                 onTap: _pickDeliveryLocation,
+
                 onClear: _draft.deliveryAddress == null
                     ? null
                     : () {
@@ -876,48 +1101,73 @@ class _QuoteEditorDetailsSheetState
     if (widget.isStaffMode) {
       children.addAll(<Widget>[
         const SizedBox(height: 18),
+
         QuoteDetailsQuestionSection(
           number: ++question,
+
           complete: _staffDetailsComplete,
+
           title: 'Quote information',
+
           subtitle: 'Staff-only dates, reference and customer notes.',
+
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+
             children: <Widget>[
               QuoteDetailsDateFields(
                 quoteDate: _draft.quoteDate,
+
                 expiryDate: _draft.expiryDate,
+
                 onPickQuoteDate: _pickQuoteDate,
+
                 onClearQuoteDate: () {
                   _patch(_draft.copyWith(clearQuoteDate: true));
                 },
+
                 onPickExpiryDate: _pickExpiryDate,
+
                 onClearExpiryDate: () {
                   _patch(_draft.copyWith(clearExpiryDate: true));
                 },
               ),
+
               const SizedBox(height: 12),
+
               TextField(
                 controller: _referenceController,
+
                 decoration: InputDecoration(
                   labelText: 'Reference',
+
                   hintText: _draft.isCompany
                       ? 'e.g. LPO / PO number'
                       : 'e.g. reference number',
+
                   border: const OutlineInputBorder(),
                 ),
+
                 onChanged: _setReference,
               ),
+
               const SizedBox(height: 12),
+
               TextField(
                 controller: _notesController,
+
                 minLines: 2,
+
                 maxLines: 4,
+
                 decoration: const InputDecoration(
                   labelText: 'Customer notes',
+
                   hintText: 'Notes on the quote…',
+
                   border: OutlineInputBorder(),
                 ),
+
                 onChanged: _setCustomerNotes,
               ),
             ],
@@ -928,16 +1178,24 @@ class _QuoteEditorDetailsSheetState
 
     return AppBottomSheetScaffold(
       title: 'Quote details',
+
       subtitle: 'Complete each numbered question.',
+
       leading: const Icon(Icons.tune_outlined),
+
       bodyPadding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+
       footer: QuoteDetailsSheetFooter(
         canSubmit: _canSubmit,
+
         onCancel: () => Navigator.of(context).pop(),
+
         onSubmit: _submit,
       ),
+
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+
         children: children,
       ),
     );
@@ -945,6 +1203,7 @@ class _QuoteEditorDetailsSheetState
 
   void _pickProfileResult(Profile profile) {
     final String? previousProfileId = _clean(_draft.resolvedProfileId);
+
     final String nextProfileId = profile.profileId.trim();
 
     setState(() {
@@ -952,17 +1211,23 @@ class _QuoteEditorDetailsSheetState
 
       if (previousProfileId != null && previousProfileId != nextProfileId) {
         _membership = null;
+
         _prescription = null;
       }
 
       _draft = _draft.copyWith(
         purchaseContext: QuotePurchaseContext.privateUse,
+
         paymentContext: _paymentContext,
+
         patientSnapshot: _snapshotFromProfile(profile),
+
         clearMembershipId:
             previousProfileId != null && previousProfileId != nextProfileId,
+
         clearPrescriptionId:
             previousProfileId != null && previousProfileId != nextProfileId,
+
         clearPrescriptionLabel:
             previousProfileId != null && previousProfileId != nextProfileId,
       );
@@ -975,8 +1240,10 @@ class _QuoteEditorDetailsSheetState
 String _prescriptionLabel(Prescription prescription) {
   final List<String> parts = <String>[
     if (_clean(prescription.fileName) != null) prescription.fileName.trim(),
+
     if (_clean(prescription.prescribedOn) != null)
       prescription.prescribedOn!.trim(),
+
     prescription.status.label,
   ];
 
@@ -999,5 +1266,6 @@ DateTime _defaultExpiry(DateTime quoteDate) {
 
 String? _clean(String? value) {
   final String text = (value ?? '').trim();
+
   return text.isEmpty ? null : text;
 }

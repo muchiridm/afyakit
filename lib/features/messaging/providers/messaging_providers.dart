@@ -1,6 +1,6 @@
 // lib/features/messaging/providers/messaging_providers.dart
 
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +18,9 @@ final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
 final staffChatConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) {
       final String tenantId = ref.watch(tenantIdProvider);
+
       final String appId = ref.watch(appIdProvider);
+
       final repository = ref.watch(messagingRepositoryProvider);
 
       return repository.watchStaffConversations(
@@ -36,10 +38,14 @@ final memberChatConversationsProvider = StreamProvider.autoDispose
       }
 
       final String tenantId = ref.watch(tenantIdProvider);
+
+      final String appId = ref.watch(appIdProvider);
+
       final repository = ref.watch(messagingRepositoryProvider);
 
       return repository.watchMemberConversations(
         tenantId: tenantId,
+        appId: appId,
         memberUid: uid,
       );
     });
@@ -53,10 +59,14 @@ final chatConversationProvider = StreamProvider.autoDispose
       }
 
       final String tenantId = ref.watch(tenantIdProvider);
+
+      final String appId = ref.watch(appIdProvider);
+
       final repository = ref.watch(messagingRepositoryProvider);
 
       return repository.watchConversation(
         tenantId: tenantId,
+        appId: appId,
         conversationId: id,
       );
     });
@@ -89,10 +99,14 @@ final chatMessagesProvider = StreamProvider.autoDispose
       }
 
       final String tenantId = ref.watch(tenantIdProvider);
+
+      final String appId = ref.watch(appIdProvider);
+
       final repository = ref.watch(messagingRepositoryProvider);
 
       return repository.watchMessages(
         tenantId: tenantId,
+        appId: appId,
         conversationId: scope.normalizedConversationId,
       );
     });

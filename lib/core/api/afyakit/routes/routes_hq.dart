@@ -31,6 +31,47 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
       _uriCore('hq/tenants/${_seg(tenantId)}/owner');
 
   // ═════════════════════════════════════════════
+  // Tenant contacts (HQ-owned shared contact lifecycle)
+  // /api/hq/tenants/:tenantId/contacts
+  // ═════════════════════════════════════════════
+
+  /// Tenant-wide contacts directory, not scoped to any individual application.
+  /// GET /api/hq/tenants/:tenantId/contacts?limit=50&cursor=AC-XXXXXX
+  Uri listHqTenantContacts(String tenantId, {int limit = 50, String? cursor}) =>
+      _uriCore(
+        'hq/tenants/${_seg(tenantId)}/contacts',
+        query: <String, String>{
+          'limit': '$limit',
+          if (cursor != null && cursor.trim().isNotEmpty)
+            'cursor': cursor.trim().toUpperCase(),
+        },
+      );
+
+  /// GET /api/hq/tenants/:tenantId/contacts/:accountNumber
+  Uri getHqTenantContact(String tenantId, String accountNumber) =>
+      _hqTenantContact(tenantId, accountNumber);
+
+  /// GET /api/hq/tenants/:tenantId/contacts/:accountNumber/dependencies
+  /// Preview only; not a retention clearance or permission to delete.
+  Uri getHqTenantContactDependencies(String tenantId, String accountNumber) =>
+      _uriCore('${_hqTenantContactPath(tenantId, accountNumber)}/dependencies');
+
+  /// POST /api/hq/tenants/:tenantId/contacts/:accountNumber/archive
+  /// Body: confirm_account_number, reason (15–1000 characters).
+  Uri archiveHqTenantContact(String tenantId, String accountNumber) =>
+      _uriCore('${_hqTenantContactPath(tenantId, accountNumber)}/archive');
+
+  /// POST /api/hq/tenants/:tenantId/contacts/:accountNumber/restore
+  /// Body: confirm_account_number, reason (15–1000 characters).
+  Uri restoreHqTenantContact(String tenantId, String accountNumber) =>
+      _uriCore('${_hqTenantContactPath(tenantId, accountNumber)}/restore');
+
+  /// DELETE /api/hq/tenants/:tenantId/contacts/:accountNumber
+  /// Body: confirm_account_number, reason.
+  Uri permanentlyDeleteHqTenantContact(String tenantId, String accountNumber) =>
+      _hqTenantContact(tenantId, accountNumber);
+
+  // ═════════════════════════════════════════════
   // Tenant apps
   // /api/hq/tenants/:tenantId/apps
   // ═════════════════════════════════════════════
@@ -77,30 +118,14 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
 
   // ═════════════════════════════════════════════
   // App Zoho Books
-  //
   // /api/hq/tenants/:tenantId/apps/:appId/zoho
-  //
-  // One resource URI is shared by:
-  // GET
-  // PUT
-  // PATCH
-  // DELETE
   // ═════════════════════════════════════════════
 
-  /// Canonical Zoho Books configuration URI
-  /// for one app.
-  ///
-  /// The HTTP method determines whether the
-  /// configuration is read, created, updated
-  /// or deleted.
+  /// One resource URI is shared by GET, PUT, PATCH and DELETE.
   Uri getTenantAppZoho(String tenantId, String appId) =>
       _hqAppZoho(tenantId, appId);
 
-  // Compatibility aliases.
-  //
-  // These all intentionally resolve to the
-  // same app-owned Zoho resource.
-
+  // Compatibility aliases use the same app-owned resource.
   Uri getAppZoho(String tenantId, String appId) =>
       getTenantAppZoho(tenantId, appId);
 
@@ -126,15 +151,21 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
     'hq/users',
     query: <String, String>{
       if (tenant != null && tenant.trim().isNotEmpty) 'tenantId': tenant.trim(),
-
       if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
-
       'limit': '$limit',
     },
   );
 
   Uri fetchUserMemberships(String uid) =>
       _uriCore('hq/users/${_seg(uid)}/memberships');
+
+  /// POST /api/hq/users/:uid/email-change/start
+  Uri startTenantEmailChange(String uid) =>
+      _uriCore('hq/users/${_seg(uid)}/email-change/start');
+
+  /// POST /api/hq/users/:uid/email-change/verify
+  Uri verifyTenantEmailChange(String uid) =>
+      _uriCore('hq/users/${_seg(uid)}/email-change/verify');
 
   Uri deleteGlobalUser(String uid) => _uriCore('hq/users/${_seg(uid)}');
 
@@ -154,6 +185,12 @@ extension AfyaKitHqRoutes on AfyaKitRoutes {
   Uri _hqTenants() => _uriCore('hq/tenants');
 
   Uri _hqTenant(String tenantId) => _uriCore('hq/tenants/${_seg(tenantId)}');
+
+  String _hqTenantContactPath(String tenantId, String accountNumber) =>
+      'hq/tenants/${_seg(tenantId)}/contacts/${_seg(accountNumber)}';
+
+  Uri _hqTenantContact(String tenantId, String accountNumber) =>
+      _uriCore(_hqTenantContactPath(tenantId, accountNumber));
 
   Uri _hqTenantApps(String tenantId) =>
       _uriCore('hq/tenants/${_seg(tenantId)}/apps');

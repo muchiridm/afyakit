@@ -1,26 +1,25 @@
 // lib/core/hq/shell/hq_gate.dart
 
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
-import 'package:afyakit/core/auth/shared/widgets/onboarding_gate.dart';
-import 'package:afyakit/features/hq/shell/hq_shell.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
-
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
 import 'package:afyakit/core/auth/auth_session/widgets/login_screen.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
+import 'package:afyakit/core/auth/shared/widgets/onboarding_gate.dart';
+import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
+import 'package:afyakit/features/hq/shell/hq_shell.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Firebase Auth's verified `superadmin` custom claim is the platform
+/// authority. The backend independently enforces its own tenant/account rules.
 final hqSuperadminProvider = FutureProvider.autoDispose<bool>((ref) async {
-  final u = fb.FirebaseAuth.instance.currentUser;
-  if (u == null) return false;
+  final user = fb.FirebaseAuth.instance.currentUser;
+  if (user == null) return false;
 
-  final t = await u.getIdTokenResult(true);
-  final claims = t.claims ?? const <String, dynamic>{};
-
-  return claims['isSuperAdmin'] == true;
+  final token = await user.getIdTokenResult(true);
+  return token.claims?['superadmin'] == true;
 });
 
 class HqGate extends ConsumerWidget {
@@ -30,37 +29,28 @@ class HqGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantId = ref.watch(tenantIdProvider); // HQ => "hq"
+    final tenantId = ref.watch(tenantIdProvider);
     final sessionAsync = ref.watch(sessionControllerProvider(tenantId));
 
     return sessionAsync.when(
       loading: () => const _LoadingScreen(),
       error: (err, _) => _ErrorScreen(
         message: 'Failed to load HQ session.\n$err',
-        onSignOut: () async {
-          await fb.FirebaseAuth.instance.signOut();
-          ref.invalidate(sessionControllerProvider(tenantId));
-        },
+        onSignOut: () => _signOut(ref, tenantId),
       ),
       data: (user) {
-        if (user == null) {
-          return const LoginScreen(copy: OtpLoginCopy.hq);
-        }
+        if (user == null) return const LoginScreen(copy: OtpLoginCopy.hq);
 
         if (!_isActive(user)) {
           return _ErrorScreen(
             message:
                 'Your account is currently "${user.status.wire}".\n'
                 'Please contact an admin to activate HQ access.',
-            onSignOut: () async {
-              await fb.FirebaseAuth.instance.signOut();
-              ref.invalidate(sessionControllerProvider(tenantId));
-            },
+            onSignOut: () => _signOut(ref, tenantId),
           );
         }
 
         final need = OnboardingGate.need(user);
-
         if (need == OnboardingNeed.phone) {
           OnboardingGate.forceStep(
             ref,
@@ -93,44 +83,39 @@ class HqGate extends ConsumerWidget {
         }
 
         final allowed = ref.watch(hqSuperadminProvider);
-
         return allowed.when(
           loading: () => const _LoadingScreen(),
           error: (err, _) => _ErrorScreen(
             message: 'Failed to verify permissions.\n$err',
-            onSignOut: () async {
-              await fb.FirebaseAuth.instance.signOut();
-              ref.invalidate(sessionControllerProvider(tenantId));
-            },
+            onSignOut: () => _signOut(ref, tenantId),
           ),
-          data: (ok) {
-            return AnimatedSwitcher(
-              duration: const Duration(milliseconds: 150),
-              child: ok
-                  ? const HqShell(key: ValueKey('hq-shell'))
-                  : _NoAccessScreen(
-                      key: const ValueKey('no-access'),
-                      onSignOut: () async {
-                        await fb.FirebaseAuth.instance.signOut();
-                        ref.invalidate(sessionControllerProvider(tenantId));
-                      },
-                    ),
-            );
-          },
+          data: (hasClaim) => AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            child: hasClaim
+                ? const HqShell(key: ValueKey('hq-shell'))
+                : _NoAccessScreen(
+                    key: const ValueKey('no-access'),
+                    onSignOut: () => _signOut(ref, tenantId),
+                  ),
+          ),
         );
       },
     );
   }
+
+  static Future<void> _signOut(WidgetRef ref, String tenantId) async {
+    await fb.FirebaseAuth.instance.signOut();
+    ref.invalidate(sessionControllerProvider(tenantId));
+    ref.invalidate(hqSuperadminProvider);
+  }
 }
 
-// ── Simple screens ───────────────────────────────────────────────────────────
 class _LoadingScreen extends StatelessWidget {
   const _LoadingScreen();
 
   @override
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
 }
 
 class _NoAccessScreen extends StatelessWidget {
@@ -154,7 +139,8 @@ class _NoAccessScreen extends StatelessWidget {
                 Text('Superadmin access required.', style: t.titleMedium),
                 const SizedBox(height: 8),
                 Text(
-                  'This account is signed in, but it does not have HQ permissions.',
+                  'This account is signed in, but it does not have '
+                  'verified HQ permissions.',
                   style: t.bodyMedium,
                   textAlign: TextAlign.center,
                 ),

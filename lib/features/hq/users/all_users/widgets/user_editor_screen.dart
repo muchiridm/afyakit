@@ -1,9 +1,10 @@
-// lib/hq/users/all_users/widgets/user_editor_screen.dart
-
+// lib/features/hq/users/all_users/widgets/user_editor_screen.dart
+import 'package:afyakit/app/models/app_profile.dart';
+import 'package:afyakit/features/hq/apps/hq_app_profiles_provider.dart';
 import 'package:afyakit/features/hq/users/all_users/all_user_model.dart';
 import 'package:afyakit/features/hq/users/all_users/controllers/user_editor_controller.dart';
+import 'package:afyakit/features/hq/users/all_users/widgets/app_email_change_dialog.dart';
 import 'package:afyakit/shared/services/snack_service.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,12 +14,13 @@ class UserEditorScreen extends ConsumerWidget {
     required this.tenantId,
     required this.userUid,
     this.initialUser,
+    this.initialAppId,
   });
 
   final String tenantId;
   final String userUid;
   final AllUser? initialUser;
-
+  final String? initialAppId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final args = UserEditorArgs(
@@ -26,411 +28,346 @@ class UserEditorScreen extends ConsumerWidget {
       uid: userUid,
       initialUser: initialUser,
     );
-
-    final state = ref.watch(userEditorControllerProvider(args));
-
-    final ctrl = ref.read(userEditorControllerProvider(args).notifier);
-
+    final provider = userEditorControllerProvider(args);
+    final state = ref.watch(provider);
+    final ctrl = ref.read(provider.notifier);
+    final appsProvider = hqAppProfilesProvider(tenantId.trim().toLowerCase());
+    final appsAsync = ref.watch(appsProvider);
+    final apps = appsAsync.asData?.value ?? const <AppProfile>[];
+    final selectedApp = state.appId.trim();
+    final selectedRegistered = apps.any(
+      (app) => app.id.trim().toLowerCase() == selectedApp && app.active,
+    );
     final busy = state.saving || state.deleting;
+    final loading = state.loadingMemberships;
+    final canEdit =
+        !busy &&
+        !loading &&
+        state.hasAccess &&
+        state.tenantAccountActive &&
+        selectedRegistered;
+    final canRemove = canEdit && state.appMembershipExists;
+    final theme = Theme.of(context);
+    final appEmail = state.selectedAppEmail?.trim();
+    final hasAppEmail = appEmail != null && appEmail.isNotEmpty;
+    final emailVerified = hasAppEmail && state.selectedAppEmailVerified;
+    final canChangeEmail = canEdit && state.appMembershipExists && state.active;
+    Future<void> changeEmail() async {
+      if (selectedApp.isEmpty || !selectedRegistered) return;
+      final changed = await showAppEmailChangeDialog(
+        context: context,
+        ref: ref,
+        tenantId: state.tenantId,
+        appId: selectedApp,
+        uid: state.uid,
+        currentEmail: hasAppEmail ? appEmail : null,
+      );
+      if (!changed || !context.mounted) return;
+      await ctrl.refreshMemberships(force: true);
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit tenant access'),
-        actions: [
-          IconButton(
-            tooltip: 'Remove access',
-            icon: const Icon(Icons.person_remove_alt_1),
-            onPressed: busy
-                ? null
-                : () async {
-                    final sure =
-                        await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Remove tenant access'),
-                            content: Text(
-                              'Remove this user\'s access to "${state.tenantId}"?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                ),
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Remove'),
-                              ),
-                            ],
-                          ),
-                        ) ??
-                        false;
-
-                    if (!sure) {
-                      return;
-                    }
-
-                    final ok = await ctrl.removeAccess();
-
-                    if (ok && context.mounted) {
-                      Navigator.of(context).pop(true);
-                    }
-                  },
+    Future<void> disableApp() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Disable application access?'),
+          content: Text(
+            'Disable access to $selectedApp? The tenant account and other '
+            'applications will not be affected.',
           ),
-        ],
-      ),
-      body: AbsorbPointer(
-        absorbing: busy,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _TenantCard(tenantId: state.tenantId, hasAccess: state.hasAccess),
-            const SizedBox(height: 16),
-            _UidSection(uid: state.uid),
-            const SizedBox(height: 16),
-            _AccessLevelPicker(
-              value: state.level,
-              onChanged: ctrl.setAccessLevel,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 12),
-            _PatchPreviewCard(roles: ctrl.patchRolesPreview),
-            const SizedBox(height: 12),
-            _TenantEmailReadOnly(email: state.tenantEmail),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              subtitle: const Text(
-                'If inactive, user remains in the tenant but is blocked.',
-              ),
-              value: state.active,
-              onChanged: ctrl.setActive,
-            ),
-            const SizedBox(height: 24),
-            _MembershipsCard(
-              loading: state.loadingMemberships,
-              memberships: state.allMemberships,
-              tenantId: state.tenantId,
-              onRefresh: () => ctrl.refreshMemberships(force: true),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Disable access'),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      final ok = await ctrl.save();
+      );
+      if (confirmed != true) return;
+      final success = await ctrl.removeAccess();
+      if (success && context.mounted) Navigator.of(context).pop(true);
+    }
 
-                      if (!ok) {
-                        SnackService.showError('❌ Save failed');
+    Future<void> save() async {
+      final success = await ctrl.save();
+      if (!success || !context.mounted) return;
+      SnackService.showInfo('Application access saved.');
+      Navigator.of(context).pop(true);
+    }
 
-                        return;
-                      }
-
-                      if (context.mounted) {
-                        Navigator.of(context).pop(true);
-                      }
-                    },
-              child: Text(state.saving ? 'Saving…' : 'Save'),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// UI
-// ─────────────────────────────────────────────
-
-class _TenantCard extends StatelessWidget {
-  const _TenantCard({required this.tenantId, required this.hasAccess});
-
-  final String tenantId;
-  final bool hasAccess;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.apartment_outlined),
-            const SizedBox(width: 10),
-            Expanded(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manage user')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Tenant'),
-                  const SizedBox(height: 4),
-                  Text(
-                    tenantId,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  Row(
+                    children: [
+                      const Icon(Icons.business_outlined),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          state.tenantId,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          !state.hasAccess
+                              ? 'No account'
+                              : state.tenantAccountActive
+                              ? 'Active'
+                              : 'Disabled',
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    hasAccess ? 'Access exists.' : 'No access yet.',
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 24),
+                  Text('User ID', style: theme.textTheme.labelSmall),
+                  SelectableText(state.uid, style: theme.textTheme.bodySmall),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UidSection extends StatelessWidget {
-  const _UidSection({required this.uid});
-
-  final String uid;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('User UID', style: textTheme.labelSmall),
-        const SizedBox(height: 4),
-        SelectableText(
-          uid,
-          style: textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Read-only global Firebase uid.',
-          style: textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-        ),
-      ],
-    );
-  }
-}
-
-class _AccessLevelPicker extends StatelessWidget {
-  const _AccessLevelPicker({required this.value, required this.onChanged});
-
-  final AccessLevel value;
-  final ValueChanged<AccessLevel> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return InputDecorator(
-      decoration: const InputDecoration(
-        labelText: 'Access level',
-        border: OutlineInputBorder(),
-        helperText:
-            'Staff access is controlled only by staffRoles. Member sends no staff role.',
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: AccessLevel.values.map((level) {
-          final selected = value == level;
-
-          return ChoiceChip(
-            label: Text(level.label),
-            selected: selected,
-            onSelected: (_) => onChanged(level),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _PatchPreviewCard extends StatelessWidget {
-  const _PatchPreviewCard({required this.roles});
-
-  final List<String> roles;
-
-  @override
-  Widget build(BuildContext context) {
-    final rolesText = roles.isEmpty ? '[]' : roles.toString();
-
-    return Card(
-      elevation: 0,
-      color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: DefaultTextStyle(
-          style: TextStyle(color: Colors.grey.shade800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Backend patch preview',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text('staffRoles: $rolesText'),
-              const SizedBox(height: 6),
-              Text(
-                roles.isEmpty
-                    ? 'Member/client access. No staff role will be sent.'
-                    : 'Staff role: ${roles.first}.',
-                style: TextStyle(color: Colors.grey.shade700),
-              ),
-            ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TenantEmailReadOnly extends StatelessWidget {
-  const _TenantEmailReadOnly({required this.email});
-
-  final String? email;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = (email ?? '').trim();
-
-    return InputDecorator(
-      decoration: const InputDecoration(
-        labelText: 'Tenant email',
-        border: OutlineInputBorder(),
-        helperText:
-            'Read-only. Email comes from tenant auth-user source-of-truth data.',
-      ),
-      child: Text(value.isEmpty ? '—' : value),
-    );
-  }
-}
-
-class _MembershipsCard extends StatelessWidget {
-  const _MembershipsCard({
-    required this.loading,
-    required this.memberships,
-    required this.tenantId,
-    required this.onRefresh,
-  });
-
-  final bool loading;
-
-  final Map<String, AllUserMembership> memberships;
-
-  final String tenantId;
-
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    final entries = memberships.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-
-    return Card(
-      elevation: 0,
-      color: Colors.grey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'Tenant memberships',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Refresh this user',
-                  icon: loading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh, size: 18),
-                  onPressed: loading ? null : onRefresh,
-                ),
-              ],
+          const SizedBox(height: 16),
+          Text('Application access', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          appsAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (error, _) => ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: const Text('Unable to load applications'),
+              subtitle: Text('$error'),
+              trailing: IconButton(
+                tooltip: 'Retry',
+                onPressed: () => ref.invalidate(appsProvider),
+                icon: const Icon(Icons.refresh),
+              ),
             ),
-            const SizedBox(height: 8),
-            if (loading && entries.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(8),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  'No tenants yet.',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
+            data: (loadedApps) {
+              final sorted = List<AppProfile>.from(loadedApps)
+                ..sort(
+                  (a, b) => a.displayName.toLowerCase().compareTo(
+                    b.displayName.toLowerCase(),
                   ),
+                );
+              final selectedExists = sorted.any(
+                (app) => app.id.trim().toLowerCase() == selectedApp,
+              );
+              return DropdownButtonFormField<String>(
+                key: ValueKey(selectedApp),
+                initialValue: selectedExists && selectedApp.isNotEmpty
+                    ? selectedApp
+                    : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Application',
+                  border: OutlineInputBorder(),
                 ),
-              )
-            else
-              Column(
-                children: entries.map((entry) {
-                  final rowTenantId = entry.key;
-
-                  final membership = entry.value;
-
-                  final role = membership.role.trim().isEmpty
-                      ? '—'
-                      : membership.role.trim();
-
-                  final email = membership.email?.trim();
-
-                  final subtitle = email == null || email.isEmpty
-                      ? 'Role: $role'
-                      : 'Role: $role · $email';
-
-                  final isCurrentTenant = rowTenantId == tenantId;
-
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      rowTenantId,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isCurrentTenant
-                            ? Colors.blueGrey.shade900
-                            : null,
-                      ),
-                    ),
-                    subtitle: Text(subtitle),
-                    trailing: Icon(
-                      membership.active ? Icons.check_circle : Icons.cancel,
-                      size: 18,
-                      color: membership.active
-                          ? Colors.green
-                          : Colors.orangeAccent,
+                items: sorted.map((app) {
+                  final id = app.id.trim().toLowerCase();
+                  return DropdownMenuItem<String>(
+                    value: id,
+                    enabled: app.active,
+                    child: Text(
+                      app.active
+                          ? app.displayName
+                          : '${app.displayName} (inactive)',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   );
                 }).toList(),
+                onChanged: busy || loading
+                    ? null
+                    : (value) {
+                        if (value != null) ctrl.setAppId(value);
+                      },
+              );
+            },
+          ),
+          if (selectedRegistered &&
+              state.hasAccess &&
+              state.tenantAccountActive) ...[
+            const SizedBox(height: 12),
+            Card.outlined(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Application email',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Used only for $selectedApp.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      hasAppEmail ? appEmail : 'No email registered',
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          emailVerified
+                              ? Icons.verified_outlined
+                              : Icons.info_outline,
+                          size: 18,
+                          color: emailVerified
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            emailVerified
+                                ? 'Verified'
+                                : hasAppEmail
+                                ? 'Not verified'
+                                : 'Not configured',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: canChangeEmail ? changeEmail : null,
+                          icon: Icon(
+                            hasAppEmail ? Icons.edit_outlined : Icons.add,
+                          ),
+                          label: Text(hasAppEmail ? 'Change' : 'Add email'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+            ),
           ],
+          const SizedBox(height: 12),
+          if (loading) const LinearProgressIndicator(),
+          if (!loading && !state.hasAccess)
+            const ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('No tenant account'),
+              subtitle: Text('Create tenant access before assigning an app.'),
+            )
+          else if (!loading && !state.tenantAccountActive)
+            const ListTile(
+              leading: Icon(Icons.lock_outline),
+              title: Text('Tenant account disabled'),
+              subtitle: Text(
+                'Enable the tenant account before editing access.',
+              ),
+            )
+          else if (selectedApp.isEmpty)
+            const Text('Select an application to edit its access.')
+          else if (!selectedRegistered && !appsAsync.isLoading)
+            const Text('This application is unavailable or inactive.')
+          else if (selectedRegistered) ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Allow access'),
+              subtitle: Text(selectedApp),
+              value: state.active,
+              onChanged: canEdit ? ctrl.setActive : null,
+            ),
+            const SizedBox(height: 8),
+            Text('Role', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: AccessLevel.values
+                  .map(
+                    (level) => ChoiceChip(
+                      label: Text(level.label),
+                      selected: state.level == level,
+                      onSelected: canEdit && state.active
+                          ? (_) => ctrl.setAccessLevel(level)
+                          : null,
+                    ),
+                  )
+                  .toList(),
+            ),
+            if (canRemove) ...[
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: disableApp,
+                icon: const Icon(Icons.person_remove_alt_1),
+                label: const Text('Disable this application access'),
+              ),
+            ],
+          ],
+          const SizedBox(height: 16),
+          ExpansionTile(
+            title: const Text('Existing memberships'),
+            subtitle: Text('${state.allMemberships.length} tenant(s)'),
+            trailing: loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.expand_more),
+            children: [
+              if (state.allMemberships.isEmpty)
+                const ListTile(title: Text('No memberships found')),
+              ...state.allMemberships.entries.map((entry) {
+                final membership = entry.value;
+                final appIds = <String>{
+                  ...membership.appMembershipsByApp.keys,
+                  ...membership.staffRolesByApp.keys,
+                }.toList()..sort();
+                return ListTile(
+                  title: Text(entry.key),
+                  subtitle: Text(
+                    '${membership.active ? 'Active' : 'Disabled'}'
+                    '${appIds.isEmpty ? '' : ' · Apps: ${appIds.join(', ')}'}',
+                  ),
+                );
+              }),
+              TextButton.icon(
+                onPressed: loading
+                    ? null
+                    : () => ctrl.refreshMemberships(force: true),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 80),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton.icon(
+            onPressed: canEdit ? save : null,
+            icon: busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(busy ? 'Saving…' : 'Save application access'),
+          ),
         ),
       ),
     );

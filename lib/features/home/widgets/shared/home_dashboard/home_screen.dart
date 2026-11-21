@@ -1,5 +1,6 @@
 // lib/features/home/widgets/shared/home_dashboard/home_screen.dart
 
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +14,6 @@ import 'package:afyakit/features/home/widgets/staff/home_staff_body.dart';
 import 'package:afyakit/features/home/widgets/staff/staff_home_quick_actions.dart';
 
 import 'package:afyakit/core/capabilities/feature_keys.dart';
-import 'package:afyakit/core/tenancy/providers/tenant_profile_providers.dart';
 
 import 'package:afyakit/features/messaging/widgets/messaging_entry_screen.dart';
 
@@ -42,10 +42,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantProfile = ref.watch(tenantProfileProvider).valueOrNull;
+    final appProfile = ref.watch(appProfileProvider).valueOrNull;
 
     final bool messagingEnabled =
-        tenantProfile?.features.enabled(FeatureKeys.messaging) == true;
+        appProfile?.features.enabled(FeatureKeys.messaging) == true;
 
     return AppPage(
       key: ValueKey<String>('home-page-${effectiveEntry.name}'),
@@ -66,7 +66,7 @@ class HomeScreen extends ConsumerWidget {
     return switch (effectiveEntry) {
       EntryMode.member => HomeMemberBody(
         key: ValueKey<String>(
-          'member-home-body-${user?.contactId ?? 'unknown'}',
+          'member-home-body-${user?.accountNumber ?? 'unknown'}',
         ),
         user: user,
       ),
@@ -87,7 +87,7 @@ class HomeScreen extends ConsumerWidget {
     return switch (effectiveEntry) {
       EntryMode.member => MemberHomeQuickActions(
         key: ValueKey<String>(
-          'member-home-quick-actions-${user?.contactId ?? 'unknown'}',
+          'member-home-quick-actions-${user?.accountNumber ?? 'unknown'}',
         ),
         user: user,
         onChat: messagingEnabled ? () => _openChat(context) : null,

@@ -9,22 +9,29 @@ class ChatMemberSnapshot {
   const ChatMemberSnapshot({
     required this.uid,
     required this.name,
-    this.contactId,
     this.accountNumber,
     this.phoneNumber,
   });
 
+  /// Firebase authentication identity.
   final String uid;
+
+  /// Display-name snapshot for messaging.
+  /// Resolved from Native Contact through session identity.
   final String name;
-  final String? contactId;
+
+  /// Canonical Native Contact reference (AC-XXXXXX).
   final String? accountNumber;
+
+  /// Login phone, not the canonical contact phone.
   final String? phoneNumber;
 
   factory ChatMemberSnapshot.fromUser(AuthUser user) {
+    final displayName = user.identity?.displayName?.trim() ?? '';
+
     return ChatMemberSnapshot(
       uid: user.uid.trim(),
-      name: user.computedDisplayName.trim(),
-      contactId: _cleanNullable(user.contactId),
+      name: displayName.isNotEmpty ? displayName : user.uid.trim(),
       accountNumber: _cleanNullable(user.accountNumber),
       phoneNumber: _cleanNullable(user.phoneNumber),
     );
@@ -34,7 +41,6 @@ class ChatMemberSnapshot {
     return ChatMemberSnapshot(
       uid: _clean(map['uid']),
       name: _clean(map['name']),
-      contactId: _cleanNullable(map['contactId']),
       accountNumber: _cleanNullable(map['accountNumber']),
       phoneNumber: _cleanNullable(map['phoneNumber']),
     );
@@ -43,14 +49,12 @@ class ChatMemberSnapshot {
   ChatMemberSnapshot copyWith({
     String? uid,
     String? name,
-    String? contactId,
     String? accountNumber,
     String? phoneNumber,
   }) {
     return ChatMemberSnapshot(
       uid: uid ?? this.uid,
       name: name ?? this.name,
-      contactId: contactId ?? this.contactId,
       accountNumber: accountNumber ?? this.accountNumber,
       phoneNumber: phoneNumber ?? this.phoneNumber,
     );
@@ -60,7 +64,6 @@ class ChatMemberSnapshot {
     return <String, dynamic>{
       'uid': uid,
       'name': name,
-      if (contactId != null) 'contactId': contactId,
       if (accountNumber != null) 'accountNumber': accountNumber,
       if (phoneNumber != null) 'phoneNumber': phoneNumber,
     };
@@ -71,8 +74,7 @@ class ChatMemberSnapshot {
   }
 
   static String? _cleanNullable(Object? value) {
-    final String cleaned = _clean(value);
-
+    final cleaned = _clean(value);
     return cleaned.isEmpty ? null : cleaned;
   }
 
@@ -82,13 +84,12 @@ class ChatMemberSnapshot {
         other is ChatMemberSnapshot &&
             other.uid == uid &&
             other.name == name &&
-            other.contactId == contactId &&
             other.accountNumber == accountNumber &&
             other.phoneNumber == phoneNumber;
   }
 
   @override
   int get hashCode {
-    return Object.hash(uid, name, contactId, accountNumber, phoneNumber);
+    return Object.hash(uid, name, accountNumber, phoneNumber);
   }
 }

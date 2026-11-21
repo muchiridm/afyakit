@@ -44,6 +44,10 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
   Uri insuranceMembershipDelete(String membershipId) =>
       _uri('insurance/memberships/${_seg(membershipId)}');
 
+  Uri insuranceClaimPackCreateCanonical() => _uri('insurance/claim-packs');
+  Uri insuranceClaimPackById(String claimPackId) =>
+      _uri('insurance/claim-packs/${_seg(claimPackId)}');
+
   Uri insuranceClaimPacksList({
     String? search,
     String? membershipId,
@@ -124,141 +128,32 @@ extension AfyaKitInsuranceRoutes on AfyaKitRoutes {
       query['is_active'] = isActive ? 'true' : 'false';
     }
 
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs',
-      query: query,
-    );
+    query['profile_id'] = profileId;
+    return _uri('insurance/claim-packs', query: query);
   }
 
   Uri insuranceClaimPackGet({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 
   Uri insuranceClaimPackCreate({required String profileId}) {
-    return _uri('insurance/profiles/${_seg(profileId)}/claim-packs');
+    return _uri('insurance/claim-packs');
   }
 
   Uri insuranceClaimPackUpdate({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 
   Uri insuranceClaimPackDelete({
     required String profileId,
     required String claimPackId,
   }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/claim-packs/${_seg(claimPackId)}',
-    );
-  }
-
-  Uri insuranceDocumentsList({
-    String? search,
-    String? profileId,
-    String? claimPackId,
-    String? documentType,
-    String? membershipId,
-    String? payerContactId,
-    String? status,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) {
-    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
-
-    void add(String key, String? value) {
-      final v = (value ?? '').trim();
-      if (v.isNotEmpty) query[key] = v;
-    }
-
-    add('search', search);
-    add('profile_id', profileId);
-    add('claim_pack_id', claimPackId);
-    add('document_type', documentType);
-    add('membership_id', membershipId);
-    add('payer_contact_id', payerContactId);
-    add('status', status);
-
-    if (isActive != null) {
-      query['is_active'] = isActive ? 'true' : 'false';
-    }
-
-    return _uri('insurance/documents', query: query);
-  }
-
-  Uri insuranceDocumentsListForProfile({
-    required String profileId,
-    String? search,
-    String? claimPackId,
-    String? documentType,
-    String? membershipId,
-    String? payerContactId,
-    String? status,
-    bool? isActive,
-    int perPage = 50,
-    int page = 1,
-  }) {
-    final query = <String, String>{'per_page': '$perPage', 'page': '$page'};
-
-    void add(String key, String? value) {
-      final v = (value ?? '').trim();
-      if (v.isNotEmpty) query[key] = v;
-    }
-
-    add('search', search);
-    add('claim_pack_id', claimPackId);
-    add('document_type', documentType);
-    add('membership_id', membershipId);
-    add('payer_contact_id', payerContactId);
-    add('status', status);
-
-    if (isActive != null) {
-      query['is_active'] = isActive ? 'true' : 'false';
-    }
-
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/documents',
-      query: query,
-    );
-  }
-
-  Uri insuranceDocumentGet({
-    required String profileId,
-    required String documentId,
-  }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/documents/${_seg(documentId)}',
-    );
-  }
-
-  Uri insuranceDocumentCreate({required String profileId}) {
-    return _uri('insurance/profiles/${_seg(profileId)}/documents');
-  }
-
-  Uri insuranceDocumentUpdate({
-    required String profileId,
-    required String documentId,
-  }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/documents/${_seg(documentId)}',
-    );
-  }
-
-  Uri insuranceDocumentDelete({
-    required String profileId,
-    required String documentId,
-  }) {
-    return _uri(
-      'insurance/profiles/${_seg(profileId)}/documents/${_seg(documentId)}',
-    );
+    return _uri('insurance/claim-packs/${_seg(claimPackId)}');
   }
 }

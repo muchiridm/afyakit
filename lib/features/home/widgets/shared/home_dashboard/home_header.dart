@@ -1,14 +1,14 @@
 // lib/core/home/widgets/shared/home_dashboard/home_header.dart
 
 import 'package:afyakit/app/models/app_profile.dart';
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_user/widgets/user_badge.dart';
 import 'package:afyakit/core/auth/shared/widgets/auth_button.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/features/home/enums/entry_mode.dart';
 import 'package:afyakit/features/home/widgets/shared/home_shell.dart';
-import 'package:afyakit/features/hq/branding/widgets/app_brand_logo.dart';
+import 'package:afyakit/features/hq/apps/widgets/app_brand_logo.dart';
 import 'package:afyakit/features/inventory/records/deliveries/widgets/delivery_banner.dart';
 import 'package:afyakit/shared/theme/app_shape.dart';
 

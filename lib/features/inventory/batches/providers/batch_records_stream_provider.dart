@@ -1,4 +1,4 @@
-import 'package:afyakit/app/providers/app_profile_provider.dart';
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/features/inventory/batches/models/batch_record.dart';
 import 'package:afyakit/shared/utils/firestore_instance.dart';
 import 'package:flutter/foundation.dart';

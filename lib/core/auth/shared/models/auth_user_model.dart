@@ -1,10 +1,124 @@
 // lib/core/auth/shared/models/auth_user_model.dart
 
 import 'package:flutter/foundation.dart';
-
 import 'package:afyakit/core/auth/auth_user/extensions/staff_role_x.dart';
 import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
-import 'package:afyakit/core/auth/shared/models/auth_user_zoho_link.dart';
+
+enum AppMembershipStatus {
+  active,
+  disabled;
+
+  static AppMembershipStatus? tryParse(Object? raw) {
+    final value = (raw ?? '').toString().trim().toLowerCase();
+    return switch (value) {
+      'active' => AppMembershipStatus.active,
+      'disabled' => AppMembershipStatus.disabled,
+      _ => null,
+    };
+  }
+
+  String get wire => name;
+}
+
+@immutable
+class AppMembership {
+  const AppMembership({required this.status, this.updatedAt});
+  final AppMembershipStatus status;
+  final String? updatedAt;
+  bool get isActive => status == AppMembershipStatus.active;
+
+  static AppMembership? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(
+      raw.map((key, value) => MapEntry(key.toString(), value)),
+    );
+    final status = AppMembershipStatus.tryParse(map['status']);
+    if (status == null) return null;
+    final rawUpdatedAt = map['updatedAt'];
+    final updatedAt = rawUpdatedAt?.toString().trim();
+    return AppMembership(
+      status: status,
+      updatedAt: updatedAt == null || updatedAt.isEmpty ? null : updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'status': status.wire,
+    if (updatedAt != null) 'updatedAt': updatedAt,
+  };
+}
+
+/// A verified address for a single app; never a Firebase Auth identity.
+
+@immutable
+class AppEmail {
+  const AppEmail({required this.emailLower, this.verifiedAt});
+  final String emailLower;
+  final String? verifiedAt;
+  bool get verified => true;
+
+  static AppEmail? tryParse(Object? raw) {
+    if (raw is! Map || raw['verified'] != true) return null;
+    final email = (raw['emailLower'] ?? '').toString().trim().toLowerCase();
+    if (email.isEmpty || !email.contains('@')) return null;
+    return AppEmail(
+      emailLower: email,
+      verifiedAt: raw['verifiedAt']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'emailLower': emailLower,
+    'verified': true,
+    if (verifiedAt != null) 'verifiedAt': verifiedAt,
+  };
+}
+
+@immutable
+class SessionIdentity {
+  const SessionIdentity({required this.linkVerified, this.accountNumber,
+    this.displayName, this.verifiedPhone, this.verifiedEmail});
+  final bool linkVerified;
+  final String? accountNumber;
+  final String? displayName;
+  final String? verifiedPhone;
+  final String? verifiedEmail;
+
+  factory SessionIdentity.fromMap(Object? value) {
+    final map = value is Map ? value : const <String, dynamic>{};
+    String? str(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+    return SessionIdentity(
+      linkVerified: map['linkVerified'] == true,
+      accountNumber: str(map['accountNumber']),
+      displayName: str(map['displayName']),
+      verifiedPhone: str(map['verifiedPhone']),
+      verifiedEmail: str(map['verifiedEmail']),
+    );
+  }
+}
+
+@immutable
+class SessionOnboarding {
+  const SessionOnboarding({required this.required, required this.next, this.missingFields = const []});
+  final bool required;
+  final String next;
+  final List<String> missingFields;
+
+  factory SessionOnboarding.fromMap(Object? value) {
+    if (value is! Map) throw const FormatException('Session missing onboarding state');
+    final next = value['next'];
+    if (next is! String || !const {'done', 'verify_email', 'complete_contact', 'link_contact'}.contains(next)) {
+      throw const FormatException('Invalid session onboarding state');
+    }
+    return SessionOnboarding(
+      required: value['required'] == true || next != 'done',
+      next: next,
+      missingFields: value['missingFields'] is List
+          ? (value['missingFields'] as List).whereType<String>().toList(growable: false)
+          : const [],
+    );
+  }
+}
 
 @immutable
 class AuthUser {
@@ -18,20 +132,12 @@ class AuthUser {
     this.lastName,
     this.displayName,
     this.avatarUrl,
-    this.email,
-    this.emailLower,
-    this.emailPendingLower,
-    this.emailPendingAt,
-    this.emailVerificationRequestedAt,
     this.phoneHistory = const [],
-    this.emailHistory = const [],
     this.phoneVerified = false,
     this.phoneVerifiedAt,
     this.phoneClaimed = false,
     this.phoneClaimedAt,
     this.phoneSatisfied,
-    this.emailVerified = false,
-    this.emailVerifiedAt,
     this.isCompany = false,
     this.companyName,
     this.accountNumber,
@@ -39,11 +145,13 @@ class AuthUser {
     this.previousUids = const <String>[],
     this.recoveredFromAccountNumber,
     this.recoveredAt,
-    this.zoho,
+    this.identity,
+    this.onboarding,
     this.claims,
     this.isSuperAdmin = false,
-    List<StaffRole> staffRoles = const [],
     this.staffRolesByApp = const {},
+    this.appMembershipsByApp = const {},
+    this.emailsByApp = const {},
     this.activeAppId,
     this.recoveryRequired = false,
     this.disabledAt,
@@ -51,49 +159,35 @@ class AuthUser {
     this.disabledByUid,
     this.createdAt,
     this.updatedAt,
-  }) : legacyStaffRoles = staffRoles;
-
+  });
   final String uid;
   final String? phoneNumber;
   final String tenantId;
-
   final UserStatus status;
   final List<String> stores;
-
   final String? firstName;
   final String? lastName;
   final String? displayName;
   final String? avatarUrl;
-
-  final String? email;
-  final String? emailLower;
-
-  final String? emailPendingLower;
-  final String? emailPendingAt;
-  final String? emailVerificationRequestedAt;
-
   final List<String> phoneHistory;
-  final List<String> emailHistory;
-
   final bool phoneVerified;
   final String? phoneVerifiedAt;
-
   final bool phoneClaimed;
   final String? phoneClaimedAt;
-
   final bool? phoneSatisfied;
-
-  final bool emailVerified;
-  final String? emailVerifiedAt;
-
   final bool isCompany;
   final String? companyName;
 
   /// Current account number.
+
   ///
+
   /// New format:
+
   ///   AC-XXXXXX
+
   ///
+
   /// Legacy numeric values may exist for older/recovered users.
   final String? accountNumber;
 
@@ -101,8 +195,11 @@ class AuthUser {
   final List<String> previousAccountNumbers;
 
   /// Historical Firebase UIDs associated with recovered identity.
+
   ///
+
   /// UID should not be the long-term business identity, but this helps
+
   /// debug/reconcile old records.
   final List<String> previousUids;
 
@@ -112,25 +209,41 @@ class AuthUser {
   /// Recovery success timestamp, ISO string.
   final String? recoveredAt;
 
-  final AuthUserZohoLink? zoho;
-
+  final SessionIdentity? identity;
+  final SessionOnboarding? onboarding;
   final Map<String, dynamic>? claims;
   final bool isSuperAdmin;
-  /// Retained for reading old records only; never grants access.
-  final List<StaffRole> legacyStaffRoles;
+
   final Map<String, List<StaffRole>> staffRolesByApp;
+
+  /// Canonical application membership by app.
+
+  /// A user may belong to multiple apps. Membership does not imply staff access.
+  final Map<String, AppMembership> appMembershipsByApp;
+  final Map<String, AppEmail> emailsByApp;
+  AppEmail? emailForApp(String appId) =>
+      emailsByApp[appId.trim().toLowerCase()];
+  String? get activeAppEmailLower =>
+      activeAppId == null ? null : emailForApp(activeAppId!)?.emailLower;
 
   /// Client context, set by the active-app providers, never trusted from JSON.
   final String? activeAppId;
-
   List<StaffRole> rolesForApp(String appId) => List<StaffRole>.unmodifiable(
     staffRolesByApp[appId.trim().toLowerCase()] ?? const <StaffRole>[],
   );
+  AppMembership? membershipForApp(String appId) {
+    final clean = appId.trim().toLowerCase();
+    if (clean.isEmpty) return null;
+    return appMembershipsByApp[clean];
+  }
 
-  List<StaffRole> get staffRoles => status == UserStatus.active && activeAppId != null
+  bool hasAppMembership(String appId) => membershipForApp(appId) != null;
+  bool hasActiveAppMembership(String appId) =>
+      membershipForApp(appId)?.isActive == true;
+  List<StaffRole> get staffRoles =>
+      status == UserStatus.active && activeAppId != null
       ? rolesForApp(activeAppId!)
       : const <StaffRole>[];
-
   AuthUser forApp(String appId) {
     final clean = appId.trim().toLowerCase();
     if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(clean)) {
@@ -139,24 +252,51 @@ class AuthUser {
     return copyWith(activeAppId: clean);
   }
 
+  static Map<String, AppEmail> _parseAppEmails(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, AppEmail>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final appId = (entry.key as String).trim().toLowerCase();
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) continue;
+      final email = AppEmail.tryParse(entry.value);
+      if (email != null) result[appId] = email;
+    }
+    return Map<String, AppEmail>.unmodifiable(result);
+  }
+
+  static Map<String, AppMembership> _parseAppMemberships(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, AppMembership>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final appId = (entry.key as String).trim().toLowerCase();
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(appId)) continue;
+      final membership = AppMembership.tryParse(entry.value);
+      if (membership == null) continue;
+      result[appId] = membership;
+    }
+    return Map<String, AppMembership>.unmodifiable(result);
+  }
+
   static Map<String, List<StaffRole>> _parseAppRoles(Object? raw) {
     if (raw is! Map) return const {};
     final result = <String, List<StaffRole>>{};
     for (final entry in raw.entries) {
       if (entry.key is! String) continue;
-      final key = entry.key as String;
+      final key = (entry.key as String).trim().toLowerCase();
       if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(key)) continue;
-      result[key] = List<StaffRole>.unmodifiable(_normalizeStaffRoles(entry.value));
+      result[key] = List<StaffRole>.unmodifiable(
+        _normalizeStaffRoles(entry.value),
+      );
     }
     return Map<String, List<StaffRole>>.unmodifiable(result);
   }
 
   final bool recoveryRequired;
-
   final String? disabledAt;
   final String? disabledReason;
   final String? disabledByUid;
-
   final String? createdAt;
   final String? updatedAt;
 
@@ -176,7 +316,6 @@ class AuthUser {
 
   static List<String> _normalizeStores(Object? raw) {
     final out = <String>[];
-
     if (raw is List) {
       for (final v in raw) {
         final s = _cleanStr(v);
@@ -188,35 +327,28 @@ class AuthUser {
         if (s.isNotEmpty) out.add(s);
       }
     }
-
     final seen = <String>{};
     return out.where(seen.add).toList(growable: false);
   }
 
   static List<String> _normalizeStringList(Object? raw) {
     if (raw is! List) return const <String>[];
-
     final out = <String>[];
-
     for (final v in raw) {
       final s = _cleanStr(v);
       if (s.isNotEmpty) out.add(s);
     }
-
     final seen = <String>{};
     return out.where(seen.add).toList(growable: false);
   }
 
   static List<String> _normalizeUpperStringList(Object? raw) {
     if (raw is! List) return const <String>[];
-
     final out = <String>[];
-
     for (final v in raw) {
       final s = _cleanStr(v).toUpperCase();
       if (s.isNotEmpty) out.add(s);
     }
-
     final seen = <String>{};
     return out.where(seen.add).toList(growable: false);
   }
@@ -225,28 +357,23 @@ class AuthUser {
     if (raw is Map) {
       return raw.map((k, v) => MapEntry(k.toString(), v));
     }
-
     return null;
   }
 
   static List<StaffRole> _normalizeStaffRoles(Object? raw) {
     if (raw is! List) return const <StaffRole>[];
-
     final out = <StaffRole>[];
-
     for (final v in raw) {
       final name = _cleanStr(v);
       final parsed = StaffRole.tryParse(name);
       if (parsed != null) out.add(parsed);
     }
-
     final seen = <String>{};
     return out.where((r) => seen.add(r.name)).toList(growable: false);
   }
 
   static UserStatus _parseStatus(Object? raw) {
     final s = _cleanStr(raw).toLowerCase();
-
     try {
       return UserStatus.fromString(s.isEmpty ? 'active' : s);
     } catch (_) {
@@ -268,15 +395,12 @@ class AuthUser {
   }
 
   bool get isStaffResolved => staffRoles.isNotEmpty;
-
   bool get isMemberResolved => !isStaffResolved;
-
   bool get hasRecoveryTrail {
     return previousAccountNumbers.isNotEmpty ||
         previousUids.isNotEmpty ||
         (recoveredFromAccountNumber ?? '').trim().isNotEmpty ||
-        (recoveredAt ?? '').trim().isNotEmpty ||
-        (zoho?.previousAccountNumbers.isNotEmpty ?? false);
+        (recoveredAt ?? '').trim().isNotEmpty;
   }
 
   List<String> get allKnownAccountNumbers {
@@ -285,43 +409,32 @@ class AuthUser {
       ...previousAccountNumbers,
       if ((recoveredFromAccountNumber ?? '').trim().isNotEmpty)
         recoveredFromAccountNumber!.trim(),
-      ...?zoho?.previousAccountNumbers,
     ];
-
     final seen = <String>{};
     return out.where((x) => seen.add(x)).toList(growable: false);
   }
 
-  String? get contactId {
-    final id = zoho?.contactId.trim();
-    if (id == null || id.isEmpty) return null;
-    return id;
-  }
-
+  /// Transitional alias; resolves to the Native Contact, not Zoho.
   String get computedDisplayName {
     final dn = (displayName ?? '').trim();
+    if (identity?.displayName != null && identity!.displayName!.isNotEmpty) return identity!.displayName!;
     if (dn.isNotEmpty) return dn;
-
     final f = (firstName ?? '').trim();
     final l = (lastName ?? '').trim();
     final name = ('$f $l').trim();
     if (name.isNotEmpty) return name;
-
     if (isCompany) {
       final cn = (companyName ?? '').trim();
       if (cn.isNotEmpty) return cn;
     }
-
     final pn = (phoneNumber ?? '').trim();
     if (pn.isNotEmpty) return pn;
-
     return uid;
   }
 
   bool get isPhoneSatisfiedResolved {
     final explicit = phoneSatisfied;
     if (explicit != null) return explicit;
-
     return _computePhoneSatisfied(
       phoneNumber: phoneNumber,
       phoneVerified: phoneVerified,
@@ -329,119 +442,41 @@ class AuthUser {
     );
   }
 
-  bool get hasVerifiedEmail {
-    final el = (emailLower ?? '').trim();
-    final e = (email ?? '').trim();
-    return emailVerified == true && (el.isNotEmpty || e.isNotEmpty);
-  }
-
-  bool get hasPendingEmail => (emailPendingLower ?? '').trim().isNotEmpty;
-
-  String? get bestVerifiedEmailLower {
-    final el = (emailLower ?? '').trim().toLowerCase();
-    if (el.isNotEmpty) return el;
-
-    final e = (email ?? '').trim().toLowerCase();
-    return e.isNotEmpty ? e : null;
-  }
-
-  String? get bestEmailForDisplay {
-    final verified = bestVerifiedEmailLower;
-    if (verified != null) return verified;
-
-    final pending = (emailPendingLower ?? '').trim().toLowerCase();
-    return pending.isNotEmpty ? pending : null;
-  }
-
-  bool get needsEmailVerificationResolved => hasPendingEmail;
-
-  bool get hasEmail => hasVerifiedEmail || hasPendingEmail;
-
-  bool get needsEmailVerification => needsEmailVerificationResolved;
-
-  String? get bestEmailLower {
-    final v = bestVerifiedEmailLower;
-    if (v != null) return v;
-
-    final p = (emailPendingLower ?? '').trim().toLowerCase();
-    return p.isNotEmpty ? p : null;
-  }
-
+  bool get hasVerifiedEmail => activeAppEmailLower != null;
+  String? get bestVerifiedEmailLower => activeAppEmailLower;
+  String? get bestEmailForDisplay => activeAppEmailLower;
+  String? get bestEmailLower => activeAppEmailLower;
+  bool get hasEmail => hasVerifiedEmail;
   bool get isDisabled => status == UserStatus.disabled;
-
   bool get hasRecoveryRequirement => recoveryRequired == true;
 
-  factory AuthUser.fromMap(Map<String, dynamic> json, {bool allowZoho = true}) {
+  factory AuthUser.fromMap(Map<String, dynamic> json) {
     final uid = _cleanStr(json['uid']);
     final tenant = _cleanStr(json['tenantId']);
-
     if (uid.isEmpty) throw ArgumentError('AuthUser requires uid');
     if (tenant.isEmpty) throw ArgumentError('AuthUser requires tenantId');
-
     final phone = _optStr(json['phoneNumber']);
-
     final claims = _normalizeClaims(json['claims']);
     final isSuperAdmin = _bool(json['isSuperAdmin']);
-    final staffRoles = _normalizeStaffRoles(json['staffRoles']);
-
     final phoneVerified = _bool(json['phoneVerified']);
     final phoneClaimed = _bool(json['phoneClaimed']);
-
-    final emailVerified = _bool(json['emailVerified']);
     final isCompany = _bool(json['isCompany']);
     final recoveryRequired = _bool(json['recoveryRequired']);
-
-    final emailRaw = _optStr(json['email']);
-    final emailLowerRaw = _optStr(json['emailLower']);
-    final email = emailRaw?.toLowerCase();
-    final emailLower = (emailLowerRaw ?? emailRaw)?.toLowerCase();
-
-    final pendingRaw = _optStr(json['emailPendingLower']);
-    final emailPendingLower = pendingRaw?.toLowerCase();
-    final emailPendingAt = _optStr(json['emailPendingAt']);
-    final emailVerificationRequestedAt = _optStr(
-      json['emailVerificationRequestedAt'],
-    );
-
     final phoneSatisfiedRaw = json['phoneSatisfied'];
     final bool? phoneSatisfied = phoneSatisfiedRaw == null
         ? null
         : _bool(phoneSatisfiedRaw);
-
     final accountNumber =
         _optUpperStr(json['accountNumber']) ??
         _optUpperStr(json['account_number']);
-
     final previousAccountNumbers = _normalizeUpperStringList(
       json['previousAccountNumbers'],
     );
-
     final previousUids = _normalizeStringList(json['previousUids']);
-
     final recoveredFromAccountNumber = _optUpperStr(
       json['recoveredFromAccountNumber'],
     );
-
     final recoveredAt = _optStr(json['recoveredAt']);
-
-    AuthUserZohoLink? zoho;
-
-    if (allowZoho) {
-      final rawZoho = json['zoho'];
-
-      if (rawZoho is Map) {
-        try {
-          zoho = AuthUserZohoLink.fromMap(
-            Map<String, dynamic>.from(
-              rawZoho.map((k, v) => MapEntry(k.toString(), v)),
-            ),
-          );
-        } catch (_) {
-          zoho = null;
-        }
-      }
-    }
-
     return AuthUser(
       uid: uid,
       phoneNumber: phone,
@@ -452,20 +487,12 @@ class AuthUser {
       lastName: _optStr(json['lastName']),
       displayName: _optStr(json['displayName']),
       avatarUrl: _optStr(json['avatarUrl']),
-      email: email,
-      emailLower: emailLower,
-      emailPendingLower: emailPendingLower,
-      emailPendingAt: emailPendingAt,
-      emailVerificationRequestedAt: emailVerificationRequestedAt,
       phoneHistory: _normalizeStringList(json['phoneHistory']),
-      emailHistory: _normalizeStringList(json['emailHistory']),
       phoneVerified: phoneVerified,
       phoneVerifiedAt: _optStr(json['phoneVerifiedAt']),
       phoneClaimed: phoneClaimed,
       phoneClaimedAt: _optStr(json['phoneClaimedAt']),
       phoneSatisfied: phoneSatisfied,
-      emailVerified: emailVerified,
-      emailVerifiedAt: _optStr(json['emailVerifiedAt']),
       isCompany: isCompany,
       companyName: _optStr(json['companyName']),
       accountNumber: accountNumber,
@@ -473,11 +500,15 @@ class AuthUser {
       previousUids: previousUids,
       recoveredFromAccountNumber: recoveredFromAccountNumber,
       recoveredAt: recoveredAt,
-      zoho: zoho,
+      identity: json['identity'] is Map ? SessionIdentity.fromMap(json['identity']) : null,
+      onboarding: json['onboarding'] is Map
+          ? SessionOnboarding.fromMap(json['onboarding'])
+          : null,
       claims: claims,
       isSuperAdmin: isSuperAdmin,
-      staffRoles: staffRoles,
       staffRolesByApp: _parseAppRoles(json['staffRolesByApp']),
+      appMembershipsByApp: _parseAppMemberships(json['appMembershipsByApp']),
+      emailsByApp: _parseAppEmails(json['emailsByApp']),
       recoveryRequired: recoveryRequired,
       disabledAt: _optStr(json['disabledAt']),
       disabledReason: _optStr(json['disabledReason']),
@@ -487,10 +518,8 @@ class AuthUser {
     );
   }
 
-  factory AuthUser.fromJson(
-    Map<String, dynamic> json, {
-    bool allowZoho = true,
-  }) => AuthUser.fromMap(json, allowZoho: allowZoho);
+  factory AuthUser.fromJson(Map<String, dynamic> json) =>
+      AuthUser.fromMap(json);
 
   AuthUser copyWith({
     UserStatus? status,
@@ -499,20 +528,12 @@ class AuthUser {
     String? lastName,
     String? displayName,
     String? avatarUrl,
-    String? email,
-    String? emailLower,
-    String? emailPendingLower,
-    String? emailPendingAt,
-    String? emailVerificationRequestedAt,
     List<String>? phoneHistory,
-    List<String>? emailHistory,
     bool? phoneVerified,
     String? phoneVerifiedAt,
     bool? phoneClaimed,
     String? phoneClaimedAt,
     bool? phoneSatisfied,
-    bool? emailVerified,
-    String? emailVerifiedAt,
     bool? isCompany,
     String? companyName,
     String? accountNumber,
@@ -520,11 +541,13 @@ class AuthUser {
     List<String>? previousUids,
     String? recoveredFromAccountNumber,
     String? recoveredAt,
-    AuthUserZohoLink? zoho,
+    SessionIdentity? identity,
+    SessionOnboarding? onboarding,
     Map<String, dynamic>? claims,
     bool? isSuperAdmin,
-    List<StaffRole>? staffRoles,
     Map<String, List<StaffRole>>? staffRolesByApp,
+    Map<String, AppMembership>? appMembershipsByApp,
+    Map<String, AppEmail>? emailsByApp,
     String? activeAppId,
     bool? recoveryRequired,
     String? disabledAt,
@@ -543,21 +566,12 @@ class AuthUser {
       lastName: lastName ?? this.lastName,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
-      email: email ?? this.email,
-      emailLower: emailLower ?? this.emailLower,
-      emailPendingLower: emailPendingLower ?? this.emailPendingLower,
-      emailPendingAt: emailPendingAt ?? this.emailPendingAt,
-      emailVerificationRequestedAt:
-          emailVerificationRequestedAt ?? this.emailVerificationRequestedAt,
       phoneHistory: phoneHistory ?? this.phoneHistory,
-      emailHistory: emailHistory ?? this.emailHistory,
       phoneVerified: phoneVerified ?? this.phoneVerified,
       phoneVerifiedAt: phoneVerifiedAt ?? this.phoneVerifiedAt,
       phoneClaimed: phoneClaimed ?? this.phoneClaimed,
       phoneClaimedAt: phoneClaimedAt ?? this.phoneClaimedAt,
       phoneSatisfied: phoneSatisfied ?? this.phoneSatisfied,
-      emailVerified: emailVerified ?? this.emailVerified,
-      emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
       isCompany: isCompany ?? this.isCompany,
       companyName: companyName ?? this.companyName,
       accountNumber: accountNumber ?? this.accountNumber,
@@ -567,11 +581,13 @@ class AuthUser {
       recoveredFromAccountNumber:
           recoveredFromAccountNumber ?? this.recoveredFromAccountNumber,
       recoveredAt: recoveredAt ?? this.recoveredAt,
-      zoho: zoho ?? this.zoho,
+      identity: identity ?? this.identity,
+      onboarding: onboarding ?? this.onboarding,
       claims: claims ?? this.claims,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
-      staffRoles: staffRoles ?? legacyStaffRoles,
       staffRolesByApp: staffRolesByApp ?? this.staffRolesByApp,
+      appMembershipsByApp: appMembershipsByApp ?? this.appMembershipsByApp,
+      emailsByApp: emailsByApp ?? this.emailsByApp,
       activeAppId: activeAppId ?? this.activeAppId,
       recoveryRequired: recoveryRequired ?? this.recoveryRequired,
       disabledAt: disabledAt ?? this.disabledAt,
@@ -587,44 +603,28 @@ class AuthUser {
     'tenantId': tenantId,
     if (phoneNumber != null) 'phoneNumber': phoneNumber,
     'status': status.wire,
-    'stores': stores,
-    if (firstName != null) 'firstName': firstName,
-    if (lastName != null) 'lastName': lastName,
-    if (displayName != null) 'displayName': displayName,
-    if (avatarUrl != null) 'avatarUrl': avatarUrl,
-    if (email != null) 'email': email,
-    if (emailLower != null) 'emailLower': emailLower,
-    if (emailPendingLower != null) 'emailPendingLower': emailPendingLower,
-    if (emailPendingAt != null) 'emailPendingAt': emailPendingAt,
-    if (emailVerificationRequestedAt != null)
-      'emailVerificationRequestedAt': emailVerificationRequestedAt,
-    if (phoneHistory.isNotEmpty) 'phoneHistory': phoneHistory,
-    if (emailHistory.isNotEmpty) 'emailHistory': emailHistory,
+    // Legacy store assignments must not be written from AuthUser.
+
+    // Native Contact owns name fields.
     if (phoneVerified) 'phoneVerified': true,
     if (phoneVerifiedAt != null) 'phoneVerifiedAt': phoneVerifiedAt,
     if (phoneClaimed) 'phoneClaimed': true,
     if (phoneClaimedAt != null) 'phoneClaimedAt': phoneClaimedAt,
-    if (phoneSatisfied != null) 'phoneSatisfied': phoneSatisfied,
-    if (emailVerified) 'emailVerified': true,
-    if (emailVerifiedAt != null) 'emailVerifiedAt': emailVerifiedAt,
-    if (isCompany) 'isCompany': true,
-    if (companyName != null) 'companyName': companyName,
+
     if (accountNumber != null) 'accountNumber': accountNumber,
-    if (previousAccountNumbers.isNotEmpty)
-      'previousAccountNumbers': previousAccountNumbers,
-    if (previousUids.isNotEmpty) 'previousUids': previousUids,
-    if (recoveredFromAccountNumber != null)
-      'recoveredFromAccountNumber': recoveredFromAccountNumber,
-    if (recoveredAt != null) 'recoveredAt': recoveredAt,
-    if (zoho != null) 'zoho': zoho!.toMap(),
-    if (claims != null && claims!.isNotEmpty) 'claims': claims,
+
     if (isSuperAdmin) 'isSuperAdmin': true,
-    'staffRolesByApp': staffRolesByApp.map((appId, roles) =>
-      MapEntry(appId, roles.map((r) => r.wire).toList(growable: false))),
+    'staffRolesByApp': staffRolesByApp.map(
+      (appId, roles) =>
+          MapEntry(appId, roles.map((r) => r.wire).toList(growable: false)),
+    ),
+    'emailsByApp': emailsByApp.map(
+      (appId, email) => MapEntry(appId, email.toMap()),
+    ),
+    'appMembershipsByApp': appMembershipsByApp.map(
+      (appId, membership) => MapEntry(appId, membership.toMap()),
+    ),
     if (recoveryRequired) 'recoveryRequired': true,
-    if (disabledAt != null) 'disabledAt': disabledAt,
-    if (disabledReason != null) 'disabledReason': disabledReason,
-    if (disabledByUid != null) 'disabledByUid': disabledByUid,
     if (createdAt != null) 'createdAt': createdAt,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };

@@ -55,7 +55,7 @@ class StaffEntryDef {
     if (user == null) return false;
 
     if (enabledByTenantFeature) {
-      final enabled = ref.watch(isModuleEnabledProvider(featureKey));
+      final enabled = ref.watch(isTenantModuleEnabledProvider(featureKey));
       if (!enabled) return false;
     }
 

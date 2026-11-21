@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/shared/models/auth_user_model.dart';
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
@@ -76,12 +77,15 @@ class _ChatConversationScreenState
 
   Future<void> _markRead() async {
     final String tenantId = ref.read(tenantIdProvider);
+    final String appId = ref.read(appIdProvider);
+
     final repository = ref.read(messagingRepositoryProvider);
 
     switch (widget.senderRole) {
       case ChatSenderRole.member:
         await repository.markMemberConversationRead(
           tenantId: tenantId,
+          appId: appId,
           conversationId: widget.conversationId,
         );
         break;
@@ -89,6 +93,7 @@ class _ChatConversationScreenState
       case ChatSenderRole.staff:
         await repository.markStaffConversationRead(
           tenantId: tenantId,
+          appId: appId,
           conversationId: widget.conversationId,
         );
         break;
@@ -97,6 +102,8 @@ class _ChatConversationScreenState
 
   Future<void> _sendMessage(String text) async {
     final String tenantId = ref.read(tenantIdProvider);
+    final String appId = ref.read(appIdProvider);
+
     final repository = ref.read(messagingRepositoryProvider);
 
     try {
@@ -104,6 +111,7 @@ class _ChatConversationScreenState
         case ChatSenderRole.member:
           await repository.sendMemberMessage(
             tenantId: tenantId,
+            appId: appId,
             conversationId: widget.conversationId,
             user: widget.user,
             text: text,
@@ -113,6 +121,7 @@ class _ChatConversationScreenState
         case ChatSenderRole.staff:
           await repository.sendStaffMessage(
             tenantId: tenantId,
+            appId: appId,
             conversationId: widget.conversationId,
             user: widget.user,
             text: text,
@@ -278,7 +287,7 @@ class _EmptyConversation extends StatelessWidget {
               Text(
                 isStaff
                     ? 'This customer has not sent a message yet.'
-                    : 'Ask us about medicines, prescriptions, quotes, payments or delivery.',
+                    : 'Send us a message and we will respond here.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

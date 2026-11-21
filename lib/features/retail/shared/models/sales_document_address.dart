@@ -1,6 +1,6 @@
 // lib/features/retail/shared/models/sales_document_address.dart
 
-import 'package:afyakit/features/delivery_addresses/models/delivery_address.dart';
+import 'package:afyakit/features/records/delivery_addresses/models/delivery_address.dart';
 import 'package:afyakit/shared/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 
