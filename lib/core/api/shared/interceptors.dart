@@ -44,7 +44,7 @@ InterceptorsWrapper requestIdAndTiming() => InterceptorsWrapper(
       final rid = e.requestOptions.extra['rid'];
       final code = e.response?.statusCode ?? 0;
       debugPrint(
-        '❌ ${e.type} $code on ${e.requestOptions.uri} (#$rid) data=${e.response?.data}',
+        '❌ ${e.type} $code on ${e.requestOptions.uri} (#$rid) data=${e.requestOptions.extra['sensitiveResponse'] == true ? '[redacted]' : e.response?.data}',
       );
     }
     handler.next(e);

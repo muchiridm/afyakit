@@ -1,3 +1,7 @@
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:afyakit/core/files/private_file.dart';
 import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/providers.dart';
@@ -11,8 +15,19 @@ final documentsServiceProvider = FutureProvider<DocumentsService>((ref) async {
   final tenantId = ref.watch(tenantIdProvider);
   final appId = ref.watch(appIdProvider);
   final routes = ref.watch(afyakitRoutesProvider);
+  final user = ref.watch(currentUserValueProvider);
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   final api = await ref.watch(afyakitClientFutureProvider.future);
   return DocumentsService(
+    isCurrent: () =>
+        !disposed &&
+        uid != null &&
+        user?.uid == uid &&
+        user?.status == UserStatus.active &&
+        user?.hasActiveAppMembership(appId) == true &&
+        FirebaseAuth.instance.currentUser?.uid == uid,
     api: api,
     routes: routes,
     tenantId: tenantId,
@@ -23,11 +38,13 @@ final documentsServiceProvider = FutureProvider<DocumentsService>((ref) async {
 class DocumentsService {
   const DocumentsService({
     required this.api,
+    required this.isCurrent,
     required this.routes,
     required this.tenantId,
     required this.appId,
     this.uploader = const SignedDocumentUploadService(),
   });
+  final bool Function() isCurrent;
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
   final String tenantId, appId;
@@ -91,6 +108,7 @@ class DocumentsService {
     required String profileId,
     required PickedDocumentFile file,
   }) async {
+    if (!isCurrent()) throw StateError('File session changed');
     file.validate();
     final res = await api.postUri<Object?>(
       routes.recordsDocumentStorageAccess(),
@@ -101,6 +119,7 @@ class DocumentsService {
         'size_bytes': file.sizeBytes,
       },
     );
+    if (!isCurrent()) throw StateError('File session changed');
     final raw = _map(_map(res.data)['storage_access']);
     if (raw['tenant_id'] != tenantId ||
         raw['app_id'] != appId ||
@@ -114,6 +133,7 @@ class DocumentsService {
     required String profileId,
     required DocumentCreateInput input,
   }) async {
+    if (!isCurrent()) throw StateError('File session changed');
     final res = await api.postUri<Object?>(
       routes.recordsDocuments(),
       data: input.toJson(),
@@ -175,17 +195,14 @@ class DocumentsService {
     }
   }
 
-  Future<Uri> download(Document document) async {
+  Future<PrivateFile> download(Document document) {
     _assertScope(document);
-    final res = await api.postUri<Object?>(
+    return downloadPrivateFile(
+      api,
       routes.recordsDocumentStorageDownload(document.documentId),
-      data: <String, Object?>{},
+      document.fileName,
+      isCurrent,
     );
-    final url = Uri.parse(_map(res.data)['download_url'] as String);
-    if (url.scheme != 'https' || url.host.isEmpty || url.userInfo.isNotEmpty) {
-      throw const FormatException('Invalid document download URL');
-    }
-    return url;
   }
 
   void _assertScope(Document doc) {

@@ -6,7 +6,8 @@ import 'package:afyakit/core/api/afyakit/client.dart';
 import 'package:afyakit/core/api/afyakit/routes/routes.dart';
 import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
 import 'package:afyakit/features/clinical/prescriptions/prescription_storage_paths.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:afyakit/core/files/private_file.dart';
+import 'package:afyakit/features/records/documents/document_upload_service.dart';
 
 class PickedPrescriptionFile {
   const PickedPrescriptionFile({
@@ -27,15 +28,15 @@ class PrescriptionsService {
     required this.appId,
     required this.api,
     required this.routes,
-    FirebaseStorage? storage,
-  }) : _storage = storage;
+    required this.isCurrent,
+    this.uploader = const SignedDocumentUploadService(),
+  });
 
   final String appId;
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
-  final FirebaseStorage? _storage;
-
-  FirebaseStorage get storage => _storage ?? FirebaseStorage.instance;
+  final bool Function() isCurrent;
+  final SignedDocumentUploadService uploader;
 
   // ─────────────────────────────────────────────
   // API scope
@@ -50,7 +51,6 @@ class PrescriptionsService {
       queryParameters: {...uri.queryParameters, 'appId': appId},
     );
   }
-
 
   // ─────────────────────────────────────────────
   // Queries
@@ -97,6 +97,7 @@ class PrescriptionsService {
   // ─────────────────────────────────────────────
 
   Future<Prescription> create(PrescriptionCreateInput input) async {
+    if (!isCurrent()) throw StateError('File session changed');
     _requiredId(input.profileId, 'profileId');
     _requiredId(input.prescriptionId, 'prescriptionId');
     final uri = routes.clinicalPrescriptionCreate();
@@ -157,37 +158,6 @@ class PrescriptionsService {
   // Prescription upload authorization
   // ─────────────────────────────────────────────
 
-  Future<Map<String, String>> _uploadMetadata({
-    required String tenantId,
-    required String profileId,
-  }) async {
-    final response = await api.postUri<Object?>(
-      _scopeUri(routes.clinicalPrescriptionStorageAccess()),
-      data: <String, Object?>{'profile_id': profileId},
-    );
-
-    final body = _asMap(response.data);
-    final context = _asMap(body['storage_access']);
-
-    if (context['tenant_id'] != tenantId ||
-        context['profile_id'] != profileId ||
-        context['app_id'] != appId ||
-        context['uploaded_by_uid'] is! String ||
-        context['prescription_id'] is! String ||
-        context['storage_prefix'] is! String) {
-      throw StateError('Storage scope does not match the active API session');
-    }
-
-    return <String, String>{
-      'tenant_id': tenantId,
-      'app_id': appId,
-      'profile_id': profileId,
-      'uploaded_by_uid': _requiredId(context['uploaded_by_uid'] as String, 'uploaded_by_uid'),
-      'prescription_id': _requiredId(context['prescription_id'] as String, 'prescription_id'),
-      'storage_prefix': _requiredId(context['storage_prefix'] as String, 'storage_prefix'),
-    };
-  }
-
   // ─────────────────────────────────────────────
   // Prescription upload
   // ─────────────────────────────────────────────
@@ -210,31 +180,32 @@ class PrescriptionsService {
     final ext = PrescriptionStoragePaths.cleanExt(file.extension);
     final contentType = PrescriptionStoragePaths.contentTypeForExt(ext);
     final fileName = _requiredId(file.fileName, 'fileName');
-    final context = await _uploadMetadata(tenantId: tid, profileId: pid);
-    final prescriptionId = context['prescription_id']!;
-    final prefix = context['storage_prefix']!;
-    final originalPath = PrescriptionStoragePaths.originalPath(
-      storagePrefix: prefix,
-      ext: ext,
+    if (!isCurrent()) throw StateError('File session changed');
+    final response = await api.postUri<Object?>(
+      _scopeUri(routes.clinicalPrescriptionStorageAccess()),
+      data: {
+        'profile_id': pid,
+        'file_name': fileName,
+        'content_type': contentType,
+        'size_bytes': file.sizeBytes,
+      },
     );
-
-    await storage
-        .ref(originalPath)
-        .putData(
-          file.bytes,
-          SettableMetadata(
-            contentType: contentType,
-            customMetadata: {
-              'tenant_id': tid,
-              'app_id': appId,
-              'profile_id': pid,
-              'uploaded_by_uid': context['uploaded_by_uid']!,
-              'prescription_id': prescriptionId,
-              'original_file_name': fileName,
-              'document_type': 'prescription',
-            },
-          ),
-        );
+    if (!isCurrent()) throw StateError('File session changed');
+    final context = _asMap(_asMap(response.data)['storage_access']);
+    if (context['tenant_id'] != tid ||
+        context['app_id'] != appId ||
+        context['profile_id'] != pid ||
+        context['prescription_id'] != context['document_id']) {
+      throw StateError('Upload scope mismatch');
+    }
+    final reservation = DocumentUploadReservation.fromJson(context);
+    final prescriptionId = reservation.documentId;
+    final originalPath = context['storage_path'] as String;
+    await uploader.upload(
+      reservation,
+      PickedDocumentFile(fileName: fileName, extension: ext, bytes: file.bytes),
+    );
+    if (!isCurrent()) throw StateError('File session changed');
 
     return create(
       PrescriptionCreateInput(
@@ -257,33 +228,20 @@ class PrescriptionsService {
   // Prescription download
   // ─────────────────────────────────────────────
 
-  Future<String> downloadUrl({required String prescriptionId}) async {
+  Future<PrivateFile> download({
+    required String prescriptionId,
+    required String fileName,
+  }) {
     final id = _requiredId(prescriptionId, 'prescriptionId');
     if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(id)) {
       throw ArgumentError('Invalid prescription ID');
     }
-    final response = await api.postUri<Object?>(
+    return downloadPrivateFile(
+      api,
       _scopeUri(routes.clinicalPrescriptionStorageDownload(id)),
-      data: <String, Object?>{},
+      fileName,
+      isCurrent,
     );
-
-    final body = _asMap(response.data);
-    final url = body['download_url'];
-
-    if (url is! String || url.trim().isEmpty) {
-      throw const FormatException('Missing download URL');
-    }
-
-    final uri = Uri.tryParse(url);
-
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty) {
-      throw const FormatException('Invalid prescription download URL');
-    }
-
-    return url;
   }
 
   // ─────────────────────────────────────────────

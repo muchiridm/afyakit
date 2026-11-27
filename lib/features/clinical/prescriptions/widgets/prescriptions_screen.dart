@@ -1,3 +1,4 @@
+import 'package:afyakit/core/files/private_file_dialog.dart';
 // lib/features/clinical/prescriptions/widgets/prescriptions_screen.dart
 
 import 'package:afyakit/core/tenancy/providers/tenant_providers.dart';
@@ -12,7 +13,6 @@ import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class PrescriptionsScreen extends ConsumerStatefulWidget {
   const PrescriptionsScreen({
@@ -340,15 +340,11 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     required Prescription prescription,
   }) async {
     try {
-      final url = await controller.downloadUrl(prescription);
+      final file = await controller.download(prescription);
 
       if (!context.mounted) return;
 
-      await showDialog<void>(
-        context: context,
-        builder: (_) =>
-            _PrescriptionPreviewDialog(prescription: prescription, url: url),
-      );
+      await showPrivateFile(context, file);
     } catch (error) {
       if (!context.mounted) return;
       _showSnack(context, error.toString());
@@ -746,161 +742,6 @@ class _PrescriptionMetaDialogState extends State<_PrescriptionMetaDialog> {
   String? _clean(String value) {
     final s = value.trim();
     return s.isEmpty ? null : s;
-  }
-}
-
-class _PrescriptionPreviewDialog extends StatelessWidget {
-  const _PrescriptionPreviewDialog({
-    required this.prescription,
-    required this.url,
-  });
-
-  final Prescription prescription;
-  final String url;
-
-  bool get _isPdf {
-    final type = (prescription.contentType ?? '').toLowerCase();
-    final name = prescription.fileName.toLowerCase();
-    return type.contains('pdf') || name.endsWith('.pdf');
-  }
-
-  bool get _isImage {
-    final type = (prescription.contentType ?? '').toLowerCase();
-    final name = prescription.fileName.toLowerCase();
-
-    return type.startsWith('image/') ||
-        name.endsWith('.jpg') ||
-        name.endsWith('.jpeg') ||
-        name.endsWith('.png') ||
-        name.endsWith('.webp');
-  }
-
-  Future<void> _openExternal(BuildContext context) async {
-    final uri = Uri.tryParse(url);
-
-    if (uri == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid prescription URL')));
-      return;
-    }
-
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open prescription')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final title = prescription.fileName.trim().isEmpty
-        ? 'Prescription'
-        : prescription.fileName.trim();
-
-    return AlertDialog(
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      content: SizedBox(
-        width: 720,
-        height: 520,
-        child: _isImage
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-
-                      return const Center(child: CircularProgressIndicator());
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return _PrescriptionPreviewFallback(
-                        icon: Icons.broken_image_outlined,
-                        title: 'Could not preview image',
-                        subtitle: 'Use Open to view the prescription.',
-                        onOpen: () => _openExternal(context),
-                      );
-                    },
-                  ),
-                ),
-              )
-            : _PrescriptionPreviewFallback(
-                icon: _isPdf
-                    ? Icons.picture_as_pdf_outlined
-                    : Icons.description_outlined,
-                title: _isPdf ? 'PDF prescription' : 'Prescription file',
-                subtitle: 'Use Open to view the file.',
-                onOpen: () => _openExternal(context),
-              ),
-      ),
-      actions: [
-        TextButton.icon(
-          onPressed: () => _openExternal(context),
-          icon: const Icon(Icons.open_in_new),
-          label: const Text('Open'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-      ],
-    );
-  }
-}
-
-class _PrescriptionPreviewFallback extends StatelessWidget {
-  const _PrescriptionPreviewFallback({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onOpen,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 56, color: scheme.primary),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: t.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open file'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

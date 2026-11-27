@@ -1,7 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:afyakit/core/files/private_file_dialog.dart';
 import 'document_model.dart';
 import 'document_upload_service.dart';
 import 'documents_controller.dart';
@@ -164,11 +164,9 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
   });
 
   Future<void> _download(Document doc) => _run((service) async {
-    final uri = await service.download(doc);
-    if (!_sameScope(service, doc.profileId)) return;
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      _message('Unable to open document download.');
-    }
+    final file = await service.download(doc);
+    if (!mounted || !_sameScope(service, doc.profileId)) return;
+    await showPrivateFile(context, file);
   });
 
   Future<void> _edit(Document doc) => _run((service) async {

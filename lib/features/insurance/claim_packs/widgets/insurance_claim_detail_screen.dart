@@ -1,3 +1,4 @@
+import 'package:afyakit/core/files/private_file_dialog.dart';
 // lib/features/insurance/claim_packs/widgets/insurance_claim_detail_screen.dart
 
 import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
@@ -13,7 +14,6 @@ import 'package:afyakit/shared/layout/app_layout.dart';
 import 'package:afyakit/shared/layout/app_page.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class InsuranceClaimDetailScreen extends ConsumerStatefulWidget {
   const InsuranceClaimDetailScreen({
@@ -173,27 +173,12 @@ class _InsuranceClaimDetailScreenState
 
       if (!mounted) return;
 
-      final String url = await svc.downloadUrl(
+      final file = await svc.download(
         prescriptionId: prescription.prescriptionId,
+        fileName: prescription.fileName,
       );
-
-      if (!mounted) return;
-
-      final Uri? uri = Uri.tryParse(url);
-
-      if (uri == null) {
-        _snack('Invalid prescription link.');
-        return;
-      }
-
-      final bool ok = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!ok && mounted) {
-        _snack('Could not open prescription.');
-      }
+      if (!mounted || !svc.isCurrent()) return;
+      await showPrivateFile(context, file);
     } catch (e) {
       if (!mounted) return;
       _snack(e.toString());

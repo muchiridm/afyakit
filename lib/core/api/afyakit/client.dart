@@ -186,12 +186,14 @@ final class AfyaKitClient {
               '${error.response?.statusCode}',
             );
 
-            debugPrint('💥 [api] msg=${error.message}');
+            if (error.requestOptions.extra['sensitiveResponse'] != true) {
+              debugPrint('💥 [api] msg=${error.message}');
 
-            final data = error.response?.data;
+              final data = error.response?.data;
 
-            if (data != null) {
-              debugPrint('💥 [api] body=$data');
+              if (data != null) {
+                debugPrint('💥 [api] body=$data');
+              }
             }
           }
 
@@ -288,9 +290,9 @@ final class AfyaKitClient {
             } catch (retryError) {
               if (kDebugMode) {
                 debugPrint(
-                  '❌ [api] conn-timeout '
-                  'retry failed: '
-                  '$retryError',
+                  options.extra['sensitiveResponse'] == true
+                      ? 'Private file request failed'
+                      : '$retryError',
                 );
               }
             }
@@ -349,8 +351,9 @@ final class AfyaKitClient {
           } catch (retryError) {
             if (kDebugMode) {
               debugPrint(
-                '❌ [api] retry failed: '
-                '$retryError',
+                options.extra['sensitiveResponse'] == true
+                    ? 'Private file request failed'
+                    : '$retryError',
               );
             }
 

@@ -1,3 +1,6 @@
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 // lib/features/clinical/prescriptions/prescriptions_providers.dart
 
 import 'package:afyakit/app/providers/app_profile_providers.dart';
@@ -11,10 +14,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ─────────────────────────────────────────────
 
 final prescriptionsServiceProvider = Provider<PrescriptionsService>((ref) {
+  final user = ref.watch(currentUserValueProvider);
+  final appId = ref.watch(appIdProvider);
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  final api = ref.watch(afyakitClientProvider);
+  if (api == null) throw StateError('API client unavailable');
+  final routes = ref.watch(afyakitRoutesProvider);
   return PrescriptionsService(
-    api: ref.afyakitClient,
-    routes: ref.afyakitRoutes,
-    appId: ref.watch(appIdProvider),
+    isCurrent: () =>
+        !disposed &&
+        uid != null &&
+        user?.uid == uid &&
+        user?.status == UserStatus.active &&
+        user?.hasActiveAppMembership(appId) == true &&
+        FirebaseAuth.instance.currentUser?.uid == uid,
+    api: api,
+    routes: routes,
+    appId: appId,
   );
 });
 

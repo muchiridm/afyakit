@@ -1,3 +1,4 @@
+import 'package:afyakit/core/files/private_file.dart';
 // lib/features/clinical/prescriptions/prescriptions_controller.dart
 
 import 'package:flutter/foundation.dart';
@@ -255,8 +256,11 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
     }
   }
 
-  Future<String> downloadUrl(Prescription prescription) {
-    return _service.downloadUrl(prescriptionId: prescription.prescriptionId);
+  Future<PrivateFile> download(Prescription prescription) {
+    return _service.download(
+      prescriptionId: prescription.prescriptionId,
+      fileName: prescription.fileName,
+    );
   }
 
   void _patchInState(Prescription prescription) {
