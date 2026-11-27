@@ -150,6 +150,9 @@ extension AfyaKitRetailRoutes on AfyaKitRoutes {
   Uri retailMpesaInitiatePayment() => _uri('mpesa/payments/initiate');
 
   /// POST; supported alias retained for existing callers.
+  Uri retailMpesaEligibility(String invoiceId) =>
+      _uri('mpesa/invoices/${_seg(invoiceId)}/eligibility');
+
   Uri retailMpesaStkInitiate() => _uri('mpesa/stk/initiate');
   Uri retailMpesaPaymentStatus(String paymentId) =>
       _uri('mpesa/payments/${_seg(paymentId)}');

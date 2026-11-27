@@ -1,3 +1,4 @@
+import '../../mpesa/providers/payment_access_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
@@ -8,6 +9,8 @@ import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.
 /// bloating the payment list DTO.
 final paymentInvoiceSummaryProvider =
     FutureProvider.family<ZohoInvoice, String>((ref, invoiceId) async {
+      if (!ref.watch(paymentContextProvider).active)
+        throw StateError('Payment access unavailable');
       final id = invoiceId.trim();
       if (id.isEmpty) {
         throw StateError('invoiceId is empty');

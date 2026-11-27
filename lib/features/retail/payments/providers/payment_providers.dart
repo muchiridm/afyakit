@@ -1,3 +1,4 @@
+import '../../mpesa/providers/payment_access_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/retail/invoices/models/zoho_invoice.dart';
@@ -8,6 +9,8 @@ import 'package:afyakit/features/retail/payments/services/zoho_payments_service.
 /// Payments belonging to a specific invoice.
 final invoicePaymentsProvider = FutureProvider.family
     .autoDispose<List<ZohoInvoicePayment>, String>((ref, invoiceId) async {
+      if (!ref.watch(paymentContextProvider).active)
+        throw StateError('Payment access unavailable');
       final id = invoiceId.trim();
       if (id.isEmpty) return const <ZohoInvoicePayment>[];
 
@@ -24,6 +27,8 @@ final invoiceProvider = FutureProvider.family.autoDispose<ZohoInvoice, String>((
   ref,
   invoiceId,
 ) async {
+  if (!ref.watch(paymentContextProvider).active)
+    throw StateError('Payment access unavailable');
   final id = invoiceId.trim();
   if (id.isEmpty) throw StateError('invoiceId is empty');
 
@@ -48,6 +53,8 @@ class PaymentReceiptVm {
 /// Receipt detail assembled from the invoice and its verified payments.
 final paymentReceiptVmProvider = FutureProvider.family
     .autoDispose<PaymentReceiptVm, ReceiptKey>((ref, key) async {
+      if (!ref.watch(paymentContextProvider).active)
+        throw StateError('Payment access unavailable');
       final invoiceId = key.invoiceId.trim();
       final paymentId = key.paymentId.trim();
 

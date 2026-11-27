@@ -1,3 +1,6 @@
+import 'package:uuid/uuid.dart';
+import 'package:dio/dio.dart';
+import '../../mpesa/providers/payment_access_provider.dart';
 // lib/features/retail/payments/controllers/payment_controller.dart
 
 import 'package:afyakit/features/retail/mpesa/models/mpesa_payment.dart';
@@ -13,9 +16,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final paymentControllerProvider =
-    StateNotifierProvider.family<PaymentController, PaymentState, String>(
-      (Ref ref, String invoiceId) => PaymentController(ref, invoiceId),
-    );
+    StateNotifierProvider.family<PaymentController, PaymentState, String>((
+      Ref ref,
+      String invoiceId,
+    ) {
+      final context = ref.watch(paymentContextProvider);
+      return PaymentController(ref, invoiceId, active: context.active);
+    });
 
 @immutable
 class PaymentState {
@@ -122,7 +129,7 @@ class PaymentState {
 }
 
 class PaymentController extends StateNotifier<PaymentState> {
-  PaymentController(this._ref, String invoiceId)
+  PaymentController(this._ref, String invoiceId, {bool active = true})
     : super(
         PaymentState(
           invoiceId: invoiceId.trim(),
@@ -131,13 +138,28 @@ class PaymentController extends StateNotifier<PaymentState> {
       ) {
     final String id = this.invoiceId;
 
-    if (id.isNotEmpty) {
+    if (active && id.isNotEmpty) {
       // ignore: discarded_futures
       load();
     }
   }
 
   final Ref _ref;
+  String? _attemptId;
+  String? _attemptFacts;
+
+  bool _clearDenied(Object error) {
+    if (error is DioException &&
+        [401, 403, 404].contains(error.response?.statusCode)) {
+      state = PaymentState(
+        invoiceId: invoiceId,
+        paymentDraft: ZohoPaymentDraft.today(invoiceId: invoiceId),
+      );
+      _ref.invalidate(mpesaEligibilityProvider(invoiceId));
+      return true;
+    }
+    return false;
+  }
 
   PaymentState get publicState => state;
 
@@ -203,8 +225,10 @@ class PaymentController extends StateNotifier<PaymentState> {
         zohoPaymentsServiceProvider.future,
       );
 
+      if (!mounted) return;
       final ListInvoicePaymentsResult payRes = await svc
           .listInvoicePaymentsWithBalance(invoiceId);
+      if (!mounted) return;
 
       state = state.copyWith(
         loadingPayments: setLoadingFalse ? false : state.loadingPayments,
@@ -217,6 +241,7 @@ class PaymentController extends StateNotifier<PaymentState> {
       // ignore: discarded_futures
       ensureSeededDefaults();
     } catch (error) {
+      if (!mounted || _clearDenied(error)) return;
       state = state.copyWith(
         loadingPayments: setLoadingFalse ? false : state.loadingPayments,
         error: _err(error),
@@ -353,7 +378,7 @@ class PaymentController extends StateNotifier<PaymentState> {
   }
 
   Future<bool> savePayment() async {
-    if (_busy) return false;
+    if (!mounted || _busy) return false;
 
     final String id = invoiceId;
 
@@ -374,19 +399,23 @@ class PaymentController extends StateNotifier<PaymentState> {
       final ZohoPaymentsService svc = await _ref.read(
         zohoPaymentsServiceProvider.future,
       );
+      if (!mounted) return false;
 
       final String editingId = (state.editingPaymentId ?? '').trim();
 
       if (editingId.isNotEmpty) {
         await svc.update(editingId, draft);
+        if (!mounted) return false;
         SnackService.showSuccess('Payment updated');
       } else {
         await svc.create(draft);
+        if (!mounted) return false;
         SnackService.showSuccess('Payment recorded');
       }
 
       final ListInvoicePaymentsResult payRes = await svc
           .listInvoicePaymentsWithBalance(id);
+      if (!mounted) return false;
 
       state = state.copyWith(
         savingPayment: false,
@@ -403,6 +432,7 @@ class PaymentController extends StateNotifier<PaymentState> {
 
       return true;
     } catch (error) {
+      if (!mounted || _clearDenied(error)) return false;
       state = state.copyWith(savingPayment: false, error: _err(error));
 
       SnackService.showError('Failed to save payment');
@@ -424,11 +454,14 @@ class PaymentController extends StateNotifier<PaymentState> {
       final ZohoPaymentsService svc = await _ref.read(
         zohoPaymentsServiceProvider.future,
       );
+      if (!mounted) return false;
 
       await svc.remove(pid);
+      if (!mounted) return false;
 
       final ListInvoicePaymentsResult payRes = await svc
           .listInvoicePaymentsWithBalance(id);
+      if (!mounted) return false;
 
       final bool wasEditingThis = (state.editingPaymentId ?? '').trim() == pid;
 
@@ -451,6 +484,7 @@ class PaymentController extends StateNotifier<PaymentState> {
 
       return true;
     } catch (error) {
+      if (!mounted || _clearDenied(error)) return false;
       state = state.copyWith(deletingPayment: false, error: _err(error));
 
       SnackService.showError('Failed to delete payment');
@@ -463,7 +497,7 @@ class PaymentController extends StateNotifier<PaymentState> {
     num? amount,
     Duration timeout = const Duration(minutes: 2),
   }) async {
-    if (_busy) return false;
+    if (!mounted || _busy) return false;
 
     final String id = invoiceId;
 
@@ -493,7 +527,7 @@ class PaymentController extends StateNotifier<PaymentState> {
 
     if (!_validateAgainstPendingBalance(effectiveAmount)) return false;
 
-    final int amountInt = effectiveAmount.round();
+    final int amountInt = effectiveAmount.toInt();
 
     if (amountInt <= 0) {
       SnackService.showError('Amount must be at least 1');
@@ -503,6 +537,16 @@ class PaymentController extends StateNotifier<PaymentState> {
     if (amount != null && amount.isFinite && amount > 0) {
       patchDraft(amount: amount);
     }
+
+    final facts = '$id|$normalizedPhone|$amountInt';
+    if (_attemptFacts != null && _attemptFacts != facts) {
+      SnackService.showError(
+        'Check the existing payment attempt before starting another.',
+      );
+      return false;
+    }
+    _attemptFacts = facts;
+    _attemptId ??= const Uuid().v4();
 
     state = state.copyWith(
       payingMpesa: true,
@@ -515,27 +559,29 @@ class PaymentController extends StateNotifier<PaymentState> {
         mpesaServiceProvider.future,
       );
 
+      if (!mounted) return false;
       final MpesaPayment payment = await mpesaSvc.initiateAndWait(
         draft: MpesaStkInitiateDraft(
           purpose: 'invoice',
           purposeRef: id,
           amount: amountInt,
           phone: normalizedPhone,
-          clientRequestId: 'stk_${DateTime.now().millisecondsSinceEpoch}',
+          clientRequestId: _attemptId!,
         ),
         timeout: timeout,
+        isCurrent: () => mounted,
         onTick: (MpesaPayment tick) {
-          state = state.copyWith(mpesaLastPayment: tick);
+          if (mounted) state = state.copyWith(mpesaLastPayment: tick);
         },
       );
 
+      if (!mounted) return false;
       state = state.copyWith(mpesaLastPayment: payment);
 
       if (payment.isFailed) {
-        final String message = (payment.resultDesc ?? '').trim();
-        SnackService.showError(
-          message.isEmpty ? 'M-Pesa payment failed' : message,
-        );
+        _attemptId = null;
+        _attemptFacts = null;
+        SnackService.showError('M-Pesa reported that the payment failed.');
 
         state = state.copyWith(payingMpesa: false);
         return false;
@@ -550,14 +596,8 @@ class PaymentController extends StateNotifier<PaymentState> {
         return false;
       }
 
-      final String syncStatus = (payment.zohoSyncStatus ?? '')
-          .trim()
-          .toLowerCase();
-
       SnackService.showSuccess(
-        syncStatus == 'success'
-            ? 'Payment received'
-            : 'Payment received. Syncing to Zoho…',
+        'M-Pesa reported success. Payment verification is pending.',
       );
 
       state = state.copyWith(
@@ -571,12 +611,33 @@ class PaymentController extends StateNotifier<PaymentState> {
         invoiceId: id,
         setLoadingFalse: true,
         resetDefaults: true,
-        errorMessage: 'Payment received, but failed to refresh payments',
+        errorMessage: 'Could not refresh invoice payments',
       );
 
-      return true;
+      return mounted;
     } catch (error) {
-      state = state.copyWith(payingMpesa: false, error: _err(error));
+      if (!mounted || _clearDenied(error)) return false;
+      if (error is DioException) {
+        final data = error.response?.data;
+        final code = data is Map ? data['error'] : null;
+        // These fixed server rejections happen before dispatch. Unknown failures
+        // retain the attempt ID because the provider outcome may be uncertain.
+        if ([
+          'invalid-payment-amount',
+          'invoice-not-payable',
+          'invoice-payment-responsibility-unconfirmed',
+          'payment-rate-limited',
+          'invalid-payment-reference',
+          'unsupported-payment-field',
+        ].contains(code)) {
+          _attemptId = null;
+          _attemptFacts = null;
+        }
+      }
+      state = state.copyWith(
+        payingMpesa: false,
+        error: 'Payment request unavailable',
+      );
 
       SnackService.showError('Failed to initiate M-Pesa STK');
       return false;
@@ -626,8 +687,10 @@ class PaymentController extends StateNotifier<PaymentState> {
   }
 
   bool _validateMpesaAmount(num amount) {
-    if (amount.isNaN || amount.isInfinite || amount <= 0) {
-      SnackService.showError('Amount must be greater than 0');
+    if (!amount.isFinite ||
+        amount <= 0 ||
+        amount != amount.truncateToDouble()) {
+      SnackService.showError('Enter a positive whole-shilling amount');
       return false;
     }
 
@@ -644,14 +707,6 @@ class PaymentController extends StateNotifier<PaymentState> {
     if (amount > pending) {
       SnackService.showError(
         'Amount cannot exceed the balance (${pending.toString()})',
-      );
-
-      return false;
-    }
-
-    if (amount.round() > pending.round()) {
-      SnackService.showError(
-        'Amount cannot exceed the balance (${pending.round()})',
       );
 
       return false;

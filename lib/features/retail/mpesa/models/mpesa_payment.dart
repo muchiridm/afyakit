@@ -13,14 +13,8 @@ class MpesaPayment {
     this.purpose,
     this.purposeRef,
 
-    this.mpesaReceiptNumber,
-    this.resultCode,
-    this.resultDesc,
-
     this.zohoSyncStatus,
-    this.zohoPaymentId,
-    this.zohoSyncError,
-    this.zohoSyncedAt,
+    this.verificationStatus = 'unverified',
   });
 
   /// BE: paymentId
@@ -40,14 +34,8 @@ class MpesaPayment {
   final String? purpose;
   final String? purposeRef;
 
-  final String? mpesaReceiptNumber;
-  final int? resultCode;
-  final String? resultDesc;
-
   final String? zohoSyncStatus;
-  final String? zohoPaymentId;
-  final String? zohoSyncError;
-  final DateTime? zohoSyncedAt;
+  final String verificationStatus;
 
   // ─────────────────────────────
   // Local parsing helpers
@@ -64,13 +52,6 @@ class MpesaPayment {
     if (v is num) return v;
     final s = _s(v);
     return num.tryParse(s) ?? 0;
-  }
-
-  static int? _i(Object? v) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    final s = _s(v);
-    return int.tryParse(s);
   }
 
   factory MpesaPayment.fromJson(JsonMap j) {
@@ -109,11 +90,6 @@ class MpesaPayment {
       );
     }
 
-    final zohoSyncedAtIso = _optStr(src['zohoSyncedAtIso']);
-    final zohoSyncedAt = zohoSyncedAtIso != null
-        ? DateTime.tryParse(zohoSyncedAtIso)
-        : null;
-
     return MpesaPayment(
       id: id,
       status: status,
@@ -124,18 +100,14 @@ class MpesaPayment {
       purpose: _optStr(src['purpose']),
       purposeRef: _optStr(src['purposeRef'] ?? src['purpose_ref']),
 
-      mpesaReceiptNumber: _optStr(src['mpesaReceiptNumber']),
-      resultCode: _i(src['resultCode']),
-      resultDesc: _optStr(src['resultDesc']),
-
       zohoSyncStatus: _optStr(src['zohoSyncStatus']),
-      zohoPaymentId: _optStr(src['zohoPaymentId']),
-      zohoSyncError: _optStr(src['zohoSyncError']),
-      zohoSyncedAt: zohoSyncedAt,
+      verificationStatus: _optStr(src['verificationStatus']) ?? 'unverified',
     );
   }
 
   bool get isTerminal => status == 'stk_success' || status == 'stk_failed';
+
+  /// Provider-reported success only; never proof of verified funds.
   bool get isSuccess => status == 'stk_success';
   bool get isFailed => status == 'stk_failed';
 }

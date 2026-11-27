@@ -22,6 +22,13 @@ class MpesaService {
   final AfyaKitClient _client;
   final AfyaKitRoutes _routes;
 
+  Future<bool> isEligible(String invoiceId) async {
+    final result = await _client.getUri<JsonMap>(
+      _routes.retailMpesaEligibility(invoiceId),
+    );
+    return result.data?['eligible'] == true;
+  }
+
   Future<MpesaInitiateResult> initiateStk(MpesaStkInitiateDraft draft) async {
     final uri = _routes.retailMpesaStkInitiate();
 
@@ -46,13 +53,18 @@ class MpesaService {
     Duration firstDelay = const Duration(milliseconds: 1200),
     Duration interval = const Duration(seconds: 2),
     MpesaTick? onTick,
+    bool Function()? isCurrent,
   }) async {
     final deadline = DateTime.now().add(timeout);
 
     await Future<void>.delayed(firstDelay);
 
     while (true) {
+      if (isCurrent?.call() == false)
+        throw StateError('Payment context changed');
       final p = await getPaymentStatus(paymentId);
+      if (isCurrent?.call() == false)
+        throw StateError('Payment context changed');
       onTick?.call(p);
 
       if (p.isTerminal) return p;
@@ -70,11 +82,12 @@ class MpesaService {
     Duration timeout = const Duration(minutes: 2),
     Duration firstDelay = const Duration(milliseconds: 1200),
     Duration interval = const Duration(seconds: 2),
-    Duration zohoSyncWaitMax = const Duration(seconds: 25),
-    Duration zohoSyncPollInterval = const Duration(seconds: 2),
     MpesaTick? onTick,
+    bool Function()? isCurrent,
   }) async {
+    if (isCurrent?.call() == false) throw StateError('Payment context changed');
     final init = await initiateStk(draft);
+    if (isCurrent?.call() == false) throw StateError('Payment context changed');
 
     final terminal = await pollStatusUntilTerminal(
       paymentId: init.paymentId,
@@ -82,42 +95,10 @@ class MpesaService {
       firstDelay: firstDelay,
       interval: interval,
       onTick: onTick,
-    );
-
-    onTick?.call(terminal);
-
-    if (!terminal.isSuccess) return terminal;
-
-    // ignore: discarded_futures
-    _watchZohoSyncNonBlocking(
-      paymentId: terminal.id,
-      onTick: onTick,
-      maxWait: zohoSyncWaitMax,
-      interval: zohoSyncPollInterval,
+      isCurrent: isCurrent,
     );
 
     return terminal;
-  }
-
-  Future<void> _watchZohoSyncNonBlocking({
-    required String paymentId,
-    required MpesaTick? onTick,
-    required Duration maxWait,
-    required Duration interval,
-  }) async {
-    if (onTick == null) return;
-
-    final deadline = DateTime.now().add(maxWait);
-
-    while (DateTime.now().isBefore(deadline)) {
-      final p = await getPaymentStatus(paymentId);
-      onTick(p);
-
-      final z = (p.zohoSyncStatus ?? '').trim().toLowerCase();
-      if (z == 'success' || z == 'failed') return;
-
-      await Future<void>.delayed(interval);
-    }
   }
 }
 

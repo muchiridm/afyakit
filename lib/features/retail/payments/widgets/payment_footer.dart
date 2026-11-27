@@ -1,3 +1,4 @@
+import '../../mpesa/providers/payment_access_provider.dart';
 // lib/features/retail/payments/widgets/payment_footer.dart
 
 import 'package:afyakit/features/retail/payments/controllers/payment_controller.dart';
@@ -57,6 +58,8 @@ class PaymentFooter extends ConsumerWidget {
     final String? phoneHint =
         _clean(state.suggestedMpesaPhone) ?? _clean(suggestedPhone);
 
+    final bool eligible =
+        ref.watch(mpesaEligibilityProvider(invId)).asData?.value == true;
     final bool busy = state.busy;
     final bool hasBalance = pending != null && pending > 0;
 
@@ -64,7 +67,7 @@ class PaymentFooter extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         const Divider(height: 1),
-        if (hasBalance)
+        if (hasBalance && eligible)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: _MpesaPromptPayCard(
@@ -258,14 +261,14 @@ class PaymentFooter extends ConsumerWidget {
       final dynamic payment = last;
 
       final String status = (payment.status ?? '').toString().trim();
-      final String code = (payment.resultCode ?? '').toString().trim();
-      final String desc = (payment.resultDesc ?? '').toString().trim();
 
       final List<String> parts = <String>[];
 
-      if (status.isNotEmpty) parts.add(status);
-      if (code.isNotEmpty) parts.add('($code)');
-      if (desc.isNotEmpty) parts.add(desc);
+      if (status == 'stk_success') {
+        parts.add('Provider reported success; verification pending');
+      } else if (status.isNotEmpty) {
+        parts.add(status);
+      }
 
       final String text = parts.join(' ');
 
@@ -416,8 +419,11 @@ class _MpesaPromptPayCardState extends State<_MpesaPromptPayCard> {
 
     final num? amount = num.tryParse(_amountCtl.text.trim());
 
-    if (amount == null || amount <= 0) {
-      _showSnack(context, 'Enter a valid amount');
+    if (amount == null ||
+        !amount.isFinite ||
+        amount <= 0 ||
+        amount != amount.truncateToDouble()) {
+      _showSnack(context, 'Enter a positive whole-shilling amount');
       return;
     }
 
