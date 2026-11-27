@@ -1,3 +1,6 @@
+import 'package:afyakit/app/providers/app_profile_providers.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_app_access_section.dart';
+import 'package:afyakit/features/records/health_profiles/widgets/profile_self_app_access_section.dart';
 // lib/features/records/health_profiles/widgets/profile_details_screen.dart
 
 import 'package:afyakit/features/records/health_profiles/profiles_controller.dart';
@@ -446,6 +449,16 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
               padding: EdgeInsets.zero,
               children: [
                 _ProfileHeaderCard(profile: visibleProfile),
+                if (visibleProfile.isActive) ...[
+                  const SizedBox(height: AppShape.gap14),
+                  ProfileSelfAppAccessSection(
+                    profile: visibleProfile,
+                    currentAppId: ref.watch(appIdProvider),
+                    controller: _controller,
+                    busy: state.isSaving,
+                    staffFallback: widget.allowExplicitContactLink && !_memberMode,
+                  ),
+                ],
                 const SizedBox(height: AppShape.gap14),
                 _ProfileDemographicsCard(profile: visibleProfile),
                 const SizedBox(height: AppShape.gap14),

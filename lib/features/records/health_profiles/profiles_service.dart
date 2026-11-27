@@ -23,6 +23,32 @@ final profilesServiceReadyProvider =
       return ProfilesService(api: api, routes: routes);
     });
 
+/// Eligible destination app, supplied by the backend for the authenticated owner.
+class EligibleProfileApp {
+  const EligibleProfileApp({required this.appId, required this.enrolled});
+  final String appId;
+  final bool enrolled;
+
+  factory EligibleProfileApp.fromMap(Map<String, dynamic> map) {
+    final id = (map['app_id'] ?? '').toString().trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(id)) {
+      throw const FormatException('Invalid eligible application');
+    }
+    return EligibleProfileApp(appId: id, enrolled: map['enrolled'] == true);
+  }
+}
+
+class ProfileSharingOptions {
+  const ProfileSharingOptions({
+    required this.apps,
+    required this.consentVersion,
+    required this.consentNotice,
+  });
+  final List<EligibleProfileApp> apps;
+  final String consentVersion;
+  final String consentNotice;
+}
+
 class ProfilesService {
   const ProfilesService({required this.api, required this.routes});
 
@@ -117,6 +143,119 @@ class ProfilesService {
     final response = await api.postUri<Object?>(
       enrolmentUri,
       data: <String, Object?>{'account_number': account},
+    );
+    return _readProfile(_asMap(response.data)['profile']);
+  }
+
+  /// Release an existing profile into another app. A trusted, approved release
+  /// record must already exist server-side; an arbitrary reference is rejected.
+  Future<Profile> addAppEnrolment({
+    required String profileId,
+    required String destinationAppId,
+    required String accountNumber,
+    required String authorizationReference,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    final destination = destinationAppId.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(destination)) {
+      throw ArgumentError('Invalid destination application ID');
+    }
+    final account = NativeContact.requireAccountNumber(accountNumber);
+    final approval = authorizationReference.trim();
+    if (approval.isEmpty || approval.length > 256) {
+      throw ArgumentError('An approved release reference is required');
+    }
+    final response = await api.postUri<Object?>(
+      routes.recordsProfileAppEnrolments(id),
+      data: <String, Object?>{
+        'destination_app_id': destination,
+        'account_number': account,
+        'authorization_reference': approval,
+      },
+    );
+    return _readProfile(_asMap(response.data)['profile']);
+  }
+
+  /// Self-service: available apps and the exact current consent notice.
+  /// The backend checks the authenticated user's active self relationship.
+  Future<ProfileSharingOptions> eligibleSelfApps(String profileId) async {
+    final id = _requiredId(profileId, 'profileId');
+    final response = await api.getUri<Object?>(routes.recordsProfileEligibleApps(id));
+    final body = _asMap(response.data);
+    final consent = _asMap(body['consent']);
+    final version = (consent['version'] ?? '').toString().trim();
+    final notice = (consent['notice'] ?? '').toString().trim();
+    if (version.isEmpty || notice.isEmpty) {
+      throw const FormatException('Sharing consent information unavailable');
+    }
+    final rawApps = body['apps'];
+    if (rawApps is! List) throw const FormatException('Eligible apps missing');
+    return ProfileSharingOptions(
+      apps: rawApps.map((item) => EligibleProfileApp.fromMap(_asMap(item)))
+          .toList(growable: false),
+      consentVersion: version,
+      consentNotice: notice,
+    );
+  }
+
+  /// Share only the authenticated owner's profile, with explicit consent.
+  /// The API resolves owner account and source app from the verified session.
+  Future<Profile> shareOwnProfile({
+    required String profileId,
+    required String destinationAppId,
+    required String consentVersion,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    final app = destinationAppId.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(app)) {
+      throw ArgumentError('Invalid destination app');
+    }
+    if (consentVersion.trim().isEmpty) throw ArgumentError('Consent version missing');
+    final response = await api.postUri<Object?>(
+      routes.recordsProfileShareSelf(id),
+      data: <String, Object?>{
+        'destination_app_id': app,
+        'consent_accepted': true,
+        'consent_version': consentVersion.trim(),
+      },
+    );
+    return _readProfile(_asMap(response.data)['profile']);
+  }
+
+  /// Revoke another app's access without deleting the canonical Health Profile.
+  Future<Profile> revokeOwnProfileApp({
+    required String profileId,
+    required String targetAppId,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    final app = targetAppId.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(app)) {
+      throw ArgumentError('Invalid destination app');
+    }
+    final response = await api.deleteUri<Object?>(
+      routes.recordsProfileRevokeSelf(id, app),
+    );
+    return _readProfile(_asMap(response.data)['profile']);
+  }
+
+  /// Removes another application's enrolment, without deleting profile data.
+  Future<Profile> removeAppEnrolment({
+    required String profileId,
+    required String targetAppId,
+    required String reason,
+  }) async {
+    final id = _requiredId(profileId, 'profileId');
+    final target = targetAppId.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(target)) {
+      throw ArgumentError('Invalid target application ID');
+    }
+    final why = reason.trim();
+    if (why.isEmpty || why.length > 512) {
+      throw ArgumentError('A removal reason (up to 512 characters) is required');
+    }
+    final response = await api.deleteUri<Object?>(
+      routes.recordsProfileAppEnrolmentRemove(id, target),
+      data: <String, Object?>{'reason': why},
     );
     return _readProfile(_asMap(response.data)['profile']);
   }

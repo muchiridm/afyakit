@@ -342,6 +342,138 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     }
   }
 
+  /// Staff-only cross-app release. The backend independently checks role,
+  /// consent approval, Contact relationship and destination eligibility.
+  Future<Profile> addAppEnrolment({
+    required String profileId,
+    required String destinationAppId,
+    required String accountNumber,
+    required String authorizationReference,
+  }) async {
+    if (isContactScoped) {
+      throw StateError('Only app staff may manage profile enrolments.');
+    }
+    if (state.isSaving) throw StateError('Another update is in progress.');
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.addAppEnrolment(
+        profileId: profileId,
+        destinationAppId: destinationAppId,
+        accountNumber: accountNumber,
+        authorizationReference: authorizationReference,
+      );
+      if (mounted) {
+        state = state.copyWith(
+          items: _upsertProfile(state.items, profile),
+          isSaving: false,
+          clearError: true,
+        );
+      }
+      return profile;
+    } catch (error) {
+      if (mounted) {
+        state = state.copyWith(
+          isSaving: false,
+          error: 'Could not add application enrolment: $error',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Staff-only removal. Current-app removal is rejected by the API.
+  Future<Profile> removeAppEnrolment({
+    required String profileId,
+    required String targetAppId,
+    required String reason,
+  }) async {
+    if (isContactScoped) {
+      throw StateError('Only app staff may manage profile enrolments.');
+    }
+    if (state.isSaving) throw StateError('Another update is in progress.');
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.removeAppEnrolment(
+        profileId: profileId,
+        targetAppId: targetAppId,
+        reason: reason,
+      );
+      if (mounted) {
+        state = state.copyWith(
+          items: _upsertProfile(state.items, profile),
+          isSaving: false,
+          clearError: true,
+        );
+      }
+      return profile;
+    } catch (error) {
+      if (mounted) {
+        state = state.copyWith(
+          isSaving: false,
+          error: 'Could not remove application enrolment: $error',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Owner-only cross-app access. Do not gate this with isContactScoped:
+  /// the backend authenticates the owner and verifies an active SELF link.
+  Future<ProfileSharingOptions> eligibleOwnApps(String profileId) =>
+      _service.eligibleSelfApps(profileId);
+
+  Future<Profile> shareOwnProfile({
+    required String profileId,
+    required String destinationAppId,
+    required String consentVersion,
+  }) async {
+    if (state.isSaving) throw StateError('Another update is in progress.');
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.shareOwnProfile(
+        profileId: profileId,
+        destinationAppId: destinationAppId,
+        consentVersion: consentVersion,
+      );
+      if (mounted) {
+        state = state.copyWith(
+          items: _upsertProfile(state.items, profile),
+          isSaving: false,
+          clearError: true,
+        );
+      }
+      return profile;
+    } catch (error) {
+      if (mounted) state = state.copyWith(isSaving: false, error: 'Unable to share profile');
+      rethrow;
+    }
+  }
+
+  Future<Profile> revokeOwnProfileApp({
+    required String profileId,
+    required String targetAppId,
+  }) async {
+    if (state.isSaving) throw StateError('Another update is in progress.');
+    state = state.copyWith(isSaving: true, clearError: true);
+    try {
+      final profile = await _service.revokeOwnProfileApp(
+        profileId: profileId,
+        targetAppId: targetAppId,
+      );
+      if (mounted) {
+        state = state.copyWith(
+          items: _upsertProfile(state.items, profile),
+          isSaving: false,
+          clearError: true,
+        );
+      }
+      return profile;
+    } catch (error) {
+      if (mounted) state = state.copyWith(isSaving: false, error: 'Unable to revoke profile access');
+      rethrow;
+    }
+  }
+
   /// Administrative hard deletion, never available in member or Contact scope.
   Future<void> permanentlyDelete(
     String profileId, {

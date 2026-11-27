@@ -118,6 +118,26 @@ extension AfyaKitRecordsRoutes on AfyaKitRoutes {
   Uri recordsProfileEnrol(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/enrolment');
 
+  /// Staff-only cross-app profile enrolment. The API requires an already
+  /// approved release record; this route does not create consent.
+  Uri recordsProfileAppEnrolments(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/app-enrolments');
+
+  /// Revokes a different app's enrolment; the API prohibits removing the
+  /// calling application and preserves the canonical Health Profile.
+  Uri recordsProfileAppEnrolmentRemove(String profileId, String targetAppId) =>
+      _uri('records/profiles/${_seg(profileId)}/app-enrolments/${_seg(targetAppId)}');
+
+  /// Self-service profile sharing: identity and consent are verified server-side.
+  Uri recordsProfileEligibleApps(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/app-enrolments/eligible');
+
+  Uri recordsProfileShareSelf(String profileId) =>
+      _uri('records/profiles/${_seg(profileId)}/app-enrolments/self');
+
+  Uri recordsProfileRevokeSelf(String profileId, String targetAppId) =>
+      _uri('records/profiles/${_seg(profileId)}/app-enrolments/self/${_seg(targetAppId)}');
+
   Uri recordsProfileLinkSelf(String profileId) =>
       _uri('records/profiles/${_seg(profileId)}/link-self');
 
