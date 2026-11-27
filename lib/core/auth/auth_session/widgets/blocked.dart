@@ -1,5 +1,6 @@
 // lib/core/auth/auth_session/widgets/blocked.dart
 
+import 'package:afyakit/core/notifications/notification_lifecycle.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:material_ui/material_ui.dart';
 
@@ -34,7 +35,9 @@ class Blocked extends StatelessWidget {
                     if (showSignOut)
                       OutlinedButton.icon(
                         onPressed: () async {
-                          await fb.FirebaseAuth.instance.signOut();
+                          await NotificationLifecycle.signOut(
+                            fb.FirebaseAuth.instance,
+                          );
                         },
                         icon: const Icon(Icons.logout),
                         label: const Text('Sign out'),

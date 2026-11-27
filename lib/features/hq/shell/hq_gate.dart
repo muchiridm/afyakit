@@ -1,5 +1,6 @@
 // lib/core/hq/shell/hq_gate.dart
 
+import 'package:afyakit/core/notifications/notification_lifecycle.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/login_controller.dart';
 import 'package:afyakit/core/auth/auth_session/controllers/session_controller.dart';
 import 'package:afyakit/core/auth/auth_session/models/otp_login_copy.dart';
@@ -104,7 +105,7 @@ class HqGate extends ConsumerWidget {
   }
 
   static Future<void> _signOut(WidgetRef ref, String tenantId) async {
-    await fb.FirebaseAuth.instance.signOut();
+    await NotificationLifecycle.signOut(fb.FirebaseAuth.instance);
     ref.invalidate(sessionControllerProvider(tenantId));
     ref.invalidate(hqSuperadminProvider);
   }

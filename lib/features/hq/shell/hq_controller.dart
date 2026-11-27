@@ -1,5 +1,6 @@
 // lib/core/hq/shell/hq_controller.dart
 
+import 'package:afyakit/core/notifications/notification_lifecycle.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -89,7 +90,7 @@ class HqController extends StateNotifier<HqState> {
       case HqAccountAction.signOut:
         final ok = await _confirmSignOut(context);
         if (ok == true) {
-          await fb.FirebaseAuth.instance.signOut();
+          await NotificationLifecycle.signOut(fb.FirebaseAuth.instance);
           // Also clear local session cache for HQ.
           ref.invalidate(sessionControllerProvider(hqTenantId));
         }

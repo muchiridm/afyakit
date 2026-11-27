@@ -1,4 +1,5 @@
 // lib/core/auth/auth_session/services/auth_service.dart
+import 'package:afyakit/core/notifications/notification_lifecycle.dart';
 import 'dart:convert';
 import 'package:afyakit/app/providers/app_profile_providers.dart';
 import 'package:afyakit/core/auth/auth_session/models/auth_api_exception.dart';
@@ -590,7 +591,7 @@ class AuthService {
 
   bool get isSignedIn => _auth.currentUser != null;
   Future<void> logOut() async {
-    await _auth.signOut();
+    await NotificationLifecycle.signOut(_auth);
     _cachedUser = null;
   }
 

@@ -33,11 +33,7 @@ final class BootLog {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  BootLog.d(
-    'Background notification '
-    'messageId=${message.messageId ?? '-'} '
-    'type=${message.data['type'] ?? '-'}',
-  );
+  // Possession challenges and generic pushes contain no loggable payload.
 }
 
 Future<void> main() async {

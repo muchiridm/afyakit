@@ -19,11 +19,48 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// N1: Web background pushes are data-only and carry no content. A service
-// worker cannot establish the current authenticated recipient. Suppress display
-// until N2 defines the secure installation/session lifecycle. Foreground Flutter
-// validates tenant, application, recipient and membership before generic display.
-messaging.onBackgroundMessage(() => undefined);
+// Only currently open, agreeing application windows may authorize display.
+function askWindow(client, message) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const finish = (value) => { clearTimeout(timer); channel.port1.close(); resolve(value); };
+    const timer = setTimeout(() => finish(null), 2000);
+    channel.port1.onmessage = (event) => finish(event.data);
+    try { client.postMessage(message, [channel.port2]); } catch (_) { finish(null); }
+  });
+}
+async function agreeingWindows(context) {
+  const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (!windows.length || typeof context !== 'string') return [];
+  const contexts = await Promise.all(windows.map(client => askWindow(client, { type: 'notification-context' })));
+  return contexts.every(value => value === context) ? windows : [];
+}
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'notification-context-check' || !event.ports?.length) return;
+  event.waitUntil((async () => {
+    const windows = await agreeingWindows(event.data.context);
+    event.ports[0].postMessage(windows.length > 0);
+  })());
+});
+messaging.onBackgroundMessage(async (payload) => {
+  const data = payload.data;
+  if (!data || !['chat_message', 'activity'].includes(data.type) ||
+      !['tenantId', 'appId', 'recipientUid', 'registrationId', 'generation'].every(key => typeof data[key] === 'string' && data[key])) return;
+  const context = JSON.stringify([data.tenantId, data.appId, data.recipientUid]);
+  const windows = await agreeingWindows(context);
+  if (!windows.length) return;
+  const allowed = await Promise.all(windows.map(client => askWindow(client, { type: 'notification-validate', payload: {
+    type: data.type, tenantId: data.tenantId, appId: data.appId, recipientUid: data.recipientUid,
+    registrationId: data.registrationId, generation: data.generation,
+  } })));
+  if (!allowed.some(value => value === true)) return;
+  // Recheck context after asynchronous backend validation.
+  if (!(await agreeingWindows(context)).length) return;
+  await self.registration.showNotification('AfyaKit', {
+    body: data.type === 'chat_message' ? 'You have a new message.' : 'You have a new update.',
+    tag: 'afyakit-update',
+  });
+});
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

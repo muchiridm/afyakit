@@ -1,3 +1,4 @@
+import 'package:afyakit/core/notifications/notification_lifecycle.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -185,7 +186,7 @@ final tenantSessionGuardProvider = FutureProvider.autoDispose<void>((
         // A previous request may finish after a new user signs in.
         // Never sign out a different Firebase user.
         if (fb.FirebaseAuth.instance.currentUser?.uid == uid) {
-          await fb.FirebaseAuth.instance.signOut();
+          await NotificationLifecycle.signOut(fb.FirebaseAuth.instance);
         }
         return;
       }
