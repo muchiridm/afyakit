@@ -19,58 +19,14 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((message) => {
-  console.log("🔔 Firebase background message:", message);
-
-  const data = message.data || {};
-  const notification = message.notification || {};
-
-  const title = notification.title || data.title || "DawaPap";
-
-  const body = notification.body || data.body || "You have a new message.";
-
-  const options = {
-    body,
-    icon: "/icons/Icon-192.png",
-    badge: "/icons/Icon-192.png",
-    data: {
-      ...data,
-      url: data.url || "/",
-    },
-  };
-
-  return self.registration.showNotification(title, options);
-});
+// N1: Web background pushes are data-only and carry no content. A service
+// worker cannot establish the current authenticated recipient. Suppress display
+// until N2 defines the secure installation/session lifecycle. Foreground Flutter
+// validates tenant, application, recipient and membership before generic display.
+messaging.onBackgroundMessage(() => undefined);
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-
-  const url = event.notification.data?.url || "/";
-
-  event.waitUntil(
-    clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      })
-      .then((windowClients) => {
-        for (const client of windowClients) {
-          if ("focus" in client) {
-            client.focus();
-
-            if ("navigate" in client) {
-              return client.navigate(url);
-            }
-
-            return client;
-          }
-        }
-
-        if (clients.openWindow) {
-          return clients.openWindow(url);
-        }
-
-        return null;
-      }),
-  );
+  // Never follow a push-supplied URL or expose a stale resource outside auth.
+  event.waitUntil(clients.openWindow("/"));
 });

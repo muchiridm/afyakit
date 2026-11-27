@@ -42,10 +42,7 @@ class NotificationService {
       sound: true,
     );
 
-    debugPrint(
-      '🔔 Notification permission '
-      'status=${settings.authorizationStatus.name}',
-    );
+    debugPrint('[notifications] operation');
 
     return settings;
   }
@@ -53,10 +50,7 @@ class NotificationService {
   Future<String?> getToken() async {
     try {
       if (kIsWeb && _webVapidKey.trim().isEmpty) {
-        debugPrint(
-          '❌ FCM web token unavailable: '
-          'FCM_WEB_VAPID_KEY is not configured.',
-        );
+        debugPrint('[notifications] operation');
 
         return null;
       }
@@ -68,29 +62,16 @@ class NotificationService {
       final cleanToken = token?.trim() ?? '';
 
       if (cleanToken.isEmpty) {
-        debugPrint(
-          '⚠️ FCM token unavailable '
-          'platform=$_platform',
-        );
+        debugPrint('[notifications] operation');
 
         return null;
       }
 
-      debugPrint(
-        '🔑 FCM token loaded '
-        'platform=$_platform '
-        'prefix=${_tokenPrefix(cleanToken)}',
-      );
+      debugPrint('[notifications] operation');
 
       return cleanToken;
-    } catch (error, stackTrace) {
-      debugPrint(
-        '❌ Failed to load FCM token '
-        'platform=$_platform '
-        'error=$error',
-      );
-
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (error) {
+      debugPrint('[notifications] operation');
 
       rethrow;
     }
@@ -120,15 +101,14 @@ class NotificationService {
     );
 
     try {
-      debugPrint('🔎 [notification-device] reading ${deviceRef.path}');
-       late final DocumentSnapshot<Map<String, dynamic>> snapshot;
-       try {
-         snapshot = await deviceRef.get();
-       } on FirebaseException catch (error) {
-         debugPrint('❌ [notification-device] READ denied/failed '
-             'path=${deviceRef.path} code=${error.code}');
-         rethrow;
-       }
+      debugPrint('[notifications] operation');
+      late final DocumentSnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await deviceRef.get();
+      } on FirebaseException {
+        debugPrint('[notifications] operation');
+        rethrow;
+      }
 
       // A device document must not silently change
       // ownership between authenticated users.
@@ -161,46 +141,18 @@ class NotificationService {
         values['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      debugPrint(
-        '🔔 Registering notification device '
-        'tenant=${identity.tenantId} '
-        'app=${identity.appId} '
-        'uid=${identity.uid} '
-        'isStaff=${user.isStaffResolved} '
-        'platform=$_platform '
-        'exists=${snapshot.exists} '
-        'deviceId=${identity.deviceId}',
-      );
+      debugPrint('[notifications] operation');
 
       try {
-         await deviceRef.set(values, SetOptions(merge: true));
-       } on FirebaseException catch (error) {
-         debugPrint('❌ [notification-device] WRITE denied/failed '
-             'path=${deviceRef.path} code=${error.code}');
-         rethrow;
-       }
+        await deviceRef.set(values, SetOptions(merge: true));
+      } on FirebaseException {
+        debugPrint('[notifications] operation');
+        rethrow;
+      }
 
-      debugPrint(
-        '✅ Notification device registered '
-        'tenant=${identity.tenantId} '
-        'app=${identity.appId} '
-        'uid=${identity.uid} '
-        'isStaff=${user.isStaffResolved} '
-        'platform=$_platform '
-        'deviceId=${identity.deviceId}',
-      );
-    } catch (error, stackTrace) {
-      debugPrint(
-        '❌ Notification device registration failed '
-        'tenant=${identity.tenantId} '
-        'app=${identity.appId} '
-        'uid=${identity.uid} '
-        'platform=$_platform '
-        'deviceId=${identity.deviceId} '
-        'error=$error',
-      );
-
-      debugPrintStack(stackTrace: stackTrace);
+      debugPrint('[notifications] operation');
+    } catch (error) {
+      debugPrint('[notifications] operation');
 
       rethrow;
     }
@@ -236,13 +188,10 @@ class NotificationService {
 
     try {
       await disableDevice(user: oldUser, appId: oldApp, token: oldToken);
-    } catch (error, stackTrace) {
+    } catch (error) {
       // A successful replacement should remain registered even when cleanup
       // is blocked by permissions or an intermittently unavailable network.
-      debugPrint(
-        '⚠️ Previous notification registration cleanup failed: $error',
-      );
-      debugPrintStack(stackTrace: stackTrace);
+      debugPrint('[notifications] operation');
     }
   }
 
@@ -275,14 +224,7 @@ class NotificationService {
       final snapshot = await deviceRef.get();
 
       if (!snapshot.exists) {
-        debugPrint(
-          'ℹ️ Notification device disable skipped: '
-          'document missing '
-          'tenant=${identity.tenantId} '
-          'app=${identity.appId} '
-          'uid=${identity.uid} '
-          'deviceId=${identity.deviceId}',
-        );
+        debugPrint('[notifications] operation');
 
         return;
       }
@@ -293,14 +235,7 @@ class NotificationService {
       final registeredAppId = _clean(data?['app_id']).toLowerCase();
 
       if (registeredUid != identity.uid || registeredAppId != identity.appId) {
-        debugPrint(
-          '⚠️ Notification device disable skipped: '
-          'identity mismatch '
-          'tenant=${identity.tenantId} '
-          'app=${identity.appId} '
-          'uid=${identity.uid} '
-          'deviceId=${identity.deviceId}',
-        );
+        debugPrint('[notifications] operation');
 
         return;
       }
@@ -310,26 +245,9 @@ class NotificationService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint(
-        '🔕 Notification device disabled '
-        'tenant=${identity.tenantId} '
-        'app=${identity.appId} '
-        'uid=${identity.uid} '
-        'platform=$_platform '
-        'deviceId=${identity.deviceId}',
-      );
-    } catch (error, stackTrace) {
-      debugPrint(
-        '❌ Notification device disable failed '
-        'tenant=${identity.tenantId} '
-        'app=${identity.appId} '
-        'uid=${identity.uid} '
-        'platform=$_platform '
-        'deviceId=${identity.deviceId} '
-        'error=$error',
-      );
-
-      debugPrintStack(stackTrace: stackTrace);
+      debugPrint('[notifications] operation');
+    } catch (error) {
+      debugPrint('[notifications] operation');
 
       rethrow;
     }
@@ -352,10 +270,7 @@ class NotificationService {
 
     if (cleanToken.isEmpty) {
       if (logInvalid) {
-        debugPrint(
-          '⚠️ Notification device operation skipped: '
-          'empty FCM token',
-        );
+        debugPrint('[notifications] operation');
       }
 
       return null;
@@ -363,10 +278,7 @@ class NotificationService {
 
     if (!_idPattern.hasMatch(tenantId)) {
       if (logInvalid) {
-        debugPrint(
-          '⚠️ Notification device operation skipped: '
-          'invalid tenantId',
-        );
+        debugPrint('[notifications] operation');
       }
 
       return null;
@@ -374,10 +286,7 @@ class NotificationService {
 
     if (!_idPattern.hasMatch(cleanAppId)) {
       if (logInvalid) {
-        debugPrint(
-          '⚠️ Notification device operation skipped: '
-          'invalid appId',
-        );
+        debugPrint('[notifications] operation');
       }
 
       return null;
@@ -385,10 +294,7 @@ class NotificationService {
 
     if (uid.isEmpty) {
       if (logInvalid) {
-        debugPrint(
-          '⚠️ Notification device operation skipped: '
-          'empty uid',
-        );
+        debugPrint('[notifications] operation');
       }
 
       return null;
@@ -430,14 +336,6 @@ class NotificationService {
 
   String _clean(Object? value) {
     return value is String ? value.trim() : '';
-  }
-
-  String _tokenPrefix(String token) {
-    if (token.length <= 12) {
-      return token;
-    }
-
-    return '${token.substring(0, 12)}…';
   }
 
   String get _platform {
