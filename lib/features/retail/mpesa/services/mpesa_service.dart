@@ -51,7 +51,7 @@ class MpesaService {
     required String paymentId,
     Duration timeout = const Duration(minutes: 2),
     Duration firstDelay = const Duration(milliseconds: 1200),
-    Duration interval = const Duration(seconds: 2),
+    Duration interval = const Duration(seconds: 10),
     MpesaTick? onTick,
     bool Function()? isCurrent,
   }) async {
@@ -81,7 +81,7 @@ class MpesaService {
     required MpesaStkInitiateDraft draft,
     Duration timeout = const Duration(minutes: 2),
     Duration firstDelay = const Duration(milliseconds: 1200),
-    Duration interval = const Duration(seconds: 2),
+    Duration interval = const Duration(seconds: 10),
     MpesaTick? onTick,
     bool Function()? isCurrent,
   }) async {

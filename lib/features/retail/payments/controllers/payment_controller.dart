@@ -201,11 +201,22 @@ class PaymentController extends StateNotifier<PaymentState> {
     state = state.copyWith(
       loadingPayments: true,
       clearError: true,
-      clearPendingAmount: true,
-      clearMpesaLastPayment: true,
       defaultsSeeded: false,
     );
 
+    final activePayment = state.mpesaLastPayment;
+    if (activePayment != null) {
+      try {
+        final service = await _ref.read(mpesaServiceProvider.future);
+        if (!mounted) return;
+        final current = await service.getPaymentStatus(activePayment.id);
+        if (!mounted) return;
+        state = state.copyWith(mpesaLastPayment: current);
+      } catch (error) {
+        if (!mounted || _clearDenied(error)) return;
+        // Preserve the known attempt and its pending/conflict status on network errors.
+      }
+    }
     await _reloadPayments(
       invoiceId: id,
       setLoadingFalse: true,
@@ -545,14 +556,11 @@ class PaymentController extends StateNotifier<PaymentState> {
       );
       return false;
     }
+    final newAttempt = _attemptId == null;
     _attemptFacts = facts;
     _attemptId ??= const Uuid().v4();
 
-    state = state.copyWith(
-      payingMpesa: true,
-      clearError: true,
-      clearMpesaLastPayment: true,
-    );
+    state = state.copyWith(payingMpesa: true, clearError: true);
 
     try {
       final MpesaService mpesaSvc = await _ref.read(
@@ -578,27 +586,13 @@ class PaymentController extends StateNotifier<PaymentState> {
       if (!mounted) return false;
       state = state.copyWith(mpesaLastPayment: payment);
 
-      if (payment.isFailed) {
-        _attemptId = null;
-        _attemptFacts = null;
-        SnackService.showError('M-Pesa reported that the payment failed.');
-
+      if (!payment.isPaymentComplete) {
+        SnackService.showError(payment.statusMessage);
         state = state.copyWith(payingMpesa: false);
         return false;
       }
 
-      if (!payment.isSuccess) {
-        SnackService.showError(
-          'Payment still pending. Tap refresh to check status.',
-        );
-
-        state = state.copyWith(payingMpesa: false);
-        return false;
-      }
-
-      SnackService.showSuccess(
-        'M-Pesa reported success. Payment verification is pending.',
-      );
+      SnackService.showSuccess('Payment verified and recorded.');
 
       state = state.copyWith(
         payingMpesa: false,
@@ -622,14 +616,15 @@ class PaymentController extends StateNotifier<PaymentState> {
         final code = data is Map ? data['error'] : null;
         // These fixed server rejections happen before dispatch. Unknown failures
         // retain the attempt ID because the provider outcome may be uncertain.
-        if ([
-          'invalid-payment-amount',
-          'invoice-not-payable',
-          'invoice-payment-responsibility-unconfirmed',
-          'payment-rate-limited',
-          'invalid-payment-reference',
-          'unsupported-payment-field',
-        ].contains(code)) {
+        if (newAttempt &&
+            [
+              'invalid-payment-amount',
+              'invoice-not-payable',
+              'invoice-payment-responsibility-unconfirmed',
+              'payment-rate-limited',
+              'invalid-payment-reference',
+              'unsupported-payment-field',
+            ].contains(code)) {
           _attemptId = null;
           _attemptFacts = null;
         }

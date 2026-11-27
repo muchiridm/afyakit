@@ -260,17 +260,7 @@ class PaymentFooter extends ConsumerWidget {
     try {
       final dynamic payment = last;
 
-      final String status = (payment.status ?? '').toString().trim();
-
-      final List<String> parts = <String>[];
-
-      if (status == 'stk_success') {
-        parts.add('Provider reported success; verification pending');
-      } else if (status.isNotEmpty) {
-        parts.add(status);
-      }
-
-      final String text = parts.join(' ');
+      final String text = payment.statusMessage.toString();
 
       return text.isEmpty ? null : text;
     } catch (_) {

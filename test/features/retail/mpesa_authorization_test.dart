@@ -39,6 +39,10 @@ class FakeMpesa extends MpesaService {
   final drafts = <MpesaStkInitiateDraft>[];
   Completer<MpesaPayment>? pending;
   bool denied = false;
+  MpesaPayment? resultOverride;
+  @override
+  Future<MpesaPayment> getPaymentStatus(String paymentId) async =>
+      resultOverride ?? payment();
   @override
   Future<MpesaPayment> initiateAndWait({
     required MpesaStkInitiateDraft draft,
@@ -54,7 +58,9 @@ class FakeMpesa extends MpesaService {
         requestOptions: RequestOptions(),
         response: Response(requestOptions: RequestOptions(), statusCode: 404),
       );
-    final result = pending == null ? payment() : await pending!.future;
+    final result = pending == null
+        ? (resultOverride ?? payment())
+        : await pending!.future;
     if (isCurrent?.call() != false) onTick?.call(result);
     return result;
   }
@@ -76,6 +82,64 @@ void main() {
       mpesaServiceProvider.overrideWith((ref) async => mpesa),
       mpesaEligibilityProvider('789').overrideWith((ref) async => true),
     ],
+  );
+
+  test(
+    'unverified success, conflicts, uncertain and legacy failure retain the same attempt',
+    () async {
+      for (final result in [
+        payment('stk_success'),
+        payment('stk_failed'),
+        MpesaPayment(
+          id: 'synthetic',
+          status: 'stk_initiated',
+          amount: 10,
+          currency: 'KES',
+          updatedAt: DateTime(2026),
+          verificationStatus: 'conflict',
+        ),
+        MpesaPayment(
+          id: 'synthetic',
+          status: 'created',
+          amount: 10,
+          currency: 'KES',
+          updatedAt: DateTime(2026),
+          dispatchState: 'uncertain',
+        ),
+      ]) {
+        final fake = FakeMpesa()..resultOverride = result;
+        final container = setup(fake);
+        await ready(container);
+        final controller = container.read(
+          paymentControllerProvider('789').notifier,
+        );
+        expect(
+          await controller.payViaMpesaStk(phone: '0712345678', amount: 10),
+          false,
+        );
+        expect(
+          container.read(paymentControllerProvider('789')).mpesaLastPayment,
+          result,
+        );
+        expect(
+          await controller.payViaMpesaStk(phone: '0712345678', amount: 10),
+          false,
+        );
+        expect(fake.drafts[0].clientRequestId, fake.drafts[1].clientRequestId);
+        await controller.refresh();
+        expect(
+          container.read(paymentControllerProvider('789')).mpesaLastPayment,
+          result,
+        );
+        expect(result.isPaymentComplete, false);
+        expect(
+          result.isTerminal,
+          true,
+        ); // stops bounded polling, never means settled
+        expect(result.statusMessage, isNot(contains('verified and recorded')));
+        container.dispose();
+      }
+    },
   );
 
   test(

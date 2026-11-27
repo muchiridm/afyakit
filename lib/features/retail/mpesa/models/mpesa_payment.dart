@@ -15,6 +15,7 @@ class MpesaPayment {
 
     this.zohoSyncStatus,
     this.verificationStatus = 'unverified',
+    this.dispatchState,
   });
 
   /// BE: paymentId
@@ -36,6 +37,7 @@ class MpesaPayment {
 
   final String? zohoSyncStatus;
   final String verificationStatus;
+  final String? dispatchState;
 
   // ─────────────────────────────
   // Local parsing helpers
@@ -102,10 +104,36 @@ class MpesaPayment {
 
       zohoSyncStatus: _optStr(src['zohoSyncStatus']),
       verificationStatus: _optStr(src['verificationStatus']) ?? 'unverified',
+      dispatchState: _optStr(src['dispatchState']),
     );
   }
 
-  bool get isTerminal => status == 'stk_success' || status == 'stk_failed';
+  /// Pause bounded polling; this is not a declaration of completed payment.
+  bool get isTerminal =>
+      status == 'stk_success' ||
+      status == 'stk_failed' ||
+      verificationStatus == 'conflict' ||
+      dispatchState == 'uncertain';
+
+  bool get isPaymentComplete =>
+      verificationStatus == 'verified' && zohoSyncStatus == 'success';
+
+  String get statusMessage {
+    if (verificationStatus == 'conflict') {
+      return 'Payment information conflicts; review required. Do not pay again.';
+    }
+    if (dispatchState == 'uncertain') {
+      return 'Payment request outcome uncertain. Do not pay again.';
+    }
+    if (isPaymentComplete) return 'Payment verified and recorded.';
+    if (status == 'stk_success') {
+      return 'Provider reported success; payment verification pending.';
+    }
+    if (status == 'stk_failed') {
+      return 'Payment outcome requires confirmation. Do not pay again.';
+    }
+    return 'Payment pending; check status before paying again.';
+  }
 
   /// Provider-reported success only; never proof of verified funds.
   bool get isSuccess => status == 'stk_success';
