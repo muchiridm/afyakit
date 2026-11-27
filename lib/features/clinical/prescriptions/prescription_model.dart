@@ -67,6 +67,8 @@ enum PrescriptionStatus {
 
 class Prescription {
   const Prescription({
+    this.allowedActions = const [],
+    this.allowedStatuses = const [],
     required this.prescriptionId,
     required this.profileId,
     required this.fileName,
@@ -87,6 +89,9 @@ class Prescription {
     this.updatedAt,
   });
 
+  final List<String> allowedActions;
+  final List<PrescriptionStatus> allowedStatuses;
+  bool can(String action) => allowedActions.contains(action);
   final String prescriptionId;
 
   /// Health profile this prescription belongs to.
@@ -200,6 +205,12 @@ class Prescription {
 
   factory Prescription.fromJson(Map<String, Object?> json) {
     return Prescription(
+      allowedActions: (json['allowed_actions'] as List? ?? [])
+          .whereType<String>()
+          .toList(),
+      allowedStatuses: (json['allowed_statuses'] as List? ?? [])
+          .map(PrescriptionStatus.fromJson)
+          .toList(),
       prescriptionId: _readString(json, 'prescription_id'),
       profileId: _readString(json, 'profile_id'),
       fileName: _readString(json, 'file_name'),

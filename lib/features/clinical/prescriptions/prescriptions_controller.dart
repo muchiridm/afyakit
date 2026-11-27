@@ -90,9 +90,15 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
         status: status,
       );
 
+      if (!mounted || !_service.isCurrent()) return;
       state = state.copyWith(items: items, isLoading: false, clearError: true);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (!mounted) return;
+      state = state.copyWith(
+        items: const [],
+        isLoading: false,
+        error: e.toString(),
+      );
     }
   }
 
@@ -131,6 +137,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
       state = state.copyWith(items: next, isUploading: false, clearError: true);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isUploading: false, error: e.toString());
     }
   }
@@ -168,6 +175,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
       return updated;
     } catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(isSaving: false, error: e.toString());
 
       return null;
@@ -211,6 +219,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
       return updated;
     } catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(isSaving: false, error: e.toString());
 
       return null;
@@ -252,6 +261,7 @@ class PrescriptionsController extends StateNotifier<PrescriptionsState> {
 
       state = state.copyWith(items: next, isSaving: false, clearError: true);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isSaving: false, error: e.toString());
     }
   }

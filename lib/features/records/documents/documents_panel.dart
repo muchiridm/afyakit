@@ -15,13 +15,12 @@ class DocumentsPanel extends ConsumerStatefulWidget {
   const DocumentsPanel({
     super.key,
     required this.profileId,
-    this.canManage = false,
     this.showUploadActions = true,
     this.title = 'Documents',
     this.emptyText = 'No documents uploaded.',
   });
   final String profileId, title, emptyText;
-  final bool canManage, showUploadActions;
+  final bool showUploadActions;
   @override
   ConsumerState<DocumentsPanel> createState() => _DocumentsPanelState();
 }
@@ -80,7 +79,7 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
 
   Future<void> _upload() => _run((service) async {
     final profileId = widget.profileId;
-    final canManage = widget.canManage;
+    const canManage = false;
     final picked = await FilePicker.platform.pickFiles(
       allowMultiple: false,
       withData: true,
@@ -118,7 +117,7 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
         documentType: draft.type,
         title: draft.title,
         notes: draft.notes,
-        visibility: canManage ? draft.visibility : null,
+        visibility: null,
       );
       _refresh();
       _message('Document uploaded.');
@@ -170,14 +169,14 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
   });
 
   Future<void> _edit(Document doc) => _run((service) async {
-    if (!widget.canManage || !_sameScope(service, doc.profileId)) return;
+    if (!doc.can('update') || !_sameScope(service, doc.profileId)) return;
     final draft = await showDialog<_DocumentDraft>(
       context: context,
       builder: (_) => _DocumentEditor(canManage: true, document: doc),
     );
     if (draft == null ||
         !_sameScope(service, doc.profileId) ||
-        !widget.canManage) {
+        !doc.can('update')) {
       return;
     }
     await service.update(
@@ -196,7 +195,7 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
   });
 
   Future<void> _archive(Document doc) => _run((service) async {
-    if (!widget.canManage || !_sameScope(service, doc.profileId)) return;
+    if (!doc.can('archive') || !_sameScope(service, doc.profileId)) return;
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -218,7 +217,7 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
     );
     if (yes != true ||
         !_sameScope(service, doc.profileId) ||
-        !widget.canManage) {
+        !doc.can('archive')) {
       return;
     }
     await service.archive(doc);
@@ -258,18 +257,7 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
               ),
           ],
         ),
-        if (widget.canManage)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Show archived documents'),
-            value: !_active,
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _active = !value;
-                    _page = 1;
-                  }),
-          ),
+
         if (_busy) const LinearProgressIndicator(),
         if (pending)
           Wrap(
@@ -333,12 +321,12 @@ class _DocumentsPanelState extends ConsumerState<DocumentsPanel> {
                         value: 'download',
                         child: Text('Download'),
                       ),
-                      if (widget.canManage && doc.isActive)
+                      if (doc.can('update') && doc.isActive)
                         const PopupMenuItem(
                           value: 'edit',
                           child: Text('Edit metadata'),
                         ),
-                      if (widget.canManage && doc.isActive)
+                      if (doc.can('archive') && doc.isActive)
                         const PopupMenuItem(
                           value: 'archive',
                           child: Text('Archive'),

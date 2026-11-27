@@ -173,6 +173,8 @@ class SessionOnboarding {
 @immutable
 class AuthUser {
   const AuthUser({
+    this.effectivePermissions = const [],
+    this.permissionAppId,
     required this.uid,
     required this.tenantId,
     required this.status,
@@ -208,6 +210,14 @@ class AuthUser {
     this.createdAt,
     this.updatedAt,
   });
+  final List<String> effectivePermissions;
+  final String? permissionAppId;
+  bool hasPermission(String permission) =>
+      status == UserStatus.active &&
+      activeAppId == permissionAppId &&
+      permissionAppId != null &&
+      hasActiveAppMembership(permissionAppId!) &&
+      effectivePermissions.contains(permission);
   final String uid;
   final String? phoneNumber;
   final String tenantId;
@@ -532,6 +542,12 @@ class AuthUser {
     );
     final recoveredAt = _optStr(json['recoveredAt']);
     return AuthUser(
+      effectivePermissions: (json['effectivePermissions'] as List? ?? [])
+          .whereType<String>()
+          .toList(),
+      permissionAppId: json['appAccess'] is Map
+          ? _optStr(json['appAccess']['appId'])
+          : null,
       uid: uid,
       phoneNumber: phone,
       tenantId: tenant,
@@ -609,6 +625,8 @@ class AuthUser {
     String? updatedAt,
   }) {
     return AuthUser(
+      effectivePermissions: effectivePermissions,
+      permissionAppId: permissionAppId,
       uid: uid,
       phoneNumber: phoneNumber,
       tenantId: tenantId,

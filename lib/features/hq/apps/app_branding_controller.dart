@@ -49,9 +49,6 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
   Future<AppProfileService> get _service =>
       _ref.read(appProfileServiceProvider.future);
 
-  BrandingStorageService get _storage =>
-      _ref.read(brandingStorageServiceProvider);
-
   // ─────────────────────────────────────────
   // Accent colour
   // ─────────────────────────────────────────
@@ -107,24 +104,11 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
       operation: () async {
         _validatePng(bytes, maxBytes: 5 * 1024 * 1024);
 
-        await _storage.uploadLogoBytes(
+        await (await _service).mutateBranding(
           tenantId: tenantId,
           appId: appId,
-          type: type,
+          asset: type.key,
           bytes: bytes,
-        );
-
-        final url = await _storage.getLogoDownloadUrl(
-          tenantId: tenantId,
-          appId: appId,
-          type: type,
-        );
-
-        await _saveAssetUrl(
-          tenantId: tenantId,
-          appId: appId,
-          key: type.key,
-          url: url,
         );
       },
     );
@@ -138,9 +122,11 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
     return _changeAsset(
       tenantId: tenantId,
       operation: () async {
-        await _storage.deleteLogo(tenantId: tenantId, appId: appId, type: type);
-
-        await _removeAssetKey(tenantId: tenantId, appId: appId, key: type.key);
+        await (await _service).mutateBranding(
+          tenantId: tenantId,
+          appId: appId,
+          asset: type.key,
+        );
       },
     );
   }
@@ -160,24 +146,11 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
       operation: () async {
         _validatePng(bytes, maxBytes: 2 * 1024 * 1024);
 
-        await _storage.uploadWebAssetBytes(
+        await (await _service).mutateBranding(
           tenantId: tenantId,
           appId: appId,
-          type: type,
+          asset: type.key,
           bytes: bytes,
-        );
-
-        final url = await _storage.getWebAssetDownloadUrl(
-          tenantId: tenantId,
-          appId: appId,
-          type: type,
-        );
-
-        await _saveAssetUrl(
-          tenantId: tenantId,
-          appId: appId,
-          key: type.key,
-          url: url,
         );
       },
     );
@@ -191,13 +164,11 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
     return _changeAsset(
       tenantId: tenantId,
       operation: () async {
-        await _storage.deleteWebAsset(
+        await (await _service).mutateBranding(
           tenantId: tenantId,
           appId: appId,
-          type: type,
+          asset: type.key,
         );
-
-        await _removeAssetKey(tenantId: tenantId, appId: appId, key: type.key);
       },
     );
   }
@@ -225,55 +196,6 @@ class AppBrandingController extends StateNotifier<AppBrandingState> {
       state = state.copyWith(changingAsset: false, error: error.toString());
       return false;
     }
-  }
-
-  Future<void> _saveAssetUrl({
-    required String tenantId,
-    required String appId,
-    required String key,
-    required String? url,
-  }) async {
-    if (url == null || url.trim().isEmpty) {
-      throw StateError(
-        'Image uploaded, but its download URL was not returned.',
-      );
-    }
-
-    final service = await _service;
-
-    // Existing service method updates an arbitrary
-    // assets.logos[key], not just web icons.
-    await service.updateAppWebAsset(
-      tenantId: tenantId,
-      appId: appId,
-      assetKey: key,
-      downloadUrl: url,
-    );
-  }
-
-  Future<void> _removeAssetKey({
-    required String tenantId,
-    required String appId,
-    required String key,
-  }) async {
-    final service = await _service;
-
-    final current = await service.getAppProfile(
-      tenantId: tenantId,
-      appId: appId,
-    );
-
-    final logos = Map<String, String>.from(current.assets.logos)..remove(key);
-
-    await service.updateAppProfile(
-      tenantId: tenantId,
-      appId: appId,
-      assets: <String, dynamic>{
-        'bucket': current.assets.bucket,
-        'version': current.assets.version + 1,
-        'logos': logos,
-      },
-    );
   }
 
   void _validatePng(Uint8List bytes, {required int maxBytes}) {

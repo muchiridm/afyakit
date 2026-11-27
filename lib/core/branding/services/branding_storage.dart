@@ -1,7 +1,5 @@
 // lib/core/branding/services/branding_storage.dart
 
-import 'dart:typed_data';
-
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -63,30 +61,6 @@ class BrandingStorageService {
   // Web assets
   // ─────────────────────────────────────────
 
-  Future<void> uploadWebAssetBytes({
-    required String tenantId,
-    required String appId,
-    required BrandingWebAssetType type,
-    required Uint8List bytes,
-    String? contentType,
-  }) {
-    return _upload(
-      path: brandingWebAssetPath(tenantId: tenantId, appId: appId, type: type),
-      bytes: bytes,
-      contentType: contentType ?? type.contentType,
-    );
-  }
-
-  Future<void> deleteWebAsset({
-    required String tenantId,
-    required String appId,
-    required BrandingWebAssetType type,
-  }) {
-    return _delete(
-      brandingWebAssetPath(tenantId: tenantId, appId: appId, type: type),
-    );
-  }
-
   Future<bool> webAssetExists({
     required String tenantId,
     required String appId,
@@ -111,30 +85,6 @@ class BrandingStorageService {
   // Logos
   // ─────────────────────────────────────────
 
-  Future<void> uploadLogoBytes({
-    required String tenantId,
-    required String appId,
-    required BrandingLogoType type,
-    required Uint8List bytes,
-    String? contentType,
-  }) {
-    return _upload(
-      path: brandingLogoPath(tenantId: tenantId, appId: appId, type: type),
-      bytes: bytes,
-      contentType: contentType ?? type.contentType,
-    );
-  }
-
-  Future<void> deleteLogo({
-    required String tenantId,
-    required String appId,
-    required BrandingLogoType type,
-  }) {
-    return _delete(
-      brandingLogoPath(tenantId: tenantId, appId: appId, type: type),
-    );
-  }
-
   Future<bool> logoExists({
     required String tenantId,
     required String appId,
@@ -158,36 +108,6 @@ class BrandingStorageService {
   // ─────────────────────────────────────────
   // Shared Storage operations
   // ─────────────────────────────────────────
-
-  Future<void> _upload({
-    required String path,
-    required Uint8List bytes,
-    required String contentType,
-  }) async {
-    if (bytes.isEmpty) {
-      throw ArgumentError.value(bytes.length, 'bytes', 'bytes cannot be empty');
-    }
-
-    await _storage
-        .ref()
-        .child(path)
-        .putData(
-          bytes,
-          SettableMetadata(
-            contentType: contentType,
-            cacheControl: 'public, max-age=300',
-          ),
-        );
-  }
-
-  Future<void> _delete(String path) async {
-    try {
-      await _storage.ref().child(path).delete();
-    } on FirebaseException catch (error) {
-      if (error.code == 'object-not-found') return;
-      rethrow;
-    }
-  }
 
   Future<bool> _exists(String path) async {
     try {

@@ -31,6 +31,32 @@ class AppProfileService {
   final Dio _dio;
   final AfyaKitRoutes routes;
 
+  Future<void> mutateBranding({
+    required String tenantId,
+    required String appId,
+    required String asset,
+    Uint8List? bytes,
+  }) async {
+    final base = routes.getTenantApp(
+      _cleanId(tenantId, fieldName: 'tenantId'),
+      _cleanId(appId, fieldName: 'appId'),
+    );
+    final uri = base.replace(path: '${base.path}/branding/$asset');
+    final current = await _dio.getUri<Map<String, dynamic>>(uri);
+    final generation = current.data?['generation'];
+    if (generation is! String) throw StateError('Invalid branding generation');
+    final options = Options(
+      headers: {'if-match': generation},
+      contentType: bytes == null ? null : 'image/png',
+      extra: {'sensitiveResponse': true},
+    );
+    if (bytes == null) {
+      await _dio.deleteUri<Object?>(uri, options: options);
+    } else {
+      await _dio.putUri<Object?>(uri, data: bytes, options: options);
+    }
+  }
+
   static const String _tag = '[AppProfileService]';
 
   static const String _json = Headers.jsonContentType;
@@ -251,50 +277,8 @@ class AppProfileService {
   }
 
   // ─────────────────────────────────────────────
-  // Branding asset metadata
+  // Zoho integration configuration
   // ─────────────────────────────────────────────
-
-  Future<AppProfile> updateAppWebAsset({
-    required String tenantId,
-    required String appId,
-    required String assetKey,
-    required String downloadUrl,
-  }) async {
-    final key = assetKey.trim();
-    final url = downloadUrl.trim();
-
-    if (key.isEmpty) {
-      throw ArgumentError.value(
-        assetKey,
-        'assetKey',
-        'assetKey cannot be empty',
-      );
-    }
-
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      throw ArgumentError.value(
-        downloadUrl,
-        'downloadUrl',
-        'downloadUrl must be a web-safe HTTP(S) URL',
-      );
-    }
-
-    final current = await getAppProfile(tenantId: tenantId, appId: appId);
-
-    final logos = Map<String, String>.from(current.assets.logos);
-
-    logos[key] = url;
-
-    return updateAppProfile(
-      tenantId: tenantId,
-      appId: appId,
-      assets: <String, dynamic>{
-        'bucket': current.assets.bucket,
-        'version': current.assets.version + 1,
-        'logos': logos,
-      },
-    );
-  }
 
   Future<ZohoAppConfig> getZohoConfig({
     required String tenantId,

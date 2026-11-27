@@ -1,9 +1,11 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../prescriptions_providers.dart';
 // lib/features/clinical/prescriptions/widgets/prescription_picker.dart
 
 import 'package:afyakit/features/clinical/prescriptions/prescription_model.dart';
 import 'package:material_ui/material_ui.dart';
 
-class PrescriptionPickerCard extends StatelessWidget {
+class PrescriptionPickerCard extends ConsumerWidget {
   const PrescriptionPickerCard({
     super.key,
     required this.profileId,
@@ -30,11 +32,15 @@ class PrescriptionPickerCard extends StatelessWidget {
   bool get _hasPatient => (profileId ?? '').trim().isNotEmpty;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final access = _hasPatient
+        ? ref.watch(prescriptionAccessProvider(profileId!)).valueOrNull ??
+              <String>[]
+        : <String>[];
     final ThemeData theme = Theme.of(context);
 
     final List<Prescription> active = prescriptions
-        .where((Prescription p) => p.isActive)
+        .where((Prescription p) => p.isActive && p.can('reference'))
         .toList(growable: false);
 
     // Important:
@@ -74,7 +80,7 @@ class PrescriptionPickerCard extends StatelessWidget {
                     onPressed: busy || !_hasPatient ? null : onRefresh,
                     icon: const Icon(Icons.refresh),
                   ),
-                if (onUpload != null)
+                if (onUpload != null && access.contains('upload'))
                   FilledButton.icon(
                     onPressed: busy || !_hasPatient ? null : onUpload,
                     icon: const Icon(Icons.upload_file_outlined),

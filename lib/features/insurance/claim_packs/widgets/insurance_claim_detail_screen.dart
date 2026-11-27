@@ -173,6 +173,10 @@ class _InsuranceClaimDetailScreenState
 
       if (!mounted) return;
 
+      if (!prescription.can('read')) {
+        _snack('Prescription reference only; clinical access is not granted.');
+        return;
+      }
       final file = await svc.download(
         prescriptionId: prescription.prescriptionId,
         fileName: prescription.fileName,
@@ -270,7 +274,16 @@ class _InsuranceClaimDetailScreenState
               _PrescriptionCard(
                 pack: pack,
                 busy: busy,
-                onView: _viewPrescription,
+                onView:
+                    (ref
+                                .watch(
+                                  prescriptionAccessProvider(pack.profileId),
+                                )
+                                .valueOrNull ??
+                            <String>[])
+                        .contains('read')
+                    ? _viewPrescription
+                    : null,
                 onAmend: _amendPrescription,
               ),
               const SizedBox(height: 12),
@@ -418,7 +431,7 @@ class _PrescriptionCard extends StatelessWidget {
 
   final InsuranceClaimPack pack;
   final bool busy;
-  final VoidCallback onView;
+  final VoidCallback? onView;
   final VoidCallback onAmend;
 
   bool get _hasPrescription {

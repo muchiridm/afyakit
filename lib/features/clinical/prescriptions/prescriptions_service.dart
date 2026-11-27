@@ -56,6 +56,18 @@ class PrescriptionsService {
   // Queries
   // ─────────────────────────────────────────────
 
+  Future<List<String>> access(String profileId) async {
+    if (!isCurrent()) throw StateError('Session changed');
+    final base = routes.clinicalPrescriptionsList(profileId: profileId);
+    final response = await api.getUri<Object?>(
+      _scopeUri(base.replace(path: '${base.path}/access')),
+    );
+    if (!isCurrent()) throw StateError('Session changed');
+    return (_asMap(response.data)['allowed_actions'] as List? ?? [])
+        .whereType<String>()
+        .toList();
+  }
+
   Future<List<Prescription>> list({
     String? profileId,
     bool? isActive,
@@ -75,6 +87,7 @@ class PrescriptionsService {
 
     final response = await api.getUri<Object?>(_scopeUri(uri));
 
+    if (!isCurrent()) throw StateError('Session changed');
     return _readPrescriptions(_asMap(response.data)['prescriptions']);
   }
 
@@ -89,6 +102,7 @@ class PrescriptionsService {
 
     final response = await api.getUri<Object?>(_scopeUri(uri));
 
+    if (!isCurrent()) throw StateError('Session changed');
     return _readPrescription(_asMap(response.data)['prescription']);
   }
 
@@ -107,6 +121,7 @@ class PrescriptionsService {
       data: input.toJson(),
     );
 
+    if (!isCurrent()) throw StateError('Session changed');
     return _readPrescription(_asMap(response.data)['prescription']);
   }
 
@@ -121,6 +136,7 @@ class PrescriptionsService {
 
     final response = await api.patchUri<Object?>(_scopeUri(uri));
 
+    if (!isCurrent()) throw StateError('Session changed');
     return _readPrescription(_asMap(response.data)['prescription']);
   }
 
@@ -139,6 +155,7 @@ class PrescriptionsService {
       data: input.toJson(),
     );
 
+    if (!isCurrent()) throw StateError('Session changed');
     return _readPrescription(_asMap(response.data)['prescription']);
   }
 

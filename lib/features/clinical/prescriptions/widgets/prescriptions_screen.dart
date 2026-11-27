@@ -153,6 +153,11 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     final controller = provider == null ? null : ref.read(provider.notifier);
 
     final busy = state?.busy ?? false;
+    final access = profileId == null
+        ? <String>[]
+        : ref.watch(prescriptionAccessProvider(profileId)).valueOrNull ??
+              <String>[];
+    final canUpload = access.contains('upload');
     final canUsePrescriptions = profileId != null && controller != null;
 
     final children = <Widget>[
@@ -241,7 +246,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: !canUsePrescriptions || busy
+            onPressed: !canUsePrescriptions || !canUpload || busy
                 ? null
                 : () =>
                       _pickAndUpload(context: context, controller: controller),
@@ -358,8 +363,10 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
   }) async {
     final nextStatus = await showDialog<PrescriptionStatus>(
       context: context,
-      builder: (_) =>
-          _PrescriptionStatusDialog(currentStatus: prescription.status),
+      builder: (_) => _PrescriptionStatusDialog(
+        currentStatus: prescription.status,
+        allowed: prescription.allowedStatuses,
+      ),
     );
 
     if (!context.mounted || nextStatus == null) return;
@@ -371,7 +378,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
 
     final updated = await controller.update(
       prescription: prescription,
-      input: PrescriptionUpdateInput(status: nextStatus, isActive: true),
+      input: PrescriptionUpdateInput(status: nextStatus),
     );
 
     if (!context.mounted) return;
@@ -396,10 +403,9 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete prescription?'),
+        title: const Text('Archive prescription?'),
         content: const Text(
-          'This removes the prescription record. The uploaded Storage file is '
-          'not deleted by this MVP action.',
+          'This removes the prescription from ordinary workflows. Original evidence and historical associations are retained.',
         ),
         actions: [
           TextButton(
@@ -409,7 +415,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
           FilledButton.icon(
             onPressed: () => Navigator.pop(context, true),
             icon: const Icon(Icons.delete_outline),
-            label: const Text('Delete'),
+            label: const Text('Archive'),
           ),
         ],
       ),
@@ -453,7 +459,9 @@ class _PrescriptionTile extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(child: Icon(_iconFor(prescription))),
         title: Text(
-          prescription.fileName,
+          prescription.fileName.isEmpty
+              ? prescription.prescriptionId
+              : prescription.fileName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -494,33 +502,36 @@ class _PrescriptionTile extends StatelessWidget {
                     break;
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _PrescriptionAction.open,
-                  child: ListTile(
-                    leading: Icon(Icons.open_in_new),
-                    title: Text('Open'),
+              itemBuilder: (context) => [
+                if (prescription.can('read'))
+                  const PopupMenuItem(
+                    value: _PrescriptionAction.open,
+                    child: ListTile(
+                      leading: Icon(Icons.open_in_new),
+                      title: Text('Open'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: _PrescriptionAction.changeStatus,
-                  child: ListTile(
-                    leading: Icon(Icons.fact_check_outlined),
-                    title: Text('Change status'),
+                if (prescription.can('review'))
+                  const PopupMenuItem(
+                    value: _PrescriptionAction.changeStatus,
+                    child: ListTile(
+                      leading: Icon(Icons.fact_check_outlined),
+                      title: Text('Change status'),
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: _PrescriptionAction.delete,
-                  child: ListTile(
-                    leading: Icon(Icons.delete_outline),
-                    title: Text('Delete'),
+                if (prescription.can('archive'))
+                  const PopupMenuItem(
+                    value: _PrescriptionAction.delete,
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Archive'),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
         ),
-        onTap: busy ? null : onOpen,
+        onTap: busy || !prescription.can('read') ? null : onOpen,
       ),
     );
   }
@@ -575,7 +586,11 @@ class _PrescriptionStatusChip extends StatelessWidget {
 }
 
 class _PrescriptionStatusDialog extends StatefulWidget {
-  const _PrescriptionStatusDialog({required this.currentStatus});
+  const _PrescriptionStatusDialog({
+    required this.currentStatus,
+    required this.allowed,
+  });
+  final List<PrescriptionStatus> allowed;
 
   final PrescriptionStatus currentStatus;
 
@@ -590,7 +605,7 @@ class _PrescriptionStatusDialogState extends State<_PrescriptionStatusDialog> {
   @override
   void initState() {
     super.initState();
-    _selectedStatus = widget.currentStatus;
+    _selectedStatus = widget.allowed.first;
   }
 
   @override
@@ -601,7 +616,7 @@ class _PrescriptionStatusDialogState extends State<_PrescriptionStatusDialog> {
         width: 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: PrescriptionStatus.values
+          children: widget.allowed
               .map((status) {
                 return RadioListTile<PrescriptionStatus>(
                   value: status,

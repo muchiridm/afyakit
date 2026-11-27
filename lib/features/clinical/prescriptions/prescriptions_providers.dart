@@ -105,3 +105,9 @@ final prescriptionPickerControllerProvider = StateNotifierProvider.autoDispose
 
       return controller;
     });
+
+final prescriptionAccessProvider = FutureProvider.autoDispose
+    .family<List<String>, String>(
+      (ref, profileId) =>
+          ref.watch(prescriptionsServiceProvider).access(profileId),
+    );
