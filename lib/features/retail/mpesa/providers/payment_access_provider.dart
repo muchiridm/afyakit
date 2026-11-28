@@ -35,8 +35,9 @@ final mpesaEligibilityProvider = FutureProvider.autoDispose
       final context = ref.watch(paymentContextProvider);
       if (!context.active ||
           context.tenant != 'afya' ||
-          context.app != 'dawapap')
+          context.app != 'dawapap') {
         return false;
+      }
       final service = await ref.watch(mpesaServiceProvider.future);
       return service.isEligible(invoiceId);
     });

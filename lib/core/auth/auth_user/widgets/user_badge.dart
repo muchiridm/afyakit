@@ -32,7 +32,7 @@ class UserBadge extends ConsumerWidget {
         if (user == null) return const SizedBox.shrink();
 
         final name = user.displayLabel();
-        final profileAction = () => _openProfile(context);
+        void profileAction() => _openProfile(context);
 
         if (!user.hasStaffWorkspace) {
           return _badge(

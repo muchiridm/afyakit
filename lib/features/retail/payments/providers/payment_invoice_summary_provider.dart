@@ -9,8 +9,9 @@ import 'package:afyakit/features/retail/invoices/services/zoho_invoices_service.
 /// bloating the payment list DTO.
 final paymentInvoiceSummaryProvider =
     FutureProvider.family<ZohoInvoice, String>((ref, invoiceId) async {
-      if (!ref.watch(paymentContextProvider).active)
+      if (!ref.watch(paymentContextProvider).active) {
         throw StateError('Payment access unavailable');
+      }
       final id = invoiceId.trim();
       if (id.isEmpty) {
         throw StateError('invoiceId is empty');

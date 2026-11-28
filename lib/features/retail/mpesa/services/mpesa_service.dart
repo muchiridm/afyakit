@@ -60,11 +60,13 @@ class MpesaService {
     await Future<void>.delayed(firstDelay);
 
     while (true) {
-      if (isCurrent?.call() == false)
+      if (isCurrent?.call() == false) {
         throw StateError('Payment context changed');
+      }
       final p = await getPaymentStatus(paymentId);
-      if (isCurrent?.call() == false)
+      if (isCurrent?.call() == false) {
         throw StateError('Payment context changed');
+      }
       onTick?.call(p);
 
       if (p.isTerminal) return p;

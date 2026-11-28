@@ -53,11 +53,12 @@ class FakeMpesa extends MpesaService {
     bool Function()? isCurrent,
   }) async {
     drafts.add(draft);
-    if (denied)
+    if (denied) {
       throw DioException(
         requestOptions: RequestOptions(),
         response: Response(requestOptions: RequestOptions(), statusCode: 404),
       );
+    }
     final result = pending == null
         ? (resultOverride ?? payment())
         : await pending!.future;
