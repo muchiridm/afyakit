@@ -1,6 +1,7 @@
 // lib/features/clinical/health_metrics/widgets/health_metrics_dashboard_screen.dart
 
 import 'package:material_ui/material_ui.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -71,6 +72,11 @@ class _HealthMetricsDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(profilesServiceProvider, (previous, next) {
+      if (previous != null && previous != next && mounted) {
+        setState(() => _selectedProfile = null);
+      }
+    });
     final selectedProfile = _selectedProfile;
 
     return AppPage(
@@ -150,11 +156,22 @@ class _ProfileMetricsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final access = ref.watch(profileDetailsProvider(profile.profileId));
+    final canRecord =
+        !access.isLoading &&
+        !access.hasError &&
+        access.valueOrNull?.allows('records.metric.create') == true;
     final query = _metricsQueryFor(profile);
 
     final metricsAsync = ref.watch(healthMetricEntriesProvider(query));
 
+    if (access.isLoading) return const _MetricsLoadingCard();
+    if (access.hasError || access.valueOrNull == null) {
+      return const AppCard(child: Text('Profile access is unavailable.'));
+    }
     return metricsAsync.when(
+      skipLoadingOnRefresh: false,
+      skipLoadingOnReload: false,
       loading: () => const _MetricsLoadingCard(),
       error: (error, _) => _MetricsErrorCard(
         error: error,
@@ -163,10 +180,12 @@ class _ProfileMetricsSection extends ConsumerWidget {
         },
       ),
       data: (metrics) => _MetricsDashboard(
-        profile: profile,
+        profile: access.requireValue,
         metrics: metrics,
         onView: (type) => _openHistory(context, type: type),
-        onAdd: (type) => _recordMetric(context, ref, type: type, query: query),
+        onAdd: canRecord
+            ? (type) => _recordMetric(context, ref, type: type, query: query)
+            : null,
       ),
     );
   }
@@ -188,6 +207,7 @@ class _ProfileMetricsSection extends ConsumerWidget {
     required HealthMetricType type,
     required HealthMetricEntriesQuery query,
   }) async {
+    final service = ref.read(healthMetricsServiceProvider);
     final input = await HealthMetricEntryDialog.show(
       context,
       profileId: profile.profileId,
@@ -200,8 +220,6 @@ class _ProfileMetricsSection extends ConsumerWidget {
     }
 
     try {
-      final service = ref.read(healthMetricsServiceProvider);
-
       await service.createMetric(input);
 
       ref.invalidate(healthMetricEntriesProvider(query));
@@ -333,7 +351,7 @@ class _MetricsDashboard extends StatelessWidget {
   final Profile profile;
   final List<HealthMetricEntry> metrics;
   final ValueChanged<HealthMetricType> onView;
-  final ValueChanged<HealthMetricType> onAdd;
+  final ValueChanged<HealthMetricType>? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -542,7 +560,7 @@ class _StandardMetricsGrid extends StatelessWidget {
   final Map<HealthMetricType, HealthMetricEntry> latestByType;
 
   final ValueChanged<HealthMetricType> onView;
-  final ValueChanged<HealthMetricType> onAdd;
+  final ValueChanged<HealthMetricType>? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +579,7 @@ class _StandardMetricsGrid extends StatelessWidget {
                   type: type,
                   latest: latestByType[type],
                   onView: () => onView(type),
-                  onAdd: () => onAdd(type),
+                  onAdd: onAdd == null ? null : () => onAdd!(type),
                 ),
               ),
           ],
@@ -589,7 +607,7 @@ class _BodyMeasurementsGrid extends StatelessWidget {
   final int? profileAge;
 
   final ValueChanged<HealthMetricType> onView;
-  final ValueChanged<HealthMetricType> onAdd;
+  final ValueChanged<HealthMetricType>? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -607,7 +625,9 @@ class _BodyMeasurementsGrid extends StatelessWidget {
                 type: HealthMetricType.height,
                 latest: height,
                 onView: () => onView(HealthMetricType.height),
-                onAdd: () => onAdd(HealthMetricType.height),
+                onAdd: onAdd == null
+                    ? null
+                    : () => onAdd!(HealthMetricType.height),
               ),
             ),
             SizedBox(
@@ -616,7 +636,9 @@ class _BodyMeasurementsGrid extends StatelessWidget {
                 type: HealthMetricType.weight,
                 latest: weight,
                 onView: () => onView(HealthMetricType.weight),
-                onAdd: () => onAdd(HealthMetricType.weight),
+                onAdd: onAdd == null
+                    ? null
+                    : () => onAdd!(HealthMetricType.weight),
               ),
             ),
             SizedBox(
@@ -626,16 +648,18 @@ class _BodyMeasurementsGrid extends StatelessWidget {
                 profileAge: profileAge,
                 height: height,
                 weight: weight,
-                onRecordMissingMetric: () {
-                  if (height == null) {
-                    onAdd(HealthMetricType.height);
-                    return;
-                  }
+                onRecordMissingMetric: onAdd == null
+                    ? null
+                    : () {
+                        if (height == null) {
+                          onAdd!(HealthMetricType.height);
+                          return;
+                        }
 
-                  if (weight == null) {
-                    onAdd(HealthMetricType.weight);
-                  }
-                },
+                        if (weight == null) {
+                          onAdd!(HealthMetricType.weight);
+                        }
+                      },
               ),
             ),
             SizedBox(
@@ -644,7 +668,9 @@ class _BodyMeasurementsGrid extends StatelessWidget {
                 type: HealthMetricType.waistCircumference,
                 latest: waist,
                 onView: () => onView(HealthMetricType.waistCircumference),
-                onAdd: () => onAdd(HealthMetricType.waistCircumference),
+                onAdd: onAdd == null
+                    ? null
+                    : () => onAdd!(HealthMetricType.waistCircumference),
               ),
             ),
           ],
@@ -665,7 +691,7 @@ class _HealthMetricCard extends StatelessWidget {
   final HealthMetricType type;
   final HealthMetricEntry? latest;
   final VoidCallback onView;
-  final VoidCallback onAdd;
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -747,7 +773,7 @@ class _BmiCard extends StatelessWidget {
   final int? profileAge;
   final HealthMetricEntry? height;
   final HealthMetricEntry? weight;
-  final VoidCallback onRecordMissingMetric;
+  final VoidCallback? onRecordMissingMetric;
 
   bool get _hasRequiredMeasurements {
     return height != null && weight != null;

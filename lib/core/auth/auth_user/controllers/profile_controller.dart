@@ -115,6 +115,7 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   /// - superadmin can assign anything
   /// - otherwise, any of editor's roles must allow assigning the target role
   bool _canAssignRole(AuthUser editor, StaffRole targetRole) {
+    if (targetRole.isProfessional) return false;
     if (editor.isSuperAdmin) return true;
     if (editor.staffRoles.isEmpty) return false;
     return editor.staffRoles.any((r) => r.canAssignRole(targetRole));
@@ -211,6 +212,8 @@ class ProfileController extends StateNotifier<ProfileFormState> {
   }
 
   void toggleStaffRole(StaffRole role) {
+    if (role.isProfessional) return; // Dedicated approval/revocation only.
+
     final target = state.user;
     final editor = ref.read(currentUserValueProvider);
 
@@ -288,7 +291,9 @@ class ProfileController extends StateNotifier<ProfileFormState> {
     final rolesChanged = !setEquals(desiredRoles.toSet(), oldRoles.toSet());
     if (rolesChanged) {
       if (!editor.canEditUserRolesFor(target) ||
-          desiredRoles.any((role) => !_canAssignRole(editor, role))) {
+          desiredRoles.any(
+            (role) => !oldRoles.contains(role) && !_canAssignRole(editor, role),
+          )) {
         SnackService.showError('You cannot make this app role change.');
         return;
       }

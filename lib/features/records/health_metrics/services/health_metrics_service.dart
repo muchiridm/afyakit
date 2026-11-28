@@ -7,7 +7,16 @@ import '../models/health_metric_entry.dart';
 import '../models/health_metric_type.dart';
 
 class HealthMetricsService {
-  const HealthMetricsService({required this.api, required this.routes});
+  const HealthMetricsService({
+    required this.api,
+    required this.routes,
+    required this.isCurrent,
+  });
+
+  final bool Function() isCurrent;
+  void _checkCurrent() {
+    if (!isCurrent()) throw StateError('Metric authorization context changed');
+  }
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
@@ -23,6 +32,7 @@ class HealthMetricsService {
   }) async {
     final pid = _requiredId(profileId, 'profileId');
 
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsProfileHealthMetricsList(
         pid,
@@ -35,6 +45,7 @@ class HealthMetricsService {
       ),
     );
 
+    _checkCurrent();
     final body = _asMap(response.data);
 
     return _readMetrics(body['metrics']);
@@ -49,6 +60,7 @@ class HealthMetricsService {
     int perPage = 50,
     int page = 1,
   }) async {
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsHealthMetricsList(
         profileId: _nullable(profileId),
@@ -61,6 +73,7 @@ class HealthMetricsService {
       ),
     );
 
+    _checkCurrent();
     final body = _asMap(response.data);
 
     return _readMetrics(body['metrics']);
@@ -74,29 +87,29 @@ class HealthMetricsService {
 
     final mid = _requiredId(metricId, 'metricId');
 
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsProfileHealthMetricGet(profileId: pid, metricId: mid),
     );
 
+    _checkCurrent();
     final body = _asMap(response.data);
 
     return _readMetric(body['metric']);
   }
 
-  Future<HealthMetricEntry> createMetric(HealthMetricCreateInput input) async {
+  Future<void> createMetric(HealthMetricCreateInput input) async {
     final profileId = _requiredId(input.profileId, 'profileId');
 
-    final response = await api.postUri<Object?>(
+    _checkCurrent();
+    await api.postUri<Object?>(
       routes.recordsProfileHealthMetricCreate(profileId),
       data: input.toJson(),
     );
-
-    final body = _asMap(response.data);
-
-    return _readMetric(body['metric']);
+    _checkCurrent();
   }
 
-  Future<HealthMetricEntry> updateMetric({
+  Future<void> updateMetric({
     required String profileId,
     required String metricId,
     required HealthMetricUpdateInput input,
@@ -105,17 +118,17 @@ class HealthMetricsService {
 
     final mid = _requiredId(metricId, 'metricId');
 
-    final response = await api.putUri<Object?>(
+    _checkCurrent();
+    await api.putUri<Object?>(
       routes.recordsProfileHealthMetricUpdate(profileId: pid, metricId: mid),
       data: input.toJson(),
     );
-
-    final body = _asMap(response.data);
-
-    return _readMetric(body['metric']);
+    _checkCurrent();
   }
 
   Future<void> deleteMetric({
+    required int expectedRevision,
+    required String reason,
     required String profileId,
     required String metricId,
   }) async {
@@ -123,9 +136,12 @@ class HealthMetricsService {
 
     final mid = _requiredId(metricId, 'metricId');
 
+    _checkCurrent();
     await api.deleteUri<Object?>(
       routes.recordsProfileHealthMetricDelete(profileId: pid, metricId: mid),
+      data: {'expectedRevision': expectedRevision, 'reason': reason},
     );
+    _checkCurrent();
   }
 
   static HealthMetricEntry _readMetric(Object? value) {

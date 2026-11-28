@@ -396,7 +396,19 @@ class AllUsersService {
     final cleanTenant = _requireId(tenantId, 'tenantId');
     final cleanUid = _requireId(uid, 'uid');
     final cleanApp = _requireId(appId, 'appId').toLowerCase();
-    final allowedRoles = <String>{'manager', 'admin', 'owner'};
+    final allowedRoles = <String>{
+      'manager',
+      'admin',
+      'owner',
+      'staff',
+      'runner',
+      'dispatcher',
+      'pharmacist',
+      'prescriber',
+      'clinician',
+      'nurse',
+      'technician',
+    };
     final roles = staffRoles
         .map((role) => role.trim().toLowerCase())
         .toSet()

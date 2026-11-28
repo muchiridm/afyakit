@@ -1,3 +1,6 @@
+import 'package:afyakit/app/providers/app_profile_providers.dart';
+import '../profiles_controller.dart';
+import 'profile_self_app_access_section.dart';
 // lib/features/records/health_profiles/widgets/member_self_profile_screen.dart
 // Personal, cross-application Health Profile entry for Occupational Health.
 // Identity and uniqueness MUST also be enforced by the backend.
@@ -24,6 +27,8 @@ class MemberSelfProfileScreen extends ConsumerStatefulWidget {
 
 class _MemberSelfProfileScreenState
     extends ConsumerState<MemberSelfProfileScreen> {
+  int _loadRevision = 0;
+  String? _associationId;
   bool _loading = true;
   bool _creating = false;
   String? _error;
@@ -43,41 +48,35 @@ class _MemberSelfProfileScreenState
   // The relationship filter must be resolved against tenant-wide canonical
   // profile links, not the current application's profile enrolments.
   Future<List<Profile>> _readSelfProfiles(ProfilesService service) async {
-    final results = await service.list(
-      accountNumber: _account,
-      relationship: ProfileContactRelationship.self,
-      // Include inactive links too: they must not trigger duplicate creation.
-      perPage: 100,
-    );
-    return results;
+    final id = await service.personalProfileId();
+    if (id == null) return [];
+    final options = await service.eligibleSelfApps(id);
+    if (!options.appIds.contains(ref.read(appIdProvider))) return [];
+    return [await service.get(id)];
   }
 
-  bool _belongsToSelf(Profile profile) {
-    if (!profile.isActive) return false;
-    if (profile.relationship == ProfileContactRelationship.self &&
-        profile.accountNumber?.trim().toUpperCase() == _account) {
-      return true;
-    }
-    return profile.activeLinkedContacts.any(
-      (link) =>
-          link.accountNumber.trim().toUpperCase() == _account &&
-          link.relationship == ProfileContactRelationship.self,
-    );
-  }
+  bool _belongsToSelf(Profile profile) => profile.profileId == _associationId;
 
   Future<void> _load() async {
     if (!mounted) return;
+    final request = ++_loadRevision;
     setState(() {
       _loading = true;
       _error = null;
       _hasUnverifiedResults = false;
+      _profile = null;
+      _associationId = null;
     });
     try {
       final service = await ref.read(profilesServiceReadyProvider.future);
+      final id = await service.personalProfileId();
       final results = await _readSelfProfiles(service);
-      final verified = results.where(_belongsToSelf).toList(growable: false);
-      if (!mounted) return;
+      final verified = results
+          .where((p) => p.profileId == id)
+          .toList(growable: false);
+      if (!mounted || request != _loadRevision || !service.isCurrent()) return;
       setState(() {
+        _associationId = id;
         _profile = verified.isEmpty ? null : verified.first;
         // Do not offer creation if a record was returned whose self-link
         // cannot be verified from the API response, or duplicates exist.
@@ -86,7 +85,7 @@ class _MemberSelfProfileScreenState
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || request != _loadRevision) return;
       setState(() {
         _error = 'Unable to check your linked profile: $error';
         _loading = false;
@@ -114,6 +113,7 @@ class _MemberSelfProfileScreenState
     if (_loading ||
         _creating ||
         _profile != null ||
+        _associationId != null ||
         _hasUnverifiedResults ||
         _error != null) {
       return;
@@ -123,8 +123,8 @@ class _MemberSelfProfileScreenState
       final service = await ref.read(profilesServiceReadyProvider.future);
       // Recheck immediately before showing creation; a profile could have
       // been linked from another app since the page was first opened.
-      final before = await _readSelfProfiles(service);
-      if (before.isNotEmpty) {
+      final before = await service.personalProfileId();
+      if (before != null) {
         if (mounted) await _load();
         return;
       }
@@ -141,8 +141,8 @@ class _MemberSelfProfileScreenState
         throw StateError('Only a Self profile may be created here.');
       }
       // Check again after the dialog, in case a link was created while open.
-      final after = await _readSelfProfiles(service);
-      if (after.isNotEmpty) {
+      final after = await service.personalProfileId();
+      if (after != null) {
         if (mounted) await _load();
         return;
       }
@@ -182,6 +182,17 @@ class _MemberSelfProfileScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(profilesServiceProvider, (previous, next) {
+      ++_loadRevision;
+      setState(() {
+        _profile = null;
+        _associationId = null;
+        _loading = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    });
     final theme = Theme.of(context);
     final profile = _profile;
     return Scaffold(
@@ -224,7 +235,7 @@ class _MemberSelfProfileScreenState
                       textAlign: TextAlign.center,
                     ),
                   )
-                : profile != null
+                : _associationId != null
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -235,7 +246,7 @@ class _MemberSelfProfileScreenState
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        profile.fullName,
+                        profile?.fullName ?? 'My profile application access',
                         style: theme.textTheme.titleLarge,
                         textAlign: TextAlign.center,
                       ),
@@ -245,11 +256,28 @@ class _MemberSelfProfileScreenState
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
-                      FilledButton.icon(
-                        onPressed: _openDetails,
-                        icon: const Icon(Icons.open_in_new),
-                        label: const Text('Open My Profile'),
+                      ProfileSelfAppAccessSection(
+                        profileId: _associationId,
+                        currentAppId: ref.watch(appIdProvider),
+                        controller: ref.watch(
+                          profilesControllerProvider(
+                            ProfilesScope(
+                              accountNumber: _account,
+                              memberMode: true,
+                            ),
+                          ).notifier,
+                        ),
+                        busy: false,
+                        onChanged: () {
+                          _load();
+                        },
                       ),
+                      if (profile != null)
+                        FilledButton.icon(
+                          onPressed: _openDetails,
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Open My Profile'),
+                        ),
                     ],
                   )
                 : Column(
@@ -268,8 +296,8 @@ class _MemberSelfProfileScreenState
                       const SizedBox(height: 8),
                       const Text(
                         'If you already created a profile in '
-                        'another AfyaKit application, it should '
-                        'appear here automatically.',
+                        'another AfyaKit application, its ownership '
+                        'must be verified before creating another.',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),

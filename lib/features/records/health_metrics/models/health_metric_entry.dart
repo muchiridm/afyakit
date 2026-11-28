@@ -15,7 +15,14 @@ class HealthMetricEntry {
     this.recordedByUid,
     this.createdAt,
     this.updatedAt,
+    this.revision,
+    this.allowedActions = const [],
   });
+
+  final int? revision;
+  final List<String> allowedActions;
+  bool get canUpdate => revision != null && allowedActions.contains('update');
+  bool get canArchive => revision != null && allowedActions.contains('archive');
 
   final String metricId;
   final String profileId;
@@ -64,6 +71,15 @@ class HealthMetricEntry {
     }
 
     return HealthMetricEntry(
+      revision: json['revision'] is int && (json['revision'] as int) > 0
+          ? json['revision'] as int
+          : null,
+      allowedActions: List.unmodifiable(
+        (json['allowed_actions'] is List
+                ? json['allowed_actions'] as List
+                : const [])
+            .whereType<String>(),
+      ),
       metricId: _readString(json, 'metric_id'),
       profileId: _readString(json, 'profile_id'),
       type: type,
@@ -95,6 +111,8 @@ class HealthMetricEntry {
     DateTime? updatedAt,
   }) {
     return HealthMetricEntry(
+      revision: revision,
+      allowedActions: allowedActions,
       metricId: metricId ?? this.metricId,
       profileId: profileId ?? this.profileId,
       type: type ?? this.type,
@@ -229,6 +247,8 @@ class HealthMetricCreateInput {
 
 class HealthMetricUpdateInput {
   const HealthMetricUpdateInput({
+    required this.expectedRevision,
+    required this.reason,
     this.recordedAt,
     this.primaryValue,
     this.secondaryValue,
@@ -239,6 +259,8 @@ class HealthMetricUpdateInput {
     this.clearNotes = false,
   });
 
+  final int expectedRevision;
+  final String reason;
   final DateTime? recordedAt;
 
   final double? primaryValue;
@@ -253,6 +275,8 @@ class HealthMetricUpdateInput {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
+      'expectedRevision': expectedRevision,
+      'reason': reason,
       if (recordedAt != null)
         'recorded_at': recordedAt!.toUtc().toIso8601String(),
       if (primaryValue != null) 'primary_value': primaryValue,

@@ -68,7 +68,7 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     required String prescriptionId,
   }) => clinicalPrescriptionApprove(prescriptionId);
 
-  // Clinical notes — all endpoints require app-staff access.
+  // Clinical notes require backend professional eligibility and encounter authority.
   // GET requires profile_id; encounter_id is optional.
   Uri clinicalNotesList({
     required String profileId,
@@ -86,7 +86,7 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     },
   );
 
-  /// POST; request body must contain profile_id, note_type and content.
+  /// POST; body requires profile_id, encounter_id, note_type and content.
   Uri clinicalNoteCreate() => _uri('clinical/notes');
 
   /// GET.
@@ -103,7 +103,7 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
   Uri clinicalNoteAmend(String noteId) =>
       _uri('clinical/notes/${_seg(noteId)}/amendments');
 
-  // Clinical tests — all endpoints require app-staff access.
+  // Clinical tests require backend professional eligibility and diagnostic scope.
   // GET requires profile_id; encounter_id is optional.
   Uri clinicalTestsList({
     required String profileId,
@@ -121,7 +121,7 @@ extension AfyaKitClinicalRoutes on AfyaKitRoutes {
     },
   );
 
-  /// POST; body requires profile_id, test_type, name, performed_at, results.
+  /// POST; body requires profile_id, encounter_id, test_type, name, performed_at, results.
   Uri clinicalTestCreate() => _uri('clinical/tests');
 
   /// GET.

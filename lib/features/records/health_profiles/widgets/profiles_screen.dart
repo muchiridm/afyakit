@@ -1,3 +1,7 @@
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'member_self_profile_screen.dart';
+import 'profile_registration_confirmation.dart';
+import '../profiles_service.dart';
 import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 // lib/features/records/health_profiles/widgets/profiles_screen.dart
 
@@ -242,7 +246,18 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     if (input == null || !mounted) return;
 
     try {
-      final created = await _controller.create(input);
+      final authorization = _memberMode
+          ? null
+          : await confirmProfileRegistration(
+              context,
+              ref.read(profilesServiceProvider),
+              'records.profile.create',
+            );
+      if (!mounted || (!_memberMode && authorization == null)) return;
+      final created = await _controller.create(
+        input,
+        authorization: authorization,
+      );
 
       if (!mounted) return;
 
@@ -332,7 +347,14 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
     );
     if (values == null || !mounted) return;
     try {
+      final authorization = await confirmProfileRegistration(
+        context,
+        ref.read(profilesServiceProvider),
+        'records.profile.enrol',
+      );
+      if (authorization == null || !mounted) return;
       await _controller.enrolInCurrentApp(
+        authorization: authorization,
         profileId: values.$1,
         accountNumber: values.$2,
       );
@@ -466,6 +488,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
   Widget build(BuildContext context) {
     final scope = _scope;
 
+    final user = ref.watch(currentUserValueProvider);
     final state = ref.watch(profilesControllerProvider(scope));
 
     final controller = ref.read(profilesControllerProvider(scope).notifier);
@@ -483,12 +506,24 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
           icon: const Icon(Icons.refresh),
         ),
         if (widget.allowExplicitContactLink &&
+            user?.hasPermission('records.profile.enrol') == true &&
             !_isContactScoped &&
             !widget.selectionMode)
           TextButton.icon(
             onPressed: state.isSaving ? null : _enrolExistingProfile,
             icon: const Icon(Icons.person_add_alt_1_outlined),
             label: const Text('Enrol existing'),
+          ),
+        if (_memberMode && !widget.selectionMode && !_missingMemberAccount)
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) =>
+                    MemberSelfProfileScreen(accountNumber: _contactScope!),
+              ),
+            ),
+            icon: const Icon(Icons.apps),
+            label: const Text('My application access'),
           ),
         if (_memberMode && !widget.selectionMode)
           TextButton.icon(
@@ -501,7 +536,11 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.isSaving || _missingMemberAccount
+            onPressed:
+                state.isSaving ||
+                    _missingMemberAccount ||
+                    (!_memberMode &&
+                        user?.hasPermission('records.profile.create') != true)
                 ? null
                 : _openCreateDialog,
             icon: state.isSaving
@@ -668,7 +707,7 @@ class _MemberProfilesInfoCard extends StatelessWidget {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Create a separate profile for yourself and each dependant; choose the relationship explicitly. '
+                'Create your own canonical profile. Representative access is not enabled. '
                 'Prescriptions, health measurements, and other clinical records '
                 'remain linked to the correct person.',
               ),

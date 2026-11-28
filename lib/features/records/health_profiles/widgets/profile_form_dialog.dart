@@ -12,12 +12,14 @@ class ProfileFormDialog extends ConsumerStatefulWidget {
   const ProfileFormDialog({
     super.key,
     this.initial,
+    this.historyOnly = false,
     this.initialContact,
     this.initialRelationship,
     this.prefillFromContact = true,
     this.allowExplicitContactLink = false,
   });
   final Profile? initial;
+  final bool historyOnly;
   final NativeContact? initialContact;
   final ProfileContactRelationship? initialRelationship;
   final bool prefillFromContact;
@@ -59,17 +61,36 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
     _phone.text = p?.phone ?? '';
     _email.text = p?.email ?? '';
     _nationalId.text = p?.nationalId ?? '';
-    _notes.text = p?.notes ?? '';
-    _past.text = p?.pastMedicalHistory ?? '';
-    _surgical.text = p?.surgicalHistory ?? '';
-    _family.text = p?.familyHistory ?? '';
-    _social.text = p?.socialHistory ?? '';
-    _medicines.text = p?.currentMedications ?? '';
+    final h = widget.historyOnly
+        ? p?.selfReportedHistory ?? <String, Object?>{}
+        : <String, Object?>{};
+    _notes.text = h['notes'] as String? ?? '';
+    _past.text = h['past_medical_history'] as String? ?? '';
+    _surgical.text = h['surgical_history'] as String? ?? '';
+    _family.text = h['family_history'] as String? ?? '';
+    _social.text = h['social_history'] as String? ?? '';
+    _medicines.text = h['current_medications'] as String? ?? '';
     _gender = p?.gender ?? ProfileGender.unknown;
-    _allergyStatus = p?.allergyStatus ?? AllergyStatus.unknown;
-    _allergies = [...?p?.allergies];
-    _conditions = [...?p?.conditions];
-    _vaccinations = [...?p?.vaccinations];
+    _allergyStatus = AllergyStatus.values.firstWhere(
+      (v) => v.name == h['allergy_status'],
+      orElse: () => AllergyStatus.unknown,
+    );
+    _allergies = (h['allergies'] as List? ?? [])
+        .map(
+          (v) => ProfileAllergy.fromJson(Map<String, Object?>.from(v as Map)),
+        )
+        .toList();
+    _conditions = (h['conditions'] as List? ?? [])
+        .map(
+          (v) => ProfileCondition.fromJson(Map<String, Object?>.from(v as Map)),
+        )
+        .toList();
+    _vaccinations = (h['vaccinations'] as List? ?? [])
+        .map(
+          (v) =>
+              ProfileVaccination.fromJson(Map<String, Object?>.from(v as Map)),
+        )
+        .toList();
     _relationship =
         widget.initialRelationship ??
         (widget.allowExplicitContactLink
@@ -284,32 +305,42 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
     }
     Navigator.pop(
       context,
-      ProfileUpsertInput(
-        fullName: _name.text.trim(),
-        dob: _dob.text.trim(),
-        gender: _gender,
-        accountNumber: _staffCreate ? _contact?.accountNumber : null,
-        relationship: _relationship,
-        phone: _phone.text.trim(),
-        email: _email.text.trim(),
-        nationalId: _nationalId.text.trim(),
-        notes: _notes.text.trim(),
-        pastMedicalHistory: _past.text.trim(),
-        surgicalHistory: _surgical.text.trim(),
-        familyHistory: _family.text.trim(),
-        socialHistory: _social.text.trim(),
-        currentMedications: _medicines.text.trim(),
-        allergyStatus: _allergyStatus,
-        allergies: _allergies,
-        vaccinations: _vaccinations,
-        conditions: _conditions,
-      ),
+      widget.historyOnly
+          ? ProfileUpsertInput(
+              fullName: _name.text.trim(),
+              notes: _notes.text.trim(),
+              pastMedicalHistory: _past.text.trim(),
+              surgicalHistory: _surgical.text.trim(),
+              familyHistory: _family.text.trim(),
+              socialHistory: _social.text.trim(),
+              currentMedications: _medicines.text.trim(),
+              allergyStatus: _allergyStatus,
+              allergies: _allergies,
+              vaccinations: _vaccinations,
+              conditions: _conditions,
+            )
+          : ProfileUpsertInput(
+              fullName: _name.text.trim(),
+              dob: _dob.text.trim(),
+              gender: _gender,
+              accountNumber: _staffCreate ? _contact?.accountNumber : null,
+              relationship: _relationship,
+              phone: _phone.text.trim(),
+              email: _email.text.trim(),
+              nationalId: _nationalId.text.trim(),
+            ),
     );
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(_editing ? 'Edit health profile' : 'Create health profile'),
+    title: Text(
+      widget.historyOnly
+          ? 'Edit self-reported history'
+          : _editing
+          ? 'Edit health profile'
+          : 'Create health profile',
+    ),
     content: SizedBox(
       width: 720,
       height: MediaQuery.sizeOf(context).height * .75,
@@ -317,152 +348,155 @@ class _ProfileFormDialogState extends ConsumerState<ProfileFormDialog> {
         key: _key,
         child: ListView(
           children: [
-            const Text(
-              'Start with the essentials. Medical history is optional and can be updated later.',
+            Text(
+              widget.historyOnly
+                  ? 'This information is self-reported. Existing clinical evidence remains unchanged.'
+                  : 'Enter demographic information. Personal medical history is managed separately.',
             ),
-            const SizedBox(height: 16),
-            if (_staffCreate) ...[
-              OutlinedButton.icon(
-                onPressed: _chooseContact,
-                icon: const Icon(Icons.person_search),
-                label: Text(
-                  _contact == null
-                      ? 'Search and link existing Native Contact'
-                      : '${_contact!.displayName} (${_contact!.accountNumber})',
+            if (!widget.historyOnly) ...[
+              const SizedBox(height: 16),
+              if (_staffCreate) ...[
+                OutlinedButton.icon(
+                  onPressed: _chooseContact,
+                  icon: const Icon(Icons.person_search),
+                  label: Text(
+                    _contact == null
+                        ? 'Search and link existing Native Contact'
+                        : '${_contact!.displayName} (${_contact!.accountNumber})',
+                  ),
                 ),
+                const SizedBox(height: 12),
+              ],
+              if (!_editing)
+                DropdownButtonFormField<ProfileContactRelationship>(
+                  key: ValueKey(_relationship),
+                  initialValue: _relationship,
+                  decoration: _dec('Patient is Contact’s…'),
+                  items:
+                      (widget.allowExplicitContactLink
+                              ? ProfilesLabels.staffLinkRelationships
+                              : const [ProfileContactRelationship.self])
+                          .map(
+                            (x) => DropdownMenuItem(
+                              value: x,
+                              child: Text(ProfilesLabels.relationship(x)),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() {
+                        _relationship = v;
+                        if (v == ProfileContactRelationship.self &&
+                            _contact != null) {
+                          _prefillSelf(_contact!);
+                        }
+                      });
+                    }
+                  },
+                ),
+              const SizedBox(height: 12),
+              _field(
+                'Full name',
+                _name,
+                validator: (v) =>
+                    (v ?? '').trim().isEmpty ? 'Full name required' : null,
               ),
               const SizedBox(height: 12),
+              _field('Date of birth (YYYY-MM-DD)', _dob, validator: _date),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ProfileGender>(
+                initialValue: _gender,
+                decoration: _dec('Gender'),
+                items: ProfileGender.values
+                    .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => _gender = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              _field('Phone', _phone),
+              const SizedBox(height: 12),
+              _field('Email', _email),
+              const SizedBox(height: 12),
+              _field('National ID', _nationalId),
+              const Divider(height: 32),
             ],
-            if (!_editing)
-              DropdownButtonFormField<ProfileContactRelationship>(
-                key: ValueKey(_relationship),
-                initialValue: _relationship,
-                decoration: _dec('Patient is Contact’s…'),
-                items:
-                    (widget.allowExplicitContactLink
-                            ? ProfilesLabels.staffLinkRelationships
-                            : const [
-                                ProfileContactRelationship.self,
-                                ProfileContactRelationship.child,
-                                ProfileContactRelationship.parent,
-                                ProfileContactRelationship.guardian,
-                              ])
-                        .map(
-                          (x) => DropdownMenuItem(
-                            value: x,
-                            child: Text(ProfilesLabels.relationship(x)),
-                          ),
-                        )
-                        .toList(),
+            if (widget.historyOnly) ...[
+              DropdownButtonFormField<AllergyStatus>(
+                key: ValueKey(_allergyStatus),
+                initialValue: _allergyStatus,
+                decoration: _dec('Known allergies'),
+                items: AllergyStatus.values
+                    .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
+                    .toList(),
                 onChanged: (v) {
                   if (v != null) {
                     setState(() {
-                      _relationship = v;
-                      if (v == ProfileContactRelationship.self &&
-                          _contact != null) {
-                        _prefillSelf(_contact!);
-                      }
+                      _allergyStatus = v;
+                      if (v != AllergyStatus.known) _allergies.clear();
                     });
                   }
                 },
               ),
-            const SizedBox(height: 12),
-            _field(
-              'Full name',
-              _name,
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Full name required' : null,
-            ),
-            const SizedBox(height: 12),
-            _field('Date of birth (YYYY-MM-DD)', _dob, validator: _date),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ProfileGender>(
-              initialValue: _gender,
-              decoration: _dec('Gender'),
-              items: ProfileGender.values
-                  .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) setState(() => _gender = v);
-              },
-            ),
-            const SizedBox(height: 12),
-            _field('Phone', _phone),
-            const SizedBox(height: 12),
-            _field('Email', _email),
-            const SizedBox(height: 12),
-            _field('National ID', _nationalId),
-            const Divider(height: 32),
-            DropdownButtonFormField<AllergyStatus>(
-              key: ValueKey(_allergyStatus),
-              initialValue: _allergyStatus,
-              decoration: _dec('Known allergies'),
-              items: AllergyStatus.values
-                  .map((v) => DropdownMenuItem(value: v, child: Text(v.name)))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() {
-                    _allergyStatus = v;
-                    if (v != AllergyStatus.known) _allergies.clear();
-                  });
-                }
-              },
-            ),
-            _clinicalList(
-              title: 'Allergy details',
-              values: _allergies,
-              label: (a) => a.substance,
-              onAdd: _addAllergy,
-              onRemove: (i) => setState(() {
-                _allergies.removeAt(i);
-                if (_allergies.isEmpty) _allergyStatus = AllergyStatus.unknown;
-              }),
-            ),
-            const Divider(),
-            _clinicalList(
-              title: 'Existing medical conditions',
-              values: _conditions,
-              label: (c) => c.name,
-              onAdd: _addCondition,
-              onRemove: (i) => setState(() => _conditions.removeAt(i)),
-            ),
-            const SizedBox(height: 12),
-            _field('Current medications (optional)', _medicines, lines: 2),
-            const SizedBox(height: 12),
-            _field(
-              'Other relevant medical history (optional)',
-              _past,
-              lines: 3,
-            ),
-            const SizedBox(height: 8),
-            ExpansionTile(
-              title: const Text('Additional clinical details'),
-              subtitle: const Text(
-                'Optional — surgery, family/social history and vaccinations',
+              _clinicalList(
+                title: 'Allergy details',
+                values: _allergies,
+                label: (a) => a.substance,
+                onAdd: _addAllergy,
+                onRemove: (i) => setState(() {
+                  _allergies.removeAt(i);
+                  if (_allergies.isEmpty) {
+                    _allergyStatus = AllergyStatus.unknown;
+                  }
+                }),
               ),
-              initiallyExpanded: false,
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: 12),
-              children: [
-                _field('Surgical history', _surgical, lines: 2),
-                const SizedBox(height: 12),
-                _field('Family history', _family, lines: 2),
-                const SizedBox(height: 12),
-                _field('Social history', _social, lines: 2),
-                const SizedBox(height: 12),
-                _clinicalList(
-                  title: 'Vaccinations',
-                  values: _vaccinations,
-                  label: (v) => v.vaccineName,
-                  onAdd: _addVaccination,
-                  onRemove: (i) => setState(() => _vaccinations.removeAt(i)),
+              const Divider(),
+              _clinicalList(
+                title: 'Existing medical conditions',
+                values: _conditions,
+                label: (c) => c.name,
+                onAdd: _addCondition,
+                onRemove: (i) => setState(() => _conditions.removeAt(i)),
+              ),
+              const SizedBox(height: 12),
+              _field('Current medications (optional)', _medicines, lines: 2),
+              const SizedBox(height: 12),
+              _field(
+                'Other relevant medical history (optional)',
+                _past,
+                lines: 3,
+              ),
+              const SizedBox(height: 8),
+              ExpansionTile(
+                title: const Text('Additional clinical details'),
+                subtitle: const Text(
+                  'Optional — surgery, family/social history and vaccinations',
                 ),
-                const SizedBox(height: 12),
-                _field('Other notes', _notes, lines: 2),
-              ],
-            ),
-            const SizedBox(height: 12),
+                initiallyExpanded: false,
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 12),
+                children: [
+                  _field('Surgical history', _surgical, lines: 2),
+                  const SizedBox(height: 12),
+                  _field('Family history', _family, lines: 2),
+                  const SizedBox(height: 12),
+                  _field('Social history', _social, lines: 2),
+                  const SizedBox(height: 12),
+                  _clinicalList(
+                    title: 'Vaccinations',
+                    values: _vaccinations,
+                    label: (v) => v.vaccineName,
+                    onAdd: _addVaccination,
+                    onRemove: (i) => setState(() => _vaccinations.removeAt(i)),
+                  ),
+                  const SizedBox(height: 12),
+                  _field('Other notes', _notes, lines: 2),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
           ],
         ),
       ),

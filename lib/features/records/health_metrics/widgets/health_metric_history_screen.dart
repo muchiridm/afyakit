@@ -1,6 +1,7 @@
 // lib/features/clinical/health_metrics/widgets/health_metric_history_screen.dart
 
 import 'package:material_ui/material_ui.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -29,6 +30,11 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final access = ref.watch(profileDetailsProvider(profile.profileId));
+    final canRecord =
+        !access.isLoading &&
+        !access.hasError &&
+        access.valueOrNull?.allows('records.metric.create') == true;
     final query = _historyQuery();
 
     final entriesAsync = ref.watch(healthMetricEntriesProvider(query));
@@ -47,38 +53,44 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      body: entriesAsync.when(
-        loading: () => const _HistoryLoading(),
-        error: (error, _) => _HistoryError(
-          error: error,
-          onRetry: () {
-            ref.invalidate(healthMetricEntriesProvider(query));
-          },
-        ),
-        data: (entries) {
-          final newestFirst = [...entries]
-            ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
-
-          final latest = newestFirst.isEmpty ? null : newestFirst.first;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _HistoryHeader(
-                profile: profile,
-                type: type,
-                latest: latest,
-                readingCount: newestFirst.length,
-                onRecord: () => _recordMetric(context, ref, query: query),
+      body: access.isLoading || access.hasError || access.valueOrNull == null
+          ? const Center(child: Text('Profile access is unavailable.'))
+          : entriesAsync.when(
+              skipLoadingOnRefresh: false,
+              skipLoadingOnReload: false,
+              loading: () => const _HistoryLoading(),
+              error: (error, _) => _HistoryError(
+                error: error,
+                onRetry: () {
+                  ref.invalidate(healthMetricEntriesProvider(query));
+                },
               ),
-              const SizedBox(height: AppShape.gap14),
-              HealthMetricChart(type: type, entries: newestFirst),
-              const SizedBox(height: AppShape.gap14),
-              HealthMetricHistoryList(type: type, entries: newestFirst),
-            ],
-          );
-        },
-      ),
+              data: (entries) {
+                final newestFirst = [...entries]
+                  ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+
+                final latest = newestFirst.isEmpty ? null : newestFirst.first;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _HistoryHeader(
+                      profile: access.requireValue,
+                      type: type,
+                      latest: latest,
+                      readingCount: newestFirst.length,
+                      onRecord: canRecord
+                          ? () => _recordMetric(context, ref, query: query)
+                          : null,
+                    ),
+                    const SizedBox(height: AppShape.gap14),
+                    HealthMetricChart(type: type, entries: newestFirst),
+                    const SizedBox(height: AppShape.gap14),
+                    HealthMetricHistoryList(type: type, entries: newestFirst),
+                  ],
+                );
+              },
+            ),
     );
   }
 
@@ -97,6 +109,7 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
     WidgetRef ref, {
     required HealthMetricEntriesQuery query,
   }) async {
+    final service = ref.read(healthMetricsServiceProvider);
     final input = await HealthMetricEntryDialog.show(
       context,
       profileId: profile.profileId,
@@ -109,8 +122,6 @@ class HealthMetricHistoryScreen extends ConsumerWidget {
     }
 
     try {
-      final service = ref.read(healthMetricsServiceProvider);
-
       await service.createMetric(input);
 
       _invalidateHistoryAndDashboard(ref, query: query);
@@ -171,7 +182,7 @@ class _HistoryHeader extends StatelessWidget {
   final HealthMetricType type;
   final HealthMetricEntry? latest;
   final int readingCount;
-  final VoidCallback onRecord;
+  final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) {

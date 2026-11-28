@@ -1,5 +1,4 @@
 import 'package:afyakit/app/providers/app_profile_providers.dart';
-import 'package:afyakit/features/records/health_profiles/widgets/profile_app_access_section.dart';
 import 'package:afyakit/features/records/health_profiles/widgets/profile_self_app_access_section.dart';
 // lib/features/records/health_profiles/widgets/profile_details_screen.dart
 
@@ -85,20 +84,6 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     return ref.watch(profilesControllerProvider(_scope));
   }
 
-  Profile? get _currentProfile {
-    final profileId = widget.profile.profileId.trim();
-    final state = _state;
-
-    for (final profile in state.items) {
-      if (profile.profileId.trim() == profileId) {
-        return profile;
-      }
-    }
-
-    // Never display unverified route arguments in member mode.
-    return _memberMode ? null : widget.profile;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -110,6 +95,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
   }
 
   Future<void> _openEditDialog(Profile profile) async {
+    final controller = _controller;
     final input = await showDialog<ProfileUpsertInput>(
       context: context,
       builder: (_) => ProfileFormDialog(
@@ -121,7 +107,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     if (input == null || !mounted) return;
 
     try {
-      await _controller.update(profile.profileId, input);
+      await controller.update(profile.profileId, input);
+      ref.invalidate(profileDetailsProvider(profile.profileId));
 
       if (!mounted) return;
 
@@ -131,6 +118,29 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
     } catch (_) {
       if (!mounted) return;
       _showErrorFromState();
+    }
+  }
+
+  Future<void> _editPersonalHistory(Profile profile) async {
+    final service = ref.read(profilesServiceProvider);
+    final input = await showDialog<ProfileUpsertInput>(
+      context: context,
+      builder: (_) => ProfileFormDialog(initial: profile, historyOnly: true),
+    );
+    if (input == null || !mounted) return;
+    try {
+      await service.updatePersonalHistory(profile.profileId, input);
+      if (!mounted) return;
+      ref.invalidate(profileDetailsProvider(profile.profileId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Self-reported history saved')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to save personal history')),
+        );
+      }
     }
   }
 
@@ -394,13 +404,16 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = _currentProfile;
+    final detail = ref.watch(profileDetailsProvider(widget.profile.profileId));
+    final profile = detail.isLoading || detail.hasError
+        ? null
+        : detail.valueOrNull;
     final state = _state;
     final isPlatformSuperadmin =
         ref.watch(healthProfileSuperadminClaimProvider).valueOrNull == true;
     final canReviewDeletion =
         !_memberMode && widget.allowExplicitContactLink && isPlatformSuperadmin;
-    if (_memberMode && profile == null) {
+    if (profile == null) {
       return AppPage(
         title: 'Health profile',
         showBack: true,
@@ -408,16 +421,16 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
         padding: AppLayout.pagePadding,
         scrollable: false,
         body: Center(
-          child: state.isLoading
+          child: detail.isLoading
               ? const CircularProgressIndicator()
               : Text(
-                  state.error ??
+                  detail.error?.toString() ??
                       'This profile is not available to your account.',
                 ),
         ),
       );
     }
-    final visibleProfile = profile!;
+    final visibleProfile = profile;
 
     return AppPage(
       title: visibleProfile.fullName,
@@ -428,13 +441,18 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
       actions: [
         IconButton(
           tooltip: 'Refresh',
-          onPressed: state.isLoading ? null : _controller.refreshAll,
+          onPressed: () =>
+              ref.invalidate(profileDetailsProvider(widget.profile.profileId)),
           icon: const Icon(Icons.refresh),
         ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
           child: FilledButton.icon(
-            onPressed: state.isSaving || !visibleProfile.isActive
+            onPressed:
+                state.isSaving ||
+                    !visibleProfile.allows(
+                      'records.profile.demographics.update',
+                    )
                 ? null
                 : () => _openEditDialog(visibleProfile),
             icon: const Icon(Icons.edit_outlined),
@@ -455,14 +473,37 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                     profile: visibleProfile,
                     currentAppId: ref.watch(appIdProvider),
                     controller: _controller,
+                    onChanged: () => ref.invalidate(
+                      profileDetailsProvider(visibleProfile.profileId),
+                    ),
                     busy: state.isSaving,
-                    staffFallback: widget.allowExplicitContactLink && !_memberMode,
+                    staffFallback:
+                        widget.allowExplicitContactLink && !_memberMode,
                   ),
                 ],
                 const SizedBox(height: AppShape.gap14),
                 _ProfileDemographicsCard(profile: visibleProfile),
                 const SizedBox(height: AppShape.gap14),
-                _ProfileClinicalCard(profile: visibleProfile),
+                if (visibleProfile.clinicalAvailable) ...[
+                  const Text(
+                    'Existing clinical history — historical provenance is unchanged',
+                  ),
+                  _ProfileClinicalCard(profile: visibleProfile),
+                  const SizedBox(height: 14),
+                  _SelfReportedHistoryCard(
+                    history: visibleProfile.selfReportedHistory,
+                  ),
+                  if (visibleProfile.allows('records.profile.history.update'))
+                    TextButton(
+                      onPressed: () => _editPersonalHistory(visibleProfile),
+                      child: const Text('Edit self-reported history'),
+                    ),
+                ] else
+                  const AppCard(
+                    child: Text(
+                      'Clinical information is unavailable for this view.',
+                    ),
+                  ),
                 const SizedBox(height: AppShape.gap14),
                 if (visibleProfile.isActive)
                   ProfileAssociationsSection(
@@ -488,13 +529,18 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                     child: visibleProfile.isActive
                         ? TextButton.icon(
                             onPressed:
-                                state.isSaving || visibleProfile.isMultiApp
+                                state.isSaving ||
+                                    !visibleProfile.allows(
+                                      'records.profile.deactivate',
+                                    )
                                 ? null
                                 : () => _deactivateProfile(visibleProfile),
                             icon: const Icon(Icons.pause_circle_outline),
                             label: Text(
-                              visibleProfile.isMultiApp
-                                  ? 'Shared profile · cannot deactivate here'
+                              !visibleProfile.allows(
+                                    'records.profile.deactivate',
+                                  )
+                                  ? 'Deactivation unavailable'
                                   : 'Deactivate Health Profile',
                             ),
                           )
@@ -504,7 +550,11 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               FilledButton.icon(
-                                onPressed: state.isSaving
+                                onPressed:
+                                    state.isSaving ||
+                                        !visibleProfile.allows(
+                                          'records.profile.reactivate',
+                                        )
                                     ? null
                                     : () => _reactivateProfile(visibleProfile),
                                 icon: const Icon(Icons.restore),
@@ -763,6 +813,40 @@ class _ProfileClinicalCard extends StatelessWidget {
           label: 'Current medications',
           value: profile.currentMedications,
         ),
+      ],
+    ),
+  );
+}
+
+class _SelfReportedHistoryCard extends StatelessWidget {
+  const _SelfReportedHistoryCard({required this.history});
+  final Map<String, Object?> history;
+  @override
+  Widget build(BuildContext context) => AppCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Self-reported information'),
+        if (history.isEmpty) const Text('No self-reported history recorded.'),
+        for (final field in const {
+          'allergy_status': 'Allergy status',
+          'past_medical_history': 'Medical history',
+          'surgical_history': 'Surgical history',
+          'family_history': 'Family history',
+          'social_history': 'Social history',
+          'current_medications': 'Current medications',
+          'notes': 'Notes',
+        }.entries)
+          if (history[field.key] is String)
+            _InfoRow(label: field.value, value: history[field.key] as String),
+        for (final field in const {
+          'allergies': 'substance',
+          'conditions': 'name',
+          'vaccinations': 'vaccine_name',
+        }.entries)
+          for (final row in (history[field.key] as List? ?? []))
+            if (row is Map && row[field.value] is String)
+              _InfoRow(label: field.key, value: row[field.value] as String),
       ],
     ),
   );

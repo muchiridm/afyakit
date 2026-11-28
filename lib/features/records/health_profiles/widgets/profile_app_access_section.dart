@@ -33,34 +33,53 @@ class ProfileAppAccessSection extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('An approved patient or representative release must already exist. This dialog does not create approval.'),
+                const Text(
+                  'An approved patient or representative release must already exist. This dialog does not create approval.',
+                ),
                 const SizedBox(height: 14),
                 TextField(
-                  onChanged: (value) => destination = value.trim().toLowerCase(),
-                  decoration: const InputDecoration(labelText: 'Destination app ID', hintText: 'afyatracker'),
+                  onChanged: (value) =>
+                      destination = value.trim().toLowerCase(),
+                  decoration: const InputDecoration(
+                    labelText: 'Destination app ID',
+                    hintText: 'afyatracker',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   onChanged: (value) => account = value.trim(),
-                  decoration: const InputDecoration(labelText: 'Linked Native Contact account number', hintText: 'AC-XXXXXX'),
+                  decoration: const InputDecoration(
+                    labelText: 'Linked Native Contact account number',
+                    hintText: 'AC-XXXXXX',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   onChanged: (value) => approval = value.trim(),
-                  decoration: const InputDecoration(labelText: 'Approved release reference'),
+                  decoration: const InputDecoration(
+                    labelText: 'Approved release reference',
+                  ),
                 ),
               ],
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
-              if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(destination) ||
+              if (!RegExp(
+                    r'^[a-z0-9][a-z0-9_-]{0,63}$',
+                  ).hasMatch(destination) ||
                   destination == currentAppId.trim().toLowerCase() ||
                   profile.appIds.contains(destination) ||
-                  account.isEmpty || approval.isEmpty) return;
+                  account.isEmpty ||
+                  approval.isEmpty) {
+                return;
+              }
               Navigator.pop(dialogContext, (destination, account, approval));
             },
             child: const Text('Add to app'),
@@ -77,15 +96,19 @@ class ProfileAppAccessSection extends StatelessWidget {
         authorizationReference: values.$3,
       );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added to ${values.$1}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Added to ${values.$1}')));
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not add this app. Check the approved release, contact enrolment and app permissions.'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not add this app. Check the approved release, contact enrolment and app permissions.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -100,17 +123,24 @@ class ProfileAppAccessSection extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('This removes profile access from the selected app. The canonical profile and retained clinical records will not be deleted.'),
+            const Text(
+              'This removes profile access from the selected app. The canonical profile and retained clinical records will not be deleted.',
+            ),
             const SizedBox(height: 12),
             TextField(
               onChanged: (value) => reasonText = value.trim(),
               maxLength: 512,
-              decoration: const InputDecoration(labelText: 'Reason for removal'),
+              decoration: const InputDecoration(
+                labelText: 'Reason for removal',
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
               if (reasonText.isEmpty) return;
@@ -124,18 +154,24 @@ class ProfileAppAccessSection extends StatelessWidget {
     if (reason == null || !context.mounted) return;
     try {
       await controller.removeAppEnrolment(
-        profileId: profile.profileId, targetAppId: appId, reason: reason,
+        profileId: profile.profileId,
+        targetAppId: appId,
+        reason: reason,
       );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Removed $appId access')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Removed $appId access')));
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Unable to remove app access. Please check your permissions.'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to remove app access. Please check your permissions.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -150,16 +186,23 @@ class ProfileAppAccessSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Application access', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Application access',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 6),
-            const Text('Only enrolled applications can see this Health Profile through profile endpoints.'),
+            const Text(
+              'Only enrolled applications can see this Health Profile through profile endpoints.',
+            ),
             const SizedBox(height: 12),
             for (final app in enrolled)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.apps_outlined),
                 title: Text(app),
-                subtitle: Text(app == current ? 'Current application' : 'Enrolled'),
+                subtitle: Text(
+                  app == current ? 'Current application' : 'Enrolled',
+                ),
                 trailing: app == current
                     ? const Text('Current app')
                     : TextButton.icon(
@@ -168,12 +211,15 @@ class ProfileAppAccessSection extends StatelessWidget {
                         label: const Text('Remove'),
                       ),
               ),
-            if (enrolled.isEmpty) const Text('No application enrolments found.'),
+            if (enrolled.isEmpty)
+              const Text('No application enrolments found.'),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
-                onPressed: busy || !profile.isActive ? null : () => _add(context),
+                onPressed: busy || !profile.isActive
+                    ? null
+                    : () => _add(context),
                 icon: const Icon(Icons.add),
                 label: const Text('Add to app'),
               ),

@@ -7,7 +7,10 @@ enum StaffRole {
   runner,
   dispatcher,
   pharmacist,
-  prescriber;
+  prescriber,
+  clinician,
+  nurse,
+  technician;
 
   /// Unknown roles must never become a staff grant.
   static StaffRole fromString(String? input) {
@@ -33,24 +36,33 @@ enum StaffRole {
     runner => 'Runner',
     dispatcher => 'Dispatcher',
     pharmacist => 'Pharmacist',
-    prescriber => 'Doctor',
+    prescriber => 'Prescriber',
+    clinician => 'Clinician',
+    nurse => 'Nurse',
+    technician => 'Technician',
   };
   int get level => switch (this) {
     owner => 7,
     admin => 6,
     manager => 5,
-    prescriber || pharmacist => 4,
+    prescriber || pharmacist || clinician || nurse || technician => 4,
     dispatcher || runner => 3,
     staff => 1,
   };
   int compareTo(StaffRole other) => level.compareTo(other.level);
 
   /// Platform provisioning of owners is separate from these app roles.
-  bool canAssignRole(StaffRole target) => switch (this) {
-    owner => target != owner,
-    admin => target != owner && target != admin,
+  bool get isProfessional => switch (this) {
+    clinician || nurse || technician || pharmacist || prescriber => true,
     _ => false,
   };
+  bool canAssignRole(StaffRole target) =>
+      !target.isProfessional &&
+      switch (this) {
+        owner => target != owner,
+        admin => target != owner && target != admin,
+        _ => false,
+      };
   List<StaffRole> assignableTargets() =>
       values.where(canAssignRole).toList(growable: false);
   bool has(StaffCapability cap) => capabilities.contains(cap);
@@ -95,6 +107,7 @@ abstract final class StaffRoleCapabilities {
       StaffCapability.manageAllStores,
     },
     StaffRole.manager => {..._operations, StaffCapability.accessAdminPanel},
+    StaffRole.clinician || StaffRole.nurse || StaffRole.technician => const {},
     StaffRole.pharmacist => const {
       StaffCapability.requestStock,
       StaffCapability.viewReports,

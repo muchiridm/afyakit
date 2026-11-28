@@ -121,8 +121,9 @@ class ProfilesState {
 
 final profilesControllerProvider = StateNotifierProvider.autoDispose
     .family<ProfilesController, ProfilesState, ProfilesScope>((ref, scope) {
+      final service = ref.watch(profilesServiceProvider);
       return ProfilesController(
-        () => ref.read(profilesServiceProvider),
+        () => service,
         fixedAccountNumber: scope.cleanAccountNumber,
         memberMode: scope.memberMode,
       );
@@ -142,6 +143,12 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   final bool _memberMode;
 
   ProfilesService get _service => _readService();
+  @override
+  set state(ProfilesState value) {
+    if (mounted) super.state = value;
+  }
+
+  int _loadRevision = 0;
 
   bool get isContactScoped => _memberMode || _fixedAccountNumber != null;
 
@@ -150,6 +157,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   // ─────────────────────────────────────────────
 
   Future<void> load() async {
+    final request = ++_loadRevision;
     // Fail closed: missing member identity must never become a directory query.
     if (_memberMode && _fixedAccountNumber == null) {
       state = state.copyWith(
@@ -170,13 +178,17 @@ class ProfilesController extends StateNotifier<ProfilesState> {
         isActive: state.isActive,
       );
 
+      if (!mounted || request != _loadRevision) return;
       state = state.copyWith(
         items: _sortedProfiles(items),
         isLoading: false,
         clearError: true,
       );
     } catch (e) {
+      if (!mounted || request != _loadRevision) return;
       state = state.copyWith(
+        items: const [],
+        linkRequests: const [],
         isLoading: false,
         error: 'Failed to load profiles: $e',
       );
@@ -263,7 +275,10 @@ class ProfilesController extends StateNotifier<ProfilesState> {
     await load();
   }
 
-  Future<Profile> create(ProfileUpsertInput input) async {
+  Future<Profile> create(
+    ProfileUpsertInput input, {
+    Map<String, Object?>? authorization,
+  }) async {
     _requireMemberAccount();
     state = state.copyWith(isSaving: true, clearError: true);
 
@@ -280,7 +295,10 @@ class ProfilesController extends StateNotifier<ProfilesState> {
         );
       }
       final effectiveInput = _withFixedContact(input);
-      final created = await _service.create(effectiveInput);
+      final created = await _service.create(
+        effectiveInput,
+        authorization: authorization,
+      );
       final items = _upsertProfile(state.items, created);
 
       state = state.copyWith(items: items, isSaving: false, clearError: true);
@@ -320,6 +338,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   Future<Profile> enrolInCurrentApp({
     required String profileId,
     required String accountNumber,
+    required Map<String, Object?> authorization,
   }) async {
     if (isContactScoped) {
       throw StateError('Only app staff can enrol an existing Health Profile.');
@@ -329,6 +348,7 @@ class ProfilesController extends StateNotifier<ProfilesState> {
       final profile = await _service.enrolInCurrentApp(
         profileId: profileId,
         accountNumber: accountNumber,
+        authorization: authorization,
       );
       await load();
       state = state.copyWith(isSaving: false, clearError: true);
@@ -422,59 +442,32 @@ class ProfilesController extends StateNotifier<ProfilesState> {
   Future<ProfileSharingOptions> eligibleOwnApps(String profileId) =>
       _service.eligibleSelfApps(profileId);
 
-  Future<Profile> shareOwnProfile({
+  Future<void> shareOwnProfile({
     required String profileId,
     required String destinationAppId,
     required String consentVersion,
+    required String revision,
   }) async {
-    if (state.isSaving) throw StateError('Another update is in progress.');
-    state = state.copyWith(isSaving: true, clearError: true);
-    try {
-      final profile = await _service.shareOwnProfile(
-        profileId: profileId,
-        destinationAppId: destinationAppId,
-        consentVersion: consentVersion,
-      );
-      if (mounted) {
-        state = state.copyWith(
-          items: _upsertProfile(state.items, profile),
-          isSaving: false,
-          clearError: true,
-        );
-      }
-      return profile;
-    } catch (error) {
-      if (mounted) state = state.copyWith(isSaving: false, error: 'Unable to share profile');
-      rethrow;
-    }
+    await _service.shareOwnProfile(
+      profileId: profileId,
+      destinationAppId: destinationAppId,
+      consentVersion: consentVersion,
+      revision: revision,
+    );
+    state = state.copyWith(items: const [], linkRequests: const []);
   }
 
-  Future<Profile> revokeOwnProfileApp({
+  Future<void> revokeOwnProfileApp({
     required String profileId,
     required String targetAppId,
   }) async {
-    if (state.isSaving) throw StateError('Another update is in progress.');
-    state = state.copyWith(isSaving: true, clearError: true);
-    try {
-      final profile = await _service.revokeOwnProfileApp(
-        profileId: profileId,
-        targetAppId: targetAppId,
-      );
-      if (mounted) {
-        state = state.copyWith(
-          items: _upsertProfile(state.items, profile),
-          isSaving: false,
-          clearError: true,
-        );
-      }
-      return profile;
-    } catch (error) {
-      if (mounted) state = state.copyWith(isSaving: false, error: 'Unable to revoke profile access');
-      rethrow;
-    }
+    await _service.revokeOwnProfileApp(
+      profileId: profileId,
+      targetAppId: targetAppId,
+    );
+    state = state.copyWith(items: const [], linkRequests: const []);
   }
 
-  /// Administrative hard deletion, never available in member or Contact scope.
   Future<void> permanentlyDelete(
     String profileId, {
     required String confirmation,

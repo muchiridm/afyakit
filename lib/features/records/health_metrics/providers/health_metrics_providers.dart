@@ -3,13 +3,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:afyakit/core/api/afyakit/providers.dart';
+import 'package:afyakit/features/records/health_profiles/profiles_service.dart';
 
 import '../models/health_metric_entry.dart';
 import '../models/health_metric_type.dart';
 import '../services/health_metrics_service.dart';
 
 final healthMetricsServiceProvider = Provider<HealthMetricsService>((ref) {
+  final context = ref.watch(profilesServiceProvider);
   return HealthMetricsService(
+    isCurrent: context.isCurrent,
     api: ref.afyakitClient,
     routes: ref.afyakitRoutes,
   );

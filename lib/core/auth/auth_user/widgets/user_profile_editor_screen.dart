@@ -521,6 +521,9 @@ class _AccountAdministrationState
                   ),
                   const SizedBox(height: 16),
                   const Text('App-specific staff roles'),
+                  const Text(
+                    'Professional assignments require independent approval and protected revocation.',
+                  ),
                   Wrap(
                     spacing: 8,
                     children: StaffRole.values
@@ -529,7 +532,7 @@ class _AccountAdministrationState
                             label: Text(role.label),
                             selected: (state.staffRoleOverrides ?? u.staffRoles)
                                 .contains(role),
-                            onSelected: canRoles
+                            onSelected: canRoles && !role.isProfessional
                                 ? (_) => ctrl.toggleStaffRole(role)
                                 : null,
                           ),

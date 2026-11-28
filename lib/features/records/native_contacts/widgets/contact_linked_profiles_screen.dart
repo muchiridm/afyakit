@@ -1,3 +1,4 @@
+import '../../health_profiles/widgets/profile_registration_confirmation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:afyakit/features/records/health_profiles/profile_models.dart';
@@ -82,7 +83,14 @@ class _ContactLinkedProfilesScreenState
       return;
     }
     try {
-      await ref.read(profilesServiceProvider).create(input);
+      final service = ref.read(profilesServiceProvider);
+      final authorization = await confirmProfileRegistration(
+        context,
+        service,
+        'records.profile.create',
+      );
+      if (authorization == null || !mounted) return;
+      await service.create(input, authorization: authorization);
       if (!mounted) return;
       ref.invalidate(contactLinkedProfilesProvider(account));
       ScaffoldMessenger.of(context).showSnackBar(

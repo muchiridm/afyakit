@@ -354,6 +354,9 @@ class RelatedProfile {
 class Profile {
   const Profile({
     required this.profileId,
+    this.projection = 'reference',
+    this.allowedActions = const [],
+    this.selfReportedHistory = const {},
     this.appIds = const <String>[],
     required this.fullName,
     required this.isActive,
@@ -382,6 +385,11 @@ class Profile {
   });
 
   final String profileId;
+  final String projection;
+  final List<String> allowedActions;
+  final Map<String, Object?> selfReportedHistory;
+  bool get clinicalAvailable => projection == 'personal';
+  bool allows(String action) => allowedActions.contains(action);
 
   /// Application IDs where this canonical Health Profile is enrolled.
   final List<String> appIds;
@@ -494,6 +502,13 @@ class Profile {
 
     return Profile(
       profileId: _readRequiredString(json, 'profile_id'),
+      projection: json['projection'] as String? ?? 'reference',
+      allowedActions:
+          (json['allowed_actions'] as List?)?.whereType<String>().toList() ??
+          const [],
+      selfReportedHistory: json['self_reported_history'] is Map
+          ? Map<String, Object?>.from(json['self_reported_history'] as Map)
+          : const {},
       appIds:
           (json['app_ids'] as List<Object?>?)?.whereType<String>().toList(
             growable: false,
@@ -565,6 +580,9 @@ class Profile {
   }) {
     return Profile(
       profileId: profileId ?? this.profileId,
+      projection: projection,
+      allowedActions: allowedActions,
+      selfReportedHistory: selfReportedHistory,
       appIds: appIds ?? this.appIds,
       fullName: fullName ?? this.fullName,
       dob: dob ?? this.dob,
@@ -670,6 +688,38 @@ class ProfileUpsertInput {
       'is_active': isActive,
     };
   }
+
+  Map<String, Object?> demographicJson() => Map.fromEntries(
+    toJson().entries.where(
+      (e) => const [
+        'full_name',
+        'dob',
+        'gender',
+        'account_number',
+        'relationship',
+        'phone',
+        'email',
+        'national_id',
+        'is_active',
+      ].contains(e.key),
+    ),
+  );
+  Map<String, Object?> historyJson() => Map.fromEntries(
+    toJson().entries.where(
+      (e) => const [
+        'notes',
+        'allergy_status',
+        'allergies',
+        'conditions',
+        'vaccinations',
+        'past_medical_history',
+        'surgical_history',
+        'family_history',
+        'social_history',
+        'current_medications',
+      ].contains(e.key),
+    ),
+  );
 
   factory ProfileUpsertInput.fromProfile(Profile profile) {
     final linkedContact = profile.primaryLinkedContact;

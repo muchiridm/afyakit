@@ -566,15 +566,16 @@ class UserEditorController extends StateNotifier<UserEditorState> {
 
     final targetActive = state.active;
 
-    final targetRoles = targetActive
-        ? state.level.staffRolesForApp
-        : const <String>[];
+    final selectedAdministrativeRoles = state.level.staffRolesForApp;
 
     final current = state.tenantMembership;
 
     final wasActive = current?.hasActiveAppMembership(_appId) ?? false;
 
     final oldRoles = current?.rolesForApp(_appId) ?? const <String>[];
+    final targetRoles = targetActive
+        ? mergeAdministrativeRoles(oldRoles, selectedAdministrativeRoles)
+        : const <String>[];
 
     state = state.copyWith(saving: true);
 
@@ -749,3 +750,14 @@ class UserEditorController extends StateNotifier<UserEditorState> {
   List<String> get patchRolesPreview =>
       state.active ? state.level.staffRolesForApp : const <String>[];
 }
+
+/// An administrative level change never replaces independent functional assignments.
+List<String> mergeAdministrativeRoles(
+  List<String> existing,
+  List<String> selected,
+) => {
+  ...existing.where(
+    (role) => !const {'owner', 'admin', 'manager'}.contains(role),
+  ),
+  ...selected,
+}.toList();

@@ -1,3 +1,7 @@
+import 'package:afyakit/app/providers/app_profile_providers.dart';
+import 'package:afyakit/core/auth/auth_user/providers/current_users_providers.dart';
+import 'package:afyakit/core/auth/auth_user/extensions/user_status_x.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 // lib/features/records/health_profiles/profiles_service.dart
 
 import 'package:afyakit/core/api/afyakit/client.dart';
@@ -9,18 +13,33 @@ import 'package:afyakit/features/records/native_contacts/native_contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final profilesServiceProvider = Provider<ProfilesService>((ref) {
-  final api = ref.afyakitClient;
-  final routes = ref.afyakitRoutes;
-
-  return ProfilesService(api: api, routes: routes);
+  final user = ref.watch(currentUserValueProvider);
+  final appId = ref.watch(appIdProvider);
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  return ProfilesService(
+    api: ref.afyakitClient,
+    routes: ref.afyakitRoutes,
+    isCurrent: () =>
+        !disposed &&
+        uid != null &&
+        user?.uid == uid &&
+        FirebaseAuth.instance.currentUser?.uid == uid &&
+        user?.status == UserStatus.active &&
+        user?.hasActiveAppMembership(appId) == true,
+  );
 });
-
 final profilesServiceReadyProvider =
     FutureProvider.autoDispose<ProfilesService>((ref) async {
-      final api = await ref.watch(afyakitClientFutureProvider.future);
-      final routes = ref.afyakitRoutes;
+      await ref.watch(afyakitClientFutureProvider.future);
+      return ref.watch(profilesServiceProvider);
+    });
 
-      return ProfilesService(api: api, routes: routes);
+final profileDetailsProvider = FutureProvider.autoDispose
+    .family<Profile, String>((ref, id) async {
+      final service = await ref.watch(profilesServiceReadyProvider.future);
+      return service.get(id);
     });
 
 /// Eligible destination app, supplied by the backend for the authenticated owner.
@@ -40,17 +59,32 @@ class EligibleProfileApp {
 
 class ProfileSharingOptions {
   const ProfileSharingOptions({
+    required this.profileId,
+    required this.appIds,
+    required this.revision,
     required this.apps,
     required this.consentVersion,
     required this.consentNotice,
   });
+  final String profileId;
+  final List<String> appIds;
+  final String revision;
   final List<EligibleProfileApp> apps;
   final String consentVersion;
   final String consentNotice;
 }
 
 class ProfilesService {
-  const ProfilesService({required this.api, required this.routes});
+  const ProfilesService({
+    required this.api,
+    required this.routes,
+    required this.isCurrent,
+  });
+
+  final bool Function() isCurrent;
+  void _checkCurrent() {
+    if (!isCurrent()) throw StateError("Profile authorization context changed");
+  }
 
   final AfyaKitClient api;
   final AfyaKitRoutes routes;
@@ -78,7 +112,9 @@ class ProfilesService {
       page: page,
     );
 
+    _checkCurrent();
     final response = await api.getUri<Object?>(uri);
+    _checkCurrent();
     final body = _asMap(response.data);
 
     return _readProfiles(body['profiles']);
@@ -87,20 +123,28 @@ class ProfilesService {
   Future<Profile> get(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
 
+    _checkCurrent();
     final response = await api.getUri<Object?>(routes.recordsProfileGet(id));
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
     return _readProfile(body['profile']);
   }
 
-  Future<Profile> create(ProfileUpsertInput input) async {
+  Future<Profile> create(
+    ProfileUpsertInput input, {
+    Map<String, Object?>? authorization,
+  }) async {
     final data = _profileUpsertPayload(input);
+    if (authorization != null) data['patient_authorization'] = authorization;
 
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileCreate(),
       data: data,
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -116,14 +160,31 @@ class ProfilesService {
       ..remove('is_active')
       ..remove('app_ids');
 
+    _checkCurrent();
     final response = await api.putUri<Object?>(
       routes.recordsProfileUpdate(id),
       data: data,
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
     return _readProfile(body['profile']);
+  }
+
+  Future<void> updatePersonalHistory(
+    String profileId,
+    ProfileUpsertInput input,
+  ) async {
+    final base = routes.recordsProfileUpdate(
+      _requiredId(profileId, 'profileId'),
+    );
+    _checkCurrent();
+    await api.putUri<Object?>(
+      base.replace(path: '${base.path}/clinical-history'),
+      data: input.historyJson(),
+    );
+    _checkCurrent();
   }
 
   /// App staff explicitly enrol a verified Contact-linked patient in the
@@ -132,6 +193,7 @@ class ProfilesService {
   Future<Profile> enrolInCurrentApp({
     required String profileId,
     required String accountNumber,
+    required Map<String, Object?> authorization,
   }) async {
     final id = _requiredId(profileId, 'profileId');
     final account = NativeContact.requireAccountNumber(accountNumber);
@@ -140,10 +202,15 @@ class ProfilesService {
       path: '${profileUri.path}/enrolment',
       query: null,
     );
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       enrolmentUri,
-      data: <String, Object?>{'account_number': account},
+      data: <String, Object?>{
+        'account_number': account,
+        'patient_authorization': authorization,
+      },
     );
+    _checkCurrent();
     return _readProfile(_asMap(response.data)['profile']);
   }
 
@@ -165,6 +232,7 @@ class ProfilesService {
     if (approval.isEmpty || approval.length > 256) {
       throw ArgumentError('An approved release reference is required');
     }
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileAppEnrolments(id),
       data: <String, Object?>{
@@ -173,6 +241,7 @@ class ProfilesService {
         'authorization_reference': approval,
       },
     );
+    _checkCurrent();
     return _readProfile(_asMap(response.data)['profile']);
   }
 
@@ -180,7 +249,11 @@ class ProfilesService {
   /// The backend checks the authenticated user's active self relationship.
   Future<ProfileSharingOptions> eligibleSelfApps(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
-    final response = await api.getUri<Object?>(routes.recordsProfileEligibleApps(id));
+    _checkCurrent();
+    final response = await api.getUri<Object?>(
+      routes.recordsProfileEligibleApps(id),
+    );
+    _checkCurrent();
     final body = _asMap(response.data);
     final consent = _asMap(body['consent']);
     final version = (consent['version'] ?? '').toString().trim();
@@ -190,52 +263,79 @@ class ProfilesService {
     }
     final rawApps = body['apps'];
     if (rawApps is! List) throw const FormatException('Eligible apps missing');
+    return _sharing(body);
+  }
+
+  static ProfileSharingOptions _sharing(Map<String, Object?> body) {
+    final consent = _asMap(body['consent']);
     return ProfileSharingOptions(
-      apps: rawApps.map((item) => EligibleProfileApp.fromMap(_asMap(item)))
-          .toList(growable: false),
-      consentVersion: version,
-      consentNotice: notice,
+      profileId: body['profile_id'] as String,
+      appIds: (body['app_ids'] as List).cast<String>(),
+      revision: body['revision'] as String,
+      apps: (body['apps'] as List)
+          .map((a) => EligibleProfileApp.fromMap(_asMap(a)))
+          .toList(),
+      consentVersion: consent['version'] as String,
+      consentNotice: consent['notice'] as String,
     );
   }
 
-  /// Share only the authenticated owner's profile, with explicit consent.
-  /// The API resolves owner account and source app from the verified session.
-  Future<Profile> shareOwnProfile({
+  Future<String?> personalProfileId() async {
+    final base = routes.recordsProfileCreate();
+    _checkCurrent();
+    final response = await api.getUri<Object?>(
+      base.replace(path: '${base.path}/app-enrolments/self'),
+    );
+    _checkCurrent();
+    return _asMap(response.data)['profile_id'] as String?;
+  }
+
+  Future<Map<String, Object?>> registrationPolicy() async {
+    final base = routes.recordsProfileCreate();
+    _checkCurrent();
+    final response = await api.getUri<Object?>(
+      base.replace(path: '${base.path}/registration-policy'),
+    );
+    _checkCurrent();
+    return _asMap(response.data);
+  }
+
+  Future<void> shareOwnProfile({
     required String profileId,
     required String destinationAppId,
     required String consentVersion,
+    required String revision,
   }) async {
-    final id = _requiredId(profileId, 'profileId');
-    final app = destinationAppId.trim().toLowerCase();
-    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(app)) {
-      throw ArgumentError('Invalid destination app');
-    }
-    if (consentVersion.trim().isEmpty) throw ArgumentError('Consent version missing');
+    _checkCurrent();
     final response = await api.postUri<Object?>(
-      routes.recordsProfileShareSelf(id),
-      data: <String, Object?>{
-        'destination_app_id': app,
+      routes.recordsProfileShareSelf(profileId),
+      data: {
+        'destination_app_id': destinationAppId,
         'consent_accepted': true,
-        'consent_version': consentVersion.trim(),
+        'consent_version': consentVersion,
+        'revision': revision,
       },
     );
-    return _readProfile(_asMap(response.data)['profile']);
+    _checkCurrent();
+    if (_asMap(response.data)['ok'] != true ||
+        _asMap(response.data)['profile_id'] != profileId) {
+      throw const FormatException('Invalid association acknowledgement');
+    }
   }
 
-  /// Revoke another app's access without deleting the canonical Health Profile.
-  Future<Profile> revokeOwnProfileApp({
+  Future<void> revokeOwnProfileApp({
     required String profileId,
     required String targetAppId,
   }) async {
-    final id = _requiredId(profileId, 'profileId');
-    final app = targetAppId.trim().toLowerCase();
-    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(app)) {
-      throw ArgumentError('Invalid destination app');
-    }
+    _checkCurrent();
     final response = await api.deleteUri<Object?>(
-      routes.recordsProfileRevokeSelf(id, app),
+      routes.recordsProfileRevokeSelf(profileId, targetAppId),
     );
-    return _readProfile(_asMap(response.data)['profile']);
+    _checkCurrent();
+    if (_asMap(response.data)['ok'] != true ||
+        _asMap(response.data)['profile_id'] != profileId) {
+      throw const FormatException('Invalid association acknowledgement');
+    }
   }
 
   /// Removes another application's enrolment, without deleting profile data.
@@ -251,19 +351,25 @@ class ProfilesService {
     }
     final why = reason.trim();
     if (why.isEmpty || why.length > 512) {
-      throw ArgumentError('A removal reason (up to 512 characters) is required');
+      throw ArgumentError(
+        'A removal reason (up to 512 characters) is required',
+      );
     }
+    _checkCurrent();
     final response = await api.deleteUri<Object?>(
       routes.recordsProfileAppEnrolmentRemove(id, target),
       data: <String, Object?>{'reason': why},
     );
+    _checkCurrent();
     return _readProfile(_asMap(response.data)['profile']);
   }
 
   Future<void> delete(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
 
+    _checkCurrent();
     await api.deleteUri<Object?>(routes.recordsProfileDelete(id));
+    _checkCurrent();
   }
 
   /// Existing DELETE endpoint performs a soft deactivation.
@@ -273,19 +379,23 @@ class ProfilesService {
   /// Contact-profile links deactivated previously remain inactive by design.
   Future<Profile> reactivate(String profileId) async {
     final id = _requiredId(profileId, 'profileId');
+    _checkCurrent();
     final response = await api.putUri<Object?>(
       routes.recordsProfileUpdate(id),
       data: <String, Object?>{'is_active': true},
     );
+    _checkCurrent();
     return _readProfile(_asMap(response.data)['profile']);
   }
 
   /// Read-only purge dependency report. Requires platform superadmin on the API.
   /// No frontend decision may override the backend's can_purge result.
   Future<ProfilePurgeReport> inspectPurgeDependencies(String profileId) async {
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsProfileDependencies(_requiredId(profileId, 'profileId')),
     );
+    _checkCurrent();
     return ProfilePurgeReport.fromJson(_asMap(_asMap(response.data)['report']));
   }
 
@@ -312,6 +422,7 @@ class ProfilesService {
     if (!retentionReviewed) {
       throw ArgumentError('Clinical retention review must be confirmed');
     }
+    _checkCurrent();
     await api.postUri<Object?>(
       routes.recordsProfilePurge(id),
       data: <String, Object?>{
@@ -320,6 +431,7 @@ class ProfilesService {
         'retention_reviewed': true,
       },
     );
+    _checkCurrent();
   }
 
   // ---------------------------------------------------------
@@ -340,6 +452,7 @@ class ProfilesService {
 
     final account = NativeContact.requireAccountNumber(input.accountNumber);
 
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkedContactCreate(id),
       data: <String, Object?>{
@@ -348,6 +461,7 @@ class ProfilesService {
         'is_active': input.isActive,
       },
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -365,12 +479,14 @@ class ProfilesService {
 
     final account = NativeContact.requireAccountNumber(accountNumber);
 
+    _checkCurrent();
     final response = await api.deleteUri<Object?>(
       routes.recordsProfileLinkedContactDelete(
         profileId: pid,
         accountNumber: account,
       ),
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -382,11 +498,13 @@ class ProfilesService {
   // ---------------------------------------------------------
 
   Future<List<RelatedProfile>> listRelatedProfiles(String profileId) async {
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsProfileRelationshipsList(
         _requiredId(profileId, 'profileId'),
       ),
     );
+    _checkCurrent();
     final body = _asMap(response.data);
     return _asListOfMaps(
       body['linked_profiles'],
@@ -398,11 +516,13 @@ class ProfilesService {
 
   /// Staff-only under backend v2. Do not fetch in member mode.
   Future<List<ProfileLinkedContact>> listLinkedPayers(String profileId) async {
+    _checkCurrent();
     final response = await api.getUri<Object?>(
       routes.recordsProfileLinkedContactsList(
         _requiredId(profileId, 'profileId'),
       ),
     );
+    _checkCurrent();
     return _asListOfMaps(
       _asMap(response.data)['linked_payers'],
     ).map(ProfileLinkedContact.fromJson).toList(growable: false);
@@ -418,10 +538,12 @@ class ProfilesService {
   ) async {
     final id = _requiredId(profileId, 'profileId');
 
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkRequestCreate(id),
       data: input.toJson(),
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -441,7 +563,9 @@ class ProfilesService {
       page: page,
     );
 
+    _checkCurrent();
     final response = await api.getUri<Object?>(uri);
+    _checkCurrent();
     final body = _asMap(response.data);
 
     return _readLinkRequests(body['requests']);
@@ -453,10 +577,12 @@ class ProfilesService {
   ) async {
     final id = _requiredId(requestId, 'requestId');
 
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkRequestApprove(id),
       data: input.toJson(),
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -469,10 +595,12 @@ class ProfilesService {
   ) async {
     final id = _requiredId(requestId, 'requestId');
 
+    _checkCurrent();
     final response = await api.postUri<Object?>(
       routes.recordsProfileLinkRequestReject(id),
       data: input.toJson(),
     );
+    _checkCurrent();
 
     final body = _asMap(response.data);
 
@@ -489,7 +617,7 @@ class ProfilesService {
   }
 
   static Map<String, Object?> _profileUpsertPayload(ProfileUpsertInput input) {
-    final data = Map<String, Object?>.from(input.toJson());
+    final data = Map<String, Object?>.from(input.demographicJson());
     final account = _optionalAccountNumber(accountNumber: input.accountNumber);
     if (account != null) {
       data['account_number'] = account;
